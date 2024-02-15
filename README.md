@@ -1,0 +1,1 @@
+# rabbitmq-java-model
