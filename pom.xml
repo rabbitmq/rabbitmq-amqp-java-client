@@ -1,292 +1,298 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>com.rabbitmq</groupId>
-  <artifactId>rabbitmq-model</artifactId>
-  <version>1.0-SNAPSHOT</version>
-  <name>RabbitMQ Model Java Client</name>
-  <description>The RabbitMQ Model Java client library defines an API to access RabbitMQ
-    with different transport and messaging protocols.
-  </description>
-  <url>https://www.rabbitmq.com</url>
-
-  <licenses>
-    <license>
-      <name>ASL 2.0</name>
-      <url>https://www.apache.org/licenses/LICENSE-2.0.html</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
-
-  <developers>
-    <developer>
-      <email>info@rabbitmq.com</email>
-      <name>Team RabbitMQ</name>
-      <organization>Broadcom Inc. and its subsidiaries</organization>
-      <organizationUrl>https://rabbitmq.com</organizationUrl>
-    </developer>
-  </developers>
-
-  <organization>
-    <name>Broadcom Inc. and/or its subsidiaries</name>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.rabbitmq</groupId>
+    <artifactId>rabbitmq-model</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>RabbitMQ Model Java Client</name>
+    <description>The RabbitMQ Model Java client library defines an API to access RabbitMQ
+        with different transport and messaging protocols.
+    </description>
     <url>https://www.rabbitmq.com</url>
-  </organization>
 
-  <scm>
-    <url>https://github.com/rabbitmq-pro/rabbitmq-java-model</url>
-    <connection>scm:git:git://github.com/rabbitmq-pro/rabbitmq-java-model.git</connection>
-    <developerConnection>scm:git:https://github.com/rabbitmq-pro/rabbitmq-java-model.git</developerConnection>
-    <tag>HEAD</tag>
-  </scm>
+    <licenses>
+        <license>
+            <name>ASL 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <spotless.check.skip>true</spotless.check.skip>
-    <slf4j.version>1.7.36</slf4j.version>
-    <logback.version>1.2.13</logback.version>
-    <protonj2.version>1.0.0-M19</protonj2.version>
-    <junit.jupiter.version>5.10.2</junit.jupiter.version>
-    <assertj.version>3.25.1</assertj.version>
-    <mockito.version>5.10.0</mockito.version>
-    <amqp-client.version>5.20.0</amqp-client.version>
-    <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
-    <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
-    <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
-    <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
-    <maven-javadoc-plugin.version>3.6.3</maven-javadoc-plugin.version>
-    <maven.jar.plugin.version>3.3.0</maven.jar.plugin.version>
-    <spotless.version>2.43.0</spotless.version>
-    <google-java-format.version>1.19.2</google-java-format.version>
-    <maven.javadoc.skip>true</maven.javadoc.skip>
-    <gpg.skip>true</gpg.skip>
-  </properties>
+    <developers>
+        <developer>
+            <email>info@rabbitmq.com</email>
+            <name>Team RabbitMQ</name>
+            <organization>Broadcom Inc. and its subsidiaries</organization>
+            <organizationUrl>https://rabbitmq.com</organizationUrl>
+        </developer>
+    </developers>
 
-  <dependencies>
+    <organization>
+        <name>Broadcom Inc. and/or its subsidiaries</name>
+        <url>https://www.rabbitmq.com</url>
+    </organization>
 
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>${slf4j.version}</version>
-    </dependency>
+    <scm>
+        <url>https://github.com/rabbitmq-pro/rabbitmq-java-model</url>
+        <connection>scm:git:git://github.com/rabbitmq-pro/rabbitmq-java-model.git</connection>
+        <developerConnection>scm:git:https://github.com/rabbitmq-pro/rabbitmq-java-model.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
 
-    <dependency>
-      <groupId>org.apache.qpid</groupId>
-      <artifactId>protonj2-client</artifactId>
-      <version>${protonj2.version}</version>
-    </dependency>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spotless.check.skip>true</spotless.check.skip>
+        <slf4j.version>1.7.36</slf4j.version>
+        <logback.version>1.2.13</logback.version>
+        <protonj2.version>1.0.0-M19</protonj2.version>
+        <junit.jupiter.version>5.10.1</junit.jupiter.version>
+        <assertj.version>3.25.1</assertj.version>
+        <mockito.version>5.9.0</mockito.version>
+        <amqp-client.version>5.20.0</amqp-client.version>
+        <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
+        <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+        <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+        <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.6.3</maven-javadoc-plugin.version>
+        <maven.jar.plugin.version>3.3.0</maven.jar.plugin.version>
+        <maven-clean-plugin.version>3.3.2</maven-clean-plugin.version>
+        <spotless.version>2.43.0</spotless.version>
+        <google-java-format.version>1.19.2</google-java-format.version>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
 
-    <dependency>
-      <groupId>com.rabbitmq</groupId>
-      <artifactId>amqp-client</artifactId>
-      <version>${amqp-client.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-params</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-suite-engine</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>${logback.version}</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.assertj</groupId>
-      <artifactId>assertj-core</artifactId>
-      <version>${assertj.version}</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <version>${mockito.version}</version>
-      <scope>test</scope>
-    </dependency>
-
-  </dependencies>
-
-  <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>org.junit</groupId>
-        <artifactId>junit-bom</artifactId>
-        <version>${junit.jupiter.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.qpid</groupId>
+            <artifactId>protonj2-client</artifactId>
+            <version>${protonj2.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>amqp-client</artifactId>
+            <version>${amqp-client.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
-  </dependencyManagement>
 
-  <build>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-  <!-- We store the client version in a Java properties file. -->
-  <resources>
-    <resource>
-      <directory>${basedir}/src/main/resources</directory>
-      <filtering>true</filtering>
-    </resource>
-  </resources>
+    <build>
 
-  <testResources>
-    <testResource>
-      <directory>${basedir}/src/test/resources</directory>
-    </testResource>
-  </testResources>
+        <!-- We store the client version in a Java properties file. -->
+        <resources>
+            <resource>
+                <directory>${basedir}/src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
 
-  <plugins>
+        <testResources>
+            <testResource>
+                <directory>${basedir}/src/test/resources</directory>
+            </testResource>
+        </testResources>
 
-  <plugin>
-    <artifactId>maven-compiler-plugin</artifactId>
-    <version>${maven.compiler.plugin.version}</version>
-    <configuration>
-      <source>1.8</source>
-      <target>1.8</target>
-      <compilerArgs>
-        <arg>-Xlint:deprecation</arg>
-        <arg>-Xlint:unchecked</arg>
-      </compilerArgs>
-    </configuration>
-  </plugin>
+        <plugins>
 
-  <plugin>
-    <artifactId>maven-surefire-plugin</artifactId>
-    <version>${maven-surefire-plugin.version}</version>
-    <configuration>
-      <excludes>
-        <exclude>**/*TestSuite.java</exclude>
-      </excludes>
-      <argLine>${test-arguments}</argLine>
-      <systemPropertyVariables>
-        <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
-        <rabbitmqctl.bin>DOCKER:rabbitmq</rabbitmqctl.bin>
-      </systemPropertyVariables>
-    </configuration>
-  </plugin>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>11</release>
+                    <compilerArgs>
+                        <arg>-Xlint:deprecation</arg>
+                        <arg>-Xlint:unchecked</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
 
-  <plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-resources-plugin</artifactId>
-    <version>${maven-resources-plugin.version}</version>
-    <configuration>
-      <propertiesEncoding>${project.build.sourceEncoding}</propertiesEncoding>
-    </configuration>
-  </plugin>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*TestSuite.java</exclude>
+                    </excludes>
+                    <argLine>${test-arguments}</argLine>
+                    <systemPropertyVariables>
+                        <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
+                        <rabbitmqctl.bin>DOCKER:rabbitmq</rabbitmqctl.bin>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
 
-  <plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-javadoc-plugin</artifactId>
-    <version>${maven-javadoc-plugin.version}</version>
-    <configuration>
-      <quiet>true</quiet>
-      <source>8</source>
-      <additionalOptions>-Xdoclint:none</additionalOptions>
-    </configuration>
-    <executions>
-      <execution>
-        <goals>
-          <goal>jar</goal>
-        </goals>
-      </execution>
-    </executions>
-  </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>${maven-clean-plugin.version}</version>
+            </plugin>
 
-    <plugin>
-      <groupId>org.apache.maven.plugins</groupId>
-      <artifactId>maven-source-plugin</artifactId>
-      <version>${maven-source-plugin.version}</version>
-      <executions>
-        <execution>
-          <goals>
-            <goal>jar</goal>
-          </goals>
-        </execution>
-      </executions>
-    </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${maven-resources-plugin.version}</version>
+                <configuration>
+                    <propertiesEncoding>${project.build.sourceEncoding}</propertiesEncoding>
+                </configuration>
+            </plugin>
 
-    <plugin>
-      <groupId>com.diffplug.spotless</groupId>
-      <artifactId>spotless-maven-plugin</artifactId>
-      <version>${spotless.version}</version>
-      <configuration>
-        <java>
-          <googleJavaFormat>
-            <version>${google-java-format.version}</version>
-            <style>GOOGLE</style>
-          </googleJavaFormat>
-        </java>
-<!--                  <ratchetFrom>origin/main</ratchetFrom>-->
-        <licenseHeader> <!-- specify either content or file, but not both -->
-          <content>// Copyright (c) $YEAR Broadcom. All Rights Reserved.
-            // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
-            //
-            // Licensed under the Apache License, Version 2.0 (the "License");
-            // you may not use this file except in compliance with the License.
-            // You may obtain a copy of the License at
-            //
-            // http://www.apache.org/licenses/LICENSE-2.0
-            //
-            // Unless required by applicable law or agreed to in writing, software
-            // distributed under the License is distributed on an "AS IS" BASIS,
-            // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-            // See the License for the specific language governing permissions and
-            // limitations under the License.
-            //
-            // If you have any questions regarding licensing, please contact us at
-            // info@rabbitmq.com.
-          </content>
-        </licenseHeader>
-      </configuration>
-    </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
+                <configuration>
+                    <quiet>true</quiet>
+                    <source>8</source>
+                    <additionalOptions>-Xdoclint:none</additionalOptions>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
 
-    <plugin>
-      <groupId>org.apache.maven.plugins</groupId>
-      <artifactId>maven-jar-plugin</artifactId>
-      <version>${maven.jar.plugin.version}</version>
-      <configuration>
-        <archive>
-          <manifestEntries>
-            <Automatic-Module-Name>com.rabbitmq.model</Automatic-Module-Name>
-            <Implementation-Version>${project.version}</Implementation-Version>
-          </manifestEntries>
-        </archive>
-      </configuration>
-    </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven-source-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
 
-  </plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat>
+                            <version>${google-java-format.version}</version>
+                            <style>GOOGLE</style>
+                        </googleJavaFormat>
+                    </java>
+                    <!--                  <ratchetFrom>origin/main</ratchetFrom>-->
+                    <licenseHeader> <!-- specify either content or file, but not both -->
+                        <content>// Copyright (c) $YEAR Broadcom. All Rights Reserved.
+                            // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
+                            //
+                            // Licensed under the Apache License, Version 2.0 (the "License");
+                            // you may not use this file except in compliance with the License.
+                            // You may obtain a copy of the License at
+                            //
+                            // http://www.apache.org/licenses/LICENSE-2.0
+                            //
+                            // Unless required by applicable law or agreed to in writing, software
+                            // distributed under the License is distributed on an "AS IS" BASIS,
+                            // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+                            // See the License for the specific language governing permissions and
+                            // limitations under the License.
+                            //
+                            // If you have any questions regarding licensing, please contact us at
+                            // info@rabbitmq.com.
+                        </content>
+                    </licenseHeader>
+                </configuration>
+            </plugin>
 
-  </build>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven.jar.plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Automatic-Module-Name>com.rabbitmq.model</Automatic-Module-Name>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
 
-  <profiles>
+        </plugins>
 
-    <profile>
-      <id>jvm-test-arguments-java-21-and-more</id>
-      <activation>
-        <jdk>[21,)</jdk>
-      </activation>
-      <properties>
-        <test-arguments>-XX:+EnableDynamicAgentLoading</test-arguments>
-      </properties>
-    </profile>
+    </build>
+
+    <profiles>
+
+        <profile>
+            <id>jvm-test-arguments-java-21-and-more</id>
+            <activation>
+                <jdk>[21,)</jdk>
+            </activation>
+            <properties>
+                <test-arguments>-XX:+EnableDynamicAgentLoading</test-arguments>
+            </properties>
+        </profile>
 
 
-  </profiles>
+    </profiles>
 
 
 </project>
