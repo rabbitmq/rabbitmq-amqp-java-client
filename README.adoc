@@ -1,0 +1,5 @@
+= rabbitmq-java-model
+
+== License
+
+This package, the RabbitMQ Java Model library, is licensed under the http://www.apache.org/licenses/LICENSE-2.0[Apache License, version 2].

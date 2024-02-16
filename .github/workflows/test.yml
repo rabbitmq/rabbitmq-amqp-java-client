@@ -1,0 +1,29 @@
+name: Test against RabbitMQ with native AMQP 1.0
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'maven'
+      - name: Start broker
+        run: ci/start-broker.sh
+        env:
+          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:native-amqp-otp-max-bazel'
+      - name: Test
+        run: |
+          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq
+      - name: Stop broker
+        run: docker stop rabbitmq && docker rm rabbitmq
