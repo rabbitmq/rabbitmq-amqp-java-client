@@ -23,5 +23,7 @@ public interface ConsumerBuilder {
 
   ConsumerBuilder messageHandler(Consumer.MessageHandler handler);
 
+  ConsumerBuilder initialCredits(int initialCredits);
+
   Consumer build();
 }

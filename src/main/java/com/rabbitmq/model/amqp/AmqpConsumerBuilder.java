@@ -25,6 +25,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private final AmqpEnvironment environment;
   private String address;
   private Consumer.MessageHandler messageHandler;
+  private int initialCredits = 10;
 
   AmqpConsumerBuilder(AmqpEnvironment environment) {
     this.environment = environment;
@@ -43,7 +44,14 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   }
 
   @Override
+  public ConsumerBuilder initialCredits(int initialCredits) {
+    this.initialCredits = initialCredits;
+    return this;
+  }
+
+  @Override
   public Consumer build() {
-    return new AmqpConsumer(this.environment, this.address, this.messageHandler);
+    return new AmqpConsumer(
+        this.environment, this.address, this.messageHandler, this.initialCredits);
   }
 }

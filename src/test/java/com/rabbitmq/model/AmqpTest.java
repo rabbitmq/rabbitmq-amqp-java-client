@@ -25,6 +25,7 @@ import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
@@ -39,32 +40,34 @@ public class AmqpTest {
       String address = "/amq/queue/" + q;
       Publisher publisher = environment.publisherBuilder().address(address).build();
 
-      CountDownLatch confirmLatch = new CountDownLatch(1);
-      UUID messageId = UUID.randomUUID();
-      publisher.publish(
-          publisher
-              .message()
-              .addData("hello".getBytes(StandardCharsets.UTF_8))
-              .messageId(messageId),
-          context -> {
-            if (messageId.equals(context.message().messageId())
-                && context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
-              confirmLatch.countDown();
-            }
-          });
+      int messageCount = 1;
+      CountDownLatch confirmLatch = new CountDownLatch(messageCount);
+      IntStream.range(0, messageCount)
+          .forEach(
+              ignored -> {
+                UUID messageId = UUID.randomUUID();
+                publisher.publish(
+                    publisher
+                        .message()
+                        .addData("hello".getBytes(StandardCharsets.UTF_8))
+                        .messageId(messageId),
+                    context -> {
+                      if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
+                        confirmLatch.countDown();
+                      }
+                    });
+              });
 
       assertThat(confirmLatch).is(completed());
 
-      CountDownLatch consumeLatch = new CountDownLatch(1);
+      CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       environment
           .consumerBuilder()
           .address(address)
           .messageHandler(
               (context, message) -> {
                 context.accept();
-                if (message.messageId().equals(messageId)) {
-                  consumeLatch.countDown();
-                }
+                consumeLatch.countDown();
               })
           .build();
       assertThat(consumeLatch).is(completed());

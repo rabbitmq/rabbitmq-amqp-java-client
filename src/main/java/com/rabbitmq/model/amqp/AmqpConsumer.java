@@ -21,6 +21,7 @@ import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
@@ -37,19 +38,30 @@ class AmqpConsumer implements Consumer {
   private final Receiver receiver;
   private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-  AmqpConsumer(AmqpEnvironment environment, String address, MessageHandler messageHandler) {
+  AmqpConsumer(
+      AmqpEnvironment environment,
+      String address,
+      MessageHandler messageHandler,
+      int initialCredits) {
     this.environment = environment;
     try {
       this.receiver =
           this.environment
               .connection()
               .openReceiver(
-                  address, new ReceiverOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+                  address,
+                  new ReceiverOptions()
+                      .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                      .autoAccept(false)
+                      .autoSettle(false)
+                      .creditWindow(initialCredits));
+      Semaphore inFlightMessages = new Semaphore(initialCredits);
       executorService.submit(
           () -> {
             try {
               while (!Thread.currentThread().isInterrupted()) {
                 Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
+                inFlightMessages.acquire();
                 if (delivery != null) {
                   AmqpMessage message = new AmqpMessage(delivery.message());
                   Context context =
@@ -57,6 +69,7 @@ class AmqpConsumer implements Consumer {
 
                         @Override
                         public void accept() {
+                          inFlightMessages.release();
                           try {
                             delivery.disposition(DeliveryState.accepted(), true);
                           } catch (ClientException e) {
@@ -66,8 +79,11 @@ class AmqpConsumer implements Consumer {
 
                         @Override
                         public void discard() {
+                          inFlightMessages.release();
                           try {
-                            delivery.disposition(DeliveryState.released(), true);
+                            // TODO propagate condition and description for "rejected" delivery
+                            // state
+                            delivery.disposition(DeliveryState.rejected("", ""), true);
                           } catch (ClientException e) {
                             throw new ModelException(e);
                           }
@@ -75,10 +91,9 @@ class AmqpConsumer implements Consumer {
 
                         @Override
                         public void requeue() {
+                          inFlightMessages.release();
                           try {
-                            // TODO propagate condition and description for "rejected" delivery
-                            // state
-                            delivery.disposition(DeliveryState.rejected("", ""), true);
+                            delivery.disposition(DeliveryState.released(), true);
                           } catch (ClientException e) {
                             throw new ModelException(e);
                           }
@@ -93,6 +108,8 @@ class AmqpConsumer implements Consumer {
               // receiver is closed
             } catch (ClientException e) {
               LOGGER.warn("Error while polling AMQP receiver", e);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
             }
           });
     } catch (ClientException e) {
