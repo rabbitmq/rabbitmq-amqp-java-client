@@ -5,15 +5,13 @@
 MESSAGE=$(git log -1 --pretty=%B)
 ./mvnw buildnumber:create pre-site --no-transfer-progress
 
-./mvnw -q javadoc:javadoc -Dmaven.javadoc.failOnError=false
+./mvnw javadoc:javadoc -Dmaven.javadoc.skip=false --no-transfer-progress
 
 if [ -e target/site/apidocs/element-list ]
   then cp target/site/apidocs/element-list target/site/apidocs/package-list
 fi
 
 RELEASE_VERSION=$(cat pom.xml | grep -oPm1 "(?<=<version>)[^<]+")
-
-git checkout -- .mvn/maven.config
 
 # GHA does shallow clones, so need the next 2 commands to have the gh-pages branch
 git remote set-branches origin 'gh-pages'
