@@ -1,5 +1,10 @@
 = rabbitmq-java-model
 
+== Documentation
+
+* https://rabbitmq-pro.github.io/rabbitmq-java-model/snapshot/htmlsingle/[Reference]
+* https://glowing-engine-1wmjvvp.pages.github.io/snapshot/api/com/rabbitmq/model/package-summary.html[API]
+
 == License
 
 This package, the RabbitMQ Java Model library, is licensed under the http://www.apache.org/licenses/LICENSE-2.0[Apache License, version 2].
