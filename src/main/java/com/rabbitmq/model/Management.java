@@ -235,13 +235,11 @@ public interface Management extends AutoCloseable {
 
   interface BindingSpecification {
 
-    BindingSpecification queue();
+    BindingSpecification sourceExchange(String exchange);
 
-    BindingSpecification exchange();
+    BindingSpecification destinationQueue(String queue);
 
-    BindingSpecification source(String source);
-
-    BindingSpecification destination(String destination);
+    BindingSpecification destinationExchange(String exchange);
 
     BindingSpecification key(String key);
 
@@ -252,13 +250,11 @@ public interface Management extends AutoCloseable {
 
   interface UnbindSpecification {
 
-    UnbindSpecification queue();
+    UnbindSpecification sourceExchange(String exchange);
 
-    UnbindSpecification exchange();
+    UnbindSpecification destinationQueue(String queue);
 
-    UnbindSpecification source(String source);
-
-    UnbindSpecification destination(String destination);
+    UnbindSpecification destinationExchange(String exchange);
 
     UnbindSpecification key(String key);
 

@@ -24,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.Publisher.ConfirmationStatus.CONFIRMED;
 
 class Api {
@@ -149,34 +148,24 @@ class Api {
     Management management = null;
     // tag::binding[]
     management.binding()
-        .source("my-exchange")
-        .destination("my-queue")
+        .sourceExchange("my-exchange")
+        .destinationQueue("my-queue")
         .key("foo")
         .bind();
     // end::binding[]
 
-    // tag::queue-binding[]
-    management.binding()
-        .queue() // <1>
-        .source("my-exchange")
-        .destination("my-queue")
-        .key("foo")
-        .bind();
-    // end::queue-binding[]
-
     // tag::exchange-binding[]
     management.binding()
-        .exchange() // <1>
-        .source("my-exchange")
-        .destination("my-other-exchange")
+        .sourceExchange("my-exchange")
+        .destinationExchange("my-other-exchange")
         .key("foo")
         .bind();
     // end::exchange-binding[]
 
     // tag::unbinding[]
     management.unbind()
-        .source("my-exchange")
-        .destination("my-queue")
+        .sourceExchange("my-exchange")
+        .destinationQueue("my-queue")
         .key("foo")
         .unbind();
     // end::unbinding[]

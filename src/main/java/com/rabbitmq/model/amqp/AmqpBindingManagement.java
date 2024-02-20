@@ -49,26 +49,22 @@ abstract class AmqpBindingManagement {
     }
 
     @Override
-    public Management.BindingSpecification queue() {
-      this.state.toQueue = true;
-      return this;
-    }
-
-    @Override
-    public Management.BindingSpecification exchange() {
-      this.state.toQueue = false;
-      return this;
-    }
-
-    @Override
-    public Management.BindingSpecification source(String source) {
+    public Management.BindingSpecification sourceExchange(String source) {
       this.state.source = source;
       return this;
     }
 
     @Override
-    public Management.BindingSpecification destination(String destination) {
-      this.state.destination = destination;
+    public Management.BindingSpecification destinationQueue(String queue) {
+      this.state.toQueue = true;
+      this.state.destination = queue;
+      return this;
+    }
+
+    @Override
+    public Management.BindingSpecification destinationExchange(String exchange) {
+      this.state.toQueue = true;
+      this.state.destination = exchange;
       return this;
     }
 
@@ -118,26 +114,22 @@ abstract class AmqpBindingManagement {
     }
 
     @Override
-    public Management.UnbindSpecification queue() {
+    public Management.UnbindSpecification sourceExchange(String exchange) {
+      this.state.source = exchange;
+      return this;
+    }
+
+    @Override
+    public Management.UnbindSpecification destinationQueue(String queue) {
       this.state.toQueue = true;
+      this.state.destination = queue;
       return this;
     }
 
     @Override
-    public Management.UnbindSpecification exchange() {
-      this.state.toQueue = false;
-      return this;
-    }
-
-    @Override
-    public Management.UnbindSpecification source(String source) {
-      this.state.source = source;
-      return this;
-    }
-
-    @Override
-    public Management.UnbindSpecification destination(String destination) {
-      this.state.destination = destination;
+    public Management.UnbindSpecification destinationExchange(String exchange) {
+      this.state.toQueue = true;
+      this.state.destination = exchange;
       return this;
     }
 

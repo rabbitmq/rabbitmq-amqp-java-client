@@ -22,7 +22,6 @@ import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.*;
 import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -89,7 +88,7 @@ public class AmqpTest {
     try {
       management.exchange().name(e).type(DIRECT).declare();
       management.queue().name(q).type(QUORUM).declare();
-      management.binding().source(e).destination(q).key(rk).bind();
+      management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
 
       Publisher publisher = environment.publisherBuilder().address("/exchange/" + e).build();
 
@@ -124,7 +123,7 @@ public class AmqpTest {
           .build();
       assertThat(consumeLatch).is(completed());
     } finally {
-      management.unbind().source(e).destination(q).key("foo").unbind();
+      management.unbind().sourceExchange(e).destinationQueue(q).key("foo").unbind();
       management.exchangeDeletion().delete(e);
       management.queueDeletion().delete(q);
       environment.close();

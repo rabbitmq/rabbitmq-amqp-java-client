@@ -115,19 +115,11 @@ include::{test-examples}/Api.java[tag=queue-deletion]
 include::{test-examples}/Api.java[tag=binding]
 --------
 
-.Explicit exchange-to-queue binding
-[source,java,indent=0]
---------
-include::{test-examples}/Api.java[tag=queue-binding]
---------
-<1> The destination is a queue (the default)
-
 .Exchange-to-exchange binding
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=exchange-binding]
 --------
-<1> The destination is an exchange
 
 .Unbinding
 [source,java,indent=0]
