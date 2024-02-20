@@ -53,6 +53,32 @@ class AmqpManagement implements Management {
     };
   }
 
+  @Override
+  public ExchangeSpecification exchange() {
+    return new AmqpExchangeSpecification(this);
+  }
+
+  @Override
+  public ExchangeDeletion exchangeDeletion() {
+    return name -> {
+      try {
+        channel().exchangeDelete(name);
+      } catch (IOException e) {
+        throw new ModelException(e);
+      }
+    };
+  }
+
+  @Override
+  public BindingSpecification binding() {
+    return new AmqpBindingManagement.AmqpBindingSpecification(this);
+  }
+
+  @Override
+  public UnbindSpecification unbind() {
+    return new AmqpBindingManagement.AmqpUnbindSpecification(this);
+  }
+
   Channel channel() {
     return this.channel;
   }

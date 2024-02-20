@@ -25,6 +25,14 @@ public interface Management extends AutoCloseable {
 
   QueueDeletion queueDeletion();
 
+  ExchangeSpecification exchange();
+
+  ExchangeDeletion exchangeDeletion();
+
+  BindingSpecification binding();
+
+  UnbindSpecification unbind();
+
   @Override
   void close();
 
@@ -194,5 +202,68 @@ public interface Management extends AutoCloseable {
   interface QueueDeletion {
 
     void delete(String name);
+  }
+
+  interface ExchangeSpecification {
+
+    ExchangeSpecification name(String name);
+
+    ExchangeSpecification durable(boolean durable);
+
+    ExchangeSpecification autoDelete(boolean autoDelete);
+
+    ExchangeSpecification type(ExchangeType type);
+
+    ExchangeSpecification type(String type);
+
+    ExchangeSpecification argument(String key, Object value);
+
+    void declare();
+  }
+
+  enum ExchangeType {
+    DIRECT,
+    FANOUT,
+    TOPIC,
+    HEADERS
+  }
+
+  interface ExchangeDeletion {
+
+    void delete(String name);
+  }
+
+  interface BindingSpecification {
+
+    BindingSpecification queue();
+
+    BindingSpecification exchange();
+
+    BindingSpecification source(String source);
+
+    BindingSpecification destination(String destination);
+
+    BindingSpecification key(String key);
+
+    BindingSpecification argument(String key, Object value);
+
+    void bind();
+  }
+
+  interface UnbindSpecification {
+
+    UnbindSpecification queue();
+
+    UnbindSpecification exchange();
+
+    UnbindSpecification source(String source);
+
+    UnbindSpecification destination(String destination);
+
+    UnbindSpecification key(String key);
+
+    UnbindSpecification argument(String key, Object value);
+
+    void unbind();
   }
 }

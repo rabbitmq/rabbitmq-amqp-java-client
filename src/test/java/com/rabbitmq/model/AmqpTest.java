@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
+import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,6 +75,58 @@ public class AmqpTest {
       assertThat(consumeLatch).is(completed());
     } finally {
       environment.management().queueDeletion().delete(q);
+      environment.close();
+    }
+  }
+
+  @Test
+  void exchangeBinding(TestInfo info) {
+    String e = TestUtils.name(info);
+    String q = TestUtils.name(info);
+    String rk = "foo";
+    Environment environment = new AmqpEnvironmentBuilder().build();
+    Management management = environment.management();
+    try {
+      management.exchange().name(e).type(DIRECT).declare();
+      management.queue().name(q).type(QUORUM).declare();
+      management.binding().source(e).destination(q).key(rk).bind();
+
+      Publisher publisher = environment.publisherBuilder().address("/exchange/" + e).build();
+
+      int messageCount = 1;
+      CountDownLatch confirmLatch = new CountDownLatch(messageCount);
+      IntStream.range(0, messageCount)
+          .forEach(
+              ignored -> {
+                publisher.publish(
+                    publisher
+                        .message()
+                        .subject(rk)
+                        .addData("hello".getBytes(StandardCharsets.UTF_8)),
+                    context -> {
+                      if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
+                        confirmLatch.countDown();
+                      }
+                    });
+              });
+
+      assertThat(confirmLatch).is(completed());
+
+      CountDownLatch consumeLatch = new CountDownLatch(messageCount);
+      environment
+          .consumerBuilder()
+          .address(q)
+          .messageHandler(
+              (context, message) -> {
+                context.accept();
+                consumeLatch.countDown();
+              })
+          .build();
+      assertThat(consumeLatch).is(completed());
+    } finally {
+      management.unbind().source(e).destination(q).key("foo").unbind();
+      management.exchangeDeletion().delete(e);
+      management.queueDeletion().delete(q);
       environment.close();
     }
   }
