@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(8127b38)</span>
+<br><span id="revremark">(a6cdd14)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -759,56 +759,28 @@ It is accessible from the <code>Environment</code>.</p>
 <div class="title">Exchange-to-queue binding</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">management.binding()
-    .source(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
-    .destination(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
+    .sourceExchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
+    .destinationQueue(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
     .key(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>)
     .bind();</code></pre>
 </div>
-</div>
-<div class="listingblock">
-<div class="title">Explicit exchange-to-queue binding</div>
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="java">management.binding()
-    .queue() <i class="conum" data-value="1"></i><b>(1)</b>
-    .source(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
-    .destination(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
-    .key(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>)
-    .bind();</code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>The destination is a queue (the default)</td>
-</tr>
-</table>
 </div>
 <div class="listingblock">
 <div class="title">Exchange-to-exchange binding</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">management.binding()
-    .exchange() <i class="conum" data-value="1"></i><b>(1)</b>
-    .source(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
-    .destination(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-other-exchange</span><span class="delimiter">&quot;</span></span>)
+    .sourceExchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
+    .destinationExchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-other-exchange</span><span class="delimiter">&quot;</span></span>)
     .key(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>)
     .bind();</code></pre>
 </div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>The destination is an exchange</td>
-</tr>
-</table>
 </div>
 <div class="listingblock">
 <div class="title">Unbinding</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">management.unbind()
-    .source(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
-    .destination(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
+    .sourceExchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
+    .destinationQueue(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
     .key(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>)
     .unbind();</code></pre>
 </div>
@@ -821,7 +793,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-02-20 17:32:25 +0100
+Last updated 2024-02-20 17:32:43 +0100
 </div>
 </div>
 </body>
