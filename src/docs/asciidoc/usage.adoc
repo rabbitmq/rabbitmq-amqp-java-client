@@ -1,0 +1,136 @@
+:test-examples: ../../test/java/com/rabbitmq/model/docs
+
+[[api-overview]]
+== API Overview
+
+=== Environment
+
+The `Environment` is the entry point for applications.
+It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).
+It deals internally with connections, pooling, recovery, etc.
+
+.Environment creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=environment-creation]
+--------
+
+=== Publishing
+
+.Publisher creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=publisher-creation]
+--------
+
+.Message creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=message-creation]
+--------
+<1> Routing key with `/exchange/{name}` address
+
+.Message publishing
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=message-publishing]
+--------
+
+=== Consuming
+
+.Consuming from a queue
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer]
+--------
+<1> Process the message
+<2> Accept (acknowledge) the message
+
+=== Resource Management
+
+The `Management` object is the entry point to deal with resources.
+It is accessible from the `Environment`.
+
+.Getting the management object from the environment
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=management]
+--------
+
+==== Exchanges
+
+.Exchange creation (built-in type)
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=fanout-exchange]
+--------
+
+.Exchange creation (not built-in)
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=delayed-message-exchange]
+--------
+
+.Exchange deletion
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=delete-exchange]
+--------
+
+==== Queues
+
+.Queue creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=queue-creation]
+--------
+
+There is no need to remember the argument names and types thanks to explicit configuration methods:
+
+.Queue creation with arguments
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=queue-creation-with-arguments]
+--------
+<1> Explicit methods for common queue arguments
+
+.Quorum queue creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=quorum-queue-creation]
+--------
+<1> Queue-type-specific configuration helper
+
+.Queue deletion
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=queue-deletion]
+--------
+
+==== Bindings
+
+.Exchange-to-queue binding
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=binding]
+--------
+
+.Explicit exchange-to-queue binding
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=queue-binding]
+--------
+<1> The destination is a queue (the default)
+
+.Exchange-to-exchange binding
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=exchange-binding]
+--------
+<1> The destination is an exchange
+
+.Unbinding
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=unbinding]
+--------
