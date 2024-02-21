@@ -66,9 +66,12 @@ public abstract class TestUtils {
   }
 
   private static String name(Class<?> testClass, Method testMethod) {
+    return name(testClass, testMethod.getName());
+  }
+
+  static String name(Class<?> testClass, String testMethod) {
     String uuid = UUID.randomUUID().toString();
     return format(
-        "%s_%s%s",
-        testClass.getSimpleName(), testMethod.getName(), uuid.substring(uuid.length() / 2));
+        "%s_%s%s", testClass.getSimpleName(), testMethod, uuid.substring(uuid.length() / 2));
   }
 }
