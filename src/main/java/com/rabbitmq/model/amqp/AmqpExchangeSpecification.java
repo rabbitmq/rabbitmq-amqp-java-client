@@ -34,7 +34,7 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
 
   private String name;
   private String type = Management.ExchangeType.DIRECT.name().toLowerCase(Locale.ENGLISH);
-  private boolean durable = false;
+  private final boolean durable = true;
   private final boolean internal = false;
   private boolean autoDelete = false;
   private final Map<String, Object> arguments = new LinkedHashMap<>();
@@ -46,12 +46,6 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
   @Override
   public Management.ExchangeSpecification name(String name) {
     this.name = name;
-    return this;
-  }
-
-  @Override
-  public Management.ExchangeSpecification durable(boolean durable) {
-    this.durable = durable;
     return this;
   }
 

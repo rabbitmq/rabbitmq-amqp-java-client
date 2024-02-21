@@ -47,7 +47,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   // the user until the fix arrives)
   private boolean shortcutArguments = false;
   private String name;
-  private boolean durable = false;
+  private final boolean durable = true;
   private boolean exclusive = false;
   private boolean autoDelete = false;
   private final Map<String, Object> arguments = new LinkedHashMap<>();
@@ -59,12 +59,6 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   @Override
   public Management.QueueSpecification name(String name) {
     this.name = name;
-    return this;
-  }
-
-  @Override
-  public Management.QueueSpecification durable(boolean durable) {
-    this.durable = durable;
     return this;
   }
 
@@ -83,7 +77,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   @Override
   public Management.QueueSpecification type(QueueType type) {
     if (type == QueueType.QUORUM || type == QueueType.STREAM) {
-      this.durable(true).exclusive(false).autoDelete(false);
+      this.exclusive(false).autoDelete(false);
     }
     this.arg("x-queue-type", type.name().toLowerCase(Locale.ENGLISH));
     return this;

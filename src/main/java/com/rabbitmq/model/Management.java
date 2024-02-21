@@ -40,8 +40,6 @@ public interface Management extends AutoCloseable {
 
     QueueSpecification name(String name);
 
-    QueueSpecification durable(boolean durable);
-
     QueueSpecification exclusive(boolean exclusive);
 
     QueueSpecification autoDelete(boolean autoDelete);
@@ -207,8 +205,6 @@ public interface Management extends AutoCloseable {
   interface ExchangeSpecification {
 
     ExchangeSpecification name(String name);
-
-    ExchangeSpecification durable(boolean durable);
 
     ExchangeSpecification autoDelete(boolean autoDelete);
 

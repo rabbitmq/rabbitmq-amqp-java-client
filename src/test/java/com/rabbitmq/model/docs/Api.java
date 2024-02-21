@@ -88,7 +88,6 @@ class Api {
     management.exchange()
         .name("my-exchange")
         .type(FANOUT)
-        .durable(true)
         .declare();
     // end::fanout-exchange[]
 
@@ -96,7 +95,6 @@ class Api {
     management.exchange()
         .name("my-exchange")
         .type("x-delayed-message")
-        .durable(true)
         .autoDelete(false)
         .argument("x-delayed-type", "direct")
         .declare();
@@ -112,7 +110,6 @@ class Api {
     // tag::queue-creation[]
     management.queue()
         .name("my-queue")
-        .durable(true)
         .exclusive(true)
         .autoDelete(false)
         .declare();
@@ -122,7 +119,6 @@ class Api {
     management
         .queue()
         .name("my-queue")
-        .durable(false)
         .messageTtl(Duration.ofMinutes(10)) // <1>
         .maxLengthBytes(ByteCapacity.MB(100)) // <1>
         .declare();
