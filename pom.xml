@@ -57,7 +57,7 @@
         <maven.jar.plugin.version>3.3.0</maven.jar.plugin.version>
         <maven-clean-plugin.version>3.3.2</maven-clean-plugin.version>
         <spotless.version>2.43.0</spotless.version>
-        <google-java-format.version>1.19.2</google-java-format.version>
+        <google-java-format.version>1.20.0</google-java-format.version>
         <buildnumber.plugin.version>3.2.0</buildnumber.plugin.version>
         <asciidoctor.maven.plugin.version>3.0.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>2.5.11</asciidoctorj.version>
