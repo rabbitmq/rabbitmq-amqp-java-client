@@ -59,7 +59,7 @@
         <spotless.version>2.43.0</spotless.version>
         <google-java-format.version>1.19.2</google-java-format.version>
         <buildnumber.plugin.version>3.2.0</buildnumber.plugin.version>
-        <asciidoctor.maven.plugin.version>2.2.5</asciidoctor.maven.plugin.version>
+        <asciidoctor.maven.plugin.version>3.0.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>2.5.11</asciidoctorj.version>
         <asciidoctorj.diagram.version>2.2.14</asciidoctorj.diagram.version>
         <maven.javadoc.skip>true</maven.javadoc.skip>
