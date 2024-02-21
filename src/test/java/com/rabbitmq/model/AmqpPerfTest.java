@@ -39,8 +39,11 @@ import java.util.stream.Collectors;
 
 public class AmqpPerfTest {
 
-  // ./mvnw -q clean test-compile exec:java -Dexec.mainClass=com.rabbitmq.model.AmqpPerfTest
-  // -Dexec.classpathScope="tes"
+  /*
+  ./mvnw -q clean test-compile exec:java \
+    -Dexec.mainClass=com.rabbitmq.model.AmqpPerfTest \
+    -Dexec.classpathScope="test"
+     */
   public static void main(String[] args) throws Exception {
     ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
     MeterRegistry registry = dropwizardMeterRegistry();
