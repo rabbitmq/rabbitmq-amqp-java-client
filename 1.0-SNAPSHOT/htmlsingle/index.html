@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(dfd1019)</span>
+<br><span id="revremark">(b2e241e)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -666,7 +666,6 @@ It is accessible from the <code>Environment</code>.</p>
 <pre class="CodeRay highlight"><code data-lang="java">management.exchange()
     .name(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
     .type(FANOUT)
-    .durable(<span class="predefined-constant">true</span>)
     .declare();</code></pre>
 </div>
 </div>
@@ -676,7 +675,6 @@ It is accessible from the <code>Environment</code>.</p>
 <pre class="CodeRay highlight"><code data-lang="java">management.exchange()
     .name(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-exchange</span><span class="delimiter">&quot;</span></span>)
     .type(<span class="string"><span class="delimiter">&quot;</span><span class="content">x-delayed-message</span><span class="delimiter">&quot;</span></span>)
-    .durable(<span class="predefined-constant">true</span>)
     .autoDelete(<span class="predefined-constant">false</span>)
     .argument(<span class="string"><span class="delimiter">&quot;</span><span class="content">x-delayed-type</span><span class="delimiter">&quot;</span></span>, <span class="string"><span class="delimiter">&quot;</span><span class="content">direct</span><span class="delimiter">&quot;</span></span>)
     .declare();</code></pre>
@@ -696,7 +694,6 @@ It is accessible from the <code>Environment</code>.</p>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">management.queue()
     .name(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
-    .durable(<span class="predefined-constant">true</span>)
     .exclusive(<span class="predefined-constant">true</span>)
     .autoDelete(<span class="predefined-constant">false</span>)
     .declare();</code></pre>
@@ -711,7 +708,6 @@ It is accessible from the <code>Environment</code>.</p>
 <pre class="CodeRay highlight"><code data-lang="java">management
     .queue()
     .name(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
-    .durable(<span class="predefined-constant">false</span>)
     .messageTtl(<span class="predefined-type">Duration</span>.ofMinutes(<span class="integer">10</span>)) <i class="conum" data-value="1"></i><b>(1)</b>
     .maxLengthBytes(ByteCapacity.MB(<span class="integer">100</span>)) <i class="conum" data-value="1"></i><b>(1)</b>
     .declare();</code></pre>
@@ -793,7 +789,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-02-21 08:27:09 UTC
+Last updated 2024-02-21 08:31:32 UTC
 </div>
 </div>
 </body>
