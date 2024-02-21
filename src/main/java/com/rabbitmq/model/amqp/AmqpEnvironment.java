@@ -26,6 +26,7 @@ import java.net.URLDecoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -44,11 +45,13 @@ class AmqpEnvironment implements Environment {
   private final com.rabbitmq.client.Connection amqplConnection;
   private final Lock managementLock = new ReentrantLock();
   private volatile AmqpManagement management;
+  private final ExecutorService executorService;
 
-  AmqpEnvironment(String uri) {
+  AmqpEnvironment(String uri, ExecutorService executorService) {
     this.connectionParameters = connectionParameters(uri);
     ClientOptions clientOptions = new ClientOptions();
     this.client = Client.create(clientOptions);
+    this.executorService = executorService;
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
     connectionOptions.user(this.connectionParameters.username);
@@ -210,5 +213,9 @@ class AmqpEnvironment implements Environment {
     } catch (IOException e) {
       throw new IllegalArgumentException(e);
     }
+  }
+
+  ExecutorService executorService() {
+    return this.executorService;
   }
 }

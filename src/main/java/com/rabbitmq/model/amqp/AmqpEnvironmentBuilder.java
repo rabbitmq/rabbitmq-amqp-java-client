@@ -19,18 +19,25 @@ package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.EnvironmentBuilder;
+import java.util.concurrent.ExecutorService;
 
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   private String uri = "amqp://guest:guest@localhost:5672/%2f";
+  private ExecutorService executorService;
 
   public AmqpEnvironmentBuilder uri(String uri) {
     this.uri = uri;
     return this;
   }
 
+  public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
+    this.executorService = executorService;
+    return this;
+  }
+
   @Override
   public Environment build() {
-    return new AmqpEnvironment(uri);
+    return new AmqpEnvironment(uri, executorService);
   }
 }

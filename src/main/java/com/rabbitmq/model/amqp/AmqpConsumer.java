@@ -19,10 +19,8 @@ package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -36,7 +34,9 @@ class AmqpConsumer implements Consumer {
 
   private final AmqpEnvironment environment;
   private final Receiver receiver;
-  private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+  private final ExecutorService executorService;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private volatile Future<?> receiveTaskFuture;
 
   AmqpConsumer(
       AmqpEnvironment environment,
@@ -44,6 +44,11 @@ class AmqpConsumer implements Consumer {
       MessageHandler messageHandler,
       int initialCredits) {
     this.environment = environment;
+    if (environment.executorService() == null) {
+      this.executorService = Executors.newSingleThreadExecutor();
+    } else {
+      this.executorService = null;
+    }
     try {
       this.receiver =
           this.environment
@@ -56,7 +61,7 @@ class AmqpConsumer implements Consumer {
                       .autoSettle(false)
                       .creditWindow(initialCredits));
       Semaphore inFlightMessages = new Semaphore(initialCredits);
-      executorService.submit(
+      Runnable receiveTask =
           () -> {
             try {
               while (!Thread.currentThread().isInterrupted()) {
@@ -111,16 +116,33 @@ class AmqpConsumer implements Consumer {
             } catch (InterruptedException e) {
               Thread.currentThread().interrupt();
             }
-          });
+          };
+      if (environment.executorService() == null) {
+        receiveTaskFuture = this.executorService.submit(receiveTask);
+      } else {
+        receiveTaskFuture = environment.executorService().submit(receiveTask);
+      }
     } catch (ClientException e) {
-      executorService.shutdownNow();
+      if (this.receiveTaskFuture != null) {
+        this.receiveTaskFuture.cancel(true);
+      }
+      if (this.executorService != null) {
+        this.executorService.shutdownNow();
+      }
       throw new ModelException(e);
     }
   }
 
   @Override
   public void close() {
-    executorService.shutdownNow();
-    this.receiver.close();
+    if (this.closed.compareAndSet(false, true)) {
+      if (this.receiveTaskFuture != null) {
+        this.receiveTaskFuture.cancel(true);
+      }
+      if (this.executorService != null) {
+        this.executorService.shutdownNow();
+      }
+      this.receiver.close();
+    }
   }
 }

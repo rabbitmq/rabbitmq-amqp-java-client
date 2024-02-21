@@ -20,10 +20,7 @@ package com.rabbitmq.model.amqp;
 import com.rabbitmq.model.Message;
 import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.Publisher;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 
@@ -31,9 +28,11 @@ class AmqpPublisher implements Publisher {
 
   private final AmqpEnvironment environment;
   private final Sender sender;
+  private final ExecutorService executorService;
 
   AmqpPublisher(AmqpEnvironment environment, String address) {
     this.environment = environment;
+    this.executorService = environment.executorService();
     try {
       this.sender =
           this.connection()
@@ -41,59 +40,6 @@ class AmqpPublisher implements Publisher {
     } catch (ClientException e) {
       throw new ModelException(e);
     }
-  }
-
-  public static <T> CompletableFuture<T> makeCompletableFuture(Future<T> future) {
-    if (future.isDone()) return transformDoneFuture(future);
-    return CompletableFuture.supplyAsync(
-        () -> {
-          try {
-            if (!future.isDone()) {
-              awaitFutureIsDoneInForkJoinPool(future);
-            }
-            return future.get();
-          } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            future.cancel(true);
-            throw new RuntimeException(e);
-          }
-        });
-  }
-
-  private static <T> CompletableFuture<T> transformDoneFuture(Future<T> future) {
-    CompletableFuture<T> cf = new CompletableFuture<>();
-    T result;
-    try {
-      result = future.get();
-    } catch (Throwable ex) {
-      cf.completeExceptionally(ex);
-      return cf;
-    }
-    cf.complete(result);
-    return cf;
-  }
-
-  private static void awaitFutureIsDoneInForkJoinPool(Future<?> future)
-      throws InterruptedException {
-    ForkJoinPool.managedBlock(
-        new ForkJoinPool.ManagedBlocker() {
-          @Override
-          public boolean block() throws InterruptedException {
-            try {
-              future.get();
-            } catch (ExecutionException e) {
-              throw new RuntimeException(e);
-            }
-            return true;
-          }
-
-          @Override
-          public boolean isReleasable() {
-            return future.isDone();
-          }
-        });
   }
 
   private Connection connection() {
@@ -109,28 +55,34 @@ class AmqpPublisher implements Publisher {
   public void publish(Message message, ConfirmationHandler confirmationHandler) {
     try {
       Tracker tracker = this.sender.send(((AmqpMessage) message).nativeMessage());
-      makeCompletableFuture(tracker.settlementFuture())
-          .whenComplete(
-              (t, throwable) -> {
-                ConfirmationStatus status;
-                if (throwable == null && t != null && t.remoteState() == DeliveryState.accepted()) {
-                  status = ConfirmationStatus.CONFIRMED;
-                } else {
-                  status = ConfirmationStatus.FAILED;
-                }
-                confirmationHandler.handle(
-                    new ConfirmationContext() {
-                      @Override
-                      public Message message() {
-                        return message;
-                      }
+      if (this.executorService == null) {
+        Utils.makeCompletableFuture(tracker.settlementFuture())
+            .whenComplete(
+                (t, throwable) -> {
+                  ConfirmationStatus status;
+                  if (throwable == null
+                      && t != null
+                      && t.remoteState() == DeliveryState.accepted()) {
+                    status = ConfirmationStatus.CONFIRMED;
+                  } else {
+                    status = ConfirmationStatus.FAILED;
+                  }
+                  confirmationHandler.handle(new DefaultConfirmationContext(message, status));
+                });
+      } else {
+        this.executorService.submit(
+            () -> {
+              ConfirmationStatus status;
+              try {
+                tracker.settlementFuture().get();
+                status = ConfirmationStatus.CONFIRMED;
+              } catch (InterruptedException | ExecutionException e) {
+                status = ConfirmationStatus.FAILED;
+              }
+              confirmationHandler.handle(new DefaultConfirmationContext(message, status));
+            });
+      }
 
-                      @Override
-                      public ConfirmationStatus status() {
-                        return status;
-                      }
-                    });
-              });
     } catch (ClientException e) {
       throw new ModelException(e);
     }
@@ -139,5 +91,26 @@ class AmqpPublisher implements Publisher {
   @Override
   public void close() {
     this.sender.close();
+  }
+
+  private static class DefaultConfirmationContext implements ConfirmationContext {
+
+    private final Message message;
+    private final ConfirmationStatus status;
+
+    private DefaultConfirmationContext(Message message, ConfirmationStatus status) {
+      this.message = message;
+      this.status = status;
+    }
+
+    @Override
+    public Message message() {
+      return this.message;
+    }
+
+    @Override
+    public ConfirmationStatus status() {
+      return this.status;
+    }
   }
 }

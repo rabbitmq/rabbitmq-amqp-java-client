@@ -39,7 +39,9 @@ import java.util.stream.Collectors;
 
 public class AmqpPerfTest {
 
-  public static void main(String[] args) {
+  // ./mvnw -q clean test-compile exec:java -Dexec.mainClass=com.rabbitmq.model.AmqpPerfTest
+  // -Dexec.classpathScope="tes"
+  public static void main(String[] args) throws Exception {
     ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
     MeterRegistry registry = dropwizardMeterRegistry();
     Counter published = registry.counter("published");
@@ -86,7 +88,17 @@ public class AmqpPerfTest {
     String e = TestUtils.name(AmqpPerfTest.class, "main");
     String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
-    Environment environment = new AmqpEnvironmentBuilder().build();
+    ExecutorService envExecutorService;
+    boolean java21OrMore = Runtime.version().compareTo(Runtime.Version.parse("21")) >= 0;
+    if (java21OrMore) {
+      envExecutorService =
+          (ExecutorService)
+              Executors.class.getDeclaredMethod("newVirtualThreadPerTaskExecutor").invoke(null);
+    } else {
+      envExecutorService = Executors.newCachedThreadPool();
+    }
+    Environment environment =
+        new AmqpEnvironmentBuilder().executorService(envExecutorService).build();
     Management management = environment.management();
 
     CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -112,7 +124,7 @@ public class AmqpPerfTest {
       environment
           .consumerBuilder()
           .address(q)
-          .initialCredits(100)
+          .initialCredits(1000)
           .messageHandler(
               (context, message) -> {
                 consumed.increment();
