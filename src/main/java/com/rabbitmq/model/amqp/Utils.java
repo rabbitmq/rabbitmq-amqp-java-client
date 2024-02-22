@@ -17,10 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.*;
 
 abstract class Utils {
 
@@ -77,5 +75,19 @@ abstract class Utils {
             return future.isDone();
           }
         });
+  }
+
+  static ExecutorService virtualThreadExecutorServiceIfAvailable() {
+    boolean java21OrMore = Runtime.version().compareTo(Runtime.Version.parse("21")) >= 0;
+    if (java21OrMore) {
+      try {
+        return (ExecutorService)
+            Executors.class.getDeclaredMethod("newVirtualThreadPerTaskExecutor").invoke(null);
+      } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      return Executors.newCachedThreadPool();
+    }
   }
 }

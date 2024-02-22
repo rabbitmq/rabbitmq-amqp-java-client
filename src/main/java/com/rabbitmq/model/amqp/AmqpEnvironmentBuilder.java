@@ -26,6 +26,8 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   private String uri = "amqp://guest:guest@localhost:5672/%2f";
   private ExecutorService executorService;
 
+  public AmqpEnvironmentBuilder() {}
+
   public AmqpEnvironmentBuilder uri(String uri) {
     this.uri = uri;
     return this;

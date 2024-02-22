@@ -48,12 +48,20 @@ class AmqpEnvironment implements Environment {
   private volatile AmqpManagement management;
   private final ExecutorService executorService;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final boolean internalExecutor;
 
   AmqpEnvironment(String uri, ExecutorService executorService) {
     this.connectionParameters = connectionParameters(uri);
     ClientOptions clientOptions = new ClientOptions();
     this.client = Client.create(clientOptions);
-    this.executorService = executorService;
+
+    if (executorService == null) {
+      this.executorService = Utils.virtualThreadExecutorServiceIfAvailable();
+      this.internalExecutor = true;
+    } else {
+      this.executorService = executorService;
+      this.internalExecutor = false;
+    }
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
     connectionOptions.user(this.connectionParameters.username);
@@ -165,6 +173,9 @@ class AmqpEnvironment implements Environment {
         throw new ModelException(e);
       }
       this.client.close();
+      if (this.internalExecutor) {
+        this.executorService.shutdownNow();
+      }
     }
   }
 

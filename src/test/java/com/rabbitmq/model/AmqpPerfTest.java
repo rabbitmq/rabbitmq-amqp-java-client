@@ -19,9 +19,9 @@ package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
+import static com.rabbitmq.model.TestUtils.environmentBuilder;
 
 import com.codahale.metrics.MetricRegistry;
-import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -91,17 +91,7 @@ public class AmqpPerfTest {
     String e = TestUtils.name(AmqpPerfTest.class, "main");
     String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
-    ExecutorService envExecutorService;
-    boolean java21OrMore = Runtime.version().compareTo(Runtime.Version.parse("21")) >= 0;
-    if (java21OrMore) {
-      envExecutorService =
-          (ExecutorService)
-              Executors.class.getDeclaredMethod("newVirtualThreadPerTaskExecutor").invoke(null);
-    } else {
-      envExecutorService = Executors.newCachedThreadPool();
-    }
-    Environment environment =
-        new AmqpEnvironmentBuilder().executorService(envExecutorService).build();
+    Environment environment = environmentBuilder().build();
     Management management = environment.management();
 
     CountDownLatch shutdownLatch = new CountDownLatch(1);

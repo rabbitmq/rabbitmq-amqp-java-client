@@ -20,9 +20,9 @@ package com.rabbitmq.model;
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.model.TestUtils.environmentBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -35,7 +35,7 @@ public class AmqpTest {
   @Test
   void queueDeclareDeletePublishConsume(TestInfo info) {
     String q = TestUtils.name(info);
-    Environment environment = new AmqpEnvironmentBuilder().build();
+    Environment environment = environmentBuilder().build();
     try {
       environment.management().queue().name(q).quorum().queue().declare();
       String address = "/amq/queue/" + q;
@@ -83,7 +83,7 @@ public class AmqpTest {
     String e = TestUtils.name(info);
     String q = TestUtils.name(info);
     String rk = "foo";
-    Environment environment = new AmqpEnvironmentBuilder().build();
+    Environment environment = environmentBuilder().build();
     Management management = environment.management();
     try {
       management.exchange().name(e).type(DIRECT).declare();

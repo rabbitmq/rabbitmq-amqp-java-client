@@ -19,11 +19,17 @@ package com.rabbitmq.model;
 
 import static java.lang.String.format;
 
+import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import org.apache.qpid.protonj2.client.Client;
+import org.apache.qpid.protonj2.client.Connection;
+import org.apache.qpid.protonj2.client.ConnectionOptions;
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -73,5 +79,35 @@ public abstract class TestUtils {
     String uuid = UUID.randomUUID().toString();
     return format(
         "%s_%s%s", testClass.getSimpleName(), testMethod, uuid.substring(uuid.length() / 2));
+  }
+
+  static Client client() {
+    return Client.create();
+  }
+
+  static Connection connection(Client client) {
+    return connection(client, o -> {});
+  }
+
+  static Connection connection(Client client, Consumer<ConnectionOptions> optionsCallback) {
+    ConnectionOptions connectionOptions = new ConnectionOptions();
+    connectionOptions
+        .user("guest")
+        .password("guest")
+        .virtualHost("vhost:/")
+        // only the mechanisms supported in RabbitMQ
+        .saslOptions()
+        .addAllowedMechanism("PLAIN")
+        .addAllowedMechanism("EXTERNAL");
+    optionsCallback.accept(connectionOptions);
+    try {
+      return client.connect("localhost", 5672, connectionOptions);
+    } catch (ClientException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  static AmqpEnvironmentBuilder environmentBuilder() {
+    return new AmqpEnvironmentBuilder();
   }
 }

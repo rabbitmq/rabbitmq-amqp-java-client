@@ -17,14 +17,17 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import static com.rabbitmq.model.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
+import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
+import org.apache.qpid.protonj2.client.Message;
 import org.junit.jupiter.api.*;
 
 public class ClientTest {
@@ -35,7 +38,7 @@ public class ClientTest {
 
   @BeforeAll
   static void initAll() {
-    environment = new AmqpEnvironmentBuilder().build();
+    environment = environmentBuilder().build();
     management = environment.management();
   }
 
@@ -57,8 +60,7 @@ public class ClientTest {
 
   @Test
   void deliveryCount() throws Exception {
-    ClientOptions clientOptions = new ClientOptions();
-    try (Client client = Client.create(clientOptions);
+    try (Client client = client();
         Publisher publisher = environment.publisherBuilder().address(q).build()) {
       int messageCount = 10;
       CountDownLatch publishLatch = new CountDownLatch(5);
@@ -69,21 +71,57 @@ public class ClientTest {
                       publisher.message().addData("".getBytes(UTF_8)),
                       context -> publishLatch.countDown()));
 
-      ConnectionOptions connectionOptions = new ConnectionOptions();
-      connectionOptions.user("guest");
-      connectionOptions.password("guest");
-      connectionOptions.virtualHost("vhost:/");
-      // only the mechanisms supported in RabbitMQ
-      connectionOptions.saslOptions().addAllowedMechanism("PLAIN").addAllowedMechanism("EXTERNAL");
-
-      Connection connection = client.connect("localhost", 5672, connectionOptions);
+      Connection connection = connection(client);
       Receiver receiver = connection.openReceiver(q, new ReceiverOptions());
       int receivedMessages = 0;
       while (receiver.receive(100, TimeUnit.MILLISECONDS) != null) {
         receivedMessages++;
       }
-
       assertThat(receivedMessages).isEqualTo(messageCount);
+    }
+  }
+
+  @Test
+  void largeMessageWithSender() throws Exception {
+    try (Client client = client()) {
+      int maxFrameSize = 1000;
+      Connection connection =
+          connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
+
+      Sender sender =
+          connection.openSender(q, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+      byte[] body = new byte[maxFrameSize * 4];
+      Arrays.fill(body, (byte) 'A');
+      Tracker tracker = sender.send(Message.create(body));
+      tracker.awaitSettlement();
+    }
+  }
+
+  @Test
+  void largeMessageWithStreamSender() throws Exception {
+    try (Client client = client()) {
+      int maxFrameSize = 1000;
+      Connection connection =
+          connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
+
+      StreamSender sender =
+          connection.openStreamSender(
+              q, new StreamSenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+      StreamSenderMessage message = sender.beginMessage();
+      byte[] body = new byte[maxFrameSize / 4];
+      Arrays.fill(body, (byte) 'A');
+
+      OutputStreamOptions streamOptions = new OutputStreamOptions().bodyLength(body.length);
+      OutputStream output = message.body(streamOptions);
+
+      final int chunkSize = 10;
+
+      for (int i = 0; i < body.length; i += chunkSize) {
+        output.write(body, i, chunkSize);
+      }
+
+      output.close();
+      message.tracker().awaitSettlement();
     }
   }
 }
