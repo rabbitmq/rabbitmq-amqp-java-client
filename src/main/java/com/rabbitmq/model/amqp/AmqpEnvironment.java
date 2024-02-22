@@ -28,6 +28,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import org.apache.qpid.protonj2.client.Client;
@@ -46,6 +47,7 @@ class AmqpEnvironment implements Environment {
   private final Lock managementLock = new ReentrantLock();
   private volatile AmqpManagement management;
   private final ExecutorService executorService;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpEnvironment(String uri, ExecutorService executorService) {
     this.connectionParameters = connectionParameters(uri);
@@ -148,19 +150,21 @@ class AmqpEnvironment implements Environment {
 
   @Override
   public void close() {
-    this.client.close();
-    try {
-      this.managementLock.lock();
-      if (this.management != null) {
-        this.management.close();
+    if (this.closed.compareAndSet(false, true)) {
+      try {
+        this.managementLock.lock();
+        if (this.management != null) {
+          this.management.close();
+        }
+      } finally {
+        this.managementLock.unlock();
       }
-    } finally {
-      this.managementLock.unlock();
-    }
-    try {
-      this.amqplConnection.close();
-    } catch (IOException e) {
-      throw new ModelException(e);
+      try {
+        this.amqplConnection.close();
+      } catch (IOException e) {
+        throw new ModelException(e);
+      }
+      this.client.close();
     }
   }
 

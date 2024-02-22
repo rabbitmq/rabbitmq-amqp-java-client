@@ -41,7 +41,7 @@ public class AmqpTest {
       String address = "/amq/queue/" + q;
       Publisher publisher = environment.publisherBuilder().address(address).build();
 
-      int messageCount = 1;
+      int messageCount = 10;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount);
       IntStream.range(0, messageCount)
           .forEach(
