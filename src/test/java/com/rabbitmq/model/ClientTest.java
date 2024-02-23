@@ -108,7 +108,7 @@ public class ClientTest {
           connection.openStreamSender(
               q, new StreamSenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
       StreamSenderMessage message = sender.beginMessage();
-      byte[] body = new byte[maxFrameSize / 4];
+      byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
 
       OutputStreamOptions streamOptions = new OutputStreamOptions().bodyLength(body.length);
