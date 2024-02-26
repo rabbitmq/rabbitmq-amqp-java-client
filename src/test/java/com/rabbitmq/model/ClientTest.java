@@ -21,6 +21,8 @@ import static com.rabbitmq.model.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
@@ -82,7 +84,7 @@ public class ClientTest {
   }
 
   @Test
-  void largeMessageWithSender() throws Exception {
+  void largeMessage() throws Exception {
     try (Client client = client()) {
       int maxFrameSize = 1000;
       Connection connection =
@@ -94,13 +96,26 @@ public class ClientTest {
       Arrays.fill(body, (byte) 'A');
       Tracker tracker = sender.send(Message.create(body));
       tracker.awaitSettlement();
+
+      Receiver receiver =
+          connection.openReceiver(
+              q,
+              new ReceiverOptions()
+                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                  .autoSettle(false)
+                  .autoAccept(false));
+      Delivery delivery = receiver.receive(100, TimeUnit.SECONDS);
+      assertThat(delivery).isNotNull();
+      assertThat(delivery.message().body()).isEqualTo(body);
+      delivery.disposition(DeliveryState.accepted(), true);
     }
   }
 
   @Test
-  void largeMessageWithStreamSender() throws Exception {
+  void largeMessageStreamSupport() throws Exception {
+    int maxFrameSize = 1000;
+    int chunkSize = 10;
     try (Client client = client()) {
-      int maxFrameSize = 1000;
       Connection connection =
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
@@ -114,14 +129,36 @@ public class ClientTest {
       OutputStreamOptions streamOptions = new OutputStreamOptions().bodyLength(body.length);
       OutputStream output = message.body(streamOptions);
 
-      final int chunkSize = 10;
-
       for (int i = 0; i < body.length; i += chunkSize) {
         output.write(body, i, chunkSize);
       }
 
       output.close();
       message.tracker().awaitSettlement();
+
+      StreamReceiver receiver =
+          connection.openStreamReceiver(
+              q,
+              new StreamReceiverOptions()
+                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                  .autoAccept(false)
+                  .autoSettle(false));
+
+      StreamDelivery delivery = receiver.receive();
+      InputStream inputStream = delivery.message().body();
+
+      byte[] chunk = new byte[chunkSize];
+
+      ByteArrayOutputStream outputStream = new ByteArrayOutputStream(body.length);
+      int read;
+      while ((read = inputStream.read(chunk)) != -1) {
+        outputStream.write(chunk, 0, read);
+      }
+
+      inputStream.close();
+
+      assertThat(outputStream.toByteArray()).isEqualTo(body);
+      delivery.disposition(DeliveryState.accepted(), true);
     }
   }
 }
