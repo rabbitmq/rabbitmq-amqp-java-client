@@ -30,6 +30,7 @@ import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -105,6 +106,10 @@ public abstract class TestUtils {
     } catch (ClientException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  static UnsignedLong ulong(long value) {
+    return UnsignedLong.valueOf(value);
   }
 
   static AmqpEnvironmentBuilder environmentBuilder() {

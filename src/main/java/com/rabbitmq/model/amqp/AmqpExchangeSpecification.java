@@ -79,6 +79,7 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
 
   @Override
   public void declare() {
+    // TODO check name is specified (server-named entities not allowed)
     try {
       this.management
           .channel()

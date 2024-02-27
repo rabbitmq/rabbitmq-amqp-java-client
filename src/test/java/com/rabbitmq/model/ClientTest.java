@@ -24,12 +24,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Arrays;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
+import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
+import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonDecoderFactory;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
+import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
 
 public class ClientTest {
@@ -159,6 +166,108 @@ public class ClientTest {
 
       assertThat(outputStream.toByteArray()).isEqualTo(body);
       delivery.disposition(DeliveryState.accepted(), true);
+    }
+  }
+
+  @Test
+  void management(TestInfo info) throws Exception {
+    String q = name(info);
+    AtomicLong requestIdSequence = new AtomicLong(0);
+    try (Client client = client()) {
+      Connection connection = connection(client, o -> o.traceFrames(false));
+
+      String linkPairName = "my-link-pair";
+      String managementNodeAddress = "$management";
+      String replyTo = "$me";
+      Session session = connection.openSession();
+      Sender sender =
+          session.openSender(
+              managementNodeAddress,
+              new SenderOptions()
+                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                  .linkName(linkPairName)
+                  .properties(Collections.singletonMap("paired", Boolean.TRUE)));
+
+      Receiver receiver =
+          session.openReceiver(
+              managementNodeAddress,
+              new ReceiverOptions()
+                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                  .linkName(linkPairName)
+                  .properties(Collections.singletonMap("paired", Boolean.TRUE)));
+
+      sender.openFuture().get(1, TimeUnit.SECONDS);
+      receiver.openFuture().get(1, TimeUnit.SECONDS);
+
+      Map<String, Object> body = new HashMap<>();
+      body.put("name", q);
+      body.put("durable", true);
+      body.put("exclusive", false);
+      body.put("auto_delete", false);
+      body.put("type", "queue");
+      body.put("arguments", Collections.emptyMap());
+      ProtonEncoder encoder = ProtonEncoderFactory.create();
+      ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer();
+      encoder.writeMap(buffer, encoder.newEncoderState(), body);
+      byte[] requestBody = Arrays.copyOf(buffer.getReadableArray(), buffer.getReadableBytes());
+      UnsignedLong requestId = ulong(requestIdSequence.incrementAndGet());
+      Message<byte[]> request =
+          Message.create(requestBody)
+              .messageId(requestId)
+              .to("/$management/entities")
+              .subject("POST")
+              .replyTo(replyTo)
+              .contentType("application/amqp-management+amqp;type=entity");
+
+      sender.send(request);
+
+      Delivery delivery = receiver.receive(1, TimeUnit.SECONDS);
+      assertThat(delivery).isNotNull();
+      Message<byte[]> response = delivery.message();
+      assertThat(response.correlationId()).isEqualTo(requestId);
+      assertThat(response.subject()).isEqualTo("201");
+      assertThat(response.contentType())
+          .isEqualTo("application/amqp-management+amqp;type=entity-collection");
+      assertThat(response.property("http:response")).isEqualTo("1.1");
+      assertThat(response.property("location")).isNotNull().isInstanceOf(String.class);
+
+      byte[] responseBodyBin = response.body();
+      ProtonDecoder decoder = ProtonDecoderFactory.create();
+      buffer = new ProtonByteArrayBuffer(responseBodyBin.length);
+      buffer.writeBytes(responseBodyBin);
+      Map<String, Object> responseBody = decoder.readMap(buffer, decoder.newDecoderState());
+      String location = response.property("location").toString();
+      assertThat(responseBody)
+          .containsEntry("type", "queue")
+          .containsEntry("id", q)
+          .containsEntry("self", location)
+          .containsEntry("management", managementNodeAddress)
+          .containsEntry("target", "/queue/" + q);
+
+      requestId = ulong(requestIdSequence.incrementAndGet());
+      request =
+          Message.create(new byte[0])
+              .messageId(requestId)
+              .to(location)
+              .subject("DELETE")
+              .replyTo(replyTo);
+
+      sender.send(request);
+
+      delivery = receiver.receive(1, TimeUnit.SECONDS);
+      assertThat(delivery).isNotNull();
+      response = delivery.message();
+      assertThat(response.correlationId()).isEqualTo(requestId);
+      assertThat(response.subject()).isEqualTo("200");
+      assertThat(response.contentType()).isEqualTo("application/amqp-management+amqp");
+      assertThat(response.property("http:response")).isEqualTo("1.1");
+
+      responseBodyBin = response.body();
+      decoder = ProtonDecoderFactory.create();
+      buffer = new ProtonByteArrayBuffer(responseBodyBin.length);
+      buffer.writeBytes(responseBodyBin);
+      responseBody = decoder.readMap(buffer, decoder.newDecoderState());
+      assertThat(responseBody).containsEntry("message_count", ulong(0));
     }
   }
 }

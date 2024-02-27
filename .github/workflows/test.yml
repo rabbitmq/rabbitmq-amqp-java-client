@@ -12,6 +12,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout ProtonJ2
+        uses: actions/checkout@v4
+        with:
+          repository: apache/qpid-protonj2
+          path: './qpid-protonj2'
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -21,7 +26,12 @@ jobs:
       - name: Start broker
         run: ci/start-broker.sh
         env:
-          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:native-amqp-otp-max-bazel'
+          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:amqp-management-otp-max-bazel'
+      - name: Display Java version
+        run: ./mvnw --version
+      - name: Install ProtonJ2
+        run: |
+          mvn --file qpid-protonj2 clean install -Dmaven.test.skip
       - name: Test
         run: |
           ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq
