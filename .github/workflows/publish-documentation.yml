@@ -12,12 +12,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout ProtonJ2
+        uses: actions/checkout@v4
+        with:
+          repository: apache/qpid-protonj2
+          path: './qpid-protonj2'
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
+      - name: Install ProtonJ2
+        run: |
+          mvn --file qpid-protonj2 clean install -Dmaven.test.skip
       - name: Publish Documentation
         run: |
           git config user.name "rabbitmq-ci"
