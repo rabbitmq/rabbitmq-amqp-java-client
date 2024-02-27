@@ -23,8 +23,8 @@ public class ModelException extends RuntimeException {
     super(cause);
   }
 
-  public ModelException(String message) {
-    super(message);
+  public ModelException(String format, Object... args) {
+    super(String.format(format, args));
   }
 
   public ModelException(String message, Throwable cause) {

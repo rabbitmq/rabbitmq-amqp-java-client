@@ -23,12 +23,8 @@ import static java.lang.String.format;
 import com.rabbitmq.model.ByteCapacity;
 import com.rabbitmq.model.Management;
 import com.rabbitmq.model.Management.QueueType;
-import com.rabbitmq.model.ModelException;
-import java.io.IOException;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,13 +183,14 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   @Override
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
-    try {
-      this.management
-          .channel()
-          .queueDeclare(this.name, this.durable, this.exclusive, this.autoDelete, this.arguments);
-    } catch (IOException e) {
-      throw new ModelException(e);
-    }
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("name", this.name);
+    body.put("durable", this.durable);
+    body.put("exclusive", this.exclusive);
+    body.put("auto_delete", this.autoDelete);
+    body.put("type", "queue");
+    body.put("arguments", this.arguments);
+    this.management.declareQueue(body);
   }
 
   private Map<String, Object> arg(String key, Object value) {

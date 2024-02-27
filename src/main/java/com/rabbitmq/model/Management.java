@@ -82,6 +82,7 @@ public interface Management extends AutoCloseable {
 
     QueueSpecification argument(String key, Object value);
 
+    // TODO consider returning a QueueStatus object with some info after creation
     void declare();
   }
 
@@ -199,6 +200,7 @@ public interface Management extends AutoCloseable {
 
   interface QueueDeletion {
 
+    // TODO consider returning a QueueStatus object with some info after deletion
     void delete(String name);
   }
 
