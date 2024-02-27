@@ -91,26 +91,9 @@ class AmqpManagement implements Management {
   @Override
   public QueueDeletion queueDeletion() {
     return name -> {
-      UUID requestId = messageId();
-      try {
-        Message<byte[]> request =
-            Message.create(new byte[0])
-                .messageId(requestId)
-                .to(queueLocation(name))
-                .subject(DELETE)
-                .replyTo(REPLY_TO);
-
-        // TODO synchronize to avoid concurrent calls
-        sender.send(request);
-        Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-        checkResponse(delivery, this.rpcTimeout, requestId, CODE_200);
-        Message<byte[]> response = delivery.message();
-        Map<String, Object> responseBody = decode(response.body());
-        if (!responseBody.containsKey("message_count")) {
-          throw new ModelException("Response body should contain message_count");
-        }
-      } catch (ClientException e) {
-        throw new ModelException("Error while deleting queue", e);
+      Map<String, Object> responseBody = delete(queueLocation(name), "queue", CODE_200);
+      if (!responseBody.containsKey("message_count")) {
+        throw new ModelException("Response body should contain message_count");
       }
     };
   }
@@ -123,11 +106,7 @@ class AmqpManagement implements Management {
   @Override
   public ExchangeDeletion exchangeDeletion() {
     return name -> {
-      try {
-        channel().exchangeDelete(name);
-      } catch (IOException e) {
-        throw new ModelException(e);
-      }
+      delete(exchangeLocation(name), "exchange", CODE_204);
     };
   }
 
@@ -164,20 +143,20 @@ class AmqpManagement implements Management {
   }
 
   void declareQueue(Map<String, Object> body) {
-    declare(body, "queue");
+    declare(body, "/$management/entities", "queue");
   }
 
   void declareExchange(Map<String, Object> body) {
-    declare(body, "exchange");
+    declare(body, "/$management/entities", "exchange");
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String type) {
+  private Map<String, Object> declare(Map<String, Object> body, String target, String type) {
     UUID requestId = messageId();
     try {
       Message<byte[]> request =
           Message.create(encode(body))
               .messageId(requestId)
-              .to("/$management/entities")
+              .to(target)
               .subject(POST)
               .replyTo(REPLY_TO)
               .contentType(MEDIA_TYPE_ENTITY);
@@ -194,7 +173,28 @@ class AmqpManagement implements Management {
       }
       return responseBody;
     } catch (ClientException e) {
-      throw new ModelException("Error while declaring " + type, e);
+      throw new ModelException("Error on POST operation: " + type, e);
+    }
+  }
+
+  private Map<String, Object> delete(String target, String type, String expectedResponseCode) {
+    UUID requestId = messageId();
+    try {
+      Message<byte[]> request =
+          Message.create(new byte[0])
+              .messageId(requestId)
+              .to(target)
+              .subject(DELETE)
+              .replyTo(REPLY_TO);
+
+      // TODO synchronize to avoid concurrent calls
+      sender.send(request);
+      Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
+      checkResponse(delivery, this.rpcTimeout, requestId, expectedResponseCode);
+      Message<byte[]> response = delivery.message();
+      return decode(response.body());
+    } catch (ClientException e) {
+      throw new ModelException("Error on DELETE operation: " + type, e);
     }
   }
 
@@ -220,6 +220,10 @@ class AmqpManagement implements Management {
     return "/" + MANAGEMENT_NODE_ADDRESS + "/queues/" + q;
   }
 
+  private static String exchangeLocation(String e) {
+    return "/" + MANAGEMENT_NODE_ADDRESS + "/exchanges/" + e;
+  }
+
   private static void checkResponse(
       Delivery delivery, Duration rpcTimeout, UUID requestId, String expectedResponseCode)
       throws ClientException {
@@ -241,4 +245,9 @@ class AmqpManagement implements Management {
   private static final String MEDIA_TYPE_ENTITY = "application/amqp-management+amqp;type=entity";
   private static final String CODE_200 = "200";
   private static final String CODE_201 = "201";
+  private static final String CODE_204 = "204";
+
+  void bindQueue(String queue, Map<String, Object> body) {
+    declare(body, "/$management/queues/" + queue + "/$management/entities", "binding");
+  }
 }

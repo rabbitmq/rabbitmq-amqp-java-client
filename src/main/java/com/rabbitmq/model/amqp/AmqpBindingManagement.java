@@ -84,13 +84,11 @@ abstract class AmqpBindingManagement {
     public void bind() {
       try {
         if (this.state.toQueue) {
-          this.state
-              .managememt
-              .channel()
-              .queueBind(
-                  this.state.destination, this.state.source,
-                  this.state.key, this.state.arguments);
-
+          Map<String, Object> body = new LinkedHashMap<>();
+          body.put("source", this.state.source);
+          body.put("binding_key", this.state.key);
+          body.put("arguments", this.state.arguments);
+          this.state.managememt.bindQueue(this.state.destination, body);
         } else {
           this.state
               .managememt
