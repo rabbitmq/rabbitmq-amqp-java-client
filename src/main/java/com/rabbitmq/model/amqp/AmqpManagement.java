@@ -97,7 +97,7 @@ class AmqpManagement implements Management {
             Message.create(new byte[0])
                 .messageId(requestId)
                 .to(queueLocation(name))
-                .subject("DELETE")
+                .subject(DELETE)
                 .replyTo(REPLY_TO);
 
         // TODO synchronize to avoid concurrent calls
@@ -164,6 +164,14 @@ class AmqpManagement implements Management {
   }
 
   void declareQueue(Map<String, Object> body) {
+    declare(body, "queue");
+  }
+
+  void declareExchange(Map<String, Object> body) {
+    declare(body, "exchange");
+  }
+
+  private Map<String, Object> declare(Map<String, Object> body, String type) {
     UUID requestId = messageId();
     try {
       Message<byte[]> request =
@@ -180,12 +188,13 @@ class AmqpManagement implements Management {
       Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
       checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
       Message<byte[]> response = delivery.message();
-      body = decode(response.body());
-      if (!"queue".equals(body.get("type"))) {
-        throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), "queue");
+      Map<String, Object> responseBody = decode(response.body());
+      if (!type.equals(responseBody.get("type"))) {
+        throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), type);
       }
+      return responseBody;
     } catch (ClientException e) {
-      throw new ModelException("Error while declaring queue", e);
+      throw new ModelException("Error while declaring " + type, e);
     }
   }
 
@@ -228,6 +237,7 @@ class AmqpManagement implements Management {
   }
 
   private static final String POST = "POST";
+  private static final String DELETE = "DELETE";
   private static final String MEDIA_TYPE_ENTITY = "application/amqp-management+amqp;type=entity";
   private static final String CODE_200 = "200";
   private static final String CODE_201 = "201";

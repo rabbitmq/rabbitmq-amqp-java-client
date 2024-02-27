@@ -18,8 +18,6 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Management;
-import com.rabbitmq.model.ModelException;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -80,13 +78,14 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
   @Override
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
-    try {
-      this.management
-          .channel()
-          .exchangeDeclare(
-              this.name, this.type, this.durable, this.autoDelete, this.internal, this.arguments);
-    } catch (IOException e) {
-      throw new ModelException(e);
-    }
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("name", this.name);
+    body.put("exchange_type", this.type);
+    body.put("durable", this.durable);
+    body.put("auto_delete", this.autoDelete);
+    body.put("internal", this.internal);
+    body.put("type", "exchange");
+    body.put("arguments", this.arguments);
+    this.management.declareExchange(body);
   }
 }
