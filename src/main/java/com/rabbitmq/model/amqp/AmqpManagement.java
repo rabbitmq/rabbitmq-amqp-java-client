@@ -28,8 +28,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -45,8 +48,9 @@ class AmqpManagement implements Management {
 
   private final Channel channel;
   private final Session session;
-  private final Sender sender;
-  private final Receiver receiver;
+  private final Lock linkPairLock = new ReentrantLock();
+  private final Sender sender; // @GuardedBy("linkPairLock")
+  private final Receiver receiver; // @GuardedBy("linkPairLock")
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final ProtonEncoder encoder = ProtonEncoderFactory.create();
   private final ProtonDecoder decoder = ProtonDecoderFactory.create();
@@ -151,51 +155,55 @@ class AmqpManagement implements Management {
   }
 
   private Map<String, Object> declare(Map<String, Object> body, String target, String type) {
-    UUID requestId = messageId();
-    try {
-      Message<byte[]> request =
-          Message.create(encode(body))
-              .messageId(requestId)
-              .to(target)
-              .subject(POST)
-              .replyTo(REPLY_TO)
-              .contentType(MEDIA_TYPE_ENTITY);
+    return this.callOnLinkPair(
+        () -> {
+          UUID requestId = messageId();
+          try {
+            Message<byte[]> request =
+                Message.create(encode(body))
+                    .messageId(requestId)
+                    .to(target)
+                    .subject(POST)
+                    .replyTo(REPLY_TO)
+                    .contentType(MEDIA_TYPE_ENTITY);
 
-      // TODO synchronize to avoid concurrent calls
-      this.sender.send(request);
+            this.sender.send(request);
 
-      Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-      checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
-      Message<byte[]> response = delivery.message();
-      Map<String, Object> responseBody = decode(response.body());
-      if (!type.equals(responseBody.get("type"))) {
-        throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), type);
-      }
-      return responseBody;
-    } catch (ClientException e) {
-      throw new ModelException("Error on POST operation: " + type, e);
-    }
+            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
+            checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
+            Message<byte[]> response = delivery.message();
+            Map<String, Object> responseBody = decode(response.body());
+            if (!type.equals(responseBody.get("type"))) {
+              throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), type);
+            }
+            return responseBody;
+          } catch (ClientException e) {
+            throw new ModelException("Error on POST operation: " + type, e);
+          }
+        });
   }
 
   private Map<String, Object> delete(String target, String type, String expectedResponseCode) {
-    UUID requestId = messageId();
-    try {
-      Message<byte[]> request =
-          Message.create(new byte[0])
-              .messageId(requestId)
-              .to(target)
-              .subject(DELETE)
-              .replyTo(REPLY_TO);
+    return this.callOnLinkPair(
+        () -> {
+          UUID requestId = messageId();
+          try {
+            Message<byte[]> request =
+                Message.create(new byte[0])
+                    .messageId(requestId)
+                    .to(target)
+                    .subject(DELETE)
+                    .replyTo(REPLY_TO);
 
-      // TODO synchronize to avoid concurrent calls
-      sender.send(request);
-      Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-      checkResponse(delivery, this.rpcTimeout, requestId, expectedResponseCode);
-      Message<byte[]> response = delivery.message();
-      return decode(response.body());
-    } catch (ClientException e) {
-      throw new ModelException("Error on DELETE operation: " + type, e);
-    }
+            this.sender.send(request);
+            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
+            checkResponse(delivery, this.rpcTimeout, requestId, expectedResponseCode);
+            Message<byte[]> response = delivery.message();
+            return decode(response.body());
+          } catch (ClientException e) {
+            throw new ModelException("Error on DELETE operation: " + type, e);
+          }
+        });
   }
 
   private byte[] encode(Map<String, Object> map) {
@@ -253,5 +261,25 @@ class AmqpManagement implements Management {
 
   void bindExchange(String exchange, Map<String, Object> body) {
     declare(body, "/$management/exchanges/" + exchange + "/$management/entities", "binding");
+  }
+
+  private <T> T callOnLinkPair(Callable<T> operation) {
+    try {
+      if (this.linkPairLock.tryLock(this.rpcTimeout.toMillis(), MILLISECONDS)) {
+        try {
+          return operation.call();
+        } catch (Exception e) {
+          throw new ModelException("Error during management operation", e);
+        } finally {
+          this.linkPairLock.unlock();
+        }
+      } else {
+        throw new ModelException(
+            "Could not acquire link pair lock in %d ms", this.rpcTimeout.toMillis());
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new ModelException("Thread interrupted while waited on link pair lock", e);
+    }
   }
 }
