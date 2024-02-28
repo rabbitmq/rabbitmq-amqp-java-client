@@ -63,7 +63,7 @@ abstract class AmqpBindingManagement {
 
     @Override
     public Management.BindingSpecification destinationExchange(String exchange) {
-      this.state.toQueue = true;
+      this.state.toQueue = false;
       this.state.destination = exchange;
       return this;
     }
@@ -82,23 +82,14 @@ abstract class AmqpBindingManagement {
 
     @Override
     public void bind() {
-      try {
-        if (this.state.toQueue) {
-          Map<String, Object> body = new LinkedHashMap<>();
-          body.put("source", this.state.source);
-          body.put("binding_key", this.state.key);
-          body.put("arguments", this.state.arguments);
-          this.state.managememt.bindQueue(this.state.destination, body);
-        } else {
-          this.state
-              .managememt
-              .channel()
-              .exchangeBind(
-                  this.state.destination, this.state.source,
-                  this.state.key, this.state.arguments);
-        }
-      } catch (IOException e) {
-        throw new ModelException(e);
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("source", this.state.source);
+      body.put("binding_key", this.state.key == null ? "" : this.state.key);
+      body.put("arguments", this.state.arguments);
+      if (this.state.toQueue) {
+        this.state.managememt.bindQueue(this.state.destination, body);
+      } else {
+        this.state.managememt.bindExchange(this.state.destination, body);
       }
     }
   }
@@ -151,8 +142,10 @@ abstract class AmqpBindingManagement {
               .managememt
               .channel()
               .queueUnbind(
-                  this.state.destination, this.state.source,
-                  this.state.key, this.state.arguments);
+                  this.state.destination,
+                  this.state.source,
+                  this.state.key == null ? "" : this.state.key,
+                  this.state.arguments);
 
         } else {
           this.state

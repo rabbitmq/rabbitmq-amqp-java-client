@@ -18,15 +18,17 @@
 package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
+import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;
+import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.IntStream;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
@@ -43,7 +45,7 @@ public class AmqpTest {
 
       int messageCount = 10;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount);
-      IntStream.range(0, messageCount)
+      range(0, messageCount)
           .forEach(
               ignored -> {
                 UUID messageId = UUID.randomUUID();
@@ -79,39 +81,42 @@ public class AmqpTest {
   }
 
   @Test
-  void exchangeBinding(TestInfo info) {
-    String e = TestUtils.name(info);
+  void binding(TestInfo info) {
+    String e1 = TestUtils.name(info);
+    String e2 = TestUtils.name(info);
     String q = TestUtils.name(info);
     String rk = "foo";
     Environment environment = environmentBuilder().build();
     Management management = environment.management();
     try {
-      management.exchange().name(e).type(DIRECT).declare();
+      management.exchange().name(e1).type(DIRECT).declare();
+      management.exchange().name(e2).type(FANOUT).declare();
       management.queue().name(q).type(QUORUM).declare();
-      management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
+      management.binding().sourceExchange(e1).destinationExchange(e2).key(rk).bind();
+      management.binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      Publisher publisher = environment.publisherBuilder().address("/exchange/" + e).build();
+      Publisher publisher1 = environment.publisherBuilder().address("/exchange/" + e1).build();
+      Publisher publisher2 = environment.publisherBuilder().address("/exchange/" + e2).build();
 
       int messageCount = 1;
-      CountDownLatch confirmLatch = new CountDownLatch(messageCount);
-      IntStream.range(0, messageCount)
-          .forEach(
-              ignored -> {
-                publisher.publish(
-                    publisher
-                        .message()
-                        .subject(rk)
-                        .addData("hello".getBytes(StandardCharsets.UTF_8)),
-                    context -> {
-                      if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
-                        confirmLatch.countDown();
-                      }
-                    });
-              });
+      CountDownLatch confirmLatch = new CountDownLatch(messageCount * 2);
+
+      Consumer<Publisher> publish =
+          publisher ->
+              publisher.publish(
+                  publisher.message().subject(rk).addData("hello".getBytes(StandardCharsets.UTF_8)),
+                  context -> {
+                    if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
+                      confirmLatch.countDown();
+                    }
+                  });
+
+      range(0, messageCount).forEach(ignored -> publish.accept(publisher1));
+      range(0, messageCount).forEach(ignored -> publish.accept(publisher2));
 
       assertThat(confirmLatch).is(completed());
 
-      CountDownLatch consumeLatch = new CountDownLatch(messageCount);
+      CountDownLatch consumeLatch = new CountDownLatch(messageCount * 2);
       environment
           .consumerBuilder()
           .address(q)
@@ -123,8 +128,10 @@ public class AmqpTest {
           .build();
       assertThat(consumeLatch).is(completed());
     } finally {
-      management.unbind().sourceExchange(e).destinationQueue(q).key("foo").unbind();
-      management.exchangeDeletion().delete(e);
+      management.unbind().sourceExchange(e2).destinationQueue(q).key(rk).unbind();
+      management.unbind().sourceExchange(e1).destinationExchange(e2).key(rk).unbind();
+      management.exchangeDeletion().delete(e2);
+      management.exchangeDeletion().delete(e1);
       management.queueDeletion().delete(q);
       environment.close();
     }

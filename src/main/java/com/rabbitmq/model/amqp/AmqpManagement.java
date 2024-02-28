@@ -250,4 +250,8 @@ class AmqpManagement implements Management {
   void bindQueue(String queue, Map<String, Object> body) {
     declare(body, "/$management/queues/" + queue + "/$management/entities", "binding");
   }
+
+  void bindExchange(String exchange, Map<String, Object> body) {
+    declare(body, "/$management/exchanges/" + exchange + "/$management/entities", "binding");
+  }
 }
