@@ -19,7 +19,7 @@ package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Management.QueueType.CLASSIC;
+import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;
 import static java.util.stream.IntStream.range;
@@ -91,7 +91,7 @@ public class AmqpTest {
     try {
       management.exchange().name(e1).type(DIRECT).declare();
       management.exchange().name(e2).type(FANOUT).declare();
-      management.queue().name(q).type(CLASSIC).declare();
+      management.queue().name(q).type(QUORUM).declare();
       management.binding().sourceExchange(e1).destinationExchange(e2).key(rk).bind();
       management.binding().sourceExchange(e2).destinationQueue(q).bind();
 
@@ -117,16 +117,20 @@ public class AmqpTest {
       assertThat(confirmLatch).is(completed());
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount * 2);
-      environment
-          .consumerBuilder()
-          .address(q)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                consumeLatch.countDown();
-              })
-          .build();
+      com.rabbitmq.model.Consumer consumer =
+          environment
+              .consumerBuilder()
+              .address(q)
+              .messageHandler(
+                  (context, message) -> {
+                    context.accept();
+                    consumeLatch.countDown();
+                  })
+              .build();
       assertThat(consumeLatch).is(completed());
+      publisher1.close();
+      publisher2.close();
+      consumer.close();
     } finally {
       management.unbind().sourceExchange(e2).destinationQueue(q).unbind();
       management.unbind().sourceExchange(e1).destinationExchange(e2).key(rk).unbind();

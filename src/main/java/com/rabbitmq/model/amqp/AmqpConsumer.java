@@ -112,7 +112,9 @@ class AmqpConsumer implements Consumer {
                 | ClientLinkRemotelyClosedException e) {
               // receiver is closed
             } catch (ClientException e) {
-              LOGGER.warn("Error while polling AMQP receiver", e);
+              java.util.function.Consumer<String> log =
+                  this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
+              log.accept("Error while polling AMQP receiver");
             } catch (InterruptedException e) {
               Thread.currentThread().interrupt();
             }
