@@ -64,16 +64,19 @@ public class AmqpTest {
       assertThat(confirmLatch).is(completed());
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
-      environment
-          .consumerBuilder()
-          .address(address)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                consumeLatch.countDown();
-              })
-          .build();
+      com.rabbitmq.model.Consumer consumer =
+          environment
+              .consumerBuilder()
+              .address(address)
+              .messageHandler(
+                  (context, message) -> {
+                    context.accept();
+                    consumeLatch.countDown();
+                  })
+              .build();
       assertThat(consumeLatch).is(completed());
+      consumer.close();
+      publisher.close();
     } finally {
       environment.management().queueDeletion().delete(q);
       environment.close();

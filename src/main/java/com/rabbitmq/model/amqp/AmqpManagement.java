@@ -30,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -75,7 +76,8 @@ class AmqpManagement implements Management {
               new ReceiverOptions()
                   .deliveryMode(DeliveryMode.AT_MOST_ONCE)
                   .linkName(linkPairName)
-                  .properties(properties));
+                  .properties(properties)
+                  .creditWindow(100));
 
       this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
       this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
@@ -272,55 +274,74 @@ class AmqpManagement implements Management {
   }
 
   void unbindQueue(String queue, String exchange, String key, Map<String, Object> arguments) {
-    String uri = queueBindingUri(queue, exchange, key, arguments);
-    delete(uri, "queue unbind", CODE_204);
+    queueBindingUri(queue, exchange, key, arguments)
+        .ifPresent(uri -> delete(uri, "queue unbind", CODE_204));
   }
 
-  String queueBindingUri(String queue, String exchange, String key, Map<String, Object> arguments) {
+  void unbindExchange(
+      String destination, String source, String key, Map<String, Object> arguments) {
+    exchangeBindingUri(destination, source, key, arguments)
+        .ifPresent(uri -> delete(uri, "exchange unbind", CODE_204));
+  }
+
+  Optional<String> queueBindingUri(
+      String queue, String exchange, String key, Map<String, Object> arguments) {
     return this.callOnLinkPair(
         () -> {
-          UUID requestId = messageId();
-          try {
-            Message<byte[]> request =
-                Message.create(new byte[0])
-                    .messageId(requestId)
-                    .to(queueBindingsTarget(queue, exchange))
-                    .subject(GET)
-                    .replyTo(REPLY_TO);
-
-            this.sender.send(request);
-
-            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-            checkResponse(delivery, this.rpcTimeout, requestId, CODE_200);
-            Message<byte[]> response = delivery.message();
-            List<Map<String, Object>> bindings = decodeList(response.body());
-            Optional<String> uri;
-            if (!bindings.isEmpty()) {
-              uri =
-                  bindings.stream()
-                      .filter(
-                          binding -> {
-                            String bindingKey = (String) binding.get("binding_key");
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> bindingArguments =
-                                (Map<String, Object>) binding.get("arguments");
-                            if (key == null && bindingKey == null
-                                || key != null && key.equals(bindingKey)) {
-                              return arguments == null && bindingArguments == null
-                                  || arguments != null && arguments.equals(bindingArguments);
-                            }
-                            return false;
-                          })
-                      .map(b -> b.get("self").toString())
-                      .findFirst();
-            } else {
-              uri = Optional.empty();
-            }
-            return uri.orElse(null);
-          } catch (ClientException e) {
-            throw new ModelException("Error while fetching queue binding URI", e);
-          }
+          List<Map<String, Object>> bindings =
+              get(queueBindingsTarget(queue, exchange), this::decodeList);
+          return matchBinding(bindings, key, arguments);
         });
+  }
+
+  Optional<String> exchangeBindingUri(
+      String destination, String source, String key, Map<String, Object> arguments) {
+    return this.callOnLinkPair(
+        () -> {
+          List<Map<String, Object>> bindings =
+              this.get(exchangeBindingsTarget(destination, source), this::decodeList);
+          return matchBinding(bindings, key, arguments);
+        });
+  }
+
+  private static Optional<String> matchBinding(
+      List<Map<String, Object>> bindings, String key, Map<String, Object> arguments) {
+    Optional<String> uri;
+    if (!bindings.isEmpty()) {
+      uri =
+          bindings.stream()
+              .filter(
+                  binding -> {
+                    String bindingKey = (String) binding.get("binding_key");
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> bindingArguments =
+                        (Map<String, Object>) binding.get("arguments");
+                    if (key == null && bindingKey == null
+                        || key != null && key.equals(bindingKey)) {
+                      return arguments == null && bindingArguments == null
+                          || arguments != null && arguments.equals(bindingArguments);
+                    }
+                    return false;
+                  })
+              .map(b -> b.get("self").toString())
+              .findFirst();
+    } else {
+      uri = Optional.empty();
+    }
+    return uri;
+  }
+
+  private <T> T get(String target, Function<byte[], T> bodyTransformer) throws ClientException {
+    UUID requestId = messageId();
+    Message<byte[]> request =
+        Message.create(new byte[0]).messageId(requestId).to(target).subject(GET).replyTo(REPLY_TO);
+
+    this.sender.send(request);
+
+    Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
+    checkResponse(delivery, this.rpcTimeout, requestId, CODE_200);
+    Message<byte[]> response = delivery.message();
+    return bodyTransformer.apply(response.body());
   }
 
   private String queueBindingsTarget(String queue, String exchange) {
@@ -332,6 +353,17 @@ class AmqpManagement implements Management {
         + MANAGEMENT_NODE_ADDRESS
         + "/bindings?source="
         + exchange;
+  }
+
+  private String exchangeBindingsTarget(String destination, String source) {
+    return "/"
+        + MANAGEMENT_NODE_ADDRESS
+        + "/exchanges/"
+        + destination
+        + "/"
+        + MANAGEMENT_NODE_ADDRESS
+        + "/bindings?source="
+        + source;
   }
 
   private <T> T callOnLinkPair(Callable<T> operation) {

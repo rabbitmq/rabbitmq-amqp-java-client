@@ -18,8 +18,6 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Management;
-import com.rabbitmq.model.ModelException;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -136,23 +134,18 @@ abstract class AmqpBindingManagement {
 
     @Override
     public void unbind() {
-      try {
-        if (this.state.toQueue) {
-          this.state.managememt.unbindQueue(
-              this.state.destination,
-              this.state.source,
-              this.state.key == null ? "" : this.state.key,
-              this.state.arguments);
-        } else {
-          this.state
-              .managememt
-              .channel()
-              .exchangeUnbind(
-                  this.state.destination, this.state.source,
-                  this.state.key, this.state.arguments);
-        }
-      } catch (IOException e) {
-        throw new ModelException(e);
+      if (this.state.toQueue) {
+        this.state.managememt.unbindQueue(
+            this.state.destination,
+            this.state.source,
+            this.state.key == null ? "" : this.state.key,
+            this.state.arguments);
+      } else {
+        this.state.managememt.unbindExchange(
+            this.state.destination,
+            this.state.source,
+            this.state.key == null ? "" : this.state.key,
+            this.state.arguments);
       }
     }
   }
