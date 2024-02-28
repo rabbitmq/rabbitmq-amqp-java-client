@@ -117,7 +117,7 @@ abstract class AmqpBindingManagement {
 
     @Override
     public Management.UnbindSpecification destinationExchange(String exchange) {
-      this.state.toQueue = true;
+      this.state.toQueue = false;
       this.state.destination = exchange;
       return this;
     }
@@ -138,15 +138,11 @@ abstract class AmqpBindingManagement {
     public void unbind() {
       try {
         if (this.state.toQueue) {
-          this.state
-              .managememt
-              .channel()
-              .queueUnbind(
-                  this.state.destination,
-                  this.state.source,
-                  this.state.key == null ? "" : this.state.key,
-                  this.state.arguments);
-
+          this.state.managememt.unbindQueue(
+              this.state.destination,
+              this.state.source,
+              this.state.key == null ? "" : this.state.key,
+              this.state.arguments);
         } else {
           this.state
               .managememt

@@ -24,10 +24,7 @@ import com.rabbitmq.model.Management;
 import com.rabbitmq.model.ModelException;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -172,7 +169,7 @@ class AmqpManagement implements Management {
             Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
             checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
             Message<byte[]> response = delivery.message();
-            Map<String, Object> responseBody = decode(response.body());
+            Map<String, Object> responseBody = decodeMap(response.body());
             if (!type.equals(responseBody.get("type"))) {
               throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), type);
             }
@@ -199,7 +196,7 @@ class AmqpManagement implements Management {
             Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
             checkResponse(delivery, this.rpcTimeout, requestId, expectedResponseCode);
             Message<byte[]> response = delivery.message();
-            return decode(response.body());
+            return decodeMap(response.body());
           } catch (ClientException e) {
             throw new ModelException("Error on DELETE operation: " + type, e);
           }
@@ -213,10 +210,20 @@ class AmqpManagement implements Management {
     }
   }
 
-  private Map<String, Object> decode(byte[] array) {
+  @SuppressWarnings("unchecked")
+  private <K, V> Map<K, V> decodeMap(byte[] array) {
+    return (Map<K, V>) decode(array);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> List<T> decodeList(byte[] array) {
+    return (List<T>) decode(array);
+  }
+
+  private Object decode(byte[] array) {
     try (ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer(array.length)) {
       buffer.writeBytes(array);
-      return decoder.readMap(buffer, decoder.newDecoderState());
+      return decoder.readObject(buffer, decoder.newDecoderState());
     }
   }
 
@@ -248,6 +255,7 @@ class AmqpManagement implements Management {
     }
   }
 
+  private static final String GET = "GET";
   private static final String POST = "POST";
   private static final String DELETE = "DELETE";
   private static final String MEDIA_TYPE_ENTITY = "application/amqp-management+amqp;type=entity";
@@ -261,6 +269,69 @@ class AmqpManagement implements Management {
 
   void bindExchange(String exchange, Map<String, Object> body) {
     declare(body, "/$management/exchanges/" + exchange + "/$management/entities", "binding");
+  }
+
+  void unbindQueue(String queue, String exchange, String key, Map<String, Object> arguments) {
+    String uri = queueBindingUri(queue, exchange, key, arguments);
+    delete(uri, "queue unbind", CODE_204);
+  }
+
+  String queueBindingUri(String queue, String exchange, String key, Map<String, Object> arguments) {
+    return this.callOnLinkPair(
+        () -> {
+          UUID requestId = messageId();
+          try {
+            Message<byte[]> request =
+                Message.create(new byte[0])
+                    .messageId(requestId)
+                    .to(queueBindingsTarget(queue, exchange))
+                    .subject(GET)
+                    .replyTo(REPLY_TO);
+
+            this.sender.send(request);
+
+            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
+            checkResponse(delivery, this.rpcTimeout, requestId, CODE_200);
+            Message<byte[]> response = delivery.message();
+            List<Map<String, Object>> bindings = decodeList(response.body());
+            Optional<String> uri;
+            if (!bindings.isEmpty()) {
+              uri =
+                  bindings.stream()
+                      .filter(
+                          binding -> {
+                            String bindingKey = (String) binding.get("binding_key");
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> bindingArguments =
+                                (Map<String, Object>) binding.get("arguments");
+                            if (key == null && bindingKey == null
+                                || key != null && key.equals(bindingKey)) {
+                              return arguments == null && bindingArguments == null
+                                  || arguments != null && arguments.equals(bindingArguments);
+                            }
+                            return false;
+                          })
+                      .map(b -> b.get("self").toString())
+                      .findFirst();
+            } else {
+              uri = Optional.empty();
+            }
+            return uri.orElse(null);
+          } catch (ClientException e) {
+            throw new ModelException("Error while fetching queue binding URI", e);
+          }
+        });
+  }
+
+  private String queueBindingsTarget(String queue, String exchange) {
+    return "/"
+        + MANAGEMENT_NODE_ADDRESS
+        + "/queues/"
+        + queue
+        + "/"
+        + MANAGEMENT_NODE_ADDRESS
+        + "/bindings?source="
+        + exchange;
   }
 
   private <T> T callOnLinkPair(Callable<T> operation) {

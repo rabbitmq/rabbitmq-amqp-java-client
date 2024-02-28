@@ -19,7 +19,7 @@ package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Management.QueueType.QUORUM;
+import static com.rabbitmq.model.Management.QueueType.CLASSIC;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;
 import static java.util.stream.IntStream.range;
@@ -91,7 +91,7 @@ public class AmqpTest {
     try {
       management.exchange().name(e1).type(DIRECT).declare();
       management.exchange().name(e2).type(FANOUT).declare();
-      management.queue().name(q).type(QUORUM).declare();
+      management.queue().name(q).type(CLASSIC).declare();
       management.binding().sourceExchange(e1).destinationExchange(e2).key(rk).bind();
       management.binding().sourceExchange(e2).destinationQueue(q).bind();
 
@@ -128,7 +128,7 @@ public class AmqpTest {
           .build();
       assertThat(consumeLatch).is(completed());
     } finally {
-      management.unbind().sourceExchange(e2).destinationQueue(q).key(rk).unbind();
+      management.unbind().sourceExchange(e2).destinationQueue(q).unbind();
       management.unbind().sourceExchange(e1).destinationExchange(e2).key(rk).unbind();
       management.exchangeDeletion().delete(e2);
       management.exchangeDeletion().delete(e1);
