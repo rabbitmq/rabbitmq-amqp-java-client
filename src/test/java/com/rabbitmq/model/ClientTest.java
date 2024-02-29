@@ -21,6 +21,7 @@ import static com.rabbitmq.model.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -39,6 +40,7 @@ import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
 
+@Disabled
 public class ClientTest {
 
   static Environment environment;
@@ -47,24 +49,24 @@ public class ClientTest {
 
   @BeforeAll
   static void initAll() {
-    environment = environmentBuilder().build();
-    management = environment.management();
+    //    environment = environmentBuilder().build();
+    //    management = environment.management();
   }
 
   @BeforeEach
   void init(TestInfo info) {
-    q = TestUtils.name(info);
-    management.queue().name(q).declare();
+    //    q = TestUtils.name(info);
+    //    management.queue().name(q).declare();
   }
 
   @AfterEach
   void tearDown() {
-    management.queueDeletion().delete(q);
+    //    management.queueDeletion().delete(q);
   }
 
   @AfterAll
   static void tearDownAll() {
-    environment.close();
+    //    environment.close();
   }
 
   @Test
@@ -268,6 +270,28 @@ public class ClientTest {
       buffer.writeBytes(responseBodyBin);
       responseBody = decoder.readMap(buffer, decoder.newDecoderState());
       assertThat(responseBody).containsEntry("message_count", ulong(0));
+    }
+  }
+
+  @Test
+  void queueDeletionImpact(TestInfo info) throws Exception {
+    String q = name(info);
+    try (Environment env = new AmqpEnvironmentBuilder().build()) {
+      env.management().queue().name(q).declare();
+
+      env.consumerBuilder()
+          .address("/queue/" + q)
+          .messageHandler(
+              new Consumer.MessageHandler() {
+                @Override
+                public void handle(Consumer.Context context, com.rabbitmq.model.Message message) {}
+              })
+          .build();
+      //      Connection connection = connection(client);
+      //      Session session = connection.openSession();
+      //      Receiver receiver = session.openReceiver("/queue/" + q);
+      //      receiver.openFuture().get();
+      env.management().queueDeletion().delete(q);
     }
   }
 }

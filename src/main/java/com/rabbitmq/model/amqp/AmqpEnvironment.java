@@ -17,24 +17,17 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.model.*;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLDecoder;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import org.apache.qpid.protonj2.client.Client;
-import org.apache.qpid.protonj2.client.ClientOptions;
-import org.apache.qpid.protonj2.client.Connection;
-import org.apache.qpid.protonj2.client.ConnectionOptions;
+import java.util.function.BiConsumer;
+import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 
 class AmqpEnvironment implements Environment {
@@ -43,7 +36,6 @@ class AmqpEnvironment implements Environment {
 
   private final Client client;
   private final Connection connection;
-  private final com.rabbitmq.client.Connection amqplConnection;
   private final Lock managementLock = new ReentrantLock();
   private volatile AmqpManagement management;
   private final ExecutorService executorService;
@@ -70,23 +62,19 @@ class AmqpEnvironment implements Environment {
     // only the mechanisms supported in RabbitMQ
     connectionOptions.saslOptions().addAllowedMechanism("PLAIN").addAllowedMechanism("EXTERNAL");
 
+    connectionOptions.disconnectedHandler(
+        new BiConsumer<Connection, DisconnectionEvent>() {
+          @Override
+          public void accept(Connection connection, DisconnectionEvent disconnectionEvent) {
+            System.out.println(disconnectionEvent.failureCause());
+          }
+        });
     try {
       this.connection =
           client.connect(
               this.connectionParameters.host, this.connectionParameters.port, connectionOptions);
       this.connection.openFuture().get();
-
-      ConnectionFactory cf = new ConnectionFactory();
-      cf.setUri(uri);
-      this.amqplConnection = cf.newConnection();
-
-    } catch (ClientException
-        | ExecutionException
-        | URISyntaxException
-        | NoSuchAlgorithmException
-        | KeyManagementException
-        | IOException
-        | TimeoutException e) {
+    } catch (ClientException | ExecutionException e) {
       throw new ModelException(e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -167,11 +155,6 @@ class AmqpEnvironment implements Environment {
       } finally {
         this.managementLock.unlock();
       }
-      try {
-        this.amqplConnection.close();
-      } catch (IOException e) {
-        throw new ModelException(e);
-      }
       this.client.close();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
@@ -181,10 +164,6 @@ class AmqpEnvironment implements Environment {
 
   Connection connection() {
     return this.connection;
-  }
-
-  com.rabbitmq.client.Connection amqplConnection() {
-    return this.amqplConnection;
   }
 
   private static class ConnectionParameters {

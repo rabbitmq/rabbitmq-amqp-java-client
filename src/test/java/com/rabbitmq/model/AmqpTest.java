@@ -19,6 +19,7 @@ package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.model.Management.QueueType.CLASSIC;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;
@@ -84,7 +85,7 @@ public class AmqpTest {
   }
 
   @Test
-  void binding(TestInfo info) {
+  void binding(TestInfo info) throws InterruptedException {
     String e1 = TestUtils.name(info);
     String e2 = TestUtils.name(info);
     String q = TestUtils.name(info);
@@ -140,6 +141,7 @@ public class AmqpTest {
       management.exchangeDeletion().delete(e2);
       management.exchangeDeletion().delete(e1);
       management.queueDeletion().delete(q);
+
       environment.close();
     }
   }

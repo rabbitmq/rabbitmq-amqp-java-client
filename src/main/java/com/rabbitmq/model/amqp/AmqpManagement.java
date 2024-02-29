@@ -19,14 +19,11 @@ package com.rabbitmq.model.amqp;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.rabbitmq.client.Channel;
 import com.rabbitmq.model.Management;
 import com.rabbitmq.model.ModelException;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -44,7 +41,6 @@ class AmqpManagement implements Management {
   private static final String MANAGEMENT_NODE_ADDRESS = "$management";
   private static final String REPLY_TO = "$me";
 
-  private final Channel channel;
   private final Session session;
   private final Lock linkPairLock = new ReentrantLock();
   private final Sender sender; // @GuardedBy("linkPairLock")
@@ -56,8 +52,6 @@ class AmqpManagement implements Management {
 
   AmqpManagement(AmqpEnvironment environment) {
     try {
-      this.channel = environment.amqplConnection().createChannel();
-
       this.session = environment.connection().openSession();
 
       String linkPairName = "management-link-pair";
@@ -123,21 +117,12 @@ class AmqpManagement implements Management {
     return new AmqpBindingManagement.AmqpUnbindSpecification(this);
   }
 
-  Channel channel() {
-    return this.channel;
-  }
-
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      try {
-        this.channel.close();
-        this.receiver.close();
-        this.sender.close();
-        this.session.close();
-      } catch (IOException | TimeoutException e) {
-        throw new ModelException(e);
-      }
+      this.receiver.close();
+      this.sender.close();
+      this.session.close();
     }
   }
 
