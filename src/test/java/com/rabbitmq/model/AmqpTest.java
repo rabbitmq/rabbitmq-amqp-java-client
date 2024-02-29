@@ -19,7 +19,6 @@ package com.rabbitmq.model;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Management.QueueType.CLASSIC;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;

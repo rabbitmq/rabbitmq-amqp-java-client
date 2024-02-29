@@ -75,7 +75,10 @@ class AmqpPublisher implements Publisher {
               ConfirmationStatus status;
               try {
                 tracker.settlementFuture().get();
-                status = ConfirmationStatus.CONFIRMED;
+                status =
+                    tracker.remoteState() == DeliveryState.accepted()
+                        ? ConfirmationStatus.CONFIRMED
+                        : ConfirmationStatus.FAILED;
               } catch (InterruptedException | ExecutionException e) {
                 status = ConfirmationStatus.FAILED;
               }

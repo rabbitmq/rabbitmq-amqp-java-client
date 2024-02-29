@@ -130,7 +130,7 @@ class Api {
         .name("my-quorum-queue")
         .quorum() // <1>
           .quorumInitialGroupSize(3)
-          .maxInMemoryBytes(ByteCapacity.MB(10))
+          .deliveryLimit(3)
         .queue()
         .declare();
     // end::quorum-queue-creation[]

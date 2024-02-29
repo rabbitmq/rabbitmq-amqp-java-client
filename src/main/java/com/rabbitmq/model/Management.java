@@ -92,10 +92,6 @@ public interface Management extends AutoCloseable {
 
     QuorumQueueSpecification deadLetterStrategy(QuorumQueueDeadLetterStrategy strategy);
 
-    QuorumQueueSpecification maxInMemoryLength(long maxInMemoryLength);
-
-    QuorumQueueSpecification maxInMemoryBytes(ByteCapacity maxInMemoryBytes);
-
     QuorumQueueSpecification deliveryLimit(int limit);
 
     QuorumQueueSpecification quorumInitialGroupSize(int size);

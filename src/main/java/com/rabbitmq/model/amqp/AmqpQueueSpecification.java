@@ -261,20 +261,6 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
-    public Management.QuorumQueueSpecification maxInMemoryLength(long maxInMemoryLength) {
-      validatePositive("x-max-in-memory-length", maxInMemoryLength);
-      this.parent.arg("x-max-in-memory-length", maxInMemoryLength);
-      return this;
-    }
-
-    @Override
-    public Management.QuorumQueueSpecification maxInMemoryBytes(ByteCapacity maxInMemoryBytes) {
-      validatePositive("x-max-in-memory-bytes", maxInMemoryBytes.toBytes());
-      this.parent.arg("x-max-in-memory-bytes", maxInMemoryBytes.toBytes());
-      return this;
-    }
-
-    @Override
     public Management.QuorumQueueSpecification deliveryLimit(int limit) {
       validatePositive("x-max-delivery-limit", limit);
       this.parent.arg("x-max-delivery-limit", limit);
