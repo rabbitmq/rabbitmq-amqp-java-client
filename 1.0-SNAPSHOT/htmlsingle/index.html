@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(1b094af)</span>
+<br><span id="revremark">(281bf05)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -729,7 +729,7 @@ It is accessible from the <code>Environment</code>.</p>
     .name(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-quorum-queue</span><span class="delimiter">&quot;</span></span>)
     .quorum() <i class="conum" data-value="1"></i><b>(1)</b>
       .quorumInitialGroupSize(<span class="integer">3</span>)
-      .maxInMemoryBytes(ByteCapacity.MB(<span class="integer">10</span>))
+      .deliveryLimit(<span class="integer">3</span>)
     .queue()
     .declare();</code></pre>
 </div>
@@ -789,7 +789,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-02-29 09:05:24 UTC
+Last updated 2024-02-29 16:07:20 UTC
 </div>
 </div>
 </body>
