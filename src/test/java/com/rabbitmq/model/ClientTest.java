@@ -17,9 +17,14 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
+import static org.apache.qpid.protonj2.client.DeliveryState.released;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.io.ByteArrayOutputStream;
@@ -33,6 +38,7 @@ import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
+import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonDecoderFactory;
 import org.apache.qpid.protonj2.codec.encoders.ProtonEncoder;
@@ -40,7 +46,6 @@ import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
 
-@Disabled
 public class ClientTest {
 
   static Environment environment;
@@ -49,24 +54,24 @@ public class ClientTest {
 
   @BeforeAll
   static void initAll() {
-    //    environment = environmentBuilder().build();
-    //    management = environment.management();
+    environment = environmentBuilder().build();
+    management = environment.management();
   }
 
   @BeforeEach
   void init(TestInfo info) {
-    //    q = TestUtils.name(info);
-    //    management.queue().name(q).declare();
+    q = TestUtils.name(info);
+    management.queue().name(q).declare();
   }
 
   @AfterEach
   void tearDown() {
-    //    management.queueDeletion().delete(q);
+    management.queueDeletion().delete(q);
   }
 
   @AfterAll
   static void tearDownAll() {
-    //    environment.close();
+    environment.close();
   }
 
   @Test
@@ -99,8 +104,7 @@ public class ClientTest {
       Connection connection =
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
-      Sender sender =
-          connection.openSender(q, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+      Sender sender = connection.openSender(q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
       Tracker tracker = sender.send(Message.create(body));
@@ -110,10 +114,10 @@ public class ClientTest {
           connection.openReceiver(
               q,
               new ReceiverOptions()
-                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                  .deliveryMode(AT_LEAST_ONCE)
                   .autoSettle(false)
                   .autoAccept(false));
-      Delivery delivery = receiver.receive(100, TimeUnit.SECONDS);
+      Delivery delivery = receiver.receive(100, SECONDS);
       assertThat(delivery).isNotNull();
       assertThat(delivery.message().body()).isEqualTo(body);
       delivery.disposition(DeliveryState.accepted(), true);
@@ -129,8 +133,7 @@ public class ClientTest {
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
       StreamSender sender =
-          connection.openStreamSender(
-              q, new StreamSenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+          connection.openStreamSender(q, new StreamSenderOptions().deliveryMode(AT_LEAST_ONCE));
       StreamSenderMessage message = sender.beginMessage();
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
@@ -149,7 +152,7 @@ public class ClientTest {
           connection.openStreamReceiver(
               q,
               new StreamReceiverOptions()
-                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                  .deliveryMode(AT_LEAST_ONCE)
                   .autoAccept(false)
                   .autoSettle(false));
 
@@ -198,8 +201,8 @@ public class ClientTest {
                   .linkName(linkPairName)
                   .properties(Collections.singletonMap("paired", Boolean.TRUE)));
 
-      sender.openFuture().get(1, TimeUnit.SECONDS);
-      receiver.openFuture().get(1, TimeUnit.SECONDS);
+      sender.openFuture().get(1, SECONDS);
+      receiver.openFuture().get(1, SECONDS);
 
       Map<String, Object> body = new HashMap<>();
       body.put("name", q);
@@ -223,7 +226,7 @@ public class ClientTest {
 
       sender.send(request);
 
-      Delivery delivery = receiver.receive(1, TimeUnit.SECONDS);
+      Delivery delivery = receiver.receive(1, SECONDS);
       assertThat(delivery).isNotNull();
       Message<byte[]> response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(requestId);
@@ -256,7 +259,7 @@ public class ClientTest {
 
       sender.send(request);
 
-      delivery = receiver.receive(1, TimeUnit.SECONDS);
+      delivery = receiver.receive(1, SECONDS);
       assertThat(delivery).isNotNull();
       response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(requestId);
@@ -274,24 +277,63 @@ public class ClientTest {
   }
 
   @Test
-  void queueDeletionImpact(TestInfo info) throws Exception {
-    String q = name(info);
-    try (Environment env = new AmqpEnvironmentBuilder().build()) {
-      env.management().queue().name(q).declare();
+  void queueDeletionImpactOnReceiver(TestInfo info) throws Exception {
+    String queue = name(info);
+    try (Environment env = new AmqpEnvironmentBuilder().build();
+        Client client = client()) {
+      env.management().queue().name(queue).declare();
 
-      env.consumerBuilder()
-          .address("/queue/" + q)
-          .messageHandler(
-              new Consumer.MessageHandler() {
-                @Override
-                public void handle(Consumer.Context context, com.rabbitmq.model.Message message) {}
-              })
-          .build();
-      //      Connection connection = connection(client);
-      //      Session session = connection.openSession();
-      //      Receiver receiver = session.openReceiver("/queue/" + q);
-      //      receiver.openFuture().get();
-      env.management().queueDeletion().delete(q);
+      Connection connection = connection(client);
+      Session session = connection.openSession();
+      Receiver receiver = session.openReceiver("/queue/" + queue);
+      receiver.openFuture().get();
+      Delivery delivery = receiver.tryReceive();
+      assertThat(delivery).isNull();
+      env.management().queueDeletion().delete(queue);
+      try {
+        receiver.receive(10, SECONDS);
+        fail("Receiver should have been closed after queue deletion");
+      } catch (ClientLinkRemotelyClosedException e) {
+        assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
+      }
+    }
+  }
+
+  @Test
+  void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
+    String exchange = name(info);
+    try (Environment env = new AmqpEnvironmentBuilder().build();
+        Client client = client()) {
+      env.management().exchange().name(exchange).type(FANOUT).declare();
+
+      Connection connection = connection(client);
+      Session session = connection.openSession();
+      Sender sender =
+          session.openSender(
+              "/exchange/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
+      Tracker tracker = sender.send(Message.create());
+      tracker.awaitSettlement(10, SECONDS);
+      assertThat(tracker.remoteState()).isEqualTo(released());
+
+      env.management().binding().sourceExchange(exchange).destinationQueue(q).bind();
+
+      tracker = sender.send(Message.create());
+      tracker.awaitSettlement(10, SECONDS);
+      assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
+
+      env.management().exchangeDeletion().delete(exchange);
+      try {
+        int count = 0;
+        while (count++ < 10) {
+          tracker = sender.send(Message.create());
+          tracker.awaitSettlement(10, SECONDS);
+          assertThat(tracker.remoteState()).isEqualTo(released());
+          Thread.sleep(100);
+        }
+        fail("The sender link should have been closed after exchange deletion");
+      } catch (ClientLinkRemotelyClosedException e) {
+        assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
+      }
     }
   }
 }
