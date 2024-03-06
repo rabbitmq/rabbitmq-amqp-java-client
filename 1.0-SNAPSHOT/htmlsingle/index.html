@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(da56fc9)</span>
+<br><span id="revremark">(a69cc26)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -584,7 +584,7 @@ It deals internally with connections, pooling, recovery, etc.</p>
 <div class="listingblock">
 <div class="title">Publisher creation</div>
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = environment.publisherBuilder()
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
     .address(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo</span><span class="delimiter">&quot;</span></span>)
     .build();</code></pre>
 </div>
@@ -624,7 +624,7 @@ It deals internally with connections, pooling, recovery, etc.</p>
 <div class="listingblock">
 <div class="title">Consuming from a queue</div>
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="java">environment.consumerBuilder()
+<pre class="CodeRay highlight"><code data-lang="java">connection.consumerBuilder()
     .address(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>)
     .messageHandler((context, message) -&gt; {
       <span class="comment">// ... </span><i class="conum" data-value="1"></i><b>(1)</b>
@@ -655,7 +655,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div class="listingblock">
 <div class="title">Getting the management object from the environment</div>
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="java">Management management = environment.management();</code></pre>
+<pre class="CodeRay highlight"><code data-lang="java">Management management = connection.management();</code></pre>
 </div>
 </div>
 <div class="sect3">
@@ -789,7 +789,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-03-06 13:35:55 UTC
+Last updated 2024-03-06 15:11:25 UTC
 </div>
 </div>
 </body>
