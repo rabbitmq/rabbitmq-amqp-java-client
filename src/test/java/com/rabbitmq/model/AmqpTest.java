@@ -38,12 +38,13 @@ public class AmqpTest {
   void queueDeclareDeletePublishConsume(TestInfo info) {
     String q = TestUtils.name(info);
     Environment environment = environmentBuilder().build();
+    Connection connection = environment.connection().build();
     try {
-      environment.management().queue().name(q).quorum().queue().declare();
+      connection.management().queue().name(q).quorum().queue().declare();
       String address = "/amq/queue/" + q;
-      Publisher publisher = environment.publisherBuilder().address(address).build();
+      Publisher publisher = connection.publisherBuilder().address(address).build();
 
-      int messageCount = 10;
+      int messageCount = 100;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount);
       range(0, messageCount)
           .forEach(
@@ -65,7 +66,7 @@ public class AmqpTest {
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       com.rabbitmq.model.Consumer consumer =
-          environment
+          connection
               .consumerBuilder()
               .address(address)
               .messageHandler(
@@ -78,19 +79,21 @@ public class AmqpTest {
       consumer.close();
       publisher.close();
     } finally {
-      environment.management().queueDeletion().delete(q);
+      connection.management().queueDeletion().delete(q);
+      connection.close();
       environment.close();
     }
   }
 
   @Test
-  void binding(TestInfo info) throws InterruptedException {
+  void binding(TestInfo info) {
     String e1 = TestUtils.name(info);
     String e2 = TestUtils.name(info);
     String q = TestUtils.name(info);
     String rk = "foo";
     Environment environment = environmentBuilder().build();
-    Management management = environment.management();
+    Connection connection = environment.connection().build();
+    Management management = connection.management();
     try {
       management.exchange().name(e1).type(DIRECT).declare();
       management.exchange().name(e2).type(FANOUT).declare();
@@ -98,8 +101,8 @@ public class AmqpTest {
       management.binding().sourceExchange(e1).destinationExchange(e2).key(rk).bind();
       management.binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      Publisher publisher1 = environment.publisherBuilder().address("/exchange/" + e1).build();
-      Publisher publisher2 = environment.publisherBuilder().address("/exchange/" + e2).build();
+      Publisher publisher1 = connection.publisherBuilder().address("/exchange/" + e1).build();
+      Publisher publisher2 = connection.publisherBuilder().address("/exchange/" + e2).build();
 
       int messageCount = 1;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount * 2);
@@ -121,7 +124,7 @@ public class AmqpTest {
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount * 2);
       com.rabbitmq.model.Consumer consumer =
-          environment
+          connection
               .consumerBuilder()
               .address(q)
               .messageHandler(

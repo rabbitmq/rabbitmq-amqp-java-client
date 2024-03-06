@@ -44,8 +44,7 @@ public class AmqpPerfTest {
     -Dexec.mainClass=com.rabbitmq.model.AmqpPerfTest \
     -Dexec.classpathScope="test"
      */
-  public static void main(String[] args) throws Exception {
-    ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
+  public static void main(String[] args) {
     MeterRegistry registry = dropwizardMeterRegistry();
     Counter published = registry.counter("published");
     Counter confirmed = registry.counter("confirmed");
@@ -58,6 +57,7 @@ public class AmqpPerfTest {
     Map<String, Long> lastMetersValues = new ConcurrentHashMap<>(counters.size());
     counters.forEach(m -> lastMetersValues.put(m.getId().getName(), 0L));
 
+    ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
     AtomicLong lastTick = new AtomicLong(System.nanoTime());
     AtomicInteger reportCount = new AtomicInteger(1);
     executorService.scheduleAtFixedRate(
@@ -92,7 +92,9 @@ public class AmqpPerfTest {
     String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
     Environment environment = environmentBuilder().build();
-    Management management = environment.management();
+    Connection publishingConnection = environment.connection().build();
+    Connection consumingConnection = environment.connection().build();
+    Management management = publishingConnection.management();
 
     CountDownLatch shutdownLatch = new CountDownLatch(1);
 
@@ -114,7 +116,7 @@ public class AmqpPerfTest {
       management.queue().name(q).type(QUORUM).declare();
       management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
 
-      environment
+      consumingConnection
           .consumerBuilder()
           .address(q)
           .initialCredits(1000)
@@ -127,7 +129,8 @@ public class AmqpPerfTest {
 
       executorService.submit(
           () -> {
-            Publisher publisher = environment.publisherBuilder().address("/exchange/" + e).build();
+            Publisher publisher =
+                publishingConnection.publisherBuilder().address("/exchange/" + e).build();
             Publisher.ConfirmationHandler confirmationHandler =
                 context -> {
                   confirmed.increment();

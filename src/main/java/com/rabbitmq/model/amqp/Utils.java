@@ -190,4 +190,57 @@ abstract class Utils {
       return new NamedThreadFactory(prefix);
     }
   }
+
+  static class ConnectionParameters {
+
+    private final String username, password, host, virtualHost;
+    private final int port;
+
+    ConnectionParameters(
+        String username, String password, String host, String virtualHost, int port) {
+      this.username = username;
+      this.password = password;
+      this.host = host;
+      this.virtualHost = virtualHost;
+      this.port = port;
+    }
+
+    String username() {
+      return username;
+    }
+
+    String password() {
+      return password;
+    }
+
+    String host() {
+      return host;
+    }
+
+    String virtualHost() {
+      return virtualHost;
+    }
+
+    int port() {
+      return port;
+    }
+
+    @Override
+    public String toString() {
+      return "ConnectionParameters{"
+          + "username='"
+          + username
+          + '\''
+          + ", password='********'"
+          + ", host='"
+          + host
+          + '\''
+          + ", virtualHost='"
+          + virtualHost
+          + '\''
+          + ", port="
+          + port
+          + '}';
+    }
+  }
 }

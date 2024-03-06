@@ -36,10 +36,18 @@ class Api {
     // end::environment-creation[]
   }
 
-  void publishing() {
+  void connection() {
     Environment environment = null;
+    // tag::connection-creation[]
+    Connection connection = environment.connection()
+        .build();
+    // end::connection-creation[]
+  }
+
+  void publishing() {
+    Connection connection = null;
     // tag::publisher-creation[]
-    Publisher publisher = environment.publisherBuilder()
+    Publisher publisher = connection.publisherBuilder()
         .address("/exchange/foo")
         .build();
     // end::publisher-creation[]
@@ -63,9 +71,9 @@ class Api {
   }
 
   void consuming() {
-    Environment environment = null;
+    Connection connection = null;
     // tag::consumer[]
-    environment.consumerBuilder()
+    connection.consumerBuilder()
         .address("some-queue")
         .messageHandler((context, message) -> {
           // ... <1>
@@ -76,9 +84,9 @@ class Api {
   }
 
   void management() {
-    Environment environment = null;
+    Connection connection = null;
     // tag::management[]
-    Management management = environment.management();
+    Management management = connection.management();
     // end::management[]
   }
 

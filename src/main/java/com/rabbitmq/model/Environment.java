@@ -19,11 +19,7 @@ package com.rabbitmq.model;
 
 public interface Environment extends AutoCloseable {
 
-  Management management();
-
-  PublisherBuilder publisherBuilder();
-
-  ConsumerBuilder consumerBuilder();
+  ConnectionBuilder connection();
 
   @Override
   void close();

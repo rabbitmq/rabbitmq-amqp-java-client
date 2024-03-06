@@ -17,27 +17,21 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import com.rabbitmq.model.Publisher;
-import com.rabbitmq.model.PublisherBuilder;
+import com.rabbitmq.model.Connection;
+import com.rabbitmq.model.ConnectionBuilder;
 
-class AmqpPublisherBuilder implements PublisherBuilder {
+class AmqpConnectionBuilder implements ConnectionBuilder {
 
-  private final AmqpConnection connection;
+  private final AmqpEnvironment environment;
 
-  private String address;
-
-  AmqpPublisherBuilder(AmqpConnection connection) {
-    this.connection = connection;
+  AmqpConnectionBuilder(AmqpEnvironment environment) {
+    this.environment = environment;
   }
 
   @Override
-  public PublisherBuilder address(String address) {
-    this.address = address;
-    return this;
-  }
-
-  @Override
-  public Publisher build() {
-    return new AmqpPublisher(this.connection, this.address);
+  public Connection build() {
+    AmqpConnection connection = new AmqpConnection(this.environment);
+    this.environment.addConnection(connection);
+    return connection;
   }
 }

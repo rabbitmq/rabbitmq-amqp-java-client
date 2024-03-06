@@ -50,12 +50,14 @@ public class ClientTest {
 
   static Environment environment;
   static Management management;
+  static Connection connection;
   String q;
 
   @BeforeAll
   static void initAll() {
     environment = environmentBuilder().build();
-    management = environment.management();
+    connection = environment.connection().build();
+    management = connection.management();
   }
 
   @BeforeEach
@@ -71,13 +73,14 @@ public class ClientTest {
 
   @AfterAll
   static void tearDownAll() {
+    connection.close();
     environment.close();
   }
 
   @Test
   void deliveryCount() throws Exception {
     try (Client client = client();
-        Publisher publisher = environment.publisherBuilder().address(q).build()) {
+        Publisher publisher = connection.publisherBuilder().address(q).build()) {
       int messageCount = 10;
       CountDownLatch publishLatch = new CountDownLatch(5);
       IntStream.range(0, messageCount)
@@ -87,8 +90,8 @@ public class ClientTest {
                       publisher.message().addData("".getBytes(UTF_8)),
                       context -> publishLatch.countDown()));
 
-      Connection connection = connection(client);
-      Receiver receiver = connection.openReceiver(q, new ReceiverOptions());
+      org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
+      Receiver receiver = protonConnection.openReceiver(q, new ReceiverOptions());
       int receivedMessages = 0;
       while (receiver.receive(100, TimeUnit.MILLISECONDS) != null) {
         receivedMessages++;
@@ -101,7 +104,7 @@ public class ClientTest {
   void largeMessage() throws Exception {
     try (Client client = client()) {
       int maxFrameSize = 1000;
-      Connection connection =
+      org.apache.qpid.protonj2.client.Connection connection =
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
       Sender sender = connection.openSender(q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
@@ -129,7 +132,7 @@ public class ClientTest {
     int maxFrameSize = 1000;
     int chunkSize = 10;
     try (Client client = client()) {
-      Connection connection =
+      org.apache.qpid.protonj2.client.Connection connection =
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
       StreamSender sender =
@@ -179,7 +182,8 @@ public class ClientTest {
     String q = name(info);
     AtomicLong requestIdSequence = new AtomicLong(0);
     try (Client client = client()) {
-      Connection connection = connection(client, o -> o.traceFrames(false));
+      org.apache.qpid.protonj2.client.Connection connection =
+          connection(client, o -> o.traceFrames(false));
 
       String linkPairName = "my-link-pair";
       String managementNodeAddress = "$management";
@@ -280,16 +284,17 @@ public class ClientTest {
   void queueDeletionImpactOnReceiver(TestInfo info) throws Exception {
     String queue = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
+        Connection connection = env.connection().build();
         Client client = client()) {
-      env.management().queue().name(queue).declare();
+      connection.management().queue().name(queue).declare();
 
-      Connection connection = connection(client);
-      Session session = connection.openSession();
+      org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
+      Session session = protonConnection.openSession();
       Receiver receiver = session.openReceiver("/queue/" + queue);
       receiver.openFuture().get();
       Delivery delivery = receiver.tryReceive();
       assertThat(delivery).isNull();
-      env.management().queueDeletion().delete(queue);
+      connection.management().queueDeletion().delete(queue);
       try {
         receiver.receive(10, SECONDS);
         fail("Receiver should have been closed after queue deletion");
@@ -303,11 +308,12 @@ public class ClientTest {
   void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
     String exchange = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
+        Connection connection = env.connection().build();
         Client client = client()) {
-      env.management().exchange().name(exchange).type(FANOUT).declare();
+      connection.management().exchange().name(exchange).type(FANOUT).declare();
 
-      Connection connection = connection(client);
-      Session session = connection.openSession();
+      org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
+      Session session = protonConnection.openSession();
       Sender sender =
           session.openSender(
               "/exchange/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
@@ -315,13 +321,13 @@ public class ClientTest {
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(released());
 
-      env.management().binding().sourceExchange(exchange).destinationQueue(q).bind();
+      connection.management().binding().sourceExchange(exchange).destinationQueue(q).bind();
 
       tracker = sender.send(Message.create());
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
 
-      env.management().exchangeDeletion().delete(exchange);
+      connection.management().exchangeDeletion().delete(exchange);
       try {
         int count = 0;
         while (count++ < 10) {

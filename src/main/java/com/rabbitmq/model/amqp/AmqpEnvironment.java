@@ -21,26 +21,26 @@ import com.rabbitmq.model.*;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
-import java.util.concurrent.ExecutionException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.*;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class AmqpEnvironment implements Environment {
 
-  private final ConnectionParameters connectionParameters;
+  private final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
+
+  private final Utils.ConnectionParameters connectionParameters;
 
   private final Client client;
-  private final Connection connection;
-  private final Lock managementLock = new ReentrantLock();
-  private volatile AmqpManagement management;
   private final ExecutorService executorService;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
+  private final List<AmqpConnection> connections = Collections.synchronizedList(new ArrayList<>());
 
   AmqpEnvironment(String uri, ExecutorService executorService) {
     this.connectionParameters = connectionParameters(uri);
@@ -54,35 +54,17 @@ class AmqpEnvironment implements Environment {
       this.executorService = executorService;
       this.internalExecutor = false;
     }
-
-    ConnectionOptions connectionOptions = new ConnectionOptions();
-    connectionOptions.user(this.connectionParameters.username);
-    connectionOptions.password(this.connectionParameters.password);
-    connectionOptions.virtualHost("vhost:" + this.connectionParameters.virtualHost);
-    // only the mechanisms supported in RabbitMQ
-    connectionOptions.saslOptions().addAllowedMechanism("PLAIN").addAllowedMechanism("EXTERNAL");
-
-    connectionOptions.disconnectedHandler(
-        new BiConsumer<Connection, DisconnectionEvent>() {
-          @Override
-          public void accept(Connection connection, DisconnectionEvent disconnectionEvent) {
-            System.out.println(disconnectionEvent.failureCause());
-          }
-        });
-    try {
-      this.connection =
-          client.connect(
-              this.connectionParameters.host, this.connectionParameters.port, connectionOptions);
-      this.connection.openFuture().get();
-    } catch (ClientException | ExecutionException e) {
-      throw new ModelException(e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ModelException(e);
-    }
   }
 
-  private ConnectionParameters connectionParameters(String uriString) {
+  Utils.ConnectionParameters connectionParameters() {
+    return this.connectionParameters;
+  }
+
+  Client client() {
+    return this.client;
+  }
+
+  private Utils.ConnectionParameters connectionParameters(String uriString) {
     String username = "guest";
     String password = "guest";
     String host = "localhost";
@@ -118,42 +100,18 @@ class AmqpEnvironment implements Environment {
       virtualHost = uriDecode(uri.getPath().substring(1));
     }
 
-    return new ConnectionParameters(username, password, host, virtualHost, port);
-  }
-
-  @Override
-  public Management management() {
-    try {
-      this.managementLock.lock();
-      if (this.management == null || !this.management.isOpen()) {
-        this.management = new AmqpManagement(this);
-      }
-    } finally {
-      this.managementLock.unlock();
-    }
-    return this.management;
-  }
-
-  @Override
-  public PublisherBuilder publisherBuilder() {
-    return new AmqpPublisherBuilder(this);
-  }
-
-  @Override
-  public ConsumerBuilder consumerBuilder() {
-    return new AmqpConsumerBuilder(this);
+    return new Utils.ConnectionParameters(username, password, host, virtualHost, port);
   }
 
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      try {
-        this.managementLock.lock();
-        if (this.management != null) {
-          this.management.close();
+      for (AmqpConnection connection : this.connections) {
+        try {
+          connection.close();
+        } catch (Exception e) {
+          LOGGER.warn("Error while closing connection", e);
         }
-      } finally {
-        this.managementLock.unlock();
       }
       this.client.close();
       if (this.internalExecutor) {
@@ -162,41 +120,9 @@ class AmqpEnvironment implements Environment {
     }
   }
 
-  Connection connection() {
-    return this.connection;
-  }
-
-  private static class ConnectionParameters {
-
-    private final String username, password, host, virtualHost;
-    private final int port;
-
-    private ConnectionParameters(
-        String username, String password, String host, String virtualHost, int port) {
-      this.username = username;
-      this.password = password;
-      this.host = host;
-      this.virtualHost = virtualHost;
-      this.port = port;
-    }
-
-    @Override
-    public String toString() {
-      return "ConnectionParameters{"
-          + "username='"
-          + username
-          + '\''
-          + ", password='********'"
-          + ", host='"
-          + host
-          + '\''
-          + ", virtualHost='"
-          + virtualHost
-          + '\''
-          + ", port="
-          + port
-          + '}';
-    }
+  @Override
+  public ConnectionBuilder connection() {
+    return new AmqpConnectionBuilder(this);
   }
 
   private static String uriDecode(String s) {
@@ -211,5 +137,9 @@ class AmqpEnvironment implements Environment {
 
   ExecutorService executorService() {
     return this.executorService;
+  }
+
+  void addConnection(AmqpConnection connection) {
+    this.connections.add(connection);
   }
 }

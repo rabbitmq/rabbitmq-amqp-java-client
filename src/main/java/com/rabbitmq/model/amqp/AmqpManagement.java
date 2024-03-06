@@ -50,9 +50,9 @@ class AmqpManagement implements Management {
   private final ProtonDecoder decoder = ProtonDecoderFactory.create();
   private final Duration rpcTimeout = Duration.ofSeconds(10);
 
-  AmqpManagement(AmqpEnvironment environment) {
+  AmqpManagement(AmqpConnection connection) {
     try {
-      this.session = environment.connection().openSession();
+      this.session = connection.nativeConnection().openSession();
 
       String linkPairName = "management-link-pair";
       Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);

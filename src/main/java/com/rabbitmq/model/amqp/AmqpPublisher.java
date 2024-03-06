@@ -26,24 +26,19 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 
 class AmqpPublisher implements Publisher {
 
-  private final AmqpEnvironment environment;
   private final Sender sender;
   private final ExecutorService executorService;
 
-  AmqpPublisher(AmqpEnvironment environment, String address) {
-    this.environment = environment;
-    this.executorService = environment.executorService();
+  AmqpPublisher(AmqpConnection connection, String address) {
+    this.executorService = connection.executorService();
     try {
       this.sender =
-          this.connection()
+          connection
+              .nativeConnection()
               .openSender(address, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
     } catch (ClientException e) {
       throw new ModelException(e);
     }
-  }
-
-  private Connection connection() {
-    return this.environment.connection();
   }
 
   @Override

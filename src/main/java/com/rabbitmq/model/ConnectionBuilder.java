@@ -15,29 +15,9 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model.amqp;
+package com.rabbitmq.model;
 
-import com.rabbitmq.model.Publisher;
-import com.rabbitmq.model.PublisherBuilder;
+public interface ConnectionBuilder {
 
-class AmqpPublisherBuilder implements PublisherBuilder {
-
-  private final AmqpConnection connection;
-
-  private String address;
-
-  AmqpPublisherBuilder(AmqpConnection connection) {
-    this.connection = connection;
-  }
-
-  @Override
-  public PublisherBuilder address(String address) {
-    this.address = address;
-    return this;
-  }
-
-  @Override
-  public Publisher build() {
-    return new AmqpPublisher(this.connection, this.address);
-  }
+  Connection build();
 }

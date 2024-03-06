@@ -15,29 +15,18 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model.amqp;
+package com.rabbitmq.model;
 
-import com.rabbitmq.model.Publisher;
-import com.rabbitmq.model.PublisherBuilder;
+import java.io.Closeable;
 
-class AmqpPublisherBuilder implements PublisherBuilder {
+public interface Connection extends Closeable {
 
-  private final AmqpConnection connection;
+  Management management();
 
-  private String address;
+  PublisherBuilder publisherBuilder();
 
-  AmqpPublisherBuilder(AmqpConnection connection) {
-    this.connection = connection;
-  }
+  ConsumerBuilder consumerBuilder();
 
   @Override
-  public PublisherBuilder address(String address) {
-    this.address = address;
-    return this;
-  }
-
-  @Override
-  public Publisher build() {
-    return new AmqpPublisher(this.connection, this.address);
-  }
+  void close();
 }

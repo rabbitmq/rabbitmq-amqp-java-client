@@ -40,14 +40,14 @@ class AmqpConsumer implements Consumer {
   private final Thread receiveLoop;
 
   AmqpConsumer(
-      AmqpEnvironment environment,
+      AmqpConnection connection,
       String address,
       MessageHandler messageHandler,
       int initialCredits) {
     try {
       this.receiver =
-          environment
-              .connection()
+          connection
+              .nativeConnection()
               .openReceiver(
                   address,
                   new ReceiverOptions()

@@ -22,13 +22,13 @@ import com.rabbitmq.model.ConsumerBuilder;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
 
-  private final AmqpEnvironment environment;
+  private final AmqpConnection connection;
   private String address;
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 10;
 
-  AmqpConsumerBuilder(AmqpEnvironment environment) {
-    this.environment = environment;
+  AmqpConsumerBuilder(AmqpConnection connection) {
+    this.connection = connection;
   }
 
   @Override
@@ -52,6 +52,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   @Override
   public Consumer build() {
     return new AmqpConsumer(
-        this.environment, this.address, this.messageHandler, this.initialCredits);
+        this.connection, this.address, this.messageHandler, this.initialCredits);
   }
 }
