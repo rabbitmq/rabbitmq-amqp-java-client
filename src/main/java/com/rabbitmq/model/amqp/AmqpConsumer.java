@@ -21,6 +21,7 @@ import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -29,6 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class AmqpConsumer implements Consumer {
+
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
@@ -112,7 +115,8 @@ class AmqpConsumer implements Consumer {
             }
           };
 
-      this.receiveLoop = Utils.newThread("consumer", receiveTask);
+      this.receiveLoop =
+          Utils.newThread("rabbitmq-amqp-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
       this.receiveLoop.start();
     } catch (ClientException e) {
       throw new ModelException(e);
