@@ -54,6 +54,7 @@ class AmqpPublisher implements Publisher {
   @Override
   public void publish(Message message, ConfirmationHandler confirmationHandler) {
     try {
+      // TODO catch ClientSendTimedOutException
       Tracker tracker = this.sender.send(((AmqpMessage) message).nativeMessage());
       if (this.executorService == null) {
         Utils.makeCompletableFuture(tracker.settlementFuture())

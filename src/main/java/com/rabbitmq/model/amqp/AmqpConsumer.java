@@ -32,26 +32,18 @@ class AmqpConsumer implements Consumer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
-  private final AmqpEnvironment environment;
   private final Receiver receiver;
-  private final ExecutorService executorService;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile Future<?> receiveTaskFuture;
+  private final Thread receiveLoop;
 
   AmqpConsumer(
       AmqpEnvironment environment,
       String address,
       MessageHandler messageHandler,
       int initialCredits) {
-    this.environment = environment;
-    if (environment.executorService() == null) {
-      this.executorService = Executors.newSingleThreadExecutor();
-    } else {
-      this.executorService = null;
-    }
     try {
       this.receiver =
-          this.environment
+          environment
               .connection()
               .openReceiver(
                   address,
@@ -119,18 +111,10 @@ class AmqpConsumer implements Consumer {
               Thread.currentThread().interrupt();
             }
           };
-      if (environment.executorService() == null) {
-        receiveTaskFuture = this.executorService.submit(receiveTask);
-      } else {
-        receiveTaskFuture = environment.executorService().submit(receiveTask);
-      }
+
+      this.receiveLoop = Utils.newThread("consumer", receiveTask);
+      this.receiveLoop.start();
     } catch (ClientException e) {
-      if (this.receiveTaskFuture != null) {
-        this.receiveTaskFuture.cancel(true);
-      }
-      if (this.executorService != null) {
-        this.executorService.shutdownNow();
-      }
       throw new ModelException(e);
     }
   }
@@ -138,11 +122,8 @@ class AmqpConsumer implements Consumer {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      if (this.receiveTaskFuture != null) {
-        this.receiveTaskFuture.cancel(true);
-      }
-      if (this.executorService != null) {
-        this.executorService.shutdownNow();
+      if (this.receiveLoop != null) {
+        this.receiveLoop.interrupt();
       }
       this.receiver.close();
     }

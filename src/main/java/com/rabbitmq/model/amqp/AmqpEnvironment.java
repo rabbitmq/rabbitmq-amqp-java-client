@@ -48,7 +48,7 @@ class AmqpEnvironment implements Environment {
     this.client = Client.create(clientOptions);
 
     if (executorService == null) {
-      this.executorService = Utils.virtualThreadExecutorServiceIfAvailable();
+      this.executorService = Utils.executorService();
       this.internalExecutor = true;
     } else {
       this.executorService = executorService;
