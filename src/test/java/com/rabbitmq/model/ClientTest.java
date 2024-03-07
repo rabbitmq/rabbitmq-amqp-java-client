@@ -56,7 +56,7 @@ public class ClientTest {
   @BeforeAll
   static void initAll() {
     environment = environmentBuilder().build();
-    connection = environment.connection().build();
+    connection = environment.connectionBuilder().build();
     management = connection.management();
   }
 
@@ -284,8 +284,8 @@ public class ClientTest {
   void queueDeletionImpactOnReceiver(TestInfo info) throws Exception {
     String queue = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
-        Connection connection = env.connection().build();
-        Client client = client()) {
+         Connection connection = env.connectionBuilder().build();
+         Client client = client()) {
       connection.management().queue().name(queue).declare();
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
@@ -308,8 +308,8 @@ public class ClientTest {
   void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
     String exchange = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
-        Connection connection = env.connection().build();
-        Client client = client()) {
+         Connection connection = env.connectionBuilder().build();
+         Client client = client()) {
       connection.management().exchange().name(exchange).type(FANOUT).declare();
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);

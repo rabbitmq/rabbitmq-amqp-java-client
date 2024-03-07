@@ -6,14 +6,25 @@
 === Environment
 
 The `Environment` is the entry point for applications.
-It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).
-It deals internally with connections, pooling, recovery, etc.
+It exposes an API to create connections.
 
 .Environment creation
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=environment-creation]
 --------
+
+=== Connection
+
+The `Connection` represents an AMQP 1.0 connection on top of TCP.
+It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).
+
+.Connection creation
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=connection-creation]
+--------
+
 
 === Publishing
 

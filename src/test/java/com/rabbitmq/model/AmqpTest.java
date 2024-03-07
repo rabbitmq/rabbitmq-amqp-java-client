@@ -38,7 +38,7 @@ public class AmqpTest {
   void queueDeclareDeletePublishConsume(TestInfo info) {
     String q = TestUtils.name(info);
     Environment environment = environmentBuilder().build();
-    Connection connection = environment.connection().build();
+    Connection connection = environment.connectionBuilder().build();
     try {
       connection.management().queue().name(q).quorum().queue().declare();
       String address = "/amq/queue/" + q;
@@ -92,7 +92,7 @@ public class AmqpTest {
     String q = TestUtils.name(info);
     String rk = "foo";
     Environment environment = environmentBuilder().build();
-    Connection connection = environment.connection().build();
+    Connection connection = environment.connectionBuilder().build();
     Management management = connection.management();
     try {
       management.exchange().name(e1).type(DIRECT).declare();

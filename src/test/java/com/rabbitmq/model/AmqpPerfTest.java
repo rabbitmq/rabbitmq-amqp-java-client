@@ -92,8 +92,8 @@ public class AmqpPerfTest {
     String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
     Environment environment = environmentBuilder().build();
-    Connection publishingConnection = environment.connection().build();
-    Connection consumingConnection = environment.connection().build();
+    Connection publishingConnection = environment.connectionBuilder().build();
+    Connection consumingConnection = environment.connectionBuilder().build();
     Management management = publishingConnection.management();
 
     CountDownLatch shutdownLatch = new CountDownLatch(1);

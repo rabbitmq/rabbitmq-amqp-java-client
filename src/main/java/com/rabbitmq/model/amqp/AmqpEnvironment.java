@@ -121,7 +121,7 @@ class AmqpEnvironment implements Environment {
   }
 
   @Override
-  public ConnectionBuilder connection() {
+  public ConnectionBuilder connectionBuilder() {
     return new AmqpConnectionBuilder(this);
   }
 

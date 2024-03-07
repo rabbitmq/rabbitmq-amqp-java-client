@@ -39,7 +39,7 @@ class Api {
   void connection() {
     Environment environment = null;
     // tag::connection-creation[]
-    Connection connection = environment.connection()
+    Connection connection = environment.connectionBuilder()
         .build();
     // end::connection-creation[]
   }

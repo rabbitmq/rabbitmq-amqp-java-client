@@ -19,7 +19,7 @@ package com.rabbitmq.model;
 
 public interface Environment extends AutoCloseable {
 
-  ConnectionBuilder connection();
+  ConnectionBuilder connectionBuilder();
 
   @Override
   void close();
