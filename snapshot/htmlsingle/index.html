@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(a69cc26)</span>
+<br><span id="revremark">(7511868)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -537,6 +537,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#api-overview">API Overview</a>
 <ul class="sectlevel2">
 <li><a href="#environment">Environment</a></li>
+<li><a href="#connection">Connection</a></li>
 <li><a href="#publishing">Publishing</a></li>
 <li><a href="#consuming">Consuming</a></li>
 <li><a href="#resource-management">Resource Management</a>
@@ -567,14 +568,27 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h3 id="environment"><a class="anchor" href="#environment"></a>Environment</h3>
 <div class="paragraph">
 <p>The <code>Environment</code> is the entry point for applications.
-It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).
-It deals internally with connections, pooling, recovery, etc.</p>
+It exposes an API to create connections.</p>
 </div>
 <div class="listingblock">
 <div class="title">Environment creation</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">Environment environment = <span class="keyword">new</span> AmqpEnvironmentBuilder()
     .uri(<span class="string"><span class="delimiter">&quot;</span><span class="content">amqp://guest:guest@localhost:5672/%2f</span><span class="delimiter">&quot;</span></span>)
+    .build();</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="connection"><a class="anchor" href="#connection"></a>Connection</h3>
+<div class="paragraph">
+<p>The <code>Connection</code> represents an AMQP 1.0 connection on top of TCP.
+It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).</p>
+</div>
+<div class="listingblock">
+<div class="title">Connection creation</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="predefined-type">Connection</span> connection = environment.connectionBuilder()
     .build();</code></pre>
 </div>
 </div>
@@ -789,7 +803,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-03-06 15:11:25 UTC
+Last updated 2024-03-07 07:49:28 UTC
 </div>
 </div>
 </body>
