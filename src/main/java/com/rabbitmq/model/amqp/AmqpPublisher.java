@@ -53,37 +53,20 @@ class AmqpPublisher implements Publisher {
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
           ((AmqpMessage) message).nativeMessage();
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
-      if (this.executorService == null) {
-        Utils.makeCompletableFuture(tracker.settlementFuture())
-            .whenComplete(
-                (t, throwable) -> {
-                  ConfirmationStatus status;
-                  if (throwable == null
-                      && t != null
-                      && t.remoteState() == DeliveryState.accepted()) {
-                    status = ConfirmationStatus.CONFIRMED;
-                  } else {
-                    status = ConfirmationStatus.FAILED;
-                  }
-                  confirmationHandler.handle(new DefaultConfirmationContext(message, status));
-                });
-      } else {
-        this.executorService.submit(
-            () -> {
-              ConfirmationStatus status;
-              try {
-                tracker.settlementFuture().get();
-                status =
-                    tracker.remoteState() == DeliveryState.accepted()
-                        ? ConfirmationStatus.CONFIRMED
-                        : ConfirmationStatus.FAILED;
-              } catch (InterruptedException | ExecutionException e) {
-                status = ConfirmationStatus.FAILED;
-              }
-              confirmationHandler.handle(new DefaultConfirmationContext(message, status));
-            });
-      }
-
+      this.executorService.submit(
+          () -> {
+            ConfirmationStatus status;
+            try {
+              tracker.settlementFuture().get();
+              status =
+                  tracker.remoteState() == DeliveryState.accepted()
+                      ? ConfirmationStatus.CONFIRMED
+                      : ConfirmationStatus.FAILED;
+            } catch (InterruptedException | ExecutionException e) {
+              status = ConfirmationStatus.FAILED;
+            }
+            confirmationHandler.handle(new DefaultConfirmationContext(message, status));
+          });
     } catch (ClientException e) {
       throw new ModelException(e);
     }

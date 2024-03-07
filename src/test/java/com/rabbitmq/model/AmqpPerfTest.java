@@ -92,9 +92,8 @@ public class AmqpPerfTest {
     String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
     Environment environment = environmentBuilder().build();
-    Connection publishingConnection = environment.connectionBuilder().build();
-    Connection consumingConnection = environment.connectionBuilder().build();
-    Management management = publishingConnection.management();
+    Connection connection = environment.connectionBuilder().build();
+    Management management = connection.management();
 
     CountDownLatch shutdownLatch = new CountDownLatch(1);
 
@@ -116,7 +115,7 @@ public class AmqpPerfTest {
       management.queue().name(q).type(QUORUM).declare();
       management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
 
-      consumingConnection
+      connection
           .consumerBuilder()
           .address(q)
           .initialCredits(1000)
@@ -129,8 +128,7 @@ public class AmqpPerfTest {
 
       executorService.submit(
           () -> {
-            Publisher publisher =
-                publishingConnection.publisherBuilder().address("/exchange/" + e).build();
+            Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
             Publisher.ConfirmationHandler confirmationHandler =
                 context -> {
                   confirmed.increment();
