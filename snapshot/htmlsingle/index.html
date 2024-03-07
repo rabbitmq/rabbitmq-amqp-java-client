@@ -528,7 +528,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ Java Model</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(046be5a)</span>
+<br><span id="revremark">(5c69ac5)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -624,8 +624,8 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 <div class="title">Message publishing</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">publisher.publish(message, context -&gt; {
-  <span class="keyword">if</span> (context.status() == CONFIRMED) {
-    <span class="comment">// message has been confirmed</span>
+  <span class="keyword">if</span> (context.status() == ACCEPTED) {
+    <span class="comment">// the broker accepted (confirmed) the message</span>
   } <span class="keyword">else</span> {
     <span class="comment">// deal with possible failure</span>
   }
@@ -803,7 +803,7 @@ It is accessible from the <code>Environment</code>.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-03-07 08:28:07 UTC
+Last updated 2024-03-07 08:39:24 UTC
 </div>
 </div>
 </body>
