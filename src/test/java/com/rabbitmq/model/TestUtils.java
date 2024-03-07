@@ -18,8 +18,10 @@
 package com.rabbitmq.model;
 
 import static java.lang.String.format;
+import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
+import java.lang.annotation.*;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.UUID;
@@ -33,6 +35,9 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.ExecutionCondition;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 public abstract class TestUtils {
@@ -91,6 +96,11 @@ public abstract class TestUtils {
   }
 
   static Connection connection(Client client, Consumer<ConnectionOptions> optionsCallback) {
+    return connection(null, client, optionsCallback);
+  }
+
+  static Connection connection(
+      String name, Client client, Consumer<ConnectionOptions> optionsCallback) {
     ConnectionOptions connectionOptions = new ConnectionOptions();
     connectionOptions
         .user("guest")
@@ -100,6 +110,9 @@ public abstract class TestUtils {
         .saslOptions()
         .addAllowedMechanism("PLAIN")
         .addAllowedMechanism("EXTERNAL");
+    if (name != null) {
+      connectionOptions.properties(singletonMap("connection_name", name));
+    }
     optionsCallback.accept(connectionOptions);
     try {
       return client.connect("localhost", 5672, connectionOptions);
@@ -115,4 +128,23 @@ public abstract class TestUtils {
   static AmqpEnvironmentBuilder environmentBuilder() {
     return new AmqpEnvironmentBuilder();
   }
+
+  static class DisabledIfRabbitMqCtlNotSetCondition implements ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      try {
+        Cli.rabbitmqctlCommand();
+        return ConditionEvaluationResult.enabled("rabbitmqctl.bin system property is set");
+      } catch (IllegalStateException e) {
+        return ConditionEvaluationResult.disabled("rabbitmqctl.bin system property not set");
+      }
+    }
+  }
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfRabbitMqCtlNotSetCondition.class)
+  @interface DisabledIfRabbitMqCtlNotSet {}
 }

@@ -17,8 +17,10 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import static com.rabbitmq.model.Cli.closeConnection;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.TestUtils.*;
+import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
@@ -33,6 +35,7 @@ import java.io.OutputStream;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
@@ -340,6 +343,57 @@ public class ClientTest {
       } catch (ClientLinkRemotelyClosedException e) {
         assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
       }
+    }
+  }
+
+  @Test
+  @DisabledIfRabbitMqCtlNotSet
+  void connectionClosing() {
+    try (Client client = client()) {
+      CountDownLatch connectedLatch = new CountDownLatch(1);
+      AtomicBoolean called = new AtomicBoolean(false);
+      org.apache.qpid.protonj2.client.Connection c =
+          connection(
+              client,
+              o ->
+                  o.connectedHandler(
+                          (conn, connectionEvent) -> {
+                            // called when connected for the first time
+                            connectedLatch.countDown();
+                          })
+                      .disconnectedHandler(
+                          (conn, disconnectionEvent) -> {
+                            // called when the connection fails
+                            called.set(true);
+                          })
+                      .interruptedHandler(
+                          (conn, disconnectionEvent) -> {
+                            // called when the connection fails and recovery is activated
+                            called.set(true);
+                          })
+                      .reconnectedHandler(
+                          (conn, connectionEvent) -> {
+                            // called when the connection reconnects after a failure
+                            called.set(true);
+                          }));
+
+      assertThat(connectedLatch).is(completed());
+      c.close();
+      assertThat(called).isFalse();
+
+      CountDownLatch disconnectedLatch = new CountDownLatch(1);
+      String name = UUID.randomUUID().toString();
+      c =
+          connection(
+              name,
+              client,
+              o ->
+                  o.disconnectedHandler((conn, disconnectedEvent) -> disconnectedLatch.countDown())
+                      .interruptedHandler((conn, disconnectionEvent) -> called.set(true))
+                      .reconnectedHandler((conn, connectionEvent) -> called.set(true)));
+      closeConnection(name);
+      assertThat(disconnectedLatch).is(completed());
+      assertThat(called).isFalse();
     }
   }
 }
