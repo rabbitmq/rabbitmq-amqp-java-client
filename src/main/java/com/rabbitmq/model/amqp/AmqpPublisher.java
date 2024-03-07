@@ -47,7 +47,7 @@ class AmqpPublisher implements Publisher {
   }
 
   @Override
-  public void publish(Message message, ConfirmationHandler confirmationHandler) {
+  public void publish(Message message, Callback callback) {
     try {
       // TODO catch ClientSendTimedOutException
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
@@ -55,17 +55,17 @@ class AmqpPublisher implements Publisher {
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
       this.executorService.submit(
           () -> {
-            ConfirmationStatus status;
+            Status status;
             try {
               tracker.settlementFuture().get();
               status =
                   tracker.remoteState() == DeliveryState.accepted()
-                      ? ConfirmationStatus.CONFIRMED
-                      : ConfirmationStatus.FAILED;
+                      ? Status.ACCEPTED
+                      : Status.FAILED;
             } catch (InterruptedException | ExecutionException e) {
-              status = ConfirmationStatus.FAILED;
+              status = Status.FAILED;
             }
-            confirmationHandler.handle(new DefaultConfirmationContext(message, status));
+            callback.handle(new DefaultContext(message, status));
           });
     } catch (ClientException e) {
       throw new ModelException(e);
@@ -77,12 +77,12 @@ class AmqpPublisher implements Publisher {
     this.sender.close();
   }
 
-  private static class DefaultConfirmationContext implements ConfirmationContext {
+  private static class DefaultContext implements Context {
 
     private final Message message;
-    private final ConfirmationStatus status;
+    private final Status status;
 
-    private DefaultConfirmationContext(Message message, ConfirmationStatus status) {
+    private DefaultContext(Message message, Status status) {
       this.message = message;
       this.status = status;
     }
@@ -93,7 +93,7 @@ class AmqpPublisher implements Publisher {
     }
 
     @Override
-    public ConfirmationStatus status() {
+    public Status status() {
       return this.status;
     }
   }

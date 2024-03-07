@@ -21,25 +21,25 @@ public interface Publisher extends AutoCloseable {
 
   Message message();
 
-  void publish(Message message, ConfirmationHandler confirmationHandler);
+  void publish(Message message, Callback callback);
 
   @Override
   void close();
 
-  interface ConfirmationHandler {
+  interface Callback {
 
-    void handle(ConfirmationContext context);
+    void handle(Context context);
   }
 
-  interface ConfirmationContext {
+  interface Context {
 
     Message message();
 
-    ConfirmationStatus status();
+    Status status();
   }
 
-  enum ConfirmationStatus {
-    CONFIRMED,
+  enum Status {
+    ACCEPTED,
     FAILED
   }
 }

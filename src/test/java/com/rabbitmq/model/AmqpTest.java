@@ -56,7 +56,7 @@ public class AmqpTest {
                         .addData("hello".getBytes(StandardCharsets.UTF_8))
                         .messageId(messageId),
                     context -> {
-                      if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
+                      if (context.status() == Publisher.Status.ACCEPTED) {
                         confirmLatch.countDown();
                       }
                     });
@@ -112,7 +112,7 @@ public class AmqpTest {
               publisher.publish(
                   publisher.message().subject(rk).addData("hello".getBytes(StandardCharsets.UTF_8)),
                   context -> {
-                    if (context.status() == Publisher.ConfirmationStatus.CONFIRMED) {
+                    if (context.status() == Publisher.Status.ACCEPTED) {
                       confirmLatch.countDown();
                     }
                   });

@@ -24,7 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Publisher.ConfirmationStatus.CONFIRMED;
+import static com.rabbitmq.model.Publisher.Status.ACCEPTED;
 
 class Api {
 
@@ -61,8 +61,8 @@ class Api {
 
     // tag::message-publishing[]
     publisher.publish(message, context -> {
-      if (context.status() == CONFIRMED) {
-        // message has been confirmed
+      if (context.status() == ACCEPTED) {
+        // the broker accepted (confirmed) the message
       } else {
         // deal with possible failure
       }

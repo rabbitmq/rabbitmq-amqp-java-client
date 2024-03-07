@@ -129,13 +129,13 @@ public class AmqpPerfTest {
       executorService.submit(
           () -> {
             Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
-            Publisher.ConfirmationHandler confirmationHandler =
+            Publisher.Callback callback =
                 context -> {
                   confirmed.increment();
                 };
             while (!Thread.currentThread().isInterrupted()) {
               Message message = publisher.message().subject(rk);
-              publisher.publish(message, confirmationHandler);
+              publisher.publish(message, callback);
               published.increment();
             }
           });
