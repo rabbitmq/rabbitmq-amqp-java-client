@@ -50,7 +50,9 @@ class AmqpPublisher implements Publisher {
   public void publish(Message message, ConfirmationHandler confirmationHandler) {
     try {
       // TODO catch ClientSendTimedOutException
-      Tracker tracker = this.sender.send(((AmqpMessage) message).nativeMessage());
+      org.apache.qpid.protonj2.client.Message<?> nativeMessage =
+          ((AmqpMessage) message).nativeMessage();
+      Tracker tracker = this.sender.send(nativeMessage.durable(true));
       if (this.executorService == null) {
         Utils.makeCompletableFuture(tracker.settlementFuture())
             .whenComplete(
