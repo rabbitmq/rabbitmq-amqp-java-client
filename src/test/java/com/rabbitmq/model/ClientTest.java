@@ -189,7 +189,7 @@ public class ClientTest {
           connection(client, o -> o.traceFrames(false));
 
       String linkPairName = "my-link-pair";
-      String managementNodeAddress = "$management";
+      String managementNodeAddress = "/management/v2";
       String replyTo = "$me";
       Session session = connection.openSession();
       Sender sender =
@@ -212,11 +212,9 @@ public class ClientTest {
       receiver.openFuture().get(1, SECONDS);
 
       Map<String, Object> body = new HashMap<>();
-      body.put("name", q);
       body.put("durable", true);
       body.put("exclusive", false);
       body.put("auto_delete", false);
-      body.put("type", "queue");
       body.put("arguments", Collections.emptyMap());
       ProtonEncoder encoder = ProtonEncoderFactory.create();
       ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer();
@@ -226,8 +224,8 @@ public class ClientTest {
       Message<byte[]> request =
           Message.create(requestBody)
               .messageId(requestId)
-              .to("/$management/entities")
-              .subject("POST")
+              .to("/queues/" + q)
+              .subject("PUT")
               .replyTo(replyTo)
               .contentType("application/amqp-management+amqp;type=entity");
 
@@ -238,29 +236,20 @@ public class ClientTest {
       Message<byte[]> response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(requestId);
       assertThat(response.subject()).isEqualTo("201");
-      assertThat(response.contentType())
-          .isEqualTo("application/amqp-management+amqp;type=entity-collection");
       assertThat(response.property("http:response")).isEqualTo("1.1");
-      assertThat(response.property("location")).isNotNull().isInstanceOf(String.class);
 
       byte[] responseBodyBin = response.body();
       ProtonDecoder decoder = ProtonDecoderFactory.create();
       buffer = new ProtonByteArrayBuffer(responseBodyBin.length);
       buffer.writeBytes(responseBodyBin);
       Map<String, Object> responseBody = decoder.readMap(buffer, decoder.newDecoderState());
-      String location = response.property("location").toString();
-      assertThat(responseBody)
-          .containsEntry("type", "queue")
-          .containsEntry("id", q)
-          .containsEntry("self", location)
-          .containsEntry("management", managementNodeAddress)
-          .containsEntry("target", "/queue/" + q);
+      assertThat(responseBody).isEmpty();
 
       requestId = ulong(requestIdSequence.incrementAndGet());
       request =
           Message.create(new byte[0])
               .messageId(requestId)
-              .to(location)
+              .to("/queues/" + q)
               .subject("DELETE")
               .replyTo(replyTo);
 
@@ -271,7 +260,6 @@ public class ClientTest {
       response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(requestId);
       assertThat(response.subject()).isEqualTo("200");
-      assertThat(response.contentType()).isEqualTo("application/amqp-management+amqp");
       assertThat(response.property("http:response")).isEqualTo("1.1");
 
       responseBodyBin = response.body();

@@ -22,15 +22,20 @@ import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.TestUtils.environmentBuilder;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class AmqpTest {
 
@@ -85,12 +90,15 @@ public class AmqpTest {
     }
   }
 
-  @Test
-  void binding(TestInfo info) {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void binding(boolean addBindingArguments, TestInfo info) {
     String e1 = TestUtils.name(info);
     String e2 = TestUtils.name(info);
     String q = TestUtils.name(info);
     String rk = "foo";
+    Map<String, Object> bindingArguments =
+        addBindingArguments ? singletonMap("foo", "bar") : emptyMap();
     Environment environment = environmentBuilder().build();
     Connection connection = environment.connectionBuilder().build();
     Management management = connection.management();
@@ -98,8 +106,19 @@ public class AmqpTest {
       management.exchange().name(e1).type(DIRECT).declare();
       management.exchange().name(e2).type(FANOUT).declare();
       management.queue().name(q).type(QUORUM).declare();
-      management.binding().sourceExchange(e1).destinationExchange(e2).key(rk).bind();
-      management.binding().sourceExchange(e2).destinationQueue(q).bind();
+      management
+          .binding()
+          .sourceExchange(e1)
+          .destinationExchange(e2)
+          .key(rk)
+          .arguments(bindingArguments)
+          .bind();
+      management
+          .binding()
+          .sourceExchange(e2)
+          .destinationQueue(q)
+          .arguments(bindingArguments)
+          .bind();
 
       Publisher publisher1 = connection.publisherBuilder().address("/exchange/" + e1).build();
       Publisher publisher2 = connection.publisherBuilder().address("/exchange/" + e2).build();
@@ -138,8 +157,19 @@ public class AmqpTest {
       publisher2.close();
       consumer.close();
     } finally {
-      management.unbind().sourceExchange(e2).destinationQueue(q).unbind();
-      management.unbind().sourceExchange(e1).destinationExchange(e2).key(rk).unbind();
+      management
+          .unbind()
+          .sourceExchange(e2)
+          .destinationQueue(q)
+          .arguments(bindingArguments)
+          .unbind();
+      management
+          .unbind()
+          .sourceExchange(e1)
+          .destinationExchange(e2)
+          .key(rk)
+          .arguments(bindingArguments)
+          .unbind();
       management.exchangeDeletion().delete(e2);
       management.exchangeDeletion().delete(e1);
       management.queueDeletion().delete(q);

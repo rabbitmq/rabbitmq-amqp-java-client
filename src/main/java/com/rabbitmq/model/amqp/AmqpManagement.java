@@ -38,8 +38,16 @@ import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
 
 class AmqpManagement implements Management {
 
-  private static final String MANAGEMENT_NODE_ADDRESS = "$management";
+  private static final String MANAGEMENT_NODE_ADDRESS = "/management/v2";
   private static final String REPLY_TO = "$me";
+
+  private static final String GET = "GET";
+  private static final String POST = "POST";
+  private static final String PUT = "PUT";
+  private static final String DELETE = "DELETE";
+  private static final String CODE_200 = "200";
+  private static final String CODE_201 = "201";
+  private static final String CODE_204 = "204";
 
   private final Session session;
   private final Lock linkPairLock = new ReentrantLock();
@@ -53,7 +61,6 @@ class AmqpManagement implements Management {
   AmqpManagement(AmqpConnection connection) {
     try {
       this.session = connection.nativeConnection().openSession();
-
       String linkPairName = "management-link-pair";
       Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
       this.sender =
@@ -88,7 +95,7 @@ class AmqpManagement implements Management {
   @Override
   public QueueDeletion queueDeletion() {
     return name -> {
-      Map<String, Object> responseBody = delete(queueLocation(name), "queue", CODE_200);
+      Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
       if (!responseBody.containsKey("message_count")) {
         throw new ModelException("Response body should contain message_count");
       }
@@ -103,7 +110,7 @@ class AmqpManagement implements Management {
   @Override
   public ExchangeDeletion exchangeDeletion() {
     return name -> {
-      delete(exchangeLocation(name), "exchange", CODE_204);
+      delete(exchangeLocation(name), CODE_204);
     };
   }
 
@@ -130,15 +137,21 @@ class AmqpManagement implements Management {
     return !this.closed.get();
   }
 
-  void declareQueue(Map<String, Object> body) {
-    declare(body, "/$management/entities", "queue");
+  void declareQueue(String name, Map<String, Object> body) {
+    // TODO HTTP encode queue name
+    declare(body, "/queues/" + name);
   }
 
-  void declareExchange(Map<String, Object> body) {
-    declare(body, "/$management/entities", "exchange");
+  void declareExchange(String name, Map<String, Object> body) {
+    // TODO HTTP encode exchange name
+    declare(body, "/exchanges/" + name);
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String target, String type) {
+  private Map<String, Object> declare(Map<String, Object> body, String target) {
+    return this.declare(body, target, PUT);
+  }
+
+  private Map<String, Object> declare(Map<String, Object> body, String target, String operation) {
     return this.callOnLinkPair(
         () -> {
           UUID requestId = messageId();
@@ -147,27 +160,22 @@ class AmqpManagement implements Management {
                 Message.create(encode(body))
                     .messageId(requestId)
                     .to(target)
-                    .subject(POST)
-                    .replyTo(REPLY_TO)
-                    .contentType(MEDIA_TYPE_ENTITY);
+                    .subject(operation)
+                    .replyTo(REPLY_TO);
 
             this.sender.send(request);
 
             Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
             checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
             Message<byte[]> response = delivery.message();
-            Map<String, Object> responseBody = decodeMap(response.body());
-            if (!type.equals(responseBody.get("type"))) {
-              throw new ModelException("Unexpected type: %s instead of %s", body.get("type"), type);
-            }
-            return responseBody;
+            return decodeMap(response.body());
           } catch (ClientException e) {
-            throw new ModelException("Error on POST operation: " + type, e);
+            throw new ModelException("Error on PUT operation: " + target, e);
           }
         });
   }
 
-  private Map<String, Object> delete(String target, String type, String expectedResponseCode) {
+  private Map<String, Object> delete(String target, String expectedResponseCode) {
     return this.callOnLinkPair(
         () -> {
           UUID requestId = messageId();
@@ -185,7 +193,7 @@ class AmqpManagement implements Management {
             Message<byte[]> response = delivery.message();
             return decodeMap(response.body());
           } catch (ClientException e) {
-            throw new ModelException("Error on DELETE operation: " + type, e);
+            throw new ModelException("Error on DELETE operation: " + target, e);
           }
         });
   }
@@ -219,11 +227,13 @@ class AmqpManagement implements Management {
   }
 
   private static String queueLocation(String q) {
-    return "/" + MANAGEMENT_NODE_ADDRESS + "/queues/" + q;
+    // TODO HTTP encode queue name
+    return "/queues/" + q;
   }
 
   private static String exchangeLocation(String e) {
-    return "/" + MANAGEMENT_NODE_ADDRESS + "/exchanges/" + e;
+    // TODO HTTP encode exchange name
+    return "/exchanges/" + e;
   }
 
   private static void checkResponse(
@@ -242,51 +252,39 @@ class AmqpManagement implements Management {
     }
   }
 
-  private static final String GET = "GET";
-  private static final String POST = "POST";
-  private static final String DELETE = "DELETE";
-  private static final String MEDIA_TYPE_ENTITY = "application/amqp-management+amqp;type=entity";
-  private static final String CODE_200 = "200";
-  private static final String CODE_201 = "201";
-  private static final String CODE_204 = "204";
-
-  void bindQueue(String queue, Map<String, Object> body) {
-    declare(body, "/$management/queues/" + queue + "/$management/entities", "binding");
+  void bind(Map<String, Object> body) {
+    declare(body, "/bindings", POST);
   }
 
-  void bindExchange(String exchange, Map<String, Object> body) {
-    declare(body, "/$management/exchanges/" + exchange + "/$management/entities", "binding");
-  }
-
-  void unbindQueue(String queue, String exchange, String key, Map<String, Object> arguments) {
-    queueBindingUri(queue, exchange, key, arguments)
-        .ifPresent(uri -> delete(uri, "queue unbind", CODE_204));
-  }
-
-  void unbindExchange(
-      String destination, String source, String key, Map<String, Object> arguments) {
-    exchangeBindingUri(destination, source, key, arguments)
-        .ifPresent(uri -> delete(uri, "exchange unbind", CODE_204));
-  }
-
-  Optional<String> queueBindingUri(
-      String queue, String exchange, String key, Map<String, Object> arguments) {
-    return this.callOnLinkPair(
-        () -> {
-          List<Map<String, Object>> bindings =
-              get(queueBindingsTarget(queue, exchange), this::decodeList);
-          return matchBinding(bindings, key, arguments);
-        });
-  }
-
-  Optional<String> exchangeBindingUri(
-      String destination, String source, String key, Map<String, Object> arguments) {
-    return this.callOnLinkPair(
-        () -> {
-          List<Map<String, Object>> bindings =
-              this.get(exchangeBindingsTarget(destination, source), this::decodeList);
-          return matchBinding(bindings, key, arguments);
-        });
+  void unbind(
+      String destinationField,
+      String source,
+      String destination,
+      String key,
+      Map<String, Object> arguments) {
+    if (arguments == null || arguments.isEmpty()) {
+      String target =
+          "/bindings/src="
+              + source
+              + ";"
+              + destinationField
+              + "="
+              + destination
+              + ";key="
+              + key
+              + ";args=";
+      delete(target, CODE_204);
+    } else {
+      this.callOnLinkPair(
+              () -> {
+                List<Map<String, Object>> bindings =
+                    get(
+                        bindingsTarget(destinationField, source, destination, key),
+                        this::decodeList);
+                return matchBinding(bindings, key, arguments);
+              })
+          .ifPresent(location -> delete(location, CODE_204));
+    }
   }
 
   private static Optional<String> matchBinding(
@@ -308,7 +306,7 @@ class AmqpManagement implements Management {
                     }
                     return false;
                   })
-              .map(b -> b.get("self").toString())
+              .map(b -> b.get("location").toString())
               .findFirst();
     } else {
       uri = Optional.empty();
@@ -329,26 +327,10 @@ class AmqpManagement implements Management {
     return bodyTransformer.apply(response.body());
   }
 
-  private String queueBindingsTarget(String queue, String exchange) {
-    return "/"
-        + MANAGEMENT_NODE_ADDRESS
-        + "/queues/"
-        + queue
-        + "/"
-        + MANAGEMENT_NODE_ADDRESS
-        + "/bindings?source="
-        + exchange;
-  }
-
-  private String exchangeBindingsTarget(String destination, String source) {
-    return "/"
-        + MANAGEMENT_NODE_ADDRESS
-        + "/exchanges/"
-        + destination
-        + "/"
-        + MANAGEMENT_NODE_ADDRESS
-        + "/bindings?source="
-        + source;
+  private String bindingsTarget(
+      String destinationField, String source, String destination, String key) {
+    // TODO encode query parameters
+    return "/bindings?src=" + source + "&" + destinationField + "=" + destination + "&key=" + key;
   }
 
   private <T> T callOnLinkPair(Callable<T> operation) {

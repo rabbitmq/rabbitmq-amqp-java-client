@@ -18,6 +18,7 @@
 package com.rabbitmq.model;
 
 import java.time.Duration;
+import java.util.Map;
 
 public interface Management extends AutoCloseable {
 
@@ -239,6 +240,8 @@ public interface Management extends AutoCloseable {
 
     BindingSpecification argument(String key, Object value);
 
+    BindingSpecification arguments(Map<String, Object> arguments);
+
     void bind();
   }
 
@@ -253,6 +256,8 @@ public interface Management extends AutoCloseable {
     UnbindSpecification key(String key);
 
     UnbindSpecification argument(String key, Object value);
+
+    UnbindSpecification arguments(Map<String, Object> arguments);
 
     void unbind();
   }

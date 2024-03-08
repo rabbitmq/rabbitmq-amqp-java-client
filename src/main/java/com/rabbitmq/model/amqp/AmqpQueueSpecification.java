@@ -184,13 +184,11 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("name", this.name);
     body.put("durable", this.durable);
     body.put("exclusive", this.exclusive);
     body.put("auto_delete", this.autoDelete);
-    body.put("type", "queue");
     body.put("arguments", this.arguments);
-    this.management.declareQueue(body);
+    this.management.declareQueue(this.name, body);
   }
 
   private Map<String, Object> arg(String key, Object value) {

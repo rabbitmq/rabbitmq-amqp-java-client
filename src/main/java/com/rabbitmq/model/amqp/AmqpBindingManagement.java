@@ -79,15 +79,24 @@ abstract class AmqpBindingManagement {
     }
 
     @Override
+    public Management.BindingSpecification arguments(Map<String, Object> arguments) {
+      this.state.arguments.clear();
+      this.state.arguments.putAll(arguments);
+      return this;
+    }
+
+    @Override
     public void bind() {
       Map<String, Object> body = new LinkedHashMap<>();
       body.put("source", this.state.source);
       body.put("binding_key", this.state.key == null ? "" : this.state.key);
       body.put("arguments", this.state.arguments);
       if (this.state.toQueue) {
-        this.state.managememt.bindQueue(this.state.destination, body);
+        body.put("destination_queue", this.state.destination);
+        this.state.managememt.bind(body);
       } else {
-        this.state.managememt.bindExchange(this.state.destination, body);
+        body.put("destination_exchange", this.state.destination);
+        this.state.managememt.bind(body);
       }
     }
   }
@@ -133,20 +142,21 @@ abstract class AmqpBindingManagement {
     }
 
     @Override
+    public Management.UnbindSpecification arguments(Map<String, Object> arguments) {
+      this.state.arguments.clear();
+      this.state.arguments.putAll(arguments);
+      return this;
+    }
+
+    @Override
     public void unbind() {
-      if (this.state.toQueue) {
-        this.state.managememt.unbindQueue(
-            this.state.destination,
-            this.state.source,
-            this.state.key == null ? "" : this.state.key,
-            this.state.arguments);
-      } else {
-        this.state.managememt.unbindExchange(
-            this.state.destination,
-            this.state.source,
-            this.state.key == null ? "" : this.state.key,
-            this.state.arguments);
-      }
+      String destinationCharacter = this.state.toQueue ? "dstq" : "dste";
+      this.state.managememt.unbind(
+          destinationCharacter,
+          this.state.source,
+          this.state.destination,
+          this.state.key == null ? "" : this.state.key,
+          this.state.arguments);
     }
   }
 }

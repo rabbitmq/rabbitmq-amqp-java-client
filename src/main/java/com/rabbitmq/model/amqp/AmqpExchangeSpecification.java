@@ -79,13 +79,11 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("name", this.name);
-    body.put("exchange_type", this.type);
+    body.put("type", this.type);
     body.put("durable", this.durable);
     body.put("auto_delete", this.autoDelete);
     body.put("internal", this.internal);
-    body.put("type", "exchange");
     body.put("arguments", this.arguments);
-    this.management.declareExchange(body);
+    this.management.declareExchange(this.name, body);
   }
 }
