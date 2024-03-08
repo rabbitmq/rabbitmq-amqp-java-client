@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import static com.rabbitmq.model.amqp.UriUtils.encodeHttpParameter;
+import static com.rabbitmq.model.amqp.UriUtils.encodePathSegment;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.model.Management;
@@ -138,13 +140,11 @@ class AmqpManagement implements Management {
   }
 
   void declareQueue(String name, Map<String, Object> body) {
-    // TODO HTTP encode queue name
-    declare(body, "/queues/" + name);
+    this.declare(body, queueLocation(name));
   }
 
   void declareExchange(String name, Map<String, Object> body) {
-    // TODO HTTP encode exchange name
-    declare(body, "/exchanges/" + name);
+    this.declare(body, exchangeLocation(name));
   }
 
   private Map<String, Object> declare(Map<String, Object> body, String target) {
@@ -227,13 +227,11 @@ class AmqpManagement implements Management {
   }
 
   private static String queueLocation(String q) {
-    // TODO HTTP encode queue name
-    return "/queues/" + q;
+    return "/queues/" + encodePathSegment(q);
   }
 
   private static String exchangeLocation(String e) {
-    // TODO HTTP encode exchange name
-    return "/exchanges/" + e;
+    return "/exchanges/" + encodePathSegment(e);
   }
 
   private static void checkResponse(
@@ -264,14 +262,15 @@ class AmqpManagement implements Management {
       Map<String, Object> arguments) {
     if (arguments == null || arguments.isEmpty()) {
       String target =
-          "/bindings/src="
-              + source
+          "/bindings/"
+              + "src="
+              + encodePathSegment(source)
               + ";"
               + destinationField
               + "="
-              + destination
+              + encodePathSegment(destination)
               + ";key="
-              + key
+              + encodePathSegment(key)
               + ";args=";
       delete(target, CODE_204);
     } else {
@@ -329,8 +328,14 @@ class AmqpManagement implements Management {
 
   private String bindingsTarget(
       String destinationField, String source, String destination, String key) {
-    // TODO encode query parameters
-    return "/bindings?src=" + source + "&" + destinationField + "=" + destination + "&key=" + key;
+    return "/bindings?src="
+        + encodeHttpParameter(source)
+        + "&"
+        + destinationField
+        + "="
+        + encodeHttpParameter(destination)
+        + "&key="
+        + encodeHttpParameter(key);
   }
 
   private <T> T callOnLinkPair(Callable<T> operation) {
