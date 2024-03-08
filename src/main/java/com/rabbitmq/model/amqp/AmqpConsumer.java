@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import static com.rabbitmq.model.amqp.Utils.newThread;
+
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
 import java.util.concurrent.*;
@@ -116,7 +118,7 @@ class AmqpConsumer implements Consumer {
           };
 
       this.receiveLoop =
-          Utils.newThread("rabbitmq-amqp-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
+          newThread("rabbitmq-amqp-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
       this.receiveLoop.start();
     } catch (ClientException e) {
       throw new ModelException(e);

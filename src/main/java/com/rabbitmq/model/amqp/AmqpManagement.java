@@ -19,26 +19,37 @@ package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.amqp.UriUtils.encodeHttpParameter;
 import static com.rabbitmq.model.amqp.UriUtils.encodePathSegment;
+import static com.rabbitmq.model.amqp.Utils.newThread;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.model.Management;
 import com.rabbitmq.model.ModelException;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
+import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonDecoderFactory;
 import org.apache.qpid.protonj2.codec.encoders.ProtonEncoder;
 import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class AmqpManagement implements Management {
+
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpManagement.class);
 
   private static final String MANAGEMENT_NODE_ADDRESS = "/management/v2";
   private static final String REPLY_TO = "$me";
@@ -52,13 +63,15 @@ class AmqpManagement implements Management {
   private static final String CODE_204 = "204";
 
   private final Session session;
-  private final Lock linkPairLock = new ReentrantLock();
-  private final Sender sender; // @GuardedBy("linkPairLock")
-  private final Receiver receiver; // @GuardedBy("linkPairLock")
+  private final Sender sender;
+  private final Receiver receiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final ProtonEncoder encoder = ProtonEncoderFactory.create();
   private final ProtonDecoder decoder = ProtonDecoderFactory.create();
   private final Duration rpcTimeout = Duration.ofSeconds(10);
+  private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
+      new ConcurrentHashMap<>();
+  private final Thread receiveLoop;
 
   AmqpManagement(AmqpConnection connection) {
     try {
@@ -84,6 +97,38 @@ class AmqpManagement implements Management {
 
       this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
       this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+      Runnable receiveTask =
+          () -> {
+            try {
+              while (!Thread.currentThread().isInterrupted()) {
+                Delivery delivery = receiver.receive(100, MILLISECONDS);
+                if (delivery != null) {
+                  Object correlationId = delivery.message().correlationId();
+                  if (correlationId != null && correlationId instanceof UUID) {
+                    OutstandingRequest request = outstandingRequests.remove(correlationId);
+                    if (request != null) {
+                      request.complete(delivery.message());
+                    } else {
+                      LOGGER.info("Could not find outstanding request {}", correlationId);
+                    }
+                  } else {
+                    LOGGER.info("Could not correlate inbound message with managemement request");
+                  }
+                }
+              }
+            } catch (ClientConnectionRemotelyClosedException
+                | ClientLinkRemotelyClosedException e) {
+              // receiver is closed
+            } catch (ClientException e) {
+              java.util.function.Consumer<String> log =
+                  this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
+              log.accept("Error while polling AMQP receiver");
+            }
+          };
+      this.receiveLoop =
+          newThread(
+              "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
+      this.receiveLoop.start();
     } catch (Exception e) {
       throw new ModelException(e);
     }
@@ -129,6 +174,9 @@ class AmqpManagement implements Management {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
+      if (this.receiveLoop != null) {
+        this.receiveLoop.interrupt();
+      }
       this.receiver.close();
       this.sender.close();
       this.session.close();
@@ -152,50 +200,49 @@ class AmqpManagement implements Management {
   }
 
   private Map<String, Object> declare(Map<String, Object> body, String target, String operation) {
-    return this.callOnLinkPair(
-        () -> {
-          UUID requestId = messageId();
-          try {
-            Message<byte[]> request =
-                Message.create(encode(body))
-                    .messageId(requestId)
-                    .to(target)
-                    .subject(operation)
-                    .replyTo(REPLY_TO);
+    UUID requestId = messageId();
+    try {
+      Message<byte[]> request =
+          Message.create(encode(body))
+              .messageId(requestId)
+              .to(target)
+              .subject(operation)
+              .replyTo(REPLY_TO);
 
-            this.sender.send(request);
+      OutstandingRequest outstandingRequest = this.request(request);
+      outstandingRequest.block();
 
-            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-            checkResponse(delivery, this.rpcTimeout, requestId, CODE_201);
-            Message<byte[]> response = delivery.message();
-            return decodeMap(response.body());
-          } catch (ClientException e) {
-            throw new ModelException("Error on PUT operation: " + target, e);
-          }
-        });
+      checkResponse(outstandingRequest.response(), requestId, CODE_201);
+      return decodeMap(outstandingRequest.response().body());
+    } catch (ClientException e) {
+      throw new ModelException("Error on PUT operation: " + target, e);
+    }
+  }
+
+  OutstandingRequest request(Message<byte[]> request) throws ClientException {
+    OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
+    this.outstandingRequests.put((UUID) request.messageId(), outstandingRequest);
+    this.sender.send(request);
+    return outstandingRequest;
   }
 
   private Map<String, Object> delete(String target, String expectedResponseCode) {
-    return this.callOnLinkPair(
-        () -> {
-          UUID requestId = messageId();
-          try {
-            Message<byte[]> request =
-                Message.create(new byte[0])
-                    .messageId(requestId)
-                    .to(target)
-                    .subject(DELETE)
-                    .replyTo(REPLY_TO);
+    UUID requestId = messageId();
+    try {
+      Message<byte[]> request =
+          Message.create(new byte[0])
+              .messageId(requestId)
+              .to(target)
+              .subject(DELETE)
+              .replyTo(REPLY_TO);
 
-            this.sender.send(request);
-            Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-            checkResponse(delivery, this.rpcTimeout, requestId, expectedResponseCode);
-            Message<byte[]> response = delivery.message();
-            return decodeMap(response.body());
-          } catch (ClientException e) {
-            throw new ModelException("Error on DELETE operation: " + target, e);
-          }
-        });
+      OutstandingRequest outstandingRequest = request(request);
+      outstandingRequest.block();
+      checkResponse(outstandingRequest.response(), requestId, expectedResponseCode);
+      return decodeMap(outstandingRequest.response().body());
+    } catch (ClientException e) {
+      throw new ModelException("Error on DELETE operation: " + target, e);
+    }
   }
 
   private byte[] encode(Map<String, Object> map) {
@@ -235,12 +282,8 @@ class AmqpManagement implements Management {
   }
 
   private static void checkResponse(
-      Delivery delivery, Duration rpcTimeout, UUID requestId, String expectedResponseCode)
+      Message<byte[]> response, UUID requestId, String expectedResponseCode)
       throws ClientException {
-    if (delivery == null) {
-      throw new ModelException("No reply received in %d ms", rpcTimeout.toMillis());
-    }
-    Message<byte[]> response = delivery.message();
     if (!requestId.equals(response.correlationId())) {
       throw new ModelException("Unexpected correlation ID");
     }
@@ -274,15 +317,14 @@ class AmqpManagement implements Management {
               + ";args=";
       delete(target, CODE_204);
     } else {
-      this.callOnLinkPair(
-              () -> {
-                List<Map<String, Object>> bindings =
-                    get(
-                        bindingsTarget(destinationField, source, destination, key),
-                        this::decodeList);
-                return matchBinding(bindings, key, arguments);
-              })
-          .ifPresent(location -> delete(location, CODE_204));
+      List<Map<String, Object>> bindings = null;
+      String target = bindingsTarget(destinationField, source, destination, key);
+      try {
+        bindings = get(target, this::decodeList);
+      } catch (ClientException e) {
+        throw new ModelException("Error on GET operation: " + target, e);
+      }
+      matchBinding(bindings, key, arguments).ifPresent(location -> delete(location, CODE_204));
     }
   }
 
@@ -318,12 +360,10 @@ class AmqpManagement implements Management {
     Message<byte[]> request =
         Message.create(new byte[0]).messageId(requestId).to(target).subject(GET).replyTo(REPLY_TO);
 
-    this.sender.send(request);
-
-    Delivery delivery = receiver.receive(this.rpcTimeout.toMillis(), MILLISECONDS);
-    checkResponse(delivery, this.rpcTimeout, requestId, CODE_200);
-    Message<byte[]> response = delivery.message();
-    return bodyTransformer.apply(response.body());
+    OutstandingRequest outstandingRequest = request(request);
+    outstandingRequest.block();
+    checkResponse(outstandingRequest.response(), requestId, CODE_200);
+    return bodyTransformer.apply(outstandingRequest.response().body());
   }
 
   private String bindingsTarget(
@@ -338,23 +378,36 @@ class AmqpManagement implements Management {
         + encodeHttpParameter(key);
   }
 
-  private <T> T callOnLinkPair(Callable<T> operation) {
-    try {
-      if (this.linkPairLock.tryLock(this.rpcTimeout.toMillis(), MILLISECONDS)) {
-        try {
-          return operation.call();
-        } catch (Exception e) {
-          throw new ModelException("Error during management operation", e);
-        } finally {
-          this.linkPairLock.unlock();
-        }
-      } else {
-        throw new ModelException(
-            "Could not acquire link pair lock in %d ms", this.rpcTimeout.toMillis());
+  private static class OutstandingRequest {
+
+    private final CountDownLatch latch = new CountDownLatch(1);
+    private final AtomicReference<Message<byte[]>> response = new AtomicReference<>();
+    private final Duration timeout;
+
+    private OutstandingRequest(Duration timeout) {
+      this.timeout = timeout;
+    }
+
+    void block() {
+      boolean completed;
+      try {
+        completed = this.latch.await(timeout.toMillis(), MILLISECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new ModelException("Interrupted while waiting for management response");
       }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ModelException("Thread interrupted while waited on link pair lock", e);
+      if (!completed) {
+        throw new ModelException("Could not get management response in %d ms", timeout.toMillis());
+      }
+    }
+
+    void complete(Message<byte[]> response) {
+      this.response.set(response);
+      this.latch.countDown();
+    }
+
+    Message<byte[]> response() {
+      return this.response.get();
     }
   }
 }
