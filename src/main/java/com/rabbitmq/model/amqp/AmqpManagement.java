@@ -32,16 +32,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
-import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder;
-import org.apache.qpid.protonj2.codec.decoders.ProtonDecoderFactory;
-import org.apache.qpid.protonj2.codec.encoders.ProtonEncoder;
-import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +60,6 @@ class AmqpManagement implements Management {
   private final Sender sender;
   private final Receiver receiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final ProtonEncoder encoder = ProtonEncoderFactory.create();
-  private final ProtonDecoder decoder = ProtonDecoderFactory.create();
   private final Duration rpcTimeout = Duration.ofSeconds(10);
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
       new ConcurrentHashMap<>();
@@ -202,24 +194,20 @@ class AmqpManagement implements Management {
   private Map<String, Object> declare(Map<String, Object> body, String target, String operation) {
     UUID requestId = messageId();
     try {
-      Message<byte[]> request =
-          Message.create(encode(body))
-              .messageId(requestId)
-              .to(target)
-              .subject(operation)
-              .replyTo(REPLY_TO);
+      Message<?> request =
+          Message.create(body).messageId(requestId).to(target).subject(operation).replyTo(REPLY_TO);
 
       OutstandingRequest outstandingRequest = this.request(request);
       outstandingRequest.block();
 
       checkResponse(outstandingRequest.response(), requestId, CODE_201);
-      return decodeMap(outstandingRequest.response().body());
+      return outstandingRequest.responseBodyAsMap();
     } catch (ClientException e) {
       throw new ModelException("Error on PUT operation: " + target, e);
     }
   }
 
-  OutstandingRequest request(Message<byte[]> request) throws ClientException {
+  OutstandingRequest request(Message<?> request) throws ClientException {
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
     this.outstandingRequests.put((UUID) request.messageId(), outstandingRequest);
     this.sender.send(request);
@@ -229,8 +217,8 @@ class AmqpManagement implements Management {
   private Map<String, Object> delete(String target, String expectedResponseCode) {
     UUID requestId = messageId();
     try {
-      Message<byte[]> request =
-          Message.create(new byte[0])
+      Message<?> request =
+          Message.create((Map<?, ?>) null)
               .messageId(requestId)
               .to(target)
               .subject(DELETE)
@@ -239,33 +227,9 @@ class AmqpManagement implements Management {
       OutstandingRequest outstandingRequest = request(request);
       outstandingRequest.block();
       checkResponse(outstandingRequest.response(), requestId, expectedResponseCode);
-      return decodeMap(outstandingRequest.response().body());
+      return outstandingRequest.responseBodyAsMap();
     } catch (ClientException e) {
       throw new ModelException("Error on DELETE operation: " + target, e);
-    }
-  }
-
-  private byte[] encode(Map<String, Object> map) {
-    try (ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer()) {
-      encoder.writeMap(buffer, encoder.newEncoderState(), map);
-      return Arrays.copyOf(buffer.getReadableArray(), buffer.getReadableBytes());
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private <K, V> Map<K, V> decodeMap(byte[] array) {
-    return (Map<K, V>) decode(array);
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T> List<T> decodeList(byte[] array) {
-    return (List<T>) decode(array);
-  }
-
-  private Object decode(byte[] array) {
-    try (ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer(array.length)) {
-      buffer.writeBytes(array);
-      return decoder.readObject(buffer, decoder.newDecoderState());
     }
   }
 
@@ -282,8 +246,7 @@ class AmqpManagement implements Management {
   }
 
   private static void checkResponse(
-      Message<byte[]> response, UUID requestId, String expectedResponseCode)
-      throws ClientException {
+      Message<?> response, UUID requestId, String expectedResponseCode) throws ClientException {
     if (!requestId.equals(response.correlationId())) {
       throw new ModelException("Unexpected correlation ID");
     }
@@ -317,10 +280,10 @@ class AmqpManagement implements Management {
               + ";args=";
       delete(target, CODE_204);
     } else {
-      List<Map<String, Object>> bindings = null;
+      List<Map<String, Object>> bindings;
       String target = bindingsTarget(destinationField, source, destination, key);
       try {
-        bindings = get(target, this::decodeList);
+        bindings = get(target).responseBodyAsList();
       } catch (ClientException e) {
         throw new ModelException("Error on GET operation: " + target, e);
       }
@@ -355,15 +318,19 @@ class AmqpManagement implements Management {
     return uri;
   }
 
-  private <T> T get(String target, Function<byte[], T> bodyTransformer) throws ClientException {
+  private OutstandingRequest get(String target) throws ClientException {
     UUID requestId = messageId();
-    Message<byte[]> request =
-        Message.create(new byte[0]).messageId(requestId).to(target).subject(GET).replyTo(REPLY_TO);
+    Message<?> request =
+        Message.create((Map<?, ?>) null)
+            .messageId(requestId)
+            .to(target)
+            .subject(GET)
+            .replyTo(REPLY_TO);
 
     OutstandingRequest outstandingRequest = request(request);
     outstandingRequest.block();
     checkResponse(outstandingRequest.response(), requestId, CODE_200);
-    return bodyTransformer.apply(outstandingRequest.response().body());
+    return outstandingRequest;
   }
 
   private String bindingsTarget(
@@ -381,7 +348,7 @@ class AmqpManagement implements Management {
   private static class OutstandingRequest {
 
     private final CountDownLatch latch = new CountDownLatch(1);
-    private final AtomicReference<Message<byte[]>> response = new AtomicReference<>();
+    private final AtomicReference<Message<?>> response = new AtomicReference<>();
     private final Duration timeout;
 
     private OutstandingRequest(Duration timeout) {
@@ -401,13 +368,23 @@ class AmqpManagement implements Management {
       }
     }
 
-    void complete(Message<byte[]> response) {
+    void complete(Message<?> response) {
       this.response.set(response);
       this.latch.countDown();
     }
 
-    Message<byte[]> response() {
+    Message<?> response() {
       return this.response.get();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V> Map<K, V> responseBodyAsMap() throws ClientException {
+      return (Map<K, V>) this.response.get().body();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> List<T> responseBodyAsList() throws ClientException {
+      return (List<T>) this.response.get().body();
     }
   }
 }

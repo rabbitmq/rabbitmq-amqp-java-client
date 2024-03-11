@@ -38,14 +38,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
-import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBuffer;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
-import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder;
-import org.apache.qpid.protonj2.codec.decoders.ProtonDecoderFactory;
-import org.apache.qpid.protonj2.codec.encoders.ProtonEncoder;
-import org.apache.qpid.protonj2.codec.encoders.ProtonEncoderFactory;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
 
@@ -216,38 +211,28 @@ public class ClientTest {
       body.put("exclusive", false);
       body.put("auto_delete", false);
       body.put("arguments", Collections.emptyMap());
-      ProtonEncoder encoder = ProtonEncoderFactory.create();
-      ProtonByteArrayBuffer buffer = new ProtonByteArrayBuffer();
-      encoder.writeMap(buffer, encoder.newEncoderState(), body);
-      byte[] requestBody = Arrays.copyOf(buffer.getReadableArray(), buffer.getReadableBytes());
       UnsignedLong requestId = ulong(requestIdSequence.incrementAndGet());
-      Message<byte[]> request =
-          Message.create(requestBody)
+      Message<Map<String, Object>> request =
+          Message.create(body)
               .messageId(requestId)
               .to("/queues/" + q)
               .subject("PUT")
-              .replyTo(replyTo)
-              .contentType("application/amqp-management+amqp;type=entity");
+              .replyTo(replyTo);
 
       sender.send(request);
 
       Delivery delivery = receiver.receive(1, SECONDS);
       assertThat(delivery).isNotNull();
-      Message<byte[]> response = delivery.message();
+      Message<Map<String, Object>> response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(requestId);
       assertThat(response.subject()).isEqualTo("201");
       assertThat(response.property("http:response")).isEqualTo("1.1");
 
-      byte[] responseBodyBin = response.body();
-      ProtonDecoder decoder = ProtonDecoderFactory.create();
-      buffer = new ProtonByteArrayBuffer(responseBodyBin.length);
-      buffer.writeBytes(responseBodyBin);
-      Map<String, Object> responseBody = decoder.readMap(buffer, decoder.newDecoderState());
-      assertThat(responseBody).isEmpty();
+      assertThat(response.body()).isNull();
 
       requestId = ulong(requestIdSequence.incrementAndGet());
       request =
-          Message.create(new byte[0])
+          Message.create((Map<String, Object>) null)
               .messageId(requestId)
               .to("/queues/" + q)
               .subject("DELETE")
@@ -262,11 +247,7 @@ public class ClientTest {
       assertThat(response.subject()).isEqualTo("200");
       assertThat(response.property("http:response")).isEqualTo("1.1");
 
-      responseBodyBin = response.body();
-      decoder = ProtonDecoderFactory.create();
-      buffer = new ProtonByteArrayBuffer(responseBodyBin.length);
-      buffer.writeBytes(responseBodyBin);
-      responseBody = decoder.readMap(buffer, decoder.newDecoderState());
+      Map<String, Object> responseBody = response.body();
       assertThat(responseBody).containsEntry("message_count", ulong(0));
     }
   }

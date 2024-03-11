@@ -13,7 +13,6 @@ wait_for_message() {
 }
 
 echo "loopback_users = none" >> rabbitmq-configuration/rabbitmq.conf
-echo "[rabbitmq_management]." >> rabbitmq-configuration/enabled_plugins
 
 echo "Running RabbitMQ ${RABBITMQ_IMAGE}"
 
