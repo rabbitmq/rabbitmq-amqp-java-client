@@ -17,20 +17,27 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConnectionBuilder {
+import java.time.Duration;
 
-  RecoveryConfiguration recovery();
+public interface BackOffDelayPolicy {
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+  Duration delay(int recoveryAttempt);
 
-  Connection build();
+  static BackOffDelayPolicy fixed(Duration delay) {
+    return new FixedBackOffDelayPolicy(delay);
+  }
 
-  interface RecoveryConfiguration {
+  class FixedBackOffDelayPolicy implements BackOffDelayPolicy {
 
-    RecoveryConfiguration activated(boolean activated);
+    private final Duration delay;
 
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
+    private FixedBackOffDelayPolicy(Duration delay) {
+      this.delay = delay;
+    }
 
-    ConnectionBuilder connectionBuilder();
+    @Override
+    public Duration delay(int recoveryAttempt) {
+      return this.delay;
+    }
   }
 }

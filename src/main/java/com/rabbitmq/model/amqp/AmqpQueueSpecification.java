@@ -183,6 +183,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   @Override
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
+    // generate a random name if name not specified
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("durable", this.durable);
     body.put("exclusive", this.exclusive);

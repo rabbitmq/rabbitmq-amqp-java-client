@@ -15,12 +15,12 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
 import static java.lang.String.format;
 import static java.util.Collections.singletonMap;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import java.lang.annotation.*;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
@@ -39,10 +40,82 @@ import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class TestUtils {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(TestUtils.class);
+
+  private static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
+
   private TestUtils() {}
+
+  @FunctionalInterface
+  public interface CallableBooleanSupplier {
+    boolean getAsBoolean() throws Exception;
+  }
+
+  public static Duration waitAtMost(CallableBooleanSupplier condition) throws Exception {
+    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, null);
+  }
+
+  public static Duration waitAtMost(CallableBooleanSupplier condition, Supplier<String> message)
+      throws Exception {
+    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, message);
+  }
+
+  public static Duration waitAtMost(Duration timeout, CallableBooleanSupplier condition)
+      throws Exception {
+    return waitAtMost(timeout, condition, null);
+  }
+
+  public static Duration waitAtMost(int timeoutInSeconds, CallableBooleanSupplier condition)
+      throws Exception {
+    return waitAtMost(timeoutInSeconds, condition, null);
+  }
+
+  public static Duration waitAtMost(
+      int timeoutInSeconds, CallableBooleanSupplier condition, Supplier<String> message)
+      throws Exception {
+    return waitAtMost(Duration.ofSeconds(timeoutInSeconds), condition, message);
+  }
+
+  public static Duration waitAtMost(
+      Duration timeout, CallableBooleanSupplier condition, Supplier<String> message)
+      throws Exception {
+    if (condition.getAsBoolean()) {
+      return Duration.ZERO;
+    }
+    int waitTime = 100;
+    int waitedTime = 0;
+    int timeoutInMs = (int) timeout.toMillis();
+    Exception exception = null;
+    while (waitedTime <= timeoutInMs) {
+      Thread.sleep(waitTime);
+      waitedTime += waitTime;
+      try {
+        if (condition.getAsBoolean()) {
+          return Duration.ofMillis(waitedTime);
+        }
+        exception = null;
+      } catch (Exception e) {
+        exception = e;
+      }
+    }
+    String msg;
+    if (message == null) {
+      msg = "Waited " + timeout.getSeconds() + " second(s), condition never got true";
+    } else {
+      msg = "Waited " + timeout.getSeconds() + " second(s), " + message.get();
+    }
+    if (exception == null) {
+      fail(msg);
+    } else {
+      fail(msg, exception);
+    }
+    return Duration.ofMillis(waitedTime);
+  }
 
   public static class CountDownLatchConditions {
 
@@ -81,7 +154,7 @@ public abstract class TestUtils {
     return name(testClass, testMethod.getName());
   }
 
-  static String name(Class<?> testClass, String testMethod) {
+  public static String name(Class<?> testClass, String testMethod) {
     String uuid = UUID.randomUUID().toString();
     return format(
         "%s_%s%s", testClass.getSimpleName(), testMethod, uuid.substring(uuid.length() / 2));
@@ -125,7 +198,7 @@ public abstract class TestUtils {
     return UnsignedLong.valueOf(value);
   }
 
-  static AmqpEnvironmentBuilder environmentBuilder() {
+  public static AmqpEnvironmentBuilder environmentBuilder() {
     return new AmqpEnvironmentBuilder();
   }
 

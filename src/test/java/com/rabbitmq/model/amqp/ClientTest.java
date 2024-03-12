@@ -15,20 +15,21 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
-import static com.rabbitmq.model.Cli.closeConnection;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.TestUtils.*;
-import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.model.amqp.Cli.closeConnection;
+import static com.rabbitmq.model.amqp.TestUtils.*;
+import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
 import static org.apache.qpid.protonj2.client.DeliveryState.released;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.*;
 
-import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
+import com.rabbitmq.model.Environment;
+import com.rabbitmq.model.Management;
+import com.rabbitmq.model.Publisher;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,9 +38,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
+import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
@@ -48,7 +51,7 @@ public class ClientTest {
 
   static Environment environment;
   static Management management;
-  static Connection connection;
+  static com.rabbitmq.model.Connection connection;
   String q;
 
   @BeforeAll
@@ -256,7 +259,7 @@ public class ClientTest {
   void queueDeletionImpactOnReceiver(TestInfo info) throws Exception {
     String queue = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
-        Connection connection = env.connectionBuilder().build();
+        com.rabbitmq.model.Connection connection = env.connectionBuilder().build();
         Client client = client()) {
       connection.management().queue().name(queue).declare();
 
@@ -280,7 +283,7 @@ public class ClientTest {
   void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
     String exchange = name(info);
     try (Environment env = new AmqpEnvironmentBuilder().build();
-        Connection connection = env.connectionBuilder().build();
+        com.rabbitmq.model.Connection connection = env.connectionBuilder().build();
         Client client = client()) {
       connection.management().exchange().name(exchange).type(FANOUT).declare();
 
@@ -363,6 +366,31 @@ public class ClientTest {
       closeConnection(name);
       assertThat(disconnectedLatch).is(completed());
       assertThat(called).isFalse();
+
+      AtomicReference<org.apache.qpid.protonj2.client.Connection> cRef = new AtomicReference<>(c);
+      assertThatThrownBy(() -> cRef.get().openReceiver("does-not-matter"))
+          .isInstanceOf(ClientConnectionRemotelyClosedException.class);
+
+      CountDownLatch interruptedLatch = new CountDownLatch(1);
+      CountDownLatch reconnectedLatch = new CountDownLatch(1);
+      name = UUID.randomUUID().toString();
+      c =
+          connection(
+              name,
+              client,
+              o ->
+                  o.disconnectedHandler((conn, disconnectedEvent) -> called.set(true))
+                      .interruptedHandler(
+                          (conn, disconnectionEvent) -> interruptedLatch.countDown())
+                      .reconnectedHandler((conn, connectionEvent) -> reconnectedLatch.countDown())
+                      .reconnectEnabled(true));
+
+      closeConnection(name);
+      assertThat(interruptedLatch).is(completed());
+      assertThat(reconnectedLatch).is(completed());
+      assertThat(called).isFalse();
+
+      c.close();
     }
   }
 }

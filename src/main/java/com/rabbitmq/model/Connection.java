@@ -19,7 +19,7 @@ package com.rabbitmq.model;
 
 import java.io.Closeable;
 
-public interface Connection extends Closeable {
+public interface Connection extends Closeable, Resource {
 
   Management management();
 

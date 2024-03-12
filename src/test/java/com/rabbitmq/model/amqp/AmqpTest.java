@@ -15,18 +15,22 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
-import static com.rabbitmq.model.TestUtils.CountDownLatchConditions.completed;
-import static com.rabbitmq.model.TestUtils.environmentBuilder;
+import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.rabbitmq.model.Connection;
+import com.rabbitmq.model.Environment;
+import com.rabbitmq.model.Management;
+import com.rabbitmq.model.Publisher;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;

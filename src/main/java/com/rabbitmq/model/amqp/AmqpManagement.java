@@ -166,12 +166,16 @@ class AmqpManagement implements Management {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      if (this.receiveLoop != null) {
-        this.receiveLoop.interrupt();
-      }
+      this.releaseResources();
       this.receiver.close();
       this.sender.close();
       this.session.close();
+    }
+  }
+
+  void releaseResources() {
+    if (this.receiveLoop != null) {
+      this.receiveLoop.interrupt();
     }
   }
 
@@ -187,13 +191,13 @@ class AmqpManagement implements Management {
     this.declare(body, exchangeLocation(name), CODE_204);
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String target,
-                                      String expectedResponseCode) {
+  private Map<String, Object> declare(
+      Map<String, Object> body, String target, String expectedResponseCode) {
     return this.declare(body, target, PUT, expectedResponseCode);
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String target, String operation,
-                                      String expectedResponseCode) {
+  private Map<String, Object> declare(
+      Map<String, Object> body, String target, String operation, String expectedResponseCode) {
     UUID requestId = messageId();
     try {
       Message<?> request =

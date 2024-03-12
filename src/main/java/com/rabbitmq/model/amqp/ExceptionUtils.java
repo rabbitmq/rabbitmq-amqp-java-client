@@ -15,22 +15,22 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
-public interface ConnectionBuilder {
+import com.rabbitmq.model.ModelException;
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
 
-  RecoveryConfiguration recovery();
+abstract class ExceptionUtils {
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+  private ExceptionUtils() {}
 
-  Connection build();
+  static ModelException convert(ClientException e) {
+    // TODO convert Proton exception into exception of lib hierarchy
+    return new ModelException(e);
+  }
 
-  interface RecoveryConfiguration {
-
-    RecoveryConfiguration activated(boolean activated);
-
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
-
-    ConnectionBuilder connectionBuilder();
+  static ModelException convert(ClientException e, String format, Object... args) {
+    // TODO convert Proton exception into exception of lib hierarchy
+    return new ModelException(String.format(format, args), e);
   }
 }

@@ -17,20 +17,30 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConnectionBuilder {
+public interface Resource {
 
-  RecoveryConfiguration recovery();
+  @FunctionalInterface
+  interface StateListener {
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+    void handle(Context context);
+  }
 
-  Connection build();
+  interface Context {
 
-  interface RecoveryConfiguration {
+    Resource resource();
 
-    RecoveryConfiguration activated(boolean activated);
+    Throwable failureCause();
 
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
+    State previousState();
 
-    ConnectionBuilder connectionBuilder();
+    State currentState();
+  }
+
+  enum State {
+    OPENING,
+    OPEN,
+    RECOVERING,
+    CLOSING,
+    CLOSED
   }
 }
