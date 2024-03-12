@@ -96,7 +96,7 @@ class AmqpManagement implements Management {
                 Delivery delivery = receiver.receive(100, MILLISECONDS);
                 if (delivery != null) {
                   Object correlationId = delivery.message().correlationId();
-                  if (correlationId != null && correlationId instanceof UUID) {
+                  if (correlationId instanceof UUID) {
                     OutstandingRequest request = outstandingRequests.remove(correlationId);
                     if (request != null) {
                       request.complete(delivery.message());
@@ -180,18 +180,20 @@ class AmqpManagement implements Management {
   }
 
   void declareQueue(String name, Map<String, Object> body) {
-    this.declare(body, queueLocation(name));
+    this.declare(body, queueLocation(name), CODE_201);
   }
 
   void declareExchange(String name, Map<String, Object> body) {
-    this.declare(body, exchangeLocation(name));
+    this.declare(body, exchangeLocation(name), CODE_204);
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String target) {
-    return this.declare(body, target, PUT);
+  private Map<String, Object> declare(Map<String, Object> body, String target,
+                                      String expectedResponseCode) {
+    return this.declare(body, target, PUT, expectedResponseCode);
   }
 
-  private Map<String, Object> declare(Map<String, Object> body, String target, String operation) {
+  private Map<String, Object> declare(Map<String, Object> body, String target, String operation,
+                                      String expectedResponseCode) {
     UUID requestId = messageId();
     try {
       Message<?> request =
@@ -200,7 +202,7 @@ class AmqpManagement implements Management {
       OutstandingRequest outstandingRequest = this.request(request);
       outstandingRequest.block();
 
-      checkResponse(outstandingRequest.response(), requestId, CODE_201);
+      checkResponse(outstandingRequest.response(), requestId, expectedResponseCode);
       return outstandingRequest.responseBodyAsMap();
     } catch (ClientException e) {
       throw new ModelException("Error on PUT operation: " + target, e);
@@ -257,7 +259,7 @@ class AmqpManagement implements Management {
   }
 
   void bind(Map<String, Object> body) {
-    declare(body, "/bindings", POST);
+    declare(body, "/bindings", POST, CODE_201);
   }
 
   void unbind(
