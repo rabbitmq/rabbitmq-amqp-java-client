@@ -22,8 +22,6 @@ import static com.rabbitmq.model.amqp.ExceptionUtils.convert;
 import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.model.*;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,11 +44,11 @@ class AmqpConnection implements Connection {
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
   private final AtomicReference<Resource.State> state = new AtomicReference<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final List<StateListener> listeners;
+  private final StateEventSupport stateEventSupport;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     this.environment = builder.environment();
-    this.listeners = new ArrayList<>(builder.listeners());
+    this.stateEventSupport = new StateEventSupport(builder.listeners());
     this.state(OPENING);
 
     Utils.ConnectionParameters connectionParameters = this.environment.connectionParameters();
@@ -228,59 +226,13 @@ class AmqpConnection implements Connection {
 
   private void state(Resource.State state, Throwable failureCause) {
     Resource.State previousState = this.state.getAndSet(state);
-    if (!this.listeners.isEmpty()) {
-      Resource.Context context = new DefaultContext(this, failureCause, previousState, state);
-      this.listeners.forEach(
-          l -> {
-            try {
-              l.handle(context);
-            } catch (Exception e) {
-              LOGGER.warn("Error in resource listener", e);
-            }
-          });
-    }
+    this.stateEventSupport.dispatch(this, failureCause, previousState, state);
   }
 
   private void checkOpen() {
     if (this.state.get() != OPEN) {
       throw new ModelException(
           "Connection is not open, current state is %s", this.state.get().name());
-    }
-  }
-
-  private static class DefaultContext implements Context {
-
-    private final Resource resource;
-    private final Throwable failureCause;
-    private final State previousState;
-    private final State currentState;
-
-    private DefaultContext(
-        Resource resource, Throwable failureCause, State previousState, State currentState) {
-      this.resource = resource;
-      this.failureCause = failureCause;
-      this.previousState = previousState;
-      this.currentState = currentState;
-    }
-
-    @Override
-    public Resource resource() {
-      return this.resource;
-    }
-
-    @Override
-    public Throwable failureCause() {
-      return this.failureCause;
-    }
-
-    @Override
-    public State previousState() {
-      return this.previousState;
-    }
-
-    @Override
-    public State currentState() {
-      return this.currentState;
     }
   }
 }

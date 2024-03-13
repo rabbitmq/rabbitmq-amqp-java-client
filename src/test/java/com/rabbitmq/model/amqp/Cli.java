@@ -111,6 +111,14 @@ abstract class Cli {
     }
   }
 
+  public static void startBroker() {
+    rabbitmqctl("start_app");
+  }
+
+  public static void stopBroker() {
+    rabbitmqctl("stop_app");
+  }
+
   public static void closeConnection(String clientProvidedName) {
     ConnectionInfo ci = findConnectionInfoFor(listConnections(), clientProvidedName);
     closeConnection(ci);
