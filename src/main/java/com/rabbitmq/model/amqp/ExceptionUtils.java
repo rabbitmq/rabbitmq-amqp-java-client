@@ -19,6 +19,7 @@ package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.ModelException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 
 abstract class ExceptionUtils {
 
@@ -32,5 +33,10 @@ abstract class ExceptionUtils {
   static ModelException convert(ClientException e, String format, Object... args) {
     // TODO convert Proton exception into exception of lib hierarchy
     return new ModelException(String.format(format, args), e);
+  }
+
+  static boolean resourceDeleted(ClientResourceRemotelyClosedException e) {
+    return e.getErrorCondition() != null
+        && "amqp:resource-deleted".equals(e.getErrorCondition().condition());
   }
 }

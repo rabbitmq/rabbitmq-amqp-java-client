@@ -21,5 +21,7 @@ public interface PublisherBuilder {
 
   PublisherBuilder address(String address);
 
+  PublisherBuilder listeners(Resource.StateListener... listeners);
+
   Publisher build();
 }

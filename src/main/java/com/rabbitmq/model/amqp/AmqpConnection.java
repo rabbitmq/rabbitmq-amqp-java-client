@@ -22,6 +22,9 @@ import static com.rabbitmq.model.amqp.ExceptionUtils.convert;
 import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.model.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,25 +34,25 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
+import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpConnection implements Connection {
+class AmqpConnection extends ResourceBase implements Connection {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConnection.class);
   private final AmqpEnvironment environment;
   private volatile AmqpManagement management;
   private final Lock managementLock = new ReentrantLock();
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
-  private final AtomicReference<Resource.State> state = new AtomicReference<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final StateEventSupport stateEventSupport;
+  private volatile Session nativeSession;
+  private List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
 
   AmqpConnection(AmqpConnectionBuilder builder) {
+    super(builder.listeners());
     this.environment = builder.environment();
-    this.stateEventSupport = new StateEventSupport(builder.listeners());
-    this.state(OPENING);
 
     Utils.ConnectionParameters connectionParameters = this.environment.connectionParameters();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
@@ -57,7 +60,7 @@ class AmqpConnection implements Connection {
         builder.recoveryConfiguration();
     if (recoveryConfiguration.activated()) {
       disconnectHandler =
-          recoverDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
+          recoveryDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
     } else {
       disconnectHandler =
           (c, e) -> {
@@ -104,6 +107,9 @@ class AmqpConnection implements Connection {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING);
       this.maybeCloseManagement();
+      for (AmqpPublisher publisher : this.publishers) {
+        publisher.close();
+      }
       try {
         this.nativeConnection.close();
       } catch (Exception e) {
@@ -145,7 +151,7 @@ class AmqpConnection implements Connection {
   }
 
   private BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
-      recoverDisconnectHandler(
+      recoveryDisconnectHandler(
           AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
           Utils.ConnectionParameters connectionParameters,
           String name) {
@@ -157,32 +163,50 @@ class AmqpConnection implements Connection {
           // (we do not want to wait too long in a IO thread)
           // it should be dispatched as a task that could be stopped in #close()
           ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
-          this.state(RECOVERING, failureCause);
-          this.nativeConnection = null;
-          this.maybeReleaseManagementResources();
-          int attempt = 0;
-          while (true) {
-            try {
-              Thread.sleep(recoveryConfiguration.backOffDelayPolicy().delay(attempt).toMillis());
-            } catch (InterruptedException ex) {
-              Thread.currentThread().interrupt();
-              LOGGER.info("Thread interrupted while waiting during connection recovery");
-              this.state(CLOSED, ex);
+          if (this.compareAndSetState(OPEN, RECOVERING, failureCause)) {
+            this.state(RECOVERING, failureCause);
+            this.changeStateOfPublishers(RECOVERING);
+            this.nativeConnection = null;
+            this.nativeSession = null;
+            this.maybeReleaseManagementResources();
+            int attempt = 0;
+            while (true) {
+              try {
+                Thread.sleep(recoveryConfiguration.backOffDelayPolicy().delay(attempt).toMillis());
+              } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                LOGGER.info("Thread interrupted while waiting during connection recovery");
+                this.closed.set(true);
+                this.changeStateOfPublishers(CLOSED);
+                this.state(CLOSED, ex);
+              }
+              try {
+                this.nativeConnection = connect(connectionParameters, name, resultReference.get());
+                this.nativeConnection.openFuture().get();
+                this.state(OPEN);
+                List<AmqpPublisher> failedPublishers = new ArrayList<>();
+                for (AmqpPublisher publisher : this.publishers) {
+                  try {
+                    publisher.recoverAfterConnectionFailure();
+                    publisher.state(OPEN);
+                  } catch (Exception ex) {
+                    LOGGER.warn("Error while trying to recover publisher", ex);
+                    failedPublishers.add(publisher);
+                  }
+                }
+                failedPublishers.forEach(AmqpPublisher::close);
+                break;
+              } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                LOGGER.info("Thread interrupted while waiting for connection opening");
+                this.closed.set(true);
+                this.changeStateOfPublishers(CLOSED);
+                this.state(CLOSED, ex);
+              } catch (Exception ex) {
+                LOGGER.info("Error while trying to recover connection", ex);
+                // TODO determine whether we should recover after the exception
+              }
             }
-            this.nativeConnection = connect(connectionParameters, name, resultReference.get());
-            try {
-              this.nativeConnection.openFuture().get();
-              this.state(OPEN);
-              break;
-            } catch (InterruptedException ex) {
-              Thread.currentThread().interrupt();
-              LOGGER.info("Thread interrupted while waiting for connection opening");
-              this.state(CLOSED, ex);
-            } catch (ExecutionException ex) {
-              LOGGER.info("Error while trying to recover connection", ex);
-              // TODO determine whether we should recover after the exception
-            }
-            break;
           }
         };
     resultReference.set(result);
@@ -212,6 +236,29 @@ class AmqpConnection implements Connection {
     }
   }
 
+  Session nativeSession() {
+    checkOpen();
+    Session result = this.nativeSession;
+    if (result == null) {
+      synchronized (this) {
+        result = this.nativeSession;
+        if (result == null) {
+          checkOpen();
+          this.nativeSession = result = this.openSession(this.nativeConnection);
+        }
+      }
+    }
+    return result;
+  }
+
+  private Session openSession(org.apache.qpid.protonj2.client.Connection connection) {
+    try {
+      return connection.openSession();
+    } catch (ClientException e) {
+      throw convert(e, "Error while opening session");
+    }
+  }
+
   org.apache.qpid.protonj2.client.Connection nativeConnection() {
     return this.nativeConnection;
   }
@@ -220,19 +267,20 @@ class AmqpConnection implements Connection {
     return this.environment.executorService();
   }
 
-  private void state(Resource.State state) {
-    this.state(state, null);
+  Publisher createPublisher(AmqpPublisherBuilder builder) {
+    // TODO copy the builder properties to create the publisher
+    AmqpPublisher publisher = new AmqpPublisher(builder);
+    this.publishers.add(publisher);
+    return publisher;
   }
 
-  private void state(Resource.State state, Throwable failureCause) {
-    Resource.State previousState = this.state.getAndSet(state);
-    this.stateEventSupport.dispatch(this, failureCause, previousState, state);
+  void removePublisher(AmqpPublisher publisher) {
+    this.publishers.remove(publisher);
   }
 
-  private void checkOpen() {
-    if (this.state.get() != OPEN) {
-      throw new ModelException(
-          "Connection is not open, current state is %s", this.state.get().name());
+  private void changeStateOfPublishers(State newState) {
+    for (AmqpPublisher publisher : this.publishers) {
+      publisher.state(newState);
     }
   }
 }

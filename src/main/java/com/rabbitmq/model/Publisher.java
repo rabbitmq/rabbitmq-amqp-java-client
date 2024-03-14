@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface Publisher extends AutoCloseable {
+public interface Publisher extends AutoCloseable, Resource {
 
   Message message();
 

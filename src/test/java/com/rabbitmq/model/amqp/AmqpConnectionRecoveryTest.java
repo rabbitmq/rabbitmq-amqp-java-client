@@ -18,24 +18,26 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.BackOffDelayPolicy.fixed;
+import static com.rabbitmq.model.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.model.Resource.State.OPEN;
 import static com.rabbitmq.model.Resource.State.RECOVERING;
 import static com.rabbitmq.model.amqp.Cli.*;
+import static com.rabbitmq.model.amqp.TestUtils.*;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.amqp.TestUtils.name;
+import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.model.BackOffDelayPolicy;
-import com.rabbitmq.model.Connection;
-import com.rabbitmq.model.ModelException;
-import com.rabbitmq.model.Resource;
+import com.rabbitmq.model.*;
 import com.rabbitmq.model.amqp.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -59,7 +61,7 @@ public class AmqpConnectionRecoveryTest {
   }
 
   @Test
-  void connectionShouldRecoverAfterClosingIt(TestInfo info) {
+  void connectionShouldRecoverAfterClosingIt(TestInfo info) throws Exception {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
     Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();
@@ -78,12 +80,43 @@ public class AmqpConnectionRecoveryTest {
                 .recovery()
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
-    try (Connection c = new AmqpConnection(builder)) {
-      c.management().queue().name(q).exclusive(true).declare();
+    Connection c = new AmqpConnection(builder);
+    try {
+      c.management().queue().name(q).declare();
+      AtomicReference<CountDownLatch> publishLatch = new AtomicReference<>(new CountDownLatch(1));
+      AtomicInteger publisherOpenCount = new AtomicInteger(0);
+      Publisher p =
+          c.publisherBuilder()
+              .address("/queue/" + q)
+              .listeners(
+                  context -> {
+                    if (context.currentState() == OPEN) {
+                      publisherOpenCount.incrementAndGet();
+                    }
+                  })
+              .build();
+      Collection<UUID> messageIds = Collections.synchronizedList(new ArrayList<>());
+      Publisher.Callback outboundMessageCallback =
+          context -> {
+            if (context.status() == ACCEPTED) {
+              messageIds.add(context.message().messageIdAsUuid());
+              publishLatch.get().countDown();
+            }
+          };
+      p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
+      assertThat(publisherOpenCount).hasValue(1);
+      assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
       closeConnection(connectionName);
       assertThat(stateLatches.get(RECOVERING)).is(completed());
       assertThat(stateLatches.get(OPEN)).is(completed());
-      c.management().queue().name(q).exclusive(true).declare();
+      waitAtMost(() -> publisherOpenCount.get() == 2);
+      publishLatch.set(new CountDownLatch(1));
+      p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
+      assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(messageIds).hasSize(2);
+    } finally {
+      //      c.management().queueDeletion().delete(q);
+      c.close();
     }
   }
 

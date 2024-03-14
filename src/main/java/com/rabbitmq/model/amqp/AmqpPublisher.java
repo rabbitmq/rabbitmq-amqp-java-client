@@ -17,28 +17,36 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import static com.rabbitmq.model.Resource.State.OPEN;
+
 import com.rabbitmq.model.Message;
 import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.Publisher;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-class AmqpPublisher implements Publisher {
+class AmqpPublisher extends ResourceBase implements Publisher {
 
-  private final Sender sender;
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpPublisher.class);
+
+  private volatile Sender sender;
   private final ExecutorService executorService;
+  private final String address;
+  private final AmqpConnection connection;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
-  AmqpPublisher(AmqpConnection connection, String address) {
-    this.executorService = connection.executorService();
-    try {
-      this.sender =
-          connection
-              .nativeConnection()
-              .openSender(address, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
-    } catch (ClientException e) {
-      throw new ModelException(e);
-    }
+  AmqpPublisher(AmqpPublisherBuilder builder) {
+    super(builder.listeners());
+    this.executorService = builder.connection().executorService();
+    this.address = builder.address();
+    this.connection = builder.connection();
+    this.sender = this.createSender(builder.connection().nativeSession(), this.address);
+    this.state(OPEN);
   }
 
   @Override
@@ -48,6 +56,7 @@ class AmqpPublisher implements Publisher {
 
   @Override
   public void publish(Message message, Callback callback) {
+    checkOpen();
     try {
       // TODO catch ClientSendTimedOutException
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
@@ -67,17 +76,45 @@ class AmqpPublisher implements Publisher {
             }
             callback.handle(new DefaultContext(message, status));
           });
+    } catch (ClientLinkRemotelyClosedException e) {
+      if (ExceptionUtils.resourceDeleted(e)) {
+        this.close();
+      }
     } catch (ClientException e) {
       throw new ModelException(e);
     }
   }
 
-  @Override
-  public void close() {
-    this.sender.close();
+  void recoverAfterConnectionFailure() {
+    this.sender = this.createSender(this.connection.nativeSession(), this.address);
   }
 
-  private static class DefaultContext implements Context {
+  @Override
+  public void close() {
+    if (this.closed.compareAndSet(false, true)) {
+      this.state(State.CLOSING);
+      this.connection.removePublisher(this);
+      try {
+        this.sender.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing sender", e);
+      }
+      this.state(State.CLOSED);
+    }
+  }
+
+  // internal API
+
+  private Sender createSender(Session session, String address) {
+    try {
+      return session.openSender(
+          address, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+    } catch (ClientException e) {
+      throw ExceptionUtils.convert(e, "Error while creating publisher to {}", address);
+    }
+  }
+
+  private static class DefaultContext implements Publisher.Context {
 
     private final Message message;
     private final Status status;

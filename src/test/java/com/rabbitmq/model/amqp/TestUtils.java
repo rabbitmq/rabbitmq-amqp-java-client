@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.Client;
@@ -115,6 +116,16 @@ public abstract class TestUtils {
       fail(msg, exception);
     }
     return Duration.ofMillis(waitedTime);
+  }
+
+  public static class CountDownLatchReferenceConditions {
+
+    public static Condition<AtomicReference<CountDownLatch>> completed() {
+      return new Condition<>(
+          latch -> CountDownLatchConditions.latchCondition(latch.get(), DEFAULT_CONDITION_TIMEOUT),
+          "completed in %d ms",
+          DEFAULT_CONDITION_TIMEOUT.toMillis());
+    }
   }
 
   public static class CountDownLatchConditions {

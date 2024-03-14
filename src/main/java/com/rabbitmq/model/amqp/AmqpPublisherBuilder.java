@@ -19,10 +19,14 @@ package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.PublisherBuilder;
+import com.rabbitmq.model.Resource;
+import java.util.ArrayList;
+import java.util.List;
 
 class AmqpPublisherBuilder implements PublisherBuilder {
 
   private final AmqpConnection connection;
+  private final List<Resource.StateListener> listeners = new ArrayList<>();
 
   private String address;
 
@@ -37,7 +41,29 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   }
 
   @Override
+  public PublisherBuilder listeners(Resource.StateListener... listeners) {
+    if (listeners == null || listeners.length == 0) {
+      this.listeners.clear();
+    } else {
+      this.listeners.addAll(List.of(listeners));
+    }
+    return this;
+  }
+
+  @Override
   public Publisher build() {
-    return new AmqpPublisher(this.connection, this.address);
+    return this.connection.createPublisher(this);
+  }
+
+  AmqpConnection connection() {
+    return connection;
+  }
+
+  List<Resource.StateListener> listeners() {
+    return listeners;
+  }
+
+  String address() {
+    return address;
   }
 }
