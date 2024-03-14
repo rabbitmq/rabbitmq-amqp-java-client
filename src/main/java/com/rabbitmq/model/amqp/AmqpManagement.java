@@ -263,7 +263,7 @@ class AmqpManagement implements Management {
   }
 
   void bind(Map<String, Object> body) {
-    declare(body, "/bindings", POST, CODE_201);
+    declare(body, "/bindings", POST, CODE_204);
   }
 
   void unbind(
