@@ -25,5 +25,7 @@ public interface ConsumerBuilder {
 
   ConsumerBuilder initialCredits(int initialCredits);
 
+  ConsumerBuilder listeners(Resource.StateListener... listeners);
+
   Consumer build();
 }

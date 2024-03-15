@@ -19,6 +19,9 @@ package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ConsumerBuilder;
+import com.rabbitmq.model.Resource;
+import java.util.ArrayList;
+import java.util.List;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
 
@@ -26,6 +29,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private String address;
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 10;
+  private final List<Resource.StateListener> listeners = new ArrayList<>();
 
   AmqpConsumerBuilder(AmqpConnection connection) {
     this.connection = connection;
@@ -50,8 +54,37 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   }
 
   @Override
+  public ConsumerBuilder listeners(Resource.StateListener... listeners) {
+    if (listeners == null || listeners.length == 0) {
+      this.listeners.clear();
+    } else {
+      this.listeners.addAll(List.of(listeners));
+    }
+    return this;
+  }
+
+  AmqpConnection connection() {
+    return connection;
+  }
+
+  String address() {
+    return address;
+  }
+
+  Consumer.MessageHandler messageHandler() {
+    return messageHandler;
+  }
+
+  int initialCredits() {
+    return initialCredits;
+  }
+
+  List<Resource.StateListener> listeners() {
+    return listeners;
+  }
+
+  @Override
   public Consumer build() {
-    return new AmqpConsumer(
-        this.connection, this.address, this.messageHandler, this.initialCredits);
+    return this.connection.createConsumer(this);
   }
 }

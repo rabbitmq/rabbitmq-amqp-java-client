@@ -49,6 +49,7 @@ class AmqpConnection extends ResourceBase implements Connection {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Session nativeSession;
   private List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
+  private List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -159,13 +160,14 @@ class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (c, e) -> {
-          // TODO consider using another thread for connection recovery
+          // TODO use a dedicated thread for connection recovery
           // (we do not want to wait too long in a IO thread)
           // it should be dispatched as a task that could be stopped in #close()
           ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
           if (this.compareAndSetState(OPEN, RECOVERING, failureCause)) {
             this.state(RECOVERING, failureCause);
             this.changeStateOfPublishers(RECOVERING);
+            this.changeStateOfConsumers(RECOVERING);
             this.nativeConnection = null;
             this.nativeSession = null;
             this.maybeReleaseManagementResources();
@@ -178,12 +180,26 @@ class AmqpConnection extends ResourceBase implements Connection {
                 LOGGER.info("Thread interrupted while waiting during connection recovery");
                 this.closed.set(true);
                 this.changeStateOfPublishers(CLOSED);
+                this.changeStateOfConsumers(CLOSED);
                 this.state(CLOSED, ex);
               }
               try {
                 this.nativeConnection = connect(connectionParameters, name, resultReference.get());
                 this.nativeConnection.openFuture().get();
                 this.state(OPEN);
+
+                List<AmqpConsumer> failedConsumers = new ArrayList<>();
+                for (AmqpConsumer consumer : this.consumers) {
+                  try {
+                    consumer.recoverAfterConnectionFailure();
+                    consumer.state(OPEN);
+                  } catch (Exception ex) {
+                    LOGGER.warn("Error while trying to recover consumer", ex);
+                    failedConsumers.add(consumer);
+                  }
+                }
+                failedConsumers.forEach(AmqpConsumer::close);
+
                 List<AmqpPublisher> failedPublishers = new ArrayList<>();
                 for (AmqpPublisher publisher : this.publishers) {
                   try {
@@ -278,9 +294,26 @@ class AmqpConnection extends ResourceBase implements Connection {
     this.publishers.remove(publisher);
   }
 
+  Consumer createConsumer(AmqpConsumerBuilder builder) {
+    // TODO copy the builder properties to create the consumer
+    AmqpConsumer consumer = new AmqpConsumer(builder);
+    this.consumers.add(consumer);
+    return consumer;
+  }
+
+  void removeConsumer(AmqpConsumer consumer) {
+    this.consumers.remove(consumer);
+  }
+
   private void changeStateOfPublishers(State newState) {
-    for (AmqpPublisher publisher : this.publishers) {
-      publisher.state(newState);
-    }
+    this.changeStateOfResources(this.publishers, newState);
+  }
+
+  private void changeStateOfConsumers(State newState) {
+    this.changeStateOfResources(this.consumers, newState);
+  }
+
+  private void changeStateOfResources(List<? extends ResourceBase> resources, State newState) {
+    resources.forEach(r -> r.state(newState));
   }
 }

@@ -58,7 +58,9 @@ abstract class ResourceBase implements Resource {
 
   protected void state(Resource.State state, Throwable failureCause) {
     Resource.State previousState = this.state.getAndSet(state);
-    this.dispatch(previousState, state, failureCause);
+    if (state != previousState) {
+      this.dispatch(previousState, state, failureCause);
+    }
   }
 
   private void dispatch(State previous, State current, Throwable failureCause) {

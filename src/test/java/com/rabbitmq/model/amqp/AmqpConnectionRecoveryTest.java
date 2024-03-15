@@ -83,6 +83,25 @@ public class AmqpConnectionRecoveryTest {
     Connection c = new AmqpConnection(builder);
     try {
       c.management().queue().name(q).declare();
+      AtomicInteger consumerOpenCount = new AtomicInteger(0);
+      Collection<UUID> receivedMessageIds = Collections.synchronizedList(new ArrayList<>());
+      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      Consumer consumer =
+          c.consumerBuilder()
+              .address(q)
+              .messageHandler(
+                  (context, message) -> {
+                    context.accept();
+                    receivedMessageIds.add(message.messageIdAsUuid());
+                    consumeLatch.get().countDown();
+                  })
+              .listeners(
+                  context -> {
+                    if (context.currentState() == OPEN) {
+                      consumerOpenCount.incrementAndGet();
+                    }
+                  })
+              .build();
       AtomicReference<CountDownLatch> publishLatch = new AtomicReference<>(new CountDownLatch(1));
       AtomicInteger publisherOpenCount = new AtomicInteger(0);
       Publisher p =
@@ -95,27 +114,44 @@ public class AmqpConnectionRecoveryTest {
                     }
                   })
               .build();
-      Collection<UUID> messageIds = Collections.synchronizedList(new ArrayList<>());
+      Collection<UUID> publishedMessageIds = Collections.synchronizedList(new ArrayList<>());
       Publisher.Callback outboundMessageCallback =
           context -> {
             if (context.status() == ACCEPTED) {
-              messageIds.add(context.message().messageIdAsUuid());
+              publishedMessageIds.add(context.message().messageIdAsUuid());
               publishLatch.get().countDown();
             }
           };
       p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
       assertThat(publisherOpenCount).hasValue(1);
       assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
+
+      assertThat(consumerOpenCount).hasValue(1);
+      assertThat(consumeLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(receivedMessageIds)
+          .hasSameSizeAs(publishedMessageIds)
+          .containsAll(publishedMessageIds);
+
+      consumeLatch.set(new CountDownLatch(1));
+
       closeConnection(connectionName);
       assertThat(stateLatches.get(RECOVERING)).is(completed());
       assertThat(stateLatches.get(OPEN)).is(completed());
+      waitAtMost(() -> consumerOpenCount.get() == 2);
       waitAtMost(() -> publisherOpenCount.get() == 2);
+
       publishLatch.set(new CountDownLatch(1));
       p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
       assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
-      assertThat(messageIds).hasSize(2);
+      assertThat(publishedMessageIds).hasSize(2);
+
+      assertThat(consumeLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(receivedMessageIds)
+          .hasSameSizeAs(publishedMessageIds)
+          .containsAll(publishedMessageIds);
+
     } finally {
-      //      c.management().queueDeletion().delete(q);
+      c.management().queueDeletion().delete(q);
       c.close();
     }
   }
