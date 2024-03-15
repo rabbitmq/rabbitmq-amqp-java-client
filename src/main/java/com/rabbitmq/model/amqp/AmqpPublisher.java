@@ -24,6 +24,7 @@ import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.Publisher;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
@@ -32,8 +33,11 @@ import org.slf4j.LoggerFactory;
 
 class AmqpPublisher extends ResourceBase implements Publisher {
 
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
+
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpPublisher.class);
 
+  private final Long id;
   private volatile Sender sender;
   private final ExecutorService executorService;
   private final String address;
@@ -42,6 +46,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
     super(builder.listeners());
+    this.id = ID_SEQUENCE.getAndIncrement();
     this.executorService = builder.connection().executorService();
     this.address = builder.address();
     this.connection = builder.connection();
@@ -61,6 +66,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
       // TODO catch ClientSendTimedOutException
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
           ((AmqpMessage) message).nativeMessage();
+      // TODO track confirmation task to cancel them during recovery
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
       this.executorService.submit(
           () -> {
@@ -133,5 +139,13 @@ class AmqpPublisher extends ResourceBase implements Publisher {
     public Status status() {
       return this.status;
     }
+  }
+
+  Long id() {
+    return this.id;
+  }
+
+  String address() {
+    return this.address;
   }
 }

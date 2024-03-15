@@ -172,6 +172,10 @@ abstract class Utils {
       return port;
     }
 
+    String label() {
+      return this.host + ":" + this.port;
+    }
+
     @Override
     public String toString() {
       return "ConnectionParameters{"

@@ -36,6 +36,7 @@ import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -159,74 +160,126 @@ class AmqpConnection extends ResourceBase implements Connection {
     AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
-        (c, e) -> {
-          // TODO use a dedicated thread for connection recovery
-          // (we do not want to wait too long in a IO thread)
-          // it should be dispatched as a task that could be stopped in #close()
-          ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
-          if (this.compareAndSetState(OPEN, RECOVERING, failureCause)) {
-            this.state(RECOVERING, failureCause);
-            this.changeStateOfPublishers(RECOVERING);
-            this.changeStateOfConsumers(RECOVERING);
-            this.nativeConnection = null;
-            this.nativeSession = null;
-            this.maybeReleaseManagementResources();
-            int attempt = 0;
-            while (true) {
-              try {
-                Thread.sleep(recoveryConfiguration.backOffDelayPolicy().delay(attempt).toMillis());
-              } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                LOGGER.info("Thread interrupted while waiting during connection recovery");
-                this.closed.set(true);
-                this.changeStateOfPublishers(CLOSED);
-                this.changeStateOfConsumers(CLOSED);
-                this.state(CLOSED, ex);
-              }
-              try {
-                this.nativeConnection = connect(connectionParameters, name, resultReference.get());
-                this.nativeConnection.openFuture().get();
-                this.state(OPEN);
-
-                List<AmqpConsumer> failedConsumers = new ArrayList<>();
-                for (AmqpConsumer consumer : this.consumers) {
-                  try {
-                    consumer.recoverAfterConnectionFailure();
-                    consumer.state(OPEN);
-                  } catch (Exception ex) {
-                    LOGGER.warn("Error while trying to recover consumer", ex);
-                    failedConsumers.add(consumer);
-                  }
-                }
-                failedConsumers.forEach(AmqpConsumer::close);
-
-                List<AmqpPublisher> failedPublishers = new ArrayList<>();
-                for (AmqpPublisher publisher : this.publishers) {
-                  try {
-                    publisher.recoverAfterConnectionFailure();
-                    publisher.state(OPEN);
-                  } catch (Exception ex) {
-                    LOGGER.warn("Error while trying to recover publisher", ex);
-                    failedPublishers.add(publisher);
-                  }
-                }
-                failedPublishers.forEach(AmqpPublisher::close);
-                break;
-              } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                LOGGER.info("Thread interrupted while waiting for connection opening");
-                this.closed.set(true);
-                this.changeStateOfPublishers(CLOSED);
-                this.state(CLOSED, ex);
-              } catch (Exception ex) {
-                LOGGER.info("Error while trying to recover connection", ex);
-                // TODO determine whether we should recover after the exception
-              }
-            }
-          }
-        };
+        (c, e) ->
+            recoverAfterConnectionFailure(
+                recoveryConfiguration,
+                connectionParameters,
+                name,
+                e.failureCause(),
+                resultReference);
     resultReference.set(result);
     return result;
+  }
+
+  private void recoverAfterConnectionFailure(
+      AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
+      Utils.ConnectionParameters connectionParameters,
+      String connectionName,
+      ClientIOException nativeFailureCause,
+      AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
+          disconnectedHandlerReference) {
+    // TODO use a dedicated thread for connection recovery
+    // (we do not want to wait too long in a IO thread)
+    // it should be dispatched as a task that could be stopped in #close()
+    ModelException failureCause = convert(nativeFailureCause, "Connection disconnected");
+    LOGGER.info("Connection to {} failed, trying to recover", connectionParameters.label());
+    if (this.compareAndSetState(OPEN, RECOVERING, failureCause)) {
+      this.state(RECOVERING, failureCause);
+      this.changeStateOfPublishers(RECOVERING);
+      this.changeStateOfConsumers(RECOVERING);
+      this.nativeConnection = null;
+      this.nativeSession = null;
+      this.maybeReleaseManagementResources();
+      int attempt = 0;
+      while (true) {
+        try {
+          Thread.sleep(recoveryConfiguration.backOffDelayPolicy().delay(attempt).toMillis());
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          LOGGER.info("Thread interrupted while waiting during connection recovery");
+          this.closed.set(true);
+          this.changeStateOfPublishers(CLOSED);
+          this.changeStateOfConsumers(CLOSED);
+          this.state(CLOSED, ex);
+        }
+        try {
+          this.nativeConnection =
+              connect(connectionParameters, connectionName, disconnectedHandlerReference.get());
+          this.nativeConnection.openFuture().get();
+          LOGGER.debug("Reconnected to {}", connectionParameters.label());
+          this.state(OPEN);
+
+          this.recoverConsumers();
+          this.recoverPublishers();
+
+          LOGGER.info("Recovered connection to {}", connectionParameters.label());
+          break;
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          LOGGER.info("Thread interrupted while waiting for connection opening");
+          this.closed.set(true);
+          this.changeStateOfPublishers(CLOSED);
+          this.state(CLOSED, ex);
+        } catch (Exception ex) {
+          LOGGER.info("Error while trying to recover connection", ex);
+          // TODO determine whether we should recover after the exception
+        }
+      }
+    } else {
+      LOGGER.info("Connection recovery already in progress");
+    }
+  }
+
+  private void recoverConsumers() {
+    if (this.consumers.isEmpty()) {
+      LOGGER.debug("No consumers to recover");
+    } else {
+      LOGGER.debug("{} consumer(s) to recover", this.consumers.size());
+      List<AmqpConsumer> failedConsumers = new ArrayList<>();
+      for (AmqpConsumer consumer : this.consumers) {
+        try {
+          LOGGER.debug("Recovering consumer {} (address '{}')", consumer.id(), consumer.address());
+          consumer.recoverAfterConnectionFailure();
+          consumer.state(OPEN);
+          LOGGER.debug("Recovered consumer {} (address '{}')", consumer.id(), consumer.address());
+        } catch (Exception ex) {
+          LOGGER.warn(
+              "Error while trying to recover consumer {} (address '{}')",
+              consumer.id(),
+              consumer.address(),
+              ex);
+          failedConsumers.add(consumer);
+        }
+      }
+      failedConsumers.forEach(AmqpConsumer::close);
+    }
+  }
+
+  private void recoverPublishers() {
+    if (this.publishers.isEmpty()) {
+      LOGGER.debug("No publishers to recover");
+    } else {
+      LOGGER.debug("{} publisher(s) to recover", this.publishers.size());
+      List<AmqpPublisher> failedPublishers = new ArrayList<>();
+      for (AmqpPublisher publisher : this.publishers) {
+        try {
+          LOGGER.debug(
+              "Recovering publisher {} (address '{}')", publisher.id(), publisher.address());
+          publisher.recoverAfterConnectionFailure();
+          publisher.state(OPEN);
+          LOGGER.debug(
+              "Recovered publisher {} (address '{}')", publisher.id(), publisher.address());
+        } catch (Exception ex) {
+          LOGGER.warn(
+              "Error while trying to recover publisher {} (address '{}')",
+              publisher.id(),
+              publisher.address(),
+              ex);
+          failedPublishers.add(publisher);
+        }
+      }
+      failedPublishers.forEach(AmqpPublisher::close);
+    }
   }
 
   private void maybeCloseManagement() {

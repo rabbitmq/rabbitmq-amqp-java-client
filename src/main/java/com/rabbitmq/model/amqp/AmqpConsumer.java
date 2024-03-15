@@ -167,4 +167,12 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     this.nativeReceiver = createNativeReceiver(this.connection, this.address, this.initialCredits);
     startReceivingLoop();
   }
+
+  Long id() {
+    return this.id;
+  }
+
+  String address() {
+    return this.address;
+  }
 }
