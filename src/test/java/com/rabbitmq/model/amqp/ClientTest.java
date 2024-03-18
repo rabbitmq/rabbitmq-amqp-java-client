@@ -231,7 +231,10 @@ public class ClientTest {
       assertThat(response.subject()).isEqualTo("201");
       assertThat(response.property("http:response")).isEqualTo("1.1");
 
-      assertThat(response.body()).isNull();
+      assertThat(response.body())
+          .isNotNull()
+          .isNotEmpty()
+          .containsEntry("message_count", UnsignedLong.valueOf(0));
 
       requestId = ulong(requestIdSequence.incrementAndGet());
       request =

@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
