@@ -4,9 +4,9 @@
     <groupId>com.rabbitmq</groupId>
     <artifactId>rabbitmq-model</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>RabbitMQ Model Java Client</name>
-    <description>The RabbitMQ Model Java client library defines an API to access RabbitMQ
-        with different transport and messaging protocols.
+    <name>RabbitMQ AMQP 1.0 Java client</name>
+    <description>The RabbitMQ AMQP 1.0 Java client library defines an API to access RabbitMQ
+        with the AMQP 1.0 protocol.
     </description>
     <url>https://www.rabbitmq.com</url>
 
