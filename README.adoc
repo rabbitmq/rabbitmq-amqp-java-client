@@ -1,10 +1,10 @@
-= rabbitmq-java-model
+= RabbitMQ AMQP 1.0 Java Client
 
 == Documentation
 
-* https://rabbitmq-pro.github.io/rabbitmq-java-model/snapshot/htmlsingle/[Reference]
-* https://glowing-engine-1wmjvvp.pages.github.io/snapshot/api/com/rabbitmq/model/package-summary.html[API]
+* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference]
+* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/model/package-summary.html[API]
 
 == License
 
-This package, the RabbitMQ Java Model library, is licensed under the http://www.apache.org/licenses/LICENSE-2.0[Apache License, version 2].
+This package, the RabbitMQ AMQP 1.0 Java Client library, is licensed under the http://www.apache.org/licenses/LICENSE-2.0[Apache License, version 2].
