@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(b273c5c)</span>
+<br><span id="revremark">(518aaec)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -548,6 +548,13 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#bindings">Bindings</a></li>
 </ul>
 </li>
+</ul>
+</li>
+<li><a href="#dependencies">Dependencies</a>
+<ul class="sectlevel2">
+<li><a href="#maven">Maven</a></li>
+<li><a href="#gradle">Gradle</a></li>
+<li><a href="#snapshots">Snapshots</a></li>
 </ul>
 </li>
 </ul>
@@ -800,11 +807,90 @@ It is accessible from the <code>Environment</code>.</p>
 </div>
 </div>
 </div>
+<div class="sect1">
+<h2 id="dependencies"><a class="anchor" href="#dependencies"></a>Dependencies</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Use your favorite build management tool to add the client dependencies to your project.</p>
+</div>
+<div class="sect2">
+<h3 id="maven"><a class="anchor" href="#maven"></a>Maven</h3>
+<div class="listingblock">
+<div class="title">pom.xml</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="xml"><span class="tag">&lt;dependencies&gt;</span>
+
+  <span class="tag">&lt;dependency&gt;</span>
+    <span class="tag">&lt;groupId&gt;</span>com.rabbitmq.amqp<span class="tag">&lt;/groupId&gt;</span>
+    <span class="tag">&lt;artifactId&gt;</span>amqp-client<span class="tag">&lt;/artifactId&gt;</span>
+    <span class="tag">&lt;version&gt;</span>1.0-SNAPSHOT<span class="tag">&lt;/version&gt;</span>
+  <span class="tag">&lt;/dependency&gt;</span>
+
+<span class="tag">&lt;/dependencies&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="gradle"><a class="anchor" href="#gradle"></a>Gradle</h3>
+<div class="listingblock">
+<div class="title">build.gradle</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="groovy">dependencies {
+  compile <span class="string"><span class="delimiter">&quot;</span><span class="content">com.rabbitmq.amqp:amqp-client:1.0-SNAPSHOT</span><span class="delimiter">&quot;</span></span>
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="snapshots"><a class="anchor" href="#snapshots"></a>Snapshots</h3>
+<div class="paragraph">
+<p>Releases are available from Maven Central, which does not require specific declaration.
+Snapshots are available from a repository which must be declared in the dependency management configuration.</p>
+</div>
+<div class="paragraph">
+<p>With Maven:</p>
+</div>
+<div class="listingblock">
+<div class="title">Snapshot repository declaration for Maven</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="xml"><span class="tag">&lt;repositories&gt;</span>
+
+  <span class="tag">&lt;repository&gt;</span>
+    <span class="tag">&lt;id&gt;</span>ossrh<span class="tag">&lt;/id&gt;</span>
+    <span class="tag">&lt;url&gt;</span>https://oss.sonatype.org/content/repositories/snapshots<span class="tag">&lt;/url&gt;</span>
+    <span class="tag">&lt;snapshots&gt;</span><span class="tag">&lt;enabled&gt;</span>true<span class="tag">&lt;/enabled&gt;</span><span class="tag">&lt;/snapshots&gt;</span>
+    <span class="tag">&lt;releases&gt;</span><span class="tag">&lt;enabled&gt;</span>false<span class="tag">&lt;/enabled&gt;</span><span class="tag">&lt;/releases&gt;</span>
+  <span class="tag">&lt;/repository&gt;</span>
+
+<span class="tag">&lt;/repositories&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With Gradle:</p>
+</div>
+<div class="listingblock">
+<div class="title">Snapshot repository declaration for Gradle:</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="groovy">repositories {
+  maven { url <span class="string"><span class="delimiter">'</span><span class="content">https://oss.sonatype.org/content/repositories/snapshots</span><span class="delimiter">'</span></span> }
+  mavenCentral()
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
 </div>
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-03-18 08:17:42 UTC
+Last updated 2024-03-18 08:49:43 UTC
 </div>
 </div>
 </body>
