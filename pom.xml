@@ -33,9 +33,9 @@
     </organization>
 
     <scm>
-        <url>https://github.com/rabbitmq-pro/rabbitmq-java-model</url>
-        <connection>scm:git:git://github.com/rabbitmq-pro/rabbitmq-java-model.git</connection>
-        <developerConnection>scm:git:https://github.com/rabbitmq-pro/rabbitmq-java-model.git</developerConnection>
+        <url>https://github.com/rabbitmq-pro/rabbitmq-amqp-java-client</url>
+        <connection>scm:git:git://github.com/rabbitmq-pro/rabbitmq-amqp-java-client.git</connection>
+        <developerConnection>scm:git:https://github.com/rabbitmq-pro/rabbitmq-amqp-java-client.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 

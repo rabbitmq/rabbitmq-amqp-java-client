@@ -1,4 +1,4 @@
-= RabbitMQ Java Model
+= RabbitMQ AMQP 1.0 Java Client
 :revnumber: {project-version}
 :revremark: ({build-number})
 ifndef::imagesdir[:imagesdir: images]
