@@ -51,7 +51,7 @@
         <amqp-client.version>5.20.0</amqp-client.version>
         <metrics.version>4.2.25</metrics.version>
         <micrometer.version>1.12.4</micrometer.version>
-        <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
         <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
         <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
