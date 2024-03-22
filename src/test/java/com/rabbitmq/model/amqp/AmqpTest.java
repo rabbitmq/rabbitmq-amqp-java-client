@@ -27,10 +27,7 @@ import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.model.Connection;
-import com.rabbitmq.model.Environment;
-import com.rabbitmq.model.Management;
-import com.rabbitmq.model.Publisher;
+import com.rabbitmq.model.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;

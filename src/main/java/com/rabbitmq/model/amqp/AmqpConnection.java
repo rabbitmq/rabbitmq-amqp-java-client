@@ -51,6 +51,7 @@ class AmqpConnection extends ResourceBase implements Connection {
   private volatile Session nativeSession;
   private List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
   private List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
+  private final boolean topologyRecovery;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -60,6 +61,7 @@ class AmqpConnection extends ResourceBase implements Connection {
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
     AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
         builder.recoveryConfiguration();
+    this.topologyRecovery = recoveryConfiguration.topology();
     if (recoveryConfiguration.activated()) {
       disconnectHandler =
           recoveryDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
@@ -84,12 +86,16 @@ class AmqpConnection extends ResourceBase implements Connection {
     try {
       this.managementLock.lock();
       if (this.management == null || !this.management.isOpen()) {
-        this.management = new AmqpManagement(this);
+        this.management = createManagement();
       }
     } finally {
       this.managementLock.unlock();
     }
     return this.management;
+  }
+
+  protected AmqpManagement createManagement() {
+    return new AmqpManagement(new AmqpManagementParameters(this));
   }
 
   @Override
@@ -351,11 +357,19 @@ class AmqpConnection extends ResourceBase implements Connection {
     // TODO copy the builder properties to create the consumer
     AmqpConsumer consumer = new AmqpConsumer(builder);
     this.consumers.add(consumer);
+    // TODO do not register consumer if management is null
+    // (we just need to track consumer of auto-delete queues)
+    ((AmqpManagement) this.management())
+        .recovery()
+        .consumerCreated(consumer.id(), consumer.address());
     return consumer;
   }
 
   void removeConsumer(AmqpConsumer consumer) {
     this.consumers.remove(consumer);
+    ((AmqpManagement) this.management())
+        .recovery()
+        .consumerDeleted(consumer.id(), consumer.address());
   }
 
   private void changeStateOfPublishers(State newState) {
@@ -368,5 +382,9 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private void changeStateOfResources(List<? extends ResourceBase> resources, State newState) {
     resources.forEach(r -> r.state(newState));
+  }
+
+  boolean topologyRecovery() {
+    return this.topologyRecovery;
   }
 }

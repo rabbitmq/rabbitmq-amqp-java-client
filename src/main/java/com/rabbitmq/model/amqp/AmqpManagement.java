@@ -64,10 +64,11 @@ class AmqpManagement implements Management {
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
       new ConcurrentHashMap<>();
   private final Thread receiveLoop;
+  private final ManagementRecovery recovery;
 
-  AmqpManagement(AmqpConnection connection) {
+  AmqpManagement(AmqpManagementParameters parameters) {
     try {
-      this.session = connection.nativeConnection().openSession();
+      this.session = parameters.connection().nativeConnection().openSession();
       String linkPairName = "management-link-pair";
       Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
       this.sender =
@@ -121,6 +122,18 @@ class AmqpManagement implements Management {
           newThread(
               "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
       this.receiveLoop.start();
+
+      ManagementRecovery managementRecovery;
+      if (parameters.connection().topologyRecovery()) {
+        managementRecovery = new DefaultManagementRecovery();
+      } else {
+        managementRecovery = ManagementRecovery.NO_OP;
+      }
+      this.recovery =
+          parameters.managementRecovery() == null
+              ? managementRecovery
+              : ManagementRecovery.compose(
+                  List.of(parameters.managementRecovery(), managementRecovery));
     } catch (Exception e) {
       throw new ModelException(e);
     }
@@ -134,6 +147,7 @@ class AmqpManagement implements Management {
   @Override
   public QueueDeletion queueDeletion() {
     return name -> {
+      this.recovery.queueDeleted(name);
       Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
       if (!responseBody.containsKey("message_count")) {
         throw new ModelException("Response body should contain message_count");
@@ -149,7 +163,8 @@ class AmqpManagement implements Management {
   @Override
   public ExchangeDeletion exchangeDeletion() {
     return name -> {
-      delete(exchangeLocation(name), CODE_204);
+      this.recovery.exchangeDeleted(name);
+      this.delete(exchangeLocation(name), CODE_204);
     };
   }
 
@@ -392,5 +407,9 @@ class AmqpManagement implements Management {
     private <T> List<T> responseBodyAsList() throws ClientException {
       return (List<T>) this.response.get().body();
     }
+  }
+
+  ManagementRecovery recovery() {
+    return this.recovery;
   }
 }

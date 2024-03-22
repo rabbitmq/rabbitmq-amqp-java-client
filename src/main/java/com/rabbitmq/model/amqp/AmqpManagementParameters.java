@@ -15,24 +15,27 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
-public interface ConnectionBuilder {
+class AmqpManagementParameters {
 
-  RecoveryConfiguration recovery();
+  private final AmqpConnection connection;
+  private ManagementRecovery managementRecovery;
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+  AmqpManagementParameters(AmqpConnection connection) {
+    this.connection = connection;
+  }
 
-  Connection build();
+  AmqpManagementParameters managementRecovery(ManagementRecovery managementRecovery) {
+    this.managementRecovery = managementRecovery;
+    return this;
+  }
 
-  interface RecoveryConfiguration {
+  AmqpConnection connection() {
+    return this.connection;
+  }
 
-    RecoveryConfiguration activated(boolean activated);
-
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
-
-    RecoveryConfiguration topology(boolean activated);
-
-    ConnectionBuilder connectionBuilder();
+  ManagementRecovery managementRecovery() {
+    return this.managementRecovery;
   }
 }

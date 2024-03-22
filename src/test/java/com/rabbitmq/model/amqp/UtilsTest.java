@@ -15,24 +15,24 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
-public interface ConnectionBuilder {
+import static org.assertj.core.api.Assertions.assertThat;
 
-  RecoveryConfiguration recovery();
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+public class UtilsTest {
 
-  Connection build();
-
-  interface RecoveryConfiguration {
-
-    RecoveryConfiguration activated(boolean activated);
-
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
-
-    RecoveryConfiguration topology(boolean activated);
-
-    ConnectionBuilder connectionBuilder();
+  @ParameterizedTest
+  @CsvSource({
+    "/exchange/foo/bar,",
+    "/topic/foo,",
+    "/amq/queue/foo,foo",
+    "/queue/foo,foo",
+    "foo,foo"
+  })
+  void extractQueueFromSourceAddress(String address, String expectedQueue) {
+    assertThat(Utils.extractQueueFromSourceAddress(address)).isEqualTo(expectedQueue);
   }
 }

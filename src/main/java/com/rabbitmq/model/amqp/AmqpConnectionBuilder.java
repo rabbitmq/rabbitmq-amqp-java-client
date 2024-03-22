@@ -86,6 +86,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
     private final AmqpConnectionBuilder connectionBuilder;
     private boolean activated = true;
+    private boolean topology = true;
     private BackOffDelayPolicy backOffDelayPolicy = BackOffDelayPolicy.fixed(Duration.ofSeconds(5));
 
     AmqpRecoveryConfiguration(AmqpConnectionBuilder connectionBuilder) {
@@ -105,12 +106,22 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     }
 
     @Override
+    public RecoveryConfiguration topology(boolean activated) {
+      this.topology = true;
+      return this;
+    }
+
+    @Override
     public ConnectionBuilder connectionBuilder() {
       return this.connectionBuilder;
     }
 
     boolean activated() {
       return this.activated;
+    }
+
+    boolean topology() {
+      return this.topology;
     }
 
     BackOffDelayPolicy backOffDelayPolicy() {

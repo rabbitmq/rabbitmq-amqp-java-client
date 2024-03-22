@@ -194,4 +194,20 @@ abstract class Utils {
           + '}';
     }
   }
+
+  static String extractQueueFromSourceAddress(String address) {
+    // from
+    // https://github.com/rabbitmq/rabbitmq-server/blob/v3.12.x/deps/rabbitmq_amqp1_0/README.md#routing-and-addressing
+    if (address == null) {
+      return null;
+    } else if (address.startsWith("/exchange/") || address.startsWith("/topic/")) {
+      return null;
+    } else if (address.startsWith("/amq/queue/")) {
+      return address.replace("/amq/queue/", "");
+    } else if (address.startsWith("/queue/")) {
+      return address.replace("/queue/", "");
+    } else {
+      return address;
+    }
+  }
 }

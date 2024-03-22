@@ -170,7 +170,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     startReceivingLoop();
   }
 
-  Long id() {
+  long id() {
     return this.id;
   }
 

@@ -20,6 +20,7 @@ package com.rabbitmq.model.amqp;
 import com.rabbitmq.model.Management;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 abstract class AmqpBindingManagement {
 
@@ -35,6 +36,26 @@ abstract class AmqpBindingManagement {
 
     BindingState(AmqpManagement managememt) {
       this.managememt = managememt;
+    }
+
+    String source() {
+      return this.source;
+    }
+
+    String destination() {
+      return this.destination;
+    }
+
+    String key() {
+      return this.key;
+    }
+
+    boolean toQueue() {
+      return this.toQueue;
+    }
+
+    void arguments(BiConsumer<String, Object> consumer) {
+      this.arguments.forEach(consumer);
     }
   }
 
@@ -98,6 +119,11 @@ abstract class AmqpBindingManagement {
         body.put("destination_exchange", this.state.destination);
         this.state.managememt.bind(body);
       }
+      this.state.managememt.recovery().bindingDeclared(this);
+    }
+
+    BindingState state() {
+      return this.state;
     }
   }
 
@@ -150,6 +176,7 @@ abstract class AmqpBindingManagement {
 
     @Override
     public void unbind() {
+      this.state.managememt.recovery().bindingDeleted(this);
       String destinationCharacter = this.state.toQueue ? "dstq" : "dste";
       this.state.managememt.unbind(
           destinationCharacter,
@@ -157,6 +184,10 @@ abstract class AmqpBindingManagement {
           this.state.destination,
           this.state.key == null ? "" : this.state.key,
           this.state.arguments);
+    }
+
+    BindingState state() {
+      return this.state;
     }
   }
 }

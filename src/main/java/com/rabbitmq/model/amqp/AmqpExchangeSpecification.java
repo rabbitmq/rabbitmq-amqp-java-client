@@ -21,12 +21,9 @@ import com.rabbitmq.model.Management;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.function.BiConsumer;
 
 class AmqpExchangeSpecification implements Management.ExchangeSpecification {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpExchangeSpecification.class);
 
   private final AmqpManagement management;
 
@@ -85,5 +82,22 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
     body.put("internal", this.internal);
     body.put("arguments", this.arguments);
     this.management.declareExchange(this.name, body);
+    this.management.recovery().exchangeDeclared(this);
+  }
+
+  String name() {
+    return this.name;
+  }
+
+  String type() {
+    return this.type;
+  }
+
+  boolean autoDelete() {
+    return this.autoDelete;
+  }
+
+  void arguments(BiConsumer<String, Object> consumer) {
+    this.arguments.forEach(consumer);
   }
 }

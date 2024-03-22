@@ -25,6 +25,7 @@ import com.rabbitmq.model.Management;
 import com.rabbitmq.model.Management.QueueType;
 import java.time.Duration;
 import java.util.*;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -190,6 +191,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     body.put("auto_delete", this.autoDelete);
     body.put("arguments", this.arguments);
     this.management.declareQueue(this.name, body);
+    this.management.recovery().queueDeclared(this);
   }
 
   private Map<String, Object> arg(String key, Object value) {
@@ -354,5 +356,21 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     public Management.QueueSpecification specification() {
       return this.parent;
     }
+  }
+
+  String name() {
+    return this.name;
+  }
+
+  boolean exclusive() {
+    return this.exclusive;
+  }
+
+  boolean autoDelete() {
+    return this.autoDelete;
+  }
+
+  void arguments(BiConsumer<String, Object> consumer) {
+    this.arguments.forEach(consumer);
   }
 }
