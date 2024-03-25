@@ -23,7 +23,7 @@ import static java.lang.Boolean.TRUE;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-class DefaultManagementRecovery implements ManagementRecovery {
+class RecordingTopologyListener implements TopologyListener {
 
   private final Map<String, ExchangeSpec> exchanges = new ConcurrentHashMap<>();
   private final Map<String, QueueSpec> queues = new ConcurrentHashMap<>();
@@ -134,8 +134,10 @@ class DefaultManagementRecovery implements ManagementRecovery {
     return new LinkedHashMap<>(this.queues);
   }
 
-  Set<BindingSpec> bindings() {
-    return new HashSet<>(this.bindings);
+  void accept(Visitor visitor) {
+    visitor.visitExchanges(this.exchanges);
+    visitor.visitQueues(this.queues);
+    visitor.visitBindings(this.bindings);
   }
 
   int bindingCount() {
@@ -251,5 +253,14 @@ class DefaultManagementRecovery implements ManagementRecovery {
       this.id = id;
       this.queue = queue;
     }
+  }
+
+  interface Visitor {
+
+    void visitExchanges(Map<String, ExchangeSpec> exchanges);
+
+    void visitQueues(Map<String, QueueSpec> exchanges);
+
+    void visitBindings(Set<BindingSpec> bindings);
   }
 }

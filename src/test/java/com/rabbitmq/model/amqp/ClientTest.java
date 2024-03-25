@@ -187,7 +187,7 @@ public class ClientTest {
           connection(client, o -> o.traceFrames(false));
 
       String linkPairName = "my-link-pair";
-      String managementNodeAddress = "/management/v2";
+      String managementNodeAddress = "/management";
       String replyTo = "$me";
       Session session = connection.openSession();
       Sender sender =

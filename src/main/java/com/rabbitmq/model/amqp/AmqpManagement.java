@@ -45,7 +45,7 @@ class AmqpManagement implements Management {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpManagement.class);
 
-  private static final String MANAGEMENT_NODE_ADDRESS = "/management/v2";
+  private static final String MANAGEMENT_NODE_ADDRESS = "/management";
   private static final String REPLY_TO = "$me";
 
   private static final String GET = "GET";
@@ -64,7 +64,7 @@ class AmqpManagement implements Management {
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
       new ConcurrentHashMap<>();
   private final Thread receiveLoop;
-  private final ManagementRecovery recovery;
+  private final TopologyListener recovery;
 
   AmqpManagement(AmqpManagementParameters parameters) {
     try {
@@ -122,18 +122,10 @@ class AmqpManagement implements Management {
           newThread(
               "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
       this.receiveLoop.start();
-
-      ManagementRecovery managementRecovery;
-      if (parameters.connection().topologyRecovery()) {
-        managementRecovery = new DefaultManagementRecovery();
-      } else {
-        managementRecovery = ManagementRecovery.NO_OP;
-      }
       this.recovery =
-          parameters.managementRecovery() == null
-              ? managementRecovery
-              : ManagementRecovery.compose(
-                  List.of(parameters.managementRecovery(), managementRecovery));
+          parameters.topologyListener() == null
+              ? TopologyListener.NO_OP
+              : parameters.topologyListener();
     } catch (Exception e) {
       throw new ModelException(e);
     }
@@ -409,7 +401,7 @@ class AmqpManagement implements Management {
     }
   }
 
-  ManagementRecovery recovery() {
+  TopologyListener recovery() {
     return this.recovery;
   }
 }

@@ -17,25 +17,33 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-class AmqpManagementParameters {
+import java.util.Map;
+import java.util.Set;
 
+class TopologyRecovery {
+
+  private final RecordingTopologyListener listener;
   private final AmqpConnection connection;
-  private TopologyListener topologyListener;
+  private final RecordingTopologyListener.Visitor recoveryVisitor;
 
-  AmqpManagementParameters(AmqpConnection connection) {
+  TopologyRecovery(AmqpConnection connection, RecordingTopologyListener listener) {
     this.connection = connection;
+    this.listener = listener;
+    this.recoveryVisitor =
+        new RecordingTopologyListener.Visitor() {
+          @Override
+          public void visitExchanges(
+              Map<String, RecordingTopologyListener.ExchangeSpec> exchanges) {}
+
+          @Override
+          public void visitQueues(Map<String, RecordingTopologyListener.QueueSpec> exchanges) {}
+
+          @Override
+          public void visitBindings(Set<RecordingTopologyListener.BindingSpec> bindings) {}
+        };
   }
 
-  AmqpManagementParameters topologyListener(TopologyListener topologyListener) {
-    this.topologyListener = topologyListener;
-    return this;
-  }
-
-  AmqpConnection connection() {
-    return this.connection;
-  }
-
-  TopologyListener topologyListener() {
-    return this.topologyListener;
+  void recover() {
+    this.listener.accept(this.recoveryVisitor);
   }
 }

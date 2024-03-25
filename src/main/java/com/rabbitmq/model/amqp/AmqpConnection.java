@@ -51,7 +51,8 @@ class AmqpConnection extends ResourceBase implements Connection {
   private volatile Session nativeSession;
   private List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
   private List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
-  private final boolean topologyRecovery;
+  private final TopologyListener topologyListener;
+  private volatile TopologyRecovery topologyRecovery;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -61,7 +62,9 @@ class AmqpConnection extends ResourceBase implements Connection {
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
     AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
         builder.recoveryConfiguration();
-    this.topologyRecovery = recoveryConfiguration.topology();
+
+    this.topologyListener = createTopologyListener(builder);
+
     if (recoveryConfiguration.activated()) {
       disconnectHandler =
           recoveryDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
@@ -95,7 +98,8 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   protected AmqpManagement createManagement() {
-    return new AmqpManagement(new AmqpManagementParameters(this));
+    return new AmqpManagement(
+        new AmqpManagementParameters(this).topologyListener(this.topologyListener));
   }
 
   @Override
@@ -158,6 +162,20 @@ class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
+  TopologyListener createTopologyListener(AmqpConnectionBuilder builder) {
+    TopologyListener topologyListener;
+    if (builder.recoveryConfiguration().topology()) {
+      RecordingTopologyListener rtl = new RecordingTopologyListener();
+      this.topologyRecovery = new TopologyRecovery(this, rtl);
+      topologyListener = rtl;
+    } else {
+      topologyListener = TopologyListener.NO_OP;
+    }
+    return builder.topologyListener() == null
+        ? topologyListener
+        : TopologyListener.compose(List.of(builder.topologyListener(), topologyListener));
+  }
+
   private BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
       recoveryDisconnectHandler(
           AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
@@ -215,6 +233,7 @@ class AmqpConnection extends ResourceBase implements Connection {
           LOGGER.debug("Reconnected to {}", connectionParameters.label());
           this.state(OPEN);
 
+          this.recoverTopology();
           this.recoverConsumers();
           this.recoverPublishers();
 
@@ -233,6 +252,12 @@ class AmqpConnection extends ResourceBase implements Connection {
       }
     } else {
       LOGGER.info("Connection recovery already in progress");
+    }
+  }
+
+  private void recoverTopology() {
+    if (this.topologyRecovery != null) {
+      this.topologyRecovery.recover();
     }
   }
 
@@ -357,19 +382,13 @@ class AmqpConnection extends ResourceBase implements Connection {
     // TODO copy the builder properties to create the consumer
     AmqpConsumer consumer = new AmqpConsumer(builder);
     this.consumers.add(consumer);
-    // TODO do not register consumer if management is null
-    // (we just need to track consumer of auto-delete queues)
-    ((AmqpManagement) this.management())
-        .recovery()
-        .consumerCreated(consumer.id(), consumer.address());
+    this.topologyListener.consumerCreated(consumer.id(), consumer.address());
     return consumer;
   }
 
   void removeConsumer(AmqpConsumer consumer) {
     this.consumers.remove(consumer);
-    ((AmqpManagement) this.management())
-        .recovery()
-        .consumerDeleted(consumer.id(), consumer.address());
+    this.topologyListener.consumerDeleted(consumer.id(), consumer.address());
   }
 
   private void changeStateOfPublishers(State newState) {
@@ -382,9 +401,5 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private void changeStateOfResources(List<? extends ResourceBase> resources, State newState) {
     resources.forEach(r -> r.state(newState));
-  }
-
-  boolean topologyRecovery() {
-    return this.topologyRecovery;
   }
 }

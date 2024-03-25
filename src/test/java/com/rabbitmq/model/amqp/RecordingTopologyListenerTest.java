@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import static com.rabbitmq.model.amqp.DefaultManagementRecoveryTest.RecoveryAssert.assertThat;
+import static com.rabbitmq.model.amqp.RecordingTopologyListenerTest.RecoveryAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
@@ -25,13 +25,13 @@ import org.assertj.core.api.AbstractObjectAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class DefaultManagementRecoveryTest {
+public class RecordingTopologyListenerTest {
 
-  DefaultManagementRecovery recovery;
+  RecordingTopologyListener recovery;
 
   @BeforeEach
   void init() {
-    recovery = new DefaultManagementRecovery();
+    recovery = new RecordingTopologyListener();
   }
 
   @Test
@@ -183,13 +183,13 @@ public class DefaultManagementRecoveryTest {
   }
 
   static class RecoveryAssert
-      extends AbstractObjectAssert<RecoveryAssert, DefaultManagementRecovery> {
+      extends AbstractObjectAssert<RecoveryAssert, RecordingTopologyListener> {
 
-    private RecoveryAssert(DefaultManagementRecovery defaultManagementRecovery) {
+    private RecoveryAssert(RecordingTopologyListener defaultManagementRecovery) {
       super(defaultManagementRecovery, RecoveryAssert.class);
     }
 
-    static RecoveryAssert assertThat(DefaultManagementRecovery recovery) {
+    static RecoveryAssert assertThat(RecordingTopologyListener recovery) {
       return new RecoveryAssert(recovery);
     }
 

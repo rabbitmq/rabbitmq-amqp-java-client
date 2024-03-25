@@ -35,67 +35,61 @@ public class TopologyRecoveryTest {
     try (Environment env = TestUtils.environmentBuilder().build()) {
       Set<String> events = ConcurrentHashMap.newKeySet();
       AtomicInteger eventCount = new AtomicInteger();
-      AmqpConnection connection =
-          new AmqpConnection(new AmqpConnectionBuilder((AmqpEnvironment) env)) {
+      TopologyListener topologyListener =
+          new TopologyListener() {
+            @Override
+            public void exchangeDeclared(AmqpExchangeSpecification specification) {
+              events.add("exchangeDeclared");
+              eventCount.incrementAndGet();
+            }
 
             @Override
-            protected AmqpManagement createManagement() {
-              return new AmqpManagement(
-                  new AmqpManagementParameters(this)
-                      .managementRecovery(
-                          new ManagementRecovery() {
-                            @Override
-                            public void exchangeDeclared(AmqpExchangeSpecification specification) {
-                              events.add("exchangeDeclared");
-                              eventCount.incrementAndGet();
-                            }
+            public void exchangeDeleted(String name) {
+              events.add("exchangeDeleted");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void exchangeDeleted(String name) {
-                              events.add("exchangeDeleted");
-                              eventCount.incrementAndGet();
-                            }
+            @Override
+            public void queueDeclared(AmqpQueueSpecification specification) {
+              events.add("queueDeclared");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void queueDeclared(AmqpQueueSpecification specification) {
-                              events.add("queueDeclared");
-                              eventCount.incrementAndGet();
-                            }
+            @Override
+            public void queueDeleted(String name) {
+              events.add("queueDeleted");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void queueDeleted(String name) {
-                              events.add("queueDeleted");
-                              eventCount.incrementAndGet();
-                            }
+            @Override
+            public void bindingDeclared(
+                AmqpBindingManagement.AmqpBindingSpecification specification) {
+              events.add("bindingDeclared");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void bindingDeclared(
-                                AmqpBindingManagement.AmqpBindingSpecification specification) {
-                              events.add("bindingDeclared");
-                              eventCount.incrementAndGet();
-                            }
+            @Override
+            public void bindingDeleted(
+                AmqpBindingManagement.AmqpUnbindSpecification specification) {
+              events.add("bindingDeleted");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void bindingDeleted(
-                                AmqpBindingManagement.AmqpUnbindSpecification specification) {
-                              events.add("bindingDeleted");
-                              eventCount.incrementAndGet();
-                            }
+            @Override
+            public void consumerCreated(long id, String address) {
+              events.add("consumerCreated");
+              eventCount.incrementAndGet();
+            }
 
-                            @Override
-                            public void consumerCreated(long id, String address) {
-                              events.add("consumerCreated");
-                              eventCount.incrementAndGet();
-                            }
-
-                            @Override
-                            public void consumerDeleted(long id, String address) {
-                              events.add("consumerDeleted");
-                              eventCount.incrementAndGet();
-                            }
-                          }));
+            @Override
+            public void consumerDeleted(long id, String address) {
+              events.add("consumerDeleted");
+              eventCount.incrementAndGet();
             }
           };
+      AmqpConnection connection =
+          new AmqpConnection(
+              new AmqpConnectionBuilder((AmqpEnvironment) env).topologyListener(topologyListener));
       Management management = connection.management();
       String e = TestUtils.name(info);
       management.exchange().name(e).declare();

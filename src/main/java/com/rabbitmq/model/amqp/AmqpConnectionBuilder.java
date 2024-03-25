@@ -17,10 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import com.rabbitmq.model.BackOffDelayPolicy;
-import com.rabbitmq.model.Connection;
-import com.rabbitmq.model.ConnectionBuilder;
-import com.rabbitmq.model.Resource;
+import com.rabbitmq.model.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +29,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
       new AmqpRecoveryConfiguration(this);
   private final List<Resource.StateListener> listeners = new ArrayList<>();
   private String name;
+  private TopologyListener topologyListener;
 
   AmqpConnectionBuilder(AmqpEnvironment environment) {
     this.environment = environment;
@@ -66,6 +64,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     return this;
   }
 
+  AmqpConnectionBuilder topologyListener(TopologyListener topologyListener) {
+    this.topologyListener = topologyListener;
+    return this;
+  }
+
   AmqpEnvironment environment() {
     return environment;
   }
@@ -76,6 +79,10 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
   String name() {
     return name;
+  }
+
+  TopologyListener topologyListener() {
+    return this.topologyListener;
   }
 
   List<Resource.StateListener> listeners() {

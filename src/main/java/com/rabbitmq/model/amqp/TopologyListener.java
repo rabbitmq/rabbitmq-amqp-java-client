@@ -19,9 +19,9 @@ package com.rabbitmq.model.amqp;
 
 import java.util.List;
 
-interface ManagementRecovery {
+interface TopologyListener {
 
-  ManagementRecovery NO_OP = new NoOpManagementRecovery();
+  TopologyListener NO_OP = new NoOpTopologyListener();
 
   void exchangeDeclared(AmqpExchangeSpecification specification);
 
@@ -39,52 +39,52 @@ interface ManagementRecovery {
 
   void consumerDeleted(long id, String address);
 
-  static ManagementRecovery compose(List<ManagementRecovery> managementRecoveries) {
-    return new ManagementRecovery() {
+  static TopologyListener compose(List<TopologyListener> listeners) {
+    return new TopologyListener() {
 
       @Override
       public void exchangeDeclared(AmqpExchangeSpecification specification) {
-        managementRecoveries.forEach(mr -> mr.exchangeDeclared(specification));
+        listeners.forEach(mr -> mr.exchangeDeclared(specification));
       }
 
       @Override
       public void exchangeDeleted(String name) {
-        managementRecoveries.forEach(mr -> mr.exchangeDeleted(name));
+        listeners.forEach(mr -> mr.exchangeDeleted(name));
       }
 
       @Override
       public void queueDeclared(AmqpQueueSpecification specification) {
-        managementRecoveries.forEach(mr -> mr.queueDeclared(specification));
+        listeners.forEach(mr -> mr.queueDeclared(specification));
       }
 
       @Override
       public void queueDeleted(String name) {
-        managementRecoveries.forEach(mr -> mr.queueDeleted(name));
+        listeners.forEach(mr -> mr.queueDeleted(name));
       }
 
       @Override
       public void bindingDeclared(AmqpBindingManagement.AmqpBindingSpecification specification) {
-        managementRecoveries.forEach(mr -> mr.bindingDeclared(specification));
+        listeners.forEach(mr -> mr.bindingDeclared(specification));
       }
 
       @Override
       public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
-        managementRecoveries.forEach(mr -> mr.bindingDeleted(specification));
+        listeners.forEach(mr -> mr.bindingDeleted(specification));
       }
 
       @Override
       public void consumerCreated(long id, String address) {
-        managementRecoveries.forEach(mr -> mr.consumerCreated(id, address));
+        listeners.forEach(mr -> mr.consumerCreated(id, address));
       }
 
       @Override
       public void consumerDeleted(long id, String address) {
-        managementRecoveries.forEach(mr -> mr.consumerDeleted(id, address));
+        listeners.forEach(mr -> mr.consumerDeleted(id, address));
       }
     };
   }
 
-  class NoOpManagementRecovery implements ManagementRecovery {
+  class NoOpTopologyListener implements TopologyListener {
 
     @Override
     public void exchangeDeclared(AmqpExchangeSpecification specification) {}
