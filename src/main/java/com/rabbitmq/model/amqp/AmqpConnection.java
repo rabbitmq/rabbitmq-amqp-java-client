@@ -86,6 +86,10 @@ class AmqpConnection extends ResourceBase implements Connection {
   @Override
   public Management management() {
     checkOpen();
+    return managementNoCheck();
+  }
+
+  Management managementNoCheck() {
     try {
       this.managementLock.lock();
       if (this.management == null || !this.management.isOpen()) {
@@ -231,13 +235,13 @@ class AmqpConnection extends ResourceBase implements Connection {
               connect(connectionParameters, connectionName, disconnectedHandlerReference.get());
           this.nativeConnection.openFuture().get();
           LOGGER.debug("Reconnected to {}", connectionParameters.label());
-          this.state(OPEN);
 
           this.recoverTopology();
           this.recoverConsumers();
           this.recoverPublishers();
 
           LOGGER.info("Recovered connection to {}", connectionParameters.label());
+          this.state(OPEN);
           break;
         } catch (InterruptedException ex) {
           Thread.currentThread().interrupt();
@@ -337,13 +341,21 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   Session nativeSession() {
-    checkOpen();
+    return nativeSession(true);
+  }
+
+  Session nativeSession(boolean check) {
+    if (check) {
+      checkOpen();
+    }
     Session result = this.nativeSession;
     if (result == null) {
       synchronized (this) {
         result = this.nativeSession;
         if (result == null) {
-          checkOpen();
+          if (check) {
+            checkOpen();
+          }
           this.nativeSession = result = this.openSession(this.nativeConnection);
         }
       }

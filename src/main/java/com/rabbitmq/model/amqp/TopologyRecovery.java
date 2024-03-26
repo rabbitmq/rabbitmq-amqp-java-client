@@ -17,10 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import com.rabbitmq.model.Management;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class TopologyRecovery {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(TopologyRecovery.class);
 
   private final RecordingTopologyListener listener;
   private final AmqpConnection connection;
@@ -33,17 +38,112 @@ class TopologyRecovery {
         new RecordingTopologyListener.Visitor() {
           @Override
           public void visitExchanges(
-              Map<String, RecordingTopologyListener.ExchangeSpec> exchanges) {}
+              Map<String, RecordingTopologyListener.ExchangeSpec> exchanges) {
+            if (exchanges.isEmpty()) {
+              LOGGER.debug("No exchanges to recover.");
+            } else {
+              LOGGER.debug("Recovering {} exchange(s)...", exchanges.size());
+              for (RecordingTopologyListener.ExchangeSpec spec : exchanges.values()) {
+                recoverExchange(spec);
+              }
+              LOGGER.debug("Exchanges recovered");
+            }
+          }
 
           @Override
-          public void visitQueues(Map<String, RecordingTopologyListener.QueueSpec> exchanges) {}
+          public void visitQueues(Map<String, RecordingTopologyListener.QueueSpec> queues) {
+            if (queues.isEmpty()) {
+              LOGGER.debug("No queues to recover");
+            } else {
+              LOGGER.debug("Recovering {} queue(s)...", queues.size());
+              for (RecordingTopologyListener.QueueSpec spec : queues.values()) {
+                recoverQueue(spec);
+              }
+              LOGGER.debug("Queues recovered");
+            }
+          }
 
           @Override
-          public void visitBindings(Set<RecordingTopologyListener.BindingSpec> bindings) {}
+          public void visitBindings(Set<RecordingTopologyListener.BindingSpec> bindings) {
+            if (bindings.isEmpty()) {
+              LOGGER.debug("No bindings to recover");
+            } else {
+              LOGGER.debug("Recovering {} binding(s)...", bindings.size());
+              for (RecordingTopologyListener.BindingSpec binding : bindings) {
+                recoverBinding(binding);
+              }
+              LOGGER.debug("Bindings recovered");
+            }
+          }
         };
   }
 
   void recover() {
+    LOGGER.debug("Starting topology recovery");
     this.listener.accept(this.recoveryVisitor);
+    LOGGER.debug("Topology recovered");
+  }
+
+  private void recoverExchange(RecordingTopologyListener.ExchangeSpec exchange) {
+    LOGGER.debug("Recovering exchange {}", exchange.name());
+
+    try {
+      Management.ExchangeSpecification spec =
+          this.connection
+              .managementNoCheck()
+              .exchange()
+              .name(exchange.name())
+              .autoDelete(exchange.autoDelete())
+              .type(exchange.type());
+      exchange.arguments().forEach(spec::argument);
+      spec.declare();
+      LOGGER.debug("Exchange {} recovered", exchange.name());
+    } catch (Exception e) {
+      LOGGER.warn("Error while recovering exchange {}", exchange.name(), e);
+    }
+  }
+
+  private void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
+    LOGGER.debug("Recovering queue {}", queue.name());
+    try {
+      Management.QueueSpecification spec =
+          this.connection
+              .managementNoCheck()
+              .queue()
+              .name(queue.name())
+              .exclusive(queue.exclusive())
+              .autoDelete(queue.autoDelete());
+      queue.arguments().forEach(spec::argument);
+      spec.declare();
+      LOGGER.debug("Queue {} recovered", queue.name());
+    } catch (Exception e) {
+      LOGGER.warn("Error while recovering queue {}", queue.name(), e);
+    }
+  }
+
+  private void recoverBinding(RecordingTopologyListener.BindingSpec binding) {
+    try {
+      Management.BindingSpecification spec =
+          this.connection
+              .managementNoCheck()
+              .binding()
+              .sourceExchange(binding.source())
+              .key(binding.key());
+      if (binding.toQueue()) {
+        spec.destinationQueue(binding.destination());
+      } else {
+        spec.destinationExchange(binding.destination());
+      }
+      binding.arguments().forEach(spec::argument);
+      spec.bind();
+    } catch (Exception e) {
+      LOGGER.warn(
+          "Error while recovering binding from {} to {} {} with binding key {}",
+          binding.source(),
+          binding.toQueue() ? "queue" : "exchange",
+          binding.destination(),
+          binding.key(),
+          e);
+    }
   }
 }

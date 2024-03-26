@@ -32,7 +32,7 @@ abstract class Cli {
   private Cli() {}
 
   private static final Pattern CONNECTION_NAME_PATTERN =
-      Pattern.compile("\"connection_name\",\"(?<name>[a-zA-Z0-9\\-]+)?\"");
+      Pattern.compile("\"connection_name\",\"(?<name>[a-zA-Z0-9_\\-]+)?\"");
   private static final String DOCKER_PREFIX = "DOCKER:";
 
   public static String rabbitmqctlCommand() {

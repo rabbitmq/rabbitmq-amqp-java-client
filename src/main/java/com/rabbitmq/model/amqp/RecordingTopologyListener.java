@@ -135,8 +135,8 @@ class RecordingTopologyListener implements TopologyListener {
   }
 
   void accept(Visitor visitor) {
-    visitor.visitExchanges(this.exchanges);
-    visitor.visitQueues(this.queues);
+    visitor.visitExchanges(new LinkedHashMap<>(this.exchanges));
+    visitor.visitQueues(new LinkedHashMap<>(this.queues));
     visitor.visitBindings(this.bindings);
   }
 
@@ -167,6 +167,22 @@ class RecordingTopologyListener implements TopologyListener {
       this.autoDelete = specification.autoDelete();
       specification.arguments(this.arguments::put);
     }
+
+    String name() {
+      return name;
+    }
+
+    String type() {
+      return type;
+    }
+
+    boolean autoDelete() {
+      return autoDelete;
+    }
+
+    public Map<String, Object> arguments() {
+      return arguments;
+    }
   }
 
   static class QueueSpec {
@@ -182,6 +198,22 @@ class RecordingTopologyListener implements TopologyListener {
       this.exclusive = specification.exclusive();
       this.autoDelete = specification.autoDelete();
       specification.arguments(this.arguments::put);
+    }
+
+    String name() {
+      return name;
+    }
+
+    boolean exclusive() {
+      return exclusive;
+    }
+
+    boolean autoDelete() {
+      return autoDelete;
+    }
+
+    Map<String, Object> arguments() {
+      return arguments;
     }
   }
 
@@ -229,6 +261,26 @@ class RecordingTopologyListener implements TopologyListener {
     public int hashCode() {
       return Objects.hash(source, destination, key, arguments, toQueue);
     }
+
+    String source() {
+      return source;
+    }
+
+    String destination() {
+      return destination;
+    }
+
+    String key() {
+      return key;
+    }
+
+    Map<String, Object> arguments() {
+      return arguments;
+    }
+
+    boolean toQueue() {
+      return toQueue;
+    }
   }
 
   static class ConsumerSpec {
@@ -259,8 +311,14 @@ class RecordingTopologyListener implements TopologyListener {
 
     void visitExchanges(Map<String, ExchangeSpec> exchanges);
 
-    void visitQueues(Map<String, QueueSpec> exchanges);
+    void visitQueues(Map<String, QueueSpec> queues);
 
     void visitBindings(Set<BindingSpec> bindings);
+  }
+
+  private static <E> Set<E> copy(Set<E> set) {
+    synchronized (set) {
+      return new LinkedHashSet<>(set);
+    }
   }
 }

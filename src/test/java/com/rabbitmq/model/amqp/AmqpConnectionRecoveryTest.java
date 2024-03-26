@@ -86,22 +86,21 @@ public class AmqpConnectionRecoveryTest {
       AtomicInteger consumerOpenCount = new AtomicInteger(0);
       Collection<UUID> receivedMessageIds = Collections.synchronizedList(new ArrayList<>());
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Consumer consumer =
-          c.consumerBuilder()
-              .address(q)
-              .messageHandler(
-                  (context, message) -> {
-                    context.accept();
-                    receivedMessageIds.add(message.messageIdAsUuid());
-                    consumeLatch.get().countDown();
-                  })
-              .listeners(
-                  context -> {
-                    if (context.currentState() == OPEN) {
-                      consumerOpenCount.incrementAndGet();
-                    }
-                  })
-              .build();
+      c.consumerBuilder()
+          .address(q)
+          .messageHandler(
+              (context, message) -> {
+                context.accept();
+                receivedMessageIds.add(message.messageIdAsUuid());
+                consumeLatch.get().countDown();
+              })
+          .listeners(
+              context -> {
+                if (context.currentState() == OPEN) {
+                  consumerOpenCount.incrementAndGet();
+                }
+              })
+          .build();
       AtomicReference<CountDownLatch> publishLatch = new AtomicReference<>(new CountDownLatch(1));
       AtomicInteger publisherOpenCount = new AtomicInteger(0);
       Publisher p =

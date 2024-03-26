@@ -54,7 +54,8 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     this.messageHandler = builder.messageHandler();
     this.address = builder.address();
     this.nativeReceiver =
-        createNativeReceiver(builder.connection(), this.address, this.initialCredits);
+        createNativeReceiver(
+            builder.connection().nativeSession(), this.address, this.initialCredits);
     this.connection = builder.connection();
     this.startReceivingLoop();
     this.state(OPEN);
@@ -79,18 +80,15 @@ class AmqpConsumer extends ResourceBase implements Consumer {
 
   // internal API
 
-  private Receiver createNativeReceiver(
-      AmqpConnection connection, String address, int initialCredits) {
+  private Receiver createNativeReceiver(Session nativeSession, String address, int initialCredits) {
     try {
-      return connection
-          .nativeSession()
-          .openReceiver(
-              address,
-              new ReceiverOptions()
-                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-                  .autoAccept(false)
-                  .autoSettle(false)
-                  .creditWindow(initialCredits));
+      return nativeSession.openReceiver(
+          address,
+          new ReceiverOptions()
+              .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+              .autoAccept(false)
+              .autoSettle(false)
+              .creditWindow(initialCredits));
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }
@@ -166,7 +164,9 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void recoverAfterConnectionFailure() {
-    this.nativeReceiver = createNativeReceiver(this.connection, this.address, this.initialCredits);
+    this.nativeReceiver =
+        createNativeReceiver(
+            this.connection.nativeSession(false), this.address, this.initialCredits);
     startReceivingLoop();
   }
 

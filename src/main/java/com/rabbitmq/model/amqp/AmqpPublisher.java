@@ -92,7 +92,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   }
 
   void recoverAfterConnectionFailure() {
-    this.sender = this.createSender(this.connection.nativeSession(), this.address);
+    this.sender = this.createSender(this.connection.nativeSession(false), this.address);
   }
 
   @Override
