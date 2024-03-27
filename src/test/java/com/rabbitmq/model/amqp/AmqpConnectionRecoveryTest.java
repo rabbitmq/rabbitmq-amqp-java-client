@@ -176,7 +176,7 @@ public class AmqpConnectionRecoveryTest {
                 .backOffDelayPolicy(fixed(ofMillis(500)))
                 .connectionBuilder();
     try (Connection c = new AmqpConnection(builder)) {
-      c.management().queue().name(q).exclusive(true).declare();
+      c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
       try {
         stopBroker();
         assertThat(stateLatches.get(RECOVERING)).is(completed());
@@ -195,7 +195,7 @@ public class AmqpConnectionRecoveryTest {
         startBroker();
       }
       assertThat(stateLatches.get(OPEN)).is(completed());
-      c.management().queue().name(q).exclusive(true).declare();
+      c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
     }
   }
 }

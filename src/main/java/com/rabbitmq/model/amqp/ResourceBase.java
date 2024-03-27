@@ -46,16 +46,6 @@ abstract class ResourceBase implements Resource {
     this.state(state, null);
   }
 
-  protected boolean compareAndSetState(
-      State expectedState, State newState, Throwable failureCause) {
-    if (this.state.compareAndSet(expectedState, newState)) {
-      this.dispatch(expectedState, newState, failureCause);
-      return true;
-    } else {
-      return false;
-    }
-  }
-
   protected void state(Resource.State state, Throwable failureCause) {
     Resource.State previousState = this.state.getAndSet(state);
     if (state != previousState) {

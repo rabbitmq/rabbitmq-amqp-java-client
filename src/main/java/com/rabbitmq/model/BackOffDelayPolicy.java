@@ -21,6 +21,8 @@ import java.time.Duration;
 
 public interface BackOffDelayPolicy {
 
+  Duration TIMEOUT = Duration.ofMillis(Long.MAX_VALUE);
+
   Duration delay(int recoveryAttempt);
 
   static BackOffDelayPolicy fixed(Duration delay) {

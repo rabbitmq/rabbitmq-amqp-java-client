@@ -107,7 +107,7 @@ abstract class Utils {
 
   private static class NamedThreadFactory implements ThreadFactory {
 
-    private final ThreadFactory backingThreaFactory;
+    private final ThreadFactory backingThreadFactory;
 
     private final String prefix;
 
@@ -118,13 +118,13 @@ abstract class Utils {
     }
 
     private NamedThreadFactory(ThreadFactory backingThreadFactory, String prefix) {
-      this.backingThreaFactory = backingThreadFactory;
+      this.backingThreadFactory = backingThreadFactory;
       this.prefix = prefix;
     }
 
     @Override
     public Thread newThread(Runnable r) {
-      Thread thread = this.backingThreaFactory.newThread(r);
+      Thread thread = this.backingThreadFactory.newThread(r);
       thread.setName(prefix + count.getAndIncrement());
       return thread;
     }
@@ -208,6 +208,12 @@ abstract class Utils {
       return address.replace("/queue/", "");
     } else {
       return address;
+    }
+  }
+
+  static void throwIfInterrupted() throws InterruptedException {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new InterruptedException();
     }
   }
 }

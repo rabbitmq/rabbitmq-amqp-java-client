@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
@@ -394,6 +395,23 @@ public class ClientTest {
       assertThat(called).isFalse();
 
       c.close();
+    }
+  }
+
+  @Test
+  void connectionClosedInDisconnectedHandler() {
+    try (Client client = client()) {
+      String name = UUID.randomUUID().toString();
+      connection(
+          name,
+          client,
+          options ->
+              options.disconnectedHandler(
+                  new BiConsumer<Connection, DisconnectionEvent>() {
+                    @Override
+                    public void accept(
+                        Connection connection, DisconnectionEvent disconnectionEvent) {}
+                  }));
     }
   }
 }
