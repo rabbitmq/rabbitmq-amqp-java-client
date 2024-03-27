@@ -25,8 +25,10 @@ import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.*;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,6 +40,7 @@ public class TopologyRecoveryTest {
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = fixed(ofMillis(100));
   static Environment environment;
   TestInfo testInfo;
+  String connectionName;
   CountDownLatch recoveredLatch;
 
   @BeforeAll
@@ -49,6 +52,7 @@ public class TopologyRecoveryTest {
   void init(TestInfo info) {
     this.testInfo = info;
     this.recoveredLatch = new CountDownLatch(1);
+    this.connectionName = connectionName();
   }
 
   @AfterAll
@@ -156,13 +160,70 @@ public class TopologyRecoveryTest {
   }
 
   @Test
-  void autoDeleteExchangeAndExclusiveQueueShouldBeRedeclared() {
-    String connectionName = connectionName();
-    try (Connection connection = connection(connectionName)) {
+  void queueShouldNotBeRecoveredWhenNoTopologyRecovery() {
+    try (Connection connection =
+        connection(this.connectionName, this.recoveredLatch, b -> b.recovery().topology(false))) {
+      String q = queue();
+      connection.management().queue(q).autoDelete(false).exclusive(true).declare();
+      closeConnectionAndWaitForRecovery();
+
+      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
+    }
+  }
+
+  @Test
+  void resourceListenersShouldBeCalled() {
+    List<String> events = new CopyOnWriteArrayList<>();
+    try (Connection connection =
+        connection(
+            this.connectionName,
+            this.recoveredLatch,
+            b ->
+                b.listeners(
+                    context -> events.add("connection " + context.currentState().name())))) {
       String e = exchange();
       String q = queue();
-      connection.management().exchange().name(e).type(DIRECT).autoDelete(true).declare();
-      connection.management().queue().name(q).autoDelete(true).exclusive(true).declare();
+      connection.management().exchange(e).type(DIRECT).autoDelete(true).declare();
+      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
+
+      connection
+          .publisherBuilder()
+          .address("/exchange/" + e + "/foo")
+          .listeners(ctx -> events.add("publisher " + ctx.currentState().name()))
+          .build();
+      connection
+          .consumerBuilder()
+          .address(q)
+          .messageHandler((context, message) -> {})
+          .listeners(ctx -> events.add("consumer " + ctx.currentState().name()))
+          .build();
+
+      closeConnectionAndWaitForRecovery();
+
+      assertThat(events)
+          .containsExactly(
+              "connection OPENING",
+              "connection OPEN",
+              "publisher OPENING",
+              "publisher OPEN",
+              "consumer OPENING",
+              "consumer OPEN",
+              "connection RECOVERING",
+              "publisher RECOVERING",
+              "consumer RECOVERING",
+              "consumer OPEN",
+              "publisher OPEN",
+              "connection OPEN");
+    }
+  }
+
+  @Test
+  void autoDeleteExchangeAndExclusiveQueueShouldBeRedeclared() {
+    try (Connection connection = connection()) {
+      String e = exchange();
+      String q = queue();
+      connection.management().exchange(e).type(DIRECT).autoDelete(true).declare();
+      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
       connection.management().binding().sourceExchange(e).key("foo").destinationQueue(q).bind();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
@@ -178,9 +239,8 @@ public class TopologyRecoveryTest {
 
       assertThat(consumeLatch).is(completed());
 
-      closeConnection(connectionName);
+      closeConnectionAndWaitForRecovery();
 
-      assertThat(recoveredLatch).is(TestUtils.CountDownLatchConditions.completed());
       consumeLatch.set(new CountDownLatch(1));
 
       publisher.publish(publisher.message(), context -> {});
@@ -200,13 +260,16 @@ public class TopologyRecoveryTest {
     return "c-" + TestUtils.name(this.testInfo);
   }
 
-  Connection connection(String name) {
-    return this.connection(name, this.recoveredLatch);
+  Connection connection() {
+    return this.connection(this.connectionName, this.recoveredLatch, b -> {});
   }
 
-  Connection connection(String name, CountDownLatch recoveredLatch) {
+  Connection connection(
+      String name,
+      CountDownLatch recoveredLatch,
+      java.util.function.Consumer<AmqpConnectionBuilder> builderCallback) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
-    return builder
+    builder
         .name(name)
         .listeners(
             context -> {
@@ -217,7 +280,13 @@ public class TopologyRecoveryTest {
             })
         .recovery()
         .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
-        .connectionBuilder()
-        .build();
+        .connectionBuilder();
+    builderCallback.accept(builder);
+    return builder.build();
+  }
+
+  void closeConnectionAndWaitForRecovery() {
+    closeConnection(this.connectionName);
+    assertThat(recoveredLatch).is(TestUtils.CountDownLatchConditions.completed());
   }
 }

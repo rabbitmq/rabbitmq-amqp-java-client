@@ -137,6 +137,11 @@ class AmqpManagement implements Management {
   }
 
   @Override
+  public QueueSpecification queue(String name) {
+    return this.queue().name(name);
+  }
+
+  @Override
   public QueueDeletion queueDeletion() {
     return name -> {
       this.topologyListener.queueDeleted(name);
@@ -150,6 +155,11 @@ class AmqpManagement implements Management {
   @Override
   public ExchangeSpecification exchange() {
     return new AmqpExchangeSpecification(this);
+  }
+
+  @Override
+  public ExchangeSpecification exchange(String name) {
+    return this.exchange().name(name);
   }
 
   @Override

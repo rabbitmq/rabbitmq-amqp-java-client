@@ -24,9 +24,13 @@ public interface Management extends AutoCloseable {
 
   QueueSpecification queue();
 
+  QueueSpecification queue(String name);
+
   QueueDeletion queueDeletion();
 
   ExchangeSpecification exchange();
+
+  ExchangeSpecification exchange(String name);
 
   ExchangeDeletion exchangeDeletion();
 

@@ -114,7 +114,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
     @Override
     public RecoveryConfiguration topology(boolean activated) {
-      this.topology = true;
+      this.topology = activated;
       return this;
     }
 
