@@ -158,16 +158,19 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
 
   @Override
   public Management.QuorumQueueSpecification quorum() {
+    this.type(QueueType.QUORUM);
     return new AmqpQuorumQueueSpecification(this);
   }
 
   @Override
   public Management.ClassicQueueSpecification classic() {
-    return null;
+    this.type(QueueType.CLASSIC);
+    return new AmqpClassicQueueSpecification(this);
   }
 
   @Override
   public Management.StreamSpecification stream() {
+    this.type(QueueType.STREAM);
     return new AmqpStreamSpecification(this);
   }
 
@@ -182,7 +185,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   }
 
   @Override
-  public void declare() {
+  public Management.QueueInfo declare() {
     // TODO check name is specified (server-named entities not allowed)
     // generate a random name if name not specified
     Map<String, Object> body = new LinkedHashMap<>();
@@ -190,8 +193,9 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     body.put("exclusive", this.exclusive);
     body.put("auto_delete", this.autoDelete);
     body.put("arguments", this.arguments);
-    this.management.declareQueue(this.name, body);
+    Management.QueueInfo info = this.management.declareQueue(this.name, body);
     this.management.recovery().queueDeclared(this);
+    return info;
   }
 
   private Map<String, Object> arg(String key, Object value) {

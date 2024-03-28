@@ -19,8 +19,9 @@ package com.rabbitmq.model.amqp;
 
 import static java.lang.String.format;
 import static java.util.Collections.singletonMap;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.fail;
 
+import com.rabbitmq.model.Management;
 import java.lang.annotation.*;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -35,6 +36,7 @@ import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.UnsignedLong;
+import org.assertj.core.api.AbstractObjectAssert;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
@@ -231,4 +233,102 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfRabbitMqCtlNotSetCondition.class)
   @interface DisabledIfRabbitMqCtlNotSet {}
+
+  static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {
+
+    private QueueInfoAssert(Management.QueueInfo queueInfo) {
+      super(queueInfo, QueueInfoAssert.class);
+    }
+
+    static QueueInfoAssert assertThat(Management.QueueInfo queueInfo) {
+      return new QueueInfoAssert(queueInfo);
+    }
+
+    QueueInfoAssert hasName(String name) {
+      isNotNull();
+      if (!actual.name().equals(name)) {
+        fail("Queue should be named '%s' but is '%s'", name, actual.name());
+      }
+      return this;
+    }
+
+    QueueInfoAssert hasConsumerCount(int consumerCount) {
+      isNotNull();
+      if (Integer.compareUnsigned(actual.consumerCount(), consumerCount) != 0) {
+        fail(
+            "Queue should have %s consumer(s) but has %s",
+            Integer.toUnsignedString(consumerCount),
+            Integer.toUnsignedString(actual.consumerCount()));
+      }
+      return this;
+    }
+
+    QueueInfoAssert hasNoConsumers() {
+      return this.hasConsumerCount(0);
+    }
+
+    QueueInfoAssert hasMessageCount(long messageCount) {
+      isNotNull();
+      if (Long.compareUnsigned(actual.messageCount(), messageCount) != 0) {
+        fail(
+            "Queue should contains %s messages(s) but contains %s",
+            Long.toUnsignedString(messageCount), Long.toUnsignedString(actual.messageCount()));
+      }
+      return this;
+    }
+
+    QueueInfoAssert isEmpty() {
+      return this.hasMessageCount(0);
+    }
+
+    QueueInfoAssert is(Management.QueueType type) {
+      isNotNull();
+      if (actual.type() != type) {
+        fail("Queue should be of type %s but is %s", type.name(), actual.type().name());
+      }
+      return this;
+    }
+
+    QueueInfoAssert hasArgument(String key, Object value) {
+      isNotNull();
+      if (!actual.arguments().containsKey(key) || !actual.arguments().get(key).equals(value)) {
+        fail(
+            "Queue should have argument %s = %s, but does not (arguments: %s)",
+            key, value.toString(), actual.arguments().toString());
+      }
+      return this;
+    }
+
+    QueueInfoAssert isDurable() {
+      return this.flag("durable", actual.durable(), true);
+    }
+
+    QueueInfoAssert isNotDurable() {
+      return this.flag("durable", actual.durable(), false);
+    }
+
+    QueueInfoAssert isAutoDelete() {
+      return this.flag("auto-delete", actual.autoDelete(), true);
+    }
+
+    QueueInfoAssert isNotAutoDelete() {
+      return this.flag("auto-delete", actual.autoDelete(), false);
+    }
+
+    QueueInfoAssert isExclusive() {
+      return this.flag("exclusive", actual.exclusive(), true);
+    }
+
+    QueueInfoAssert isNotExclusive() {
+      return this.flag("exclusive", actual.exclusive(), false);
+    }
+
+    private QueueInfoAssert flag(String label, boolean expected, boolean actual) {
+      isNotNull();
+      if (expected != actual) {
+        fail("Queue should have %s = %b but does not", label, actual);
+      }
+      return this;
+    }
+  }
 }

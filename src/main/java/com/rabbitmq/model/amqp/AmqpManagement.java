@@ -142,6 +142,16 @@ class AmqpManagement implements Management {
   }
 
   @Override
+  public QueueInfo queueInfo(String name) {
+    try {
+      Map<String, Object> queueInfo = get(queueLocation(name)).responseBodyAsMap();
+      return new DefaultQueueInfo(queueInfo);
+    } catch (ClientException e) {
+      throw new ModelException("Error while fetching queue '%s' information", name);
+    }
+  }
+
+  @Override
   public QueueDeletion queueDeletion() {
     return name -> {
       this.topologyListener.queueDeleted(name);
@@ -200,8 +210,9 @@ class AmqpManagement implements Management {
     return !this.closed.get();
   }
 
-  void declareQueue(String name, Map<String, Object> body) {
-    this.declare(body, queueLocation(name), List.of(CODE_200, CODE_201));
+  QueueInfo declareQueue(String name, Map<String, Object> body) {
+    return new DefaultQueueInfo(
+        this.declare(body, queueLocation(name), List.of(CODE_200, CODE_201)));
   }
 
   void declareExchange(String name, Map<String, Object> body) {
@@ -418,5 +429,116 @@ class AmqpManagement implements Management {
 
   TopologyListener recovery() {
     return this.topologyListener;
+  }
+
+  private static class DefaultQueueInfo implements QueueInfo {
+
+    private final String name;
+    private final boolean durable;
+    private final boolean autoDelete;
+    private final boolean exclusive;
+    private final QueueType type;
+    private final Map<String, Object> arguments;
+    private final String leader;
+    private final List<String> replicas;
+    private final long messageCount;
+    private final int consumerCount;
+
+    @SuppressWarnings("unchecked")
+    private DefaultQueueInfo(Map<String, Object> response) {
+      this.name = (String) response.get("name");
+      this.durable = (Boolean) response.get("durable");
+      this.autoDelete = (Boolean) response.get("auto_delete");
+      this.exclusive = (Boolean) response.get("exclusive");
+      this.type = QueueType.valueOf(((String) response.get("type")).toUpperCase(Locale.ENGLISH));
+      this.arguments = Collections.unmodifiableMap((Map<String, Object>) response.get("arguments"));
+      this.leader = (String) response.get("leader");
+      String[] replicas = (String[]) response.get("replicas");
+      if (replicas == null || replicas.length == 0) {
+        this.replicas = Collections.emptyList();
+      } else {
+        this.replicas = List.of(replicas);
+      }
+      this.messageCount = ((Number) response.get("message_count")).longValue();
+      this.consumerCount = ((Number) response.get("consumer_count")).intValue();
+    }
+
+    @Override
+    public String name() {
+      return this.name;
+    }
+
+    @Override
+    public boolean durable() {
+      return this.durable;
+    }
+
+    @Override
+    public boolean autoDelete() {
+      return this.autoDelete;
+    }
+
+    @Override
+    public boolean exclusive() {
+      return this.exclusive;
+    }
+
+    @Override
+    public QueueType type() {
+      return this.type;
+    }
+
+    @Override
+    public Map<String, Object> arguments() {
+      return this.arguments;
+    }
+
+    @Override
+    public String leader() {
+      return this.leader;
+    }
+
+    @Override
+    public List<String> replicas() {
+      return this.replicas;
+    }
+
+    @Override
+    public long messageCount() {
+      return this.messageCount;
+    }
+
+    @Override
+    public int consumerCount() {
+      return this.consumerCount;
+    }
+
+    @Override
+    public String toString() {
+      return "DefaultQueueInfo{"
+          + "name='"
+          + name
+          + '\''
+          + ", durable="
+          + durable
+          + ", autoDelete="
+          + autoDelete
+          + ", exclusive="
+          + exclusive
+          + ", type="
+          + type
+          + ", arguments="
+          + arguments
+          + ", leader='"
+          + leader
+          + '\''
+          + ", replicas="
+          + replicas
+          + ", messageCount="
+          + messageCount
+          + ", consumerCount="
+          + consumerCount
+          + '}';
+    }
   }
 }

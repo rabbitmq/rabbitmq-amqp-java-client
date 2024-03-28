@@ -396,6 +396,8 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   private void maybeReleaseManagementResources() {
+    // FIXME keep the management reference and make it recover
+    // users can keep a reference to it
     try {
       this.managementLock.lock();
       if (this.management != null) {

@@ -21,6 +21,7 @@ import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.model.amqp.TestUtils.QueueInfoAssert.assertThat;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -33,18 +34,61 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 public class AmqpTest {
 
+  static Environment environment;
+  Connection connection;
+
+  @BeforeAll
+  static void initAll() {
+    environment = environmentBuilder().build();
+  }
+
+  @BeforeEach
+  void init() {
+    this.connection = environment.connectionBuilder().build();
+  }
+
+  @AfterEach
+  void tearDown() {
+    this.connection.close();
+  }
+
+  @AfterAll
+  static void tearDownAll() {
+    environment.close();
+  }
+
+  @Test
+  void queueInfoTest(TestInfo info) {
+    String q = TestUtils.name(info);
+    Management management = connection.management();
+    try {
+      management.queue(q).quorum().queue().declare();
+
+      Management.QueueInfo queueInfo = management.queueInfo(q);
+      assertThat(queueInfo)
+          .hasName(q)
+          .is(QUORUM)
+          .isDurable()
+          .isNotAutoDelete()
+          .isNotExclusive()
+          .isEmpty()
+          .hasNoConsumers()
+          .hasArgument("x-queue-type", "quorum");
+
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
   @Test
   void queueDeclareDeletePublishConsume(TestInfo info) {
     String q = TestUtils.name(info);
-    Environment environment = environmentBuilder().build();
-    Connection connection = environment.connectionBuilder().build();
     try {
       connection.management().queue().name(q).quorum().queue().declare();
       String address = "/amq/queue/" + q;
@@ -70,6 +114,9 @@ public class AmqpTest {
 
       assertThat(confirmLatch).is(completed());
 
+      Management.QueueInfo queueInfo = connection.management().queueInfo(q);
+      assertThat(queueInfo).hasName(q).hasNoConsumers().hasMessageCount(messageCount);
+
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       com.rabbitmq.model.Consumer consumer =
           connection
@@ -82,12 +129,14 @@ public class AmqpTest {
                   })
               .build();
       assertThat(consumeLatch).is(completed());
+
+      queueInfo = connection.management().queueInfo(q);
+      assertThat(queueInfo).hasConsumerCount(1).isEmpty();
+
       consumer.close();
       publisher.close();
     } finally {
       connection.management().queueDeletion().delete(q);
-      connection.close();
-      environment.close();
     }
   }
 
@@ -100,8 +149,6 @@ public class AmqpTest {
     String rk = "foo";
     Map<String, Object> bindingArguments =
         addBindingArguments ? singletonMap("foo", "bar") : emptyMap();
-    Environment environment = environmentBuilder().build();
-    Connection connection = environment.connectionBuilder().build();
     Management management = connection.management();
     try {
       management.exchange().name(e1).type(DIRECT).declare();
@@ -174,8 +221,6 @@ public class AmqpTest {
       management.exchangeDeletion().delete(e2);
       management.exchangeDeletion().delete(e1);
       management.queueDeletion().delete(q);
-
-      environment.close();
     }
   }
 }

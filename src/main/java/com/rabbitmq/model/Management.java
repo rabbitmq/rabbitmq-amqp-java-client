@@ -18,6 +18,7 @@
 package com.rabbitmq.model;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 public interface Management extends AutoCloseable {
@@ -25,6 +26,8 @@ public interface Management extends AutoCloseable {
   QueueSpecification queue();
 
   QueueSpecification queue(String name);
+
+  QueueInfo queueInfo(String name);
 
   QueueDeletion queueDeletion();
 
@@ -87,8 +90,7 @@ public interface Management extends AutoCloseable {
 
     QueueSpecification argument(String key, Object value);
 
-    // TODO consider returning a QueueStatus object with some info after creation
-    void declare();
+    QueueInfo declare();
   }
 
   interface QuorumQueueSpecification {
@@ -264,5 +266,28 @@ public interface Management extends AutoCloseable {
     UnbindSpecification arguments(Map<String, Object> arguments);
 
     void unbind();
+  }
+
+  interface QueueInfo {
+
+    String name();
+
+    boolean durable();
+
+    boolean autoDelete();
+
+    boolean exclusive();
+
+    QueueType type();
+
+    Map<String, Object> arguments();
+
+    String leader();
+
+    List<String> replicas();
+
+    long messageCount();
+
+    int consumerCount();
   }
 }
