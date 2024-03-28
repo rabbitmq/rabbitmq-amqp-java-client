@@ -12,6 +12,7 @@ wait_for_message() {
   done
 }
 
+mkdir rabbitmq-configuration
 echo "loopback_users = none" >> rabbitmq-configuration/rabbitmq.conf
 
 echo "Running RabbitMQ ${RABBITMQ_IMAGE}"
