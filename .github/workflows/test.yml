@@ -20,8 +20,6 @@ jobs:
           cache: 'maven'
       - name: Start broker
         run: ci/start-broker.sh
-        env:
-          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:amqp-management-otp-max-bazel'
       - name: Display Java version
         run: ./mvnw --version
       - name: Test
