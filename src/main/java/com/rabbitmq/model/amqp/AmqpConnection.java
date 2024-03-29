@@ -280,7 +280,6 @@ class AmqpConnection extends ResourceBase implements Connection {
         LOGGER.debug("Recovered topology");
       }
 
-
       LOGGER.info("Recovered connection to {}", connectionParameters.label());
       this.state(OPEN);
     } catch (Exception ex) {

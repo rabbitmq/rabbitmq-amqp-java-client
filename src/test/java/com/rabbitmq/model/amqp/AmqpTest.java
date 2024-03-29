@@ -21,7 +21,7 @@ import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
-import static com.rabbitmq.model.amqp.TestUtils.QueueInfoAssert.assertThat;
+import static com.rabbitmq.model.amqp.TestUtils.assertThat;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;

@@ -19,8 +19,9 @@ package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.BackOffDelayPolicy.fixed;
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
+import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.amqp.Cli.closeConnection;
-import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchReferenceConditions.completed;
+import static com.rabbitmq.model.amqp.TestUtils.assertThat;
 import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,7 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.*;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
-public class EntityRecoveryTest {
+public class TopologyRecoveryTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = fixed(ofMillis(100));
   static Environment environment;
@@ -237,14 +238,97 @@ public class EntityRecoveryTest {
 
       publisher.publish(publisher.message(), context -> {});
 
-      assertThat(consumeLatch).is(completed());
+      assertThat(consumeLatch).completes();
 
       closeConnectionAndWaitForRecovery();
 
       consumeLatch.set(new CountDownLatch(1));
 
       publisher.publish(publisher.message(), context -> {});
-      assertThat(consumeLatch).is(completed());
+      assertThat(consumeLatch).completes();
+    }
+  }
+
+  @Test
+  void autoDeleteExchangeAndExclusiveQueueWithE2eBindingShouldBeRedeclared() {
+    try (Connection connection = connection()) {
+      String e1 = exchange();
+      String e2 = exchange();
+      String q = queue();
+      connection.management().exchange(e1).type(FANOUT).autoDelete(true).declare();
+      connection.management().exchange(e2).type(FANOUT).autoDelete(true).declare();
+      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
+      connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
+      connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
+
+      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e1).build();
+      connection
+          .consumerBuilder()
+          .address(q)
+          .messageHandler((context, message) -> consumeLatch.get().countDown())
+          .build();
+
+      publisher.publish(publisher.message(), context -> {});
+
+      assertThat(consumeLatch).completes();
+
+      closeConnectionAndWaitForRecovery();
+
+      consumeLatch.set(new CountDownLatch(1));
+
+      publisher.publish(publisher.message(), context -> {});
+      assertThat(consumeLatch).completes();
+    }
+  }
+
+  @Test
+  void deletedBindingIsNotRecovered() {
+    String e = exchange();
+    String q = queue();
+    Connection connection = connection();
+    try {
+      connection.management().exchange(e).type(FANOUT).declare();
+      connection.management().queue(q).declare();
+      connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
+
+      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
+      Consumer consumer =
+          connection
+              .consumerBuilder()
+              .address(q)
+              .messageHandler(
+                  (context, message) -> {
+                    context.accept();
+                    consumeLatch.get().countDown();
+                  })
+              .build();
+
+      publisher.publish(publisher.message(), context -> {});
+
+      assertThat(consumeLatch).completes();
+
+      connection.management().unbind().sourceExchange(e).destinationQueue(q).unbind();
+
+      closeConnectionAndWaitForRecovery();
+
+      consumer.close();
+
+      CountDownLatch acceptedLatch = new CountDownLatch(1);
+      publisher.publish(
+          publisher.message(),
+          context -> {
+            if (context.status() == Publisher.Status.FAILED) {
+              acceptedLatch.countDown();
+            }
+          });
+      assertThat(acceptedLatch).completes();
+      TestUtils.assertThat(connection.management().queueInfo(q)).isEmpty();
+    } finally {
+      connection.management().queueDeletion().delete(q);
+      connection.management().exchangeDeletion().delete(e);
+      connection.close();
     }
   }
 
@@ -287,6 +371,6 @@ public class EntityRecoveryTest {
 
   void closeConnectionAndWaitForRecovery() {
     closeConnection(this.connectionName);
-    assertThat(recoveredLatch).is(TestUtils.CountDownLatchConditions.completed());
+    assertThat(recoveredLatch).completes();
   }
 }

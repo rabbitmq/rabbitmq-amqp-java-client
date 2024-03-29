@@ -130,6 +130,47 @@ public abstract class TestUtils {
     }
   }
 
+  static QueueInfoAssert assertThat(Management.QueueInfo queueInfo) {
+    return new QueueInfoAssert(queueInfo);
+  }
+
+  static CountDownLatchAssert assertThat(AtomicReference<CountDownLatch> reference) {
+    return new CountDownLatchAssert(reference);
+  }
+
+  static CountDownLatchAssert assertThat(CountDownLatch latch) {
+    return new CountDownLatchAssert(latch);
+  }
+
+  static class CountDownLatchAssert
+      extends AbstractObjectAssert<CountDownLatchAssert, CountDownLatch> {
+
+    private CountDownLatchAssert(CountDownLatch latch) {
+      super(latch, CountDownLatchAssert.class);
+    }
+
+    private CountDownLatchAssert(AtomicReference<CountDownLatch> reference) {
+      super(reference.get(), CountDownLatchAssert.class);
+    }
+
+    CountDownLatchAssert completes() {
+      return this.completes(DEFAULT_CONDITION_TIMEOUT);
+    }
+
+    CountDownLatchAssert completes(Duration timeout) {
+      try {
+        boolean completed = actual.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (!completed) {
+          fail("Latch timed out after %d ms", timeout.toMillis());
+        }
+      } catch (InterruptedException e) {
+        Thread.interrupted();
+        throw new RuntimeException(e);
+      }
+      return this;
+    }
+  }
+
   public static class CountDownLatchConditions {
 
     public static Condition<CountDownLatch> completed() {
@@ -238,10 +279,6 @@ public abstract class TestUtils {
 
     private QueueInfoAssert(Management.QueueInfo queueInfo) {
       super(queueInfo, QueueInfoAssert.class);
-    }
-
-    static QueueInfoAssert assertThat(Management.QueueInfo queueInfo) {
-      return new QueueInfoAssert(queueInfo);
     }
 
     QueueInfoAssert hasName(String name) {
