@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.*;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
-public class TopologyRecoveryTest {
+public class EntityRecoveryTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = fixed(ofMillis(100));
   static Environment environment;

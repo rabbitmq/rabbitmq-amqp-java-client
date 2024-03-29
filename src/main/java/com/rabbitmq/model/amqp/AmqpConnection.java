@@ -53,7 +53,7 @@ class AmqpConnection extends ResourceBase implements Connection {
   private final List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
   private final List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
-  private volatile TopologyRecovery topologyRecovery;
+  private volatile EntityRecovery entityRecovery;
   private final Thread recoveryLoop;
   private final BlockingQueue<Runnable> recoveryRequestQueue;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
@@ -196,7 +196,7 @@ class AmqpConnection extends ResourceBase implements Connection {
     TopologyListener topologyListener;
     if (builder.recoveryConfiguration().topology()) {
       RecordingTopologyListener rtl = new RecordingTopologyListener();
-      this.topologyRecovery = new TopologyRecovery(this, rtl);
+      this.entityRecovery = new EntityRecovery(this, rtl);
       topologyListener = rtl;
     } else {
       topologyListener = TopologyListener.NO_OP;
@@ -272,9 +272,14 @@ class AmqpConnection extends ResourceBase implements Connection {
     }
 
     try {
-      this.recoverTopology();
-      this.recoverConsumers();
-      this.recoverPublishers();
+      if (recoveryConfiguration.topology()) {
+        LOGGER.debug("Recovering topology");
+        this.recoverTopology();
+        this.recoverConsumers();
+        this.recoverPublishers();
+        LOGGER.debug("Recovered topology");
+      }
+
 
       LOGGER.info("Recovered connection to {}", connectionParameters.label());
       this.state(OPEN);
@@ -324,9 +329,9 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   private void recoverTopology() throws InterruptedException {
-    if (this.topologyRecovery != null) {
+    if (this.entityRecovery != null) {
       throwIfInterrupted();
-      this.topologyRecovery.recover();
+      this.entityRecovery.recover();
     }
   }
 

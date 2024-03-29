@@ -6,7 +6,7 @@
     </appender>
 
     <logger name="com.rabbitmq.model" level="warn" />
-    <logger name="com.rabbitmq.model.amqp.TopologyRecovery" level="warn" />
+    <logger name="com.rabbitmq.model.amqp.EntityRecovery" level="warn" />
     <logger name="com.rabbitmq.model.amqp.AmqpConnection" level="warn" />
 
     <root level="warn">

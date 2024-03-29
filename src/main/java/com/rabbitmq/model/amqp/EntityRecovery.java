@@ -23,15 +23,15 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class TopologyRecovery {
+class EntityRecovery {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(TopologyRecovery.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(EntityRecovery.class);
 
   private final RecordingTopologyListener listener;
   private final AmqpConnection connection;
   private final RecordingTopologyListener.Visitor recoveryVisitor;
 
-  TopologyRecovery(AmqpConnection connection, RecordingTopologyListener listener) {
+  EntityRecovery(AmqpConnection connection, RecordingTopologyListener listener) {
     this.connection = connection;
     this.listener = listener;
     this.recoveryVisitor =
