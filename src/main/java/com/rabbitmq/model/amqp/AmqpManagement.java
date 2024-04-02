@@ -56,79 +56,24 @@ class AmqpManagement implements Management {
   private static final String CODE_201 = "201";
   private static final String CODE_204 = "204";
 
-  private final Session session;
-  private final Sender sender;
-  private final Receiver receiver;
+  private final AmqpConnection connection;
+  private volatile Session session;
+  private volatile Sender sender;
+  private volatile Receiver receiver;
+  private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Duration rpcTimeout = Duration.ofSeconds(10);
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
       new ConcurrentHashMap<>();
-  private final Thread receiveLoop;
+  private volatile Thread receiveLoop;
   private final TopologyListener topologyListener;
 
   AmqpManagement(AmqpManagementParameters parameters) {
-    try {
-      this.session = parameters.connection().nativeConnection().openSession();
-      String linkPairName = "management-link-pair";
-      Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
-      this.sender =
-          session.openSender(
-              MANAGEMENT_NODE_ADDRESS,
-              new SenderOptions()
-                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                  .linkName(linkPairName)
-                  .properties(properties));
-
-      this.receiver =
-          session.openReceiver(
-              MANAGEMENT_NODE_ADDRESS,
-              new ReceiverOptions()
-                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                  .linkName(linkPairName)
-                  .properties(properties)
-                  .creditWindow(100));
-
-      this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-      this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-      Runnable receiveTask =
-          () -> {
-            try {
-              while (!Thread.currentThread().isInterrupted()) {
-                Delivery delivery = receiver.receive(100, MILLISECONDS);
-                if (delivery != null) {
-                  Object correlationId = delivery.message().correlationId();
-                  if (correlationId instanceof UUID) {
-                    OutstandingRequest request = outstandingRequests.remove(correlationId);
-                    if (request != null) {
-                      request.complete(delivery.message());
-                    } else {
-                      LOGGER.info("Could not find outstanding request {}", correlationId);
-                    }
-                  } else {
-                    LOGGER.info("Could not correlate inbound message with managemement request");
-                  }
-                }
-              }
-            } catch (ClientConnectionRemotelyClosedException
-                | ClientLinkRemotelyClosedException e) {
-              // receiver is closed
-            } catch (ClientException e) {
-              java.util.function.Consumer<String> log =
-                  this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
-              log.accept("Error while polling AMQP receiver");
-            }
-          };
-      this.receiveLoop =
-          newThread(
-              "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
-      this.receiveLoop.start();
-      this.topologyListener =
-          parameters.topologyListener() == null
-              ? TopologyListener.NO_OP
-              : parameters.topologyListener();
-    } catch (Exception e) {
-      throw new ModelException(e);
-    }
+    this.connection = parameters.connection();
+    this.topologyListener =
+        parameters.topologyListener() == null
+            ? TopologyListener.NO_OP
+            : parameters.topologyListener();
   }
 
   @Override
@@ -200,14 +145,74 @@ class AmqpManagement implements Management {
     }
   }
 
+  void init() {
+    if (this.initialized.compareAndSet(false, true)) {
+      try {
+        this.session = this.connection.nativeConnection().openSession();
+        String linkPairName = "management-link-pair";
+        Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
+        this.sender =
+            session.openSender(
+                MANAGEMENT_NODE_ADDRESS,
+                new SenderOptions()
+                    .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                    .linkName(linkPairName)
+                    .properties(properties));
+
+        this.receiver =
+            session.openReceiver(
+                MANAGEMENT_NODE_ADDRESS,
+                new ReceiverOptions()
+                    .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                    .linkName(linkPairName)
+                    .properties(properties)
+                    .creditWindow(100));
+
+        this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+        this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+        Runnable receiveTask =
+            () -> {
+              try {
+                while (!Thread.currentThread().isInterrupted()) {
+                  Delivery delivery = receiver.receive(100, MILLISECONDS);
+                  if (delivery != null) {
+                    Object correlationId = delivery.message().correlationId();
+                    if (correlationId instanceof UUID) {
+                      OutstandingRequest request = outstandingRequests.remove(correlationId);
+                      if (request != null) {
+                        request.complete(delivery.message());
+                      } else {
+                        LOGGER.info("Could not find outstanding request {}", correlationId);
+                      }
+                    } else {
+                      LOGGER.info("Could not correlate inbound message with managemement request");
+                    }
+                  }
+                }
+              } catch (ClientConnectionRemotelyClosedException
+                  | ClientLinkRemotelyClosedException e) {
+                // receiver is closed
+              } catch (ClientException e) {
+                java.util.function.Consumer<String> log =
+                    this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
+                log.accept("Error while polling AMQP receiver");
+              }
+            };
+        this.receiveLoop =
+            newThread(
+                "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
+        this.receiveLoop.start();
+      } catch (Exception e) {
+        throw new ModelException(e);
+      }
+    }
+  }
+
   void releaseResources() {
     if (this.receiveLoop != null) {
       this.receiveLoop.interrupt();
     }
-  }
-
-  boolean isOpen() {
-    return !this.closed.get();
+    this.initialized.set(false);
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {

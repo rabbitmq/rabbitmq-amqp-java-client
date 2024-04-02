@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
@@ -45,8 +43,7 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConnection.class);
   private final AmqpEnvironment environment;
-  private volatile AmqpManagement management;
-  private final Lock managementLock = new ReentrantLock();
+  private final AmqpManagement management;
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Session nativeSession;
@@ -95,7 +92,7 @@ class AmqpConnection extends ResourceBase implements Connection {
             if (this.closed.compareAndSet(false, true)) {
               ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
               this.state(CLOSING, failureCause);
-              this.maybeReleaseManagementResources();
+              this.releaseManagementResources();
               this.state(CLOSED, failureCause);
             }
           };
@@ -103,24 +100,18 @@ class AmqpConnection extends ResourceBase implements Connection {
       this.recoveryLoop = null;
     }
     this.nativeConnection = connect(connectionParameters, builder.name(), disconnectHandler);
+    this.management = createManagement();
     this.state(OPEN);
   }
 
   @Override
   public Management management() {
     checkOpen();
-    return managementNoCheck();
+    return this.managementNoCheck();
   }
 
   Management managementNoCheck() {
-    try {
-      this.managementLock.lock();
-      if (this.management == null || !this.management.isOpen()) {
-        this.management = createManagement();
-      }
-    } finally {
-      this.managementLock.unlock();
-    }
+    this.management.init();
     return this.management;
   }
 
@@ -148,7 +139,7 @@ class AmqpConnection extends ResourceBase implements Connection {
       if (this.recoveryLoop != null) {
         this.recoveryLoop.interrupt();
       }
-      this.maybeCloseManagement();
+      this.closeManagement();
       for (AmqpPublisher publisher : this.publishers) {
         publisher.close();
       }
@@ -249,7 +240,7 @@ class AmqpConnection extends ResourceBase implements Connection {
     this.changeStateOfConsumers(RECOVERING, failureCause);
     this.nativeConnection = null;
     this.nativeSession = null;
-    this.maybeReleaseManagementResources();
+    this.releaseManagementResources();
     try {
       this.recoveringConnection.set(true);
       this.nativeConnection =
@@ -388,29 +379,12 @@ class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
-  private void maybeCloseManagement() {
-    try {
-      this.managementLock.lock();
-      if (this.management != null) {
-        this.management.close();
-      }
-    } finally {
-      this.managementLock.unlock();
-    }
+  private void closeManagement() {
+    this.management.close();
   }
 
-  private void maybeReleaseManagementResources() {
-    // FIXME keep the management reference and make it recover
-    // users can keep a reference to it
-    try {
-      this.managementLock.lock();
-      if (this.management != null) {
-        this.management.releaseResources();
-        this.management = null;
-      }
-    } finally {
-      this.managementLock.unlock();
-    }
+  private void releaseManagementResources() {
+    this.management.releaseResources();
   }
 
   Session nativeSession() {
