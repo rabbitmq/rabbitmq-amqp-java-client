@@ -178,7 +178,7 @@ public class TopologyRecoveryTest {
   }
 
   @Test
-  void resourceListenersShouldBeCalled() {
+  void resourceListenersShouldBeCalled() throws Exception {
     List<String> events = new CopyOnWriteArrayList<>();
     try (Connection connection =
         connection(
@@ -208,20 +208,24 @@ public class TopologyRecoveryTest {
 
       closeConnectionAndWaitForRecovery();
 
-      assertThat(events)
-          .containsExactly(
-              "connection OPENING",
-              "connection OPEN",
-              "publisher OPENING",
-              "publisher OPEN",
-              "consumer OPENING",
-              "consumer OPEN",
-              "connection RECOVERING",
-              "publisher RECOVERING",
-              "consumer RECOVERING",
-              "consumer OPEN",
-              "publisher OPEN",
-              "connection OPEN");
+      String[] expectedStates =
+          new String[] {
+            "connection OPENING",
+            "connection OPEN",
+            "publisher OPENING",
+            "publisher OPEN",
+            "consumer OPENING",
+            "consumer OPEN",
+            "connection RECOVERING",
+            "publisher RECOVERING",
+            "consumer RECOVERING",
+            "consumer OPEN",
+            "publisher OPEN",
+            "connection OPEN"
+          };
+
+      waitAtMost(() -> events.size() == expectedStates.length);
+      assertThat(events).containsExactly(expectedStates);
     }
   }
 
