@@ -23,6 +23,7 @@ import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.amqp.Cli.closeConnection;
 import static com.rabbitmq.model.amqp.Cli.exchangeExists;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
+import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -419,17 +420,17 @@ public class TopologyRecoveryTest {
   }
 
   @Test
-  void closedConsumerIsNotRecovered() {
+  void closedConsumerIsNotRecovered() throws Exception {
     String q = queue();
     Connection connection = connection();
     try {
       connection.management().queue(q).declare();
       Consumer consumer =
           connection.consumerBuilder().address(q).messageHandler((ctx, m) -> {}).build();
-      assertThat(connection.management().queueInfo(q)).hasConsumerCount(1);
+      waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 1);
       consumer.close();
       closeConnectionAndWaitForRecovery();
-      assertThat(connection.management().queueInfo(q)).hasNoConsumers();
+      waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 0);
     } finally {
       connection.management().queueDeletion().delete(q);
       connection.close();
