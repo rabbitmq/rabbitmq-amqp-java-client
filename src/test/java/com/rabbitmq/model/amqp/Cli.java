@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -126,6 +127,11 @@ abstract class Cli {
 
   private static void closeConnection(ConnectionInfo ci) {
     rabbitmqctl("close_connection '" + ci.getPid() + "' 'Closed via rabbitmqctl'");
+  }
+
+  static boolean exchangeExists(String exchange) {
+    String output = rabbitmqctl("list_exchanges -s name").output();
+    return Arrays.asList(output.split("\n")).contains(exchange);
   }
 
   static List<ConnectionInfo> listConnections() {
