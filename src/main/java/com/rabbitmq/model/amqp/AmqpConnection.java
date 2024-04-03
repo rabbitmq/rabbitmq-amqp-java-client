@@ -139,6 +139,13 @@ class AmqpConnection extends ResourceBase implements Connection {
       if (this.recoveryLoop != null) {
         this.recoveryLoop.interrupt();
       }
+      if (this.topologyListener instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) this.topologyListener).close();
+        } catch (Exception e) {
+          LOGGER.info("Error while closing topology listener", e);
+        }
+      }
       this.closeManagement();
       for (AmqpPublisher publisher : this.publishers) {
         publisher.close();

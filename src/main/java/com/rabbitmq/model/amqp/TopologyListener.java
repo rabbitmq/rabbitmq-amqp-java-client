@@ -18,6 +18,9 @@
 package com.rabbitmq.model.amqp;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 interface TopologyListener {
 
@@ -40,48 +43,7 @@ interface TopologyListener {
   void consumerDeleted(long id, String address);
 
   static TopologyListener compose(List<TopologyListener> listeners) {
-    return new TopologyListener() {
-
-      @Override
-      public void exchangeDeclared(AmqpExchangeSpecification specification) {
-        listeners.forEach(mr -> mr.exchangeDeclared(specification));
-      }
-
-      @Override
-      public void exchangeDeleted(String name) {
-        listeners.forEach(mr -> mr.exchangeDeleted(name));
-      }
-
-      @Override
-      public void queueDeclared(AmqpQueueSpecification specification) {
-        listeners.forEach(mr -> mr.queueDeclared(specification));
-      }
-
-      @Override
-      public void queueDeleted(String name) {
-        listeners.forEach(mr -> mr.queueDeleted(name));
-      }
-
-      @Override
-      public void bindingDeclared(AmqpBindingManagement.AmqpBindingSpecification specification) {
-        listeners.forEach(mr -> mr.bindingDeclared(specification));
-      }
-
-      @Override
-      public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
-        listeners.forEach(mr -> mr.bindingDeleted(specification));
-      }
-
-      @Override
-      public void consumerCreated(long id, String address) {
-        listeners.forEach(mr -> mr.consumerCreated(id, address));
-      }
-
-      @Override
-      public void consumerDeleted(long id, String address) {
-        listeners.forEach(mr -> mr.consumerDeleted(id, address));
-      }
-    };
+    return new CompositeTopologyListener(listeners);
   }
 
   class NoOpTopologyListener implements TopologyListener {
@@ -109,5 +71,69 @@ interface TopologyListener {
 
     @Override
     public void consumerDeleted(long id, String address) {}
+  }
+
+  class CompositeTopologyListener implements TopologyListener, AutoCloseable {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CompositeTopologyListener.class);
+
+    private final List<TopologyListener> listeners;
+
+    public CompositeTopologyListener(List<TopologyListener> listeners) {
+      this.listeners = new CopyOnWriteArrayList<>(listeners);
+    }
+
+    @Override
+    public void exchangeDeclared(AmqpExchangeSpecification specification) {
+      listeners.forEach(mr -> mr.exchangeDeclared(specification));
+    }
+
+    @Override
+    public void exchangeDeleted(String name) {
+      listeners.forEach(mr -> mr.exchangeDeleted(name));
+    }
+
+    @Override
+    public void queueDeclared(AmqpQueueSpecification specification) {
+      listeners.forEach(mr -> mr.queueDeclared(specification));
+    }
+
+    @Override
+    public void queueDeleted(String name) {
+      listeners.forEach(mr -> mr.queueDeleted(name));
+    }
+
+    @Override
+    public void bindingDeclared(AmqpBindingManagement.AmqpBindingSpecification specification) {
+      listeners.forEach(mr -> mr.bindingDeclared(specification));
+    }
+
+    @Override
+    public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
+      listeners.forEach(mr -> mr.bindingDeleted(specification));
+    }
+
+    @Override
+    public void consumerCreated(long id, String address) {
+      listeners.forEach(mr -> mr.consumerCreated(id, address));
+    }
+
+    @Override
+    public void consumerDeleted(long id, String address) {
+      listeners.forEach(mr -> mr.consumerDeleted(id, address));
+    }
+
+    @Override
+    public void close() throws Exception {
+      for (TopologyListener listener : this.listeners) {
+        if (listener instanceof AutoCloseable) {
+          try {
+            ((AutoCloseable) listener).close();
+          } catch (Exception e) {
+            LOGGER.info("Error while closing topology listener", e);
+          }
+        }
+      }
+    }
   }
 }

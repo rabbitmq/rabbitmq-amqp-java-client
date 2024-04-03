@@ -18,8 +18,8 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.Management;
-import java.util.Map;
-import java.util.Set;
+import java.util.Collection;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,13 +37,12 @@ class EntityRecovery {
     this.recoveryVisitor =
         new RecordingTopologyListener.Visitor() {
           @Override
-          public void visitExchanges(
-              Map<String, RecordingTopologyListener.ExchangeSpec> exchanges) {
+          public void visitExchanges(List<RecordingTopologyListener.ExchangeSpec> exchanges) {
             if (exchanges.isEmpty()) {
               LOGGER.debug("No exchanges to recover.");
             } else {
               LOGGER.debug("Recovering {} exchange(s)...", exchanges.size());
-              for (RecordingTopologyListener.ExchangeSpec spec : exchanges.values()) {
+              for (RecordingTopologyListener.ExchangeSpec spec : exchanges) {
                 recoverExchange(spec);
               }
               LOGGER.debug("Exchanges recovered");
@@ -51,12 +50,12 @@ class EntityRecovery {
           }
 
           @Override
-          public void visitQueues(Map<String, RecordingTopologyListener.QueueSpec> queues) {
+          public void visitQueues(List<RecordingTopologyListener.QueueSpec> queues) {
             if (queues.isEmpty()) {
               LOGGER.debug("No queues to recover");
             } else {
               LOGGER.debug("Recovering {} queue(s)...", queues.size());
-              for (RecordingTopologyListener.QueueSpec spec : queues.values()) {
+              for (RecordingTopologyListener.QueueSpec spec : queues) {
                 recoverQueue(spec);
               }
               LOGGER.debug("Queues recovered");
@@ -64,7 +63,7 @@ class EntityRecovery {
           }
 
           @Override
-          public void visitBindings(Set<RecordingTopologyListener.BindingSpec> bindings) {
+          public void visitBindings(Collection<RecordingTopologyListener.BindingSpec> bindings) {
             if (bindings.isEmpty()) {
               LOGGER.debug("No bindings to recover");
             } else {

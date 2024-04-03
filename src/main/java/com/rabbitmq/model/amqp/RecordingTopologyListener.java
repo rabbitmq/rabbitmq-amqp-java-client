@@ -18,91 +18,172 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.amqp.Utils.extractQueueFromSourceAddress;
-import static java.lang.Boolean.TRUE;
 
+import com.rabbitmq.model.ModelException;
+import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-class RecordingTopologyListener implements TopologyListener {
+class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
-  private final Map<String, ExchangeSpec> exchanges = new ConcurrentHashMap<>();
-  private final Map<String, QueueSpec> queues = new ConcurrentHashMap<>();
-  private final Set<BindingSpec> bindings = Collections.synchronizedSet(new LinkedHashSet<>());
-  private final ConcurrentHashMap<Long, ConsumerSpec> consumers = new ConcurrentHashMap<>();
+  private static final Duration TIMEOUT = Duration.ofSeconds(60);
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(RecordingTopologyListener.class);
+
+  private final Map<String, ExchangeSpec> exchanges = new LinkedHashMap<>();
+  private final Map<String, QueueSpec> queues = new LinkedHashMap<>();
+  private final Set<BindingSpec> bindings = new LinkedHashSet<>();
+  private final Map<Long, ConsumerSpec> consumers = new LinkedHashMap<>();
+  private final BlockingQueue<Runnable> taskQueue = new ArrayBlockingQueue<>(100);
+  private final Thread loop;
+
+  RecordingTopologyListener() {
+    this.loop =
+        Utils.newThread(
+            "rabbitmq-amqp-recording-topology-listener",
+            () -> {
+              while (!Thread.currentThread().isInterrupted()) {
+                try {
+                  Runnable task = this.taskQueue.take();
+                  task.run();
+                } catch (InterruptedException e) {
+                  return;
+                } catch (Exception e) {
+                  LOGGER.warn("Error during processing of topology recording task", e);
+                }
+              }
+            });
+    this.loop.start();
+  }
 
   @Override
   public void exchangeDeclared(AmqpExchangeSpecification specification) {
-    this.exchanges.put(specification.name(), new ExchangeSpec(specification));
+    this.submit(() -> this.exchanges.put(specification.name(), new ExchangeSpec(specification)));
   }
 
   @Override
   public void exchangeDeleted(String name) {
-    this.exchanges.remove(name);
-    Set<BindingSpec> deletedBindings = this.deleteBindings(name, true);
-    this.deleteAutoDeleteExchanges(deletedBindings);
+    this.submit(
+        () -> {
+          this.exchanges.remove(name);
+          Set<BindingSpec> deletedBindings = this.deleteBindings(name, true);
+          this.deleteAutoDeleteExchanges(deletedBindings);
+        });
   }
 
   @Override
   public void queueDeclared(AmqpQueueSpecification specification) {
-    this.queues.put(specification.name(), new QueueSpec(specification));
+    this.submit(() -> this.queues.put(specification.name(), new QueueSpec(specification)));
   }
 
   @Override
   public void queueDeleted(String name) {
-    this.queues.remove(name);
-    Set<BindingSpec> deletedBindings = this.deleteBindings(name, false);
-    this.deleteAutoDeleteExchanges(deletedBindings);
+    this.submit(
+        () -> {
+          this.queues.remove(name);
+          Set<BindingSpec> deletedBindings = this.deleteBindings(name, false);
+          this.deleteAutoDeleteExchanges(deletedBindings);
+        });
   }
 
   @Override
   public void bindingDeclared(AmqpBindingManagement.AmqpBindingSpecification specification) {
-    this.bindings.add(new BindingSpec(specification.state()));
+    this.submit(() -> this.bindings.add(new BindingSpec(specification.state())));
   }
 
   @Override
   public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
-    BindingSpec spec = new BindingSpec(specification.state());
-    this.bindings.remove(spec);
-    this.deleteAutoDeleteExchanges(Collections.singleton(spec));
+    this.submit(
+        () -> {
+          BindingSpec spec = new BindingSpec(specification.state());
+          this.bindings.remove(spec);
+          this.deleteAutoDeleteExchanges(Collections.singleton(spec));
+        });
   }
 
   @Override
   public void consumerCreated(long id, String address) {
-    String queue = extractQueueFromSourceAddress(address);
-    if (queue != null) {
-      this.consumers.put(id, new ConsumerSpec(id, queue));
-    }
+    this.submit(
+        () -> {
+          String queue = extractQueueFromSourceAddress(address);
+          if (queue != null) {
+            this.consumers.put(id, new ConsumerSpec(id, queue));
+          }
+        });
   }
 
   @Override
   public void consumerDeleted(long id, String address) {
-    String queue = extractQueueFromSourceAddress(address);
-    if (queue != null) {
-      this.consumers.remove(id);
-      // if there's no consumer anymore on the queue, delete it if it's auto-delete
-      Boolean atLeastOneConsumerOnQueue =
-          this.consumers.searchValues(
-              Long.MAX_VALUE, spec -> spec.queue.equals(queue) ? TRUE : null);
-      if (!TRUE.equals(atLeastOneConsumerOnQueue)) {
-        QueueSpec queueSpec = this.queues.get(queue);
-        if (queueSpec != null && queueSpec.autoDelete) {
-          this.queueDeleted(queue);
+    this.submit(
+        () -> {
+          String queue = extractQueueFromSourceAddress(address);
+          if (queue != null) {
+            this.consumers.remove(id);
+            // if there's no consumer anymore on the queue, delete it if it's auto-delete
+            boolean atLeastOneConsumerOnQueue =
+                this.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
+            if (!atLeastOneConsumerOnQueue) {
+              QueueSpec queueSpec = this.queues.get(queue);
+              if (queueSpec != null && queueSpec.autoDelete) {
+                this.queueDeleted(queue);
+              }
+            }
+          }
+        });
+  }
+
+  @Override
+  public void close() {
+    this.loop.interrupt();
+  }
+
+  private void submit(Runnable task) {
+    if (Thread.currentThread().equals(this.loop)) {
+      task.run();
+    } else {
+      CountDownLatch latch = new CountDownLatch(1);
+      try {
+        boolean added =
+            this.taskQueue.offer(
+                () -> {
+                  try {
+                    task.run();
+                  } catch (Exception e) {
+                    LOGGER.info("Error during topology recording task", e);
+                  } finally {
+                    latch.countDown();
+                  }
+                },
+                TIMEOUT.toMillis(),
+                TimeUnit.MILLISECONDS);
+        if (!added) {
+          throw new ModelException("Enqueueing of topology task timed out");
         }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new ModelException("Topology task enqueueing has been interrupted", e);
+      }
+      try {
+        latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new ModelException("Topology task processing has been interrupted", e);
       }
     }
   }
 
   private Set<BindingSpec> deleteBindings(String name, boolean exchange) {
     Set<BindingSpec> deletedBindings = new LinkedHashSet<>();
-    synchronized (this.bindings) {
-      // delete bindings that depend on this exchange or queue
-      Iterator<BindingSpec> iterator = this.bindings.iterator();
-      while (iterator.hasNext()) {
-        BindingSpec spec = iterator.next();
-        if (spec.isInvolved(name, exchange)) {
-          iterator.remove();
-          deletedBindings.add(spec);
-        }
+    // delete bindings that depend on this exchange or queue
+    Iterator<BindingSpec> iterator = this.bindings.iterator();
+    while (iterator.hasNext()) {
+      BindingSpec spec = iterator.next();
+      if (spec.isInvolved(name, exchange)) {
+        iterator.remove();
+        deletedBindings.add(spec);
       }
     }
     return deletedBindings;
@@ -113,9 +194,7 @@ class RecordingTopologyListener implements TopologyListener {
     for (BindingSpec binding : deletedBindings) {
       String source = binding.source;
       boolean exchangeStillSource;
-      synchronized (this.bindings) {
-        exchangeStillSource = this.bindings.stream().anyMatch(b -> b.source.equals(source));
-      }
+      exchangeStillSource = this.bindings.stream().anyMatch(b -> b.source.equals(source));
 
       if (!exchangeStillSource) {
         ExchangeSpec exchange = this.exchanges.get(source);
@@ -135,9 +214,17 @@ class RecordingTopologyListener implements TopologyListener {
   }
 
   void accept(Visitor visitor) {
-    visitor.visitExchanges(new LinkedHashMap<>(this.exchanges));
-    visitor.visitQueues(new LinkedHashMap<>(this.queues));
-    visitor.visitBindings(this.bindings);
+    AtomicReference<List<ExchangeSpec>> exchangeCopy = new AtomicReference<>();
+    submit(() -> exchangeCopy.set(new ArrayList<>(this.exchanges.values())));
+    visitor.visitExchanges(exchangeCopy.get());
+
+    AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>();
+    submit(() -> queueCopy.set(new ArrayList<>(this.queues.values())));
+    visitor.visitQueues(queueCopy.get());
+
+    AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>();
+    submit(() -> bindingCopy.set(new LinkedHashSet<>(this.bindings)));
+    visitor.visitBindings(bindingCopy.get());
   }
 
   int bindingCount() {
@@ -156,8 +243,6 @@ class RecordingTopologyListener implements TopologyListener {
 
     private final String name;
     private final String type;
-    private final boolean durable = true;
-    private final boolean internal = false;
     private final boolean autoDelete;
     private final Map<String, Object> arguments = new LinkedHashMap<>();
 
@@ -188,7 +273,6 @@ class RecordingTopologyListener implements TopologyListener {
   static class QueueSpec {
 
     private final String name;
-    private final boolean durable = true;
     private final boolean exclusive;
     private final boolean autoDelete;
     private final Map<String, Object> arguments = new LinkedHashMap<>();
@@ -309,16 +393,10 @@ class RecordingTopologyListener implements TopologyListener {
 
   interface Visitor {
 
-    void visitExchanges(Map<String, ExchangeSpec> exchanges);
+    void visitExchanges(List<ExchangeSpec> exchanges);
 
-    void visitQueues(Map<String, QueueSpec> queues);
+    void visitQueues(List<QueueSpec> queues);
 
-    void visitBindings(Set<BindingSpec> bindings);
-  }
-
-  private static <E> Set<E> copy(Set<E> set) {
-    synchronized (set) {
-      return new LinkedHashSet<>(set);
-    }
+    void visitBindings(Collection<BindingSpec> bindings);
   }
 }
