@@ -118,7 +118,7 @@ public class AmqpPerfTest {
 
       connection
           .consumerBuilder()
-          .address(q)
+          .queue(q)
           .initialCredits(1000)
           .messageHandler(
               (context, message) -> {
@@ -129,13 +129,13 @@ public class AmqpPerfTest {
 
       executorService.submit(
           () -> {
-            Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
+            Publisher publisher = connection.publisherBuilder().exchange(e).key(rk).build();
             Publisher.Callback callback =
                 context -> {
                   confirmed.increment();
                 };
             while (!Thread.currentThread().isInterrupted()) {
-              Message message = publisher.message().subject(rk);
+              Message message = publisher.message();
               publisher.publish(message, callback);
               published.increment();
             }

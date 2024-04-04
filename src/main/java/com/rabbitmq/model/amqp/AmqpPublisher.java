@@ -112,9 +112,13 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   // internal API
 
   private Sender createSender(Session session, String address) {
+    SenderOptions senderOptions = new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE);
     try {
-      return session.openSender(
-          address, new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE));
+      if (address == null) {
+        return session.openAnonymousSender(senderOptions);
+      } else {
+        return session.openSender(address, senderOptions);
+      }
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating publisher to {}", address);
     }

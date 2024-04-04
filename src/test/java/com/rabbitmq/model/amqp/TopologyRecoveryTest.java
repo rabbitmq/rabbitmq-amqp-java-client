@@ -141,7 +141,7 @@ public class TopologyRecoveryTest {
       assertThat(eventCount).hasValue(3);
 
       Consumer consumer =
-          connection.consumerBuilder().address(q).messageHandler((context, message) -> {}).build();
+          connection.consumerBuilder().queue(q).messageHandler((context, message) -> {}).build();
 
       assertThat(events).contains("consumerCreated");
       assertThat(eventCount).hasValue(4);
@@ -196,12 +196,13 @@ public class TopologyRecoveryTest {
 
       connection
           .publisherBuilder()
-          .address("/exchange/" + e + "/foo")
+          .exchange(e)
+          .key("foo")
           .listeners(ctx -> events.add("publisher " + ctx.currentState().name()))
           .build();
       connection
           .consumerBuilder()
-          .address(q)
+          .queue(q)
           .messageHandler((context, message) -> {})
           .listeners(ctx -> events.add("consumer " + ctx.currentState().name()))
           .build();
@@ -239,11 +240,10 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e).key("foo").destinationQueue(q).bind();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Publisher publisher =
-          connection.publisherBuilder().address("/exchange/" + e + "/foo").build();
+      Publisher publisher = connection.publisherBuilder().exchange(e).key("foo").build();
       connection
           .consumerBuilder()
-          .address(q)
+          .queue(q)
           .messageHandler((context, message) -> consumeLatch.get().countDown())
           .build();
 
@@ -273,10 +273,10 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e1).build();
+      Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       connection
           .consumerBuilder()
-          .address(q)
+          .queue(q)
           .messageHandler((context, message) -> consumeLatch.get().countDown())
           .build();
 
@@ -304,11 +304,11 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
+      Publisher publisher = connection.publisherBuilder().exchange(e).build();
       Consumer consumer =
           connection
               .consumerBuilder()
-              .address(q)
+              .queue(q)
               .messageHandler(
                   (context, message) -> {
                     context.accept();
@@ -357,11 +357,11 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e1).build();
+      Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       Consumer consumer =
           connection
               .consumerBuilder()
-              .address(q)
+              .queue(q)
               .messageHandler(
                   (context, message) -> {
                     context.accept();
@@ -430,7 +430,7 @@ public class TopologyRecoveryTest {
     try {
       connection.management().queue(q).declare();
       Consumer consumer =
-          connection.consumerBuilder().address(q).messageHandler((ctx, m) -> {}).build();
+          connection.consumerBuilder().queue(q).messageHandler((ctx, m) -> {}).build();
       waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 1);
       consumer.close();
       closeConnectionAndWaitForRecovery();
@@ -460,8 +460,8 @@ public class TopologyRecoveryTest {
           };
       range(0, consumerCount)
           .forEach(
-              ignored -> connection.consumerBuilder().address(q).messageHandler(handler).build());
-      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
+              ignored -> connection.consumerBuilder().queue(q).messageHandler(handler).build());
+      Publisher publisher = connection.publisherBuilder().exchange(e).build();
       range(0, consumerCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
       assertThat(consumeLatch).completes();
       assertThat(connection.management().queueInfo(q)).hasConsumerCount(consumerCount);
@@ -488,11 +488,11 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
-      Publisher publisher = connection.publisherBuilder().address("/exchange/" + e).build();
+      Publisher publisher = connection.publisherBuilder().exchange(e).build();
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>();
       connection
           .consumerBuilder()
-          .address(q)
+          .queue(q)
           .messageHandler(
               (ctx, m) -> {
                 consumeLatch.get().countDown();

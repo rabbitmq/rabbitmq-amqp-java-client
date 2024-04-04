@@ -19,7 +19,7 @@ package com.rabbitmq.model;
 
 public interface ConsumerBuilder {
 
-  ConsumerBuilder address(String address);
+  ConsumerBuilder queue(String queue);
 
   ConsumerBuilder messageHandler(Consumer.MessageHandler handler);
 

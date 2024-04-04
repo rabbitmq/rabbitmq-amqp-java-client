@@ -26,7 +26,7 @@ import java.util.List;
 class AmqpConsumerBuilder implements ConsumerBuilder {
 
   private final AmqpConnection connection;
-  private String address;
+  private String queue;
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 10;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
@@ -36,8 +36,8 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   }
 
   @Override
-  public ConsumerBuilder address(String address) {
-    this.address = address;
+  public ConsumerBuilder queue(String queue) {
+    this.queue = queue;
     return this;
   }
 
@@ -67,8 +67,8 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     return connection;
   }
 
-  String address() {
-    return address;
+  String queue() {
+    return queue;
   }
 
   Consumer.MessageHandler messageHandler() {

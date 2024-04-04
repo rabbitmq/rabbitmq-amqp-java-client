@@ -26,6 +26,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
 import static org.apache.qpid.protonj2.client.DeliveryState.released;
 import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.Management;
@@ -45,7 +46,6 @@ import org.apache.qpid.protonj2.client.Message;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.types.UnsignedLong;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 
 public class ClientTest {
@@ -82,7 +82,7 @@ public class ClientTest {
   @Test
   void deliveryCount() throws Exception {
     try (Client client = client();
-        Publisher publisher = connection.publisherBuilder().address(q).build()) {
+        Publisher publisher = connection.publisherBuilder().queue(q).build()) {
       int messageCount = 10;
       CountDownLatch publishLatch = new CountDownLatch(5);
       IntStream.range(0, messageCount)
@@ -93,12 +93,12 @@ public class ClientTest {
                       context -> publishLatch.countDown()));
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
-      Receiver receiver = protonConnection.openReceiver(q, new ReceiverOptions());
+      Receiver receiver = protonConnection.openReceiver("/queue/" + q, new ReceiverOptions());
       int receivedMessages = 0;
       while (receiver.receive(100, TimeUnit.MILLISECONDS) != null) {
         receivedMessages++;
       }
-      Assertions.assertThat(receivedMessages).isEqualTo(messageCount);
+      assertThat(receivedMessages).isEqualTo(messageCount);
     }
   }
 
@@ -109,7 +109,8 @@ public class ClientTest {
       org.apache.qpid.protonj2.client.Connection connection =
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
-      Sender sender = connection.openSender(q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
+      Sender sender =
+          connection.openSender("/queue/" + q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
       Tracker tracker = sender.send(Message.create(body));
@@ -117,14 +118,14 @@ public class ClientTest {
 
       Receiver receiver =
           connection.openReceiver(
-              q,
+              "/queue/" + q,
               new ReceiverOptions()
                   .deliveryMode(AT_LEAST_ONCE)
                   .autoSettle(false)
                   .autoAccept(false));
       Delivery delivery = receiver.receive(100, SECONDS);
-      Assertions.assertThat(delivery).isNotNull();
-      Assertions.assertThat(delivery.message().body()).isEqualTo(body);
+      assertThat(delivery).isNotNull();
+      assertThat(delivery.message().body()).isEqualTo(body);
       delivery.disposition(DeliveryState.accepted(), true);
     }
   }
@@ -138,7 +139,8 @@ public class ClientTest {
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
       StreamSender sender =
-          connection.openStreamSender(q, new StreamSenderOptions().deliveryMode(AT_LEAST_ONCE));
+          connection.openStreamSender(
+              "/queue/" + q, new StreamSenderOptions().deliveryMode(AT_LEAST_ONCE));
       StreamSenderMessage message = sender.beginMessage();
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
@@ -155,7 +157,7 @@ public class ClientTest {
 
       StreamReceiver receiver =
           connection.openStreamReceiver(
-              q,
+              "/queue/" + q,
               new StreamReceiverOptions()
                   .deliveryMode(AT_LEAST_ONCE)
                   .autoAccept(false)
@@ -174,7 +176,7 @@ public class ClientTest {
 
       inputStream.close();
 
-      Assertions.assertThat(outputStream.toByteArray()).isEqualTo(body);
+      assertThat(outputStream.toByteArray()).isEqualTo(body);
       delivery.disposition(DeliveryState.accepted(), true);
     }
   }
@@ -226,13 +228,13 @@ public class ClientTest {
       sender.send(request);
 
       Delivery delivery = receiver.receive(1, SECONDS);
-      Assertions.assertThat(delivery).isNotNull();
+      assertThat(delivery).isNotNull();
       Message<Map<String, Object>> response = delivery.message();
-      Assertions.assertThat(response.correlationId()).isEqualTo(requestId);
-      Assertions.assertThat(response.subject()).isEqualTo("201");
-      Assertions.assertThat(response.property("http:response")).isEqualTo("1.1");
+      assertThat(response.correlationId()).isEqualTo(requestId);
+      assertThat(response.subject()).isEqualTo("201");
+      assertThat(response.property("http:response")).isEqualTo("1.1");
 
-      Assertions.assertThat(response.body())
+      assertThat(response.body())
           .isNotNull()
           .isNotEmpty()
           .containsEntry("message_count", UnsignedLong.valueOf(0));
@@ -248,14 +250,14 @@ public class ClientTest {
       sender.send(request);
 
       delivery = receiver.receive(1, SECONDS);
-      Assertions.assertThat(delivery).isNotNull();
+      assertThat(delivery).isNotNull();
       response = delivery.message();
-      Assertions.assertThat(response.correlationId()).isEqualTo(requestId);
-      Assertions.assertThat(response.subject()).isEqualTo("200");
-      Assertions.assertThat(response.property("http:response")).isEqualTo("1.1");
+      assertThat(response.correlationId()).isEqualTo(requestId);
+      assertThat(response.subject()).isEqualTo("200");
+      assertThat(response.property("http:response")).isEqualTo("1.1");
 
       Map<String, Object> responseBody = response.body();
-      Assertions.assertThat(responseBody).containsEntry("message_count", ulong(0));
+      assertThat(responseBody).containsEntry("message_count", ulong(0));
     }
   }
 
@@ -272,13 +274,13 @@ public class ClientTest {
       Receiver receiver = session.openReceiver("/queue/" + queue);
       receiver.openFuture().get();
       Delivery delivery = receiver.tryReceive();
-      Assertions.assertThat(delivery).isNull();
+      assertThat(delivery).isNull();
       connection.management().queueDeletion().delete(queue);
       try {
         receiver.receive(10, SECONDS);
         fail("Receiver should have been closed after queue deletion");
       } catch (ClientLinkRemotelyClosedException e) {
-        Assertions.assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
+        assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
       }
     }
   }
@@ -298,13 +300,13 @@ public class ClientTest {
               "/exchange/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
       Tracker tracker = sender.send(Message.create());
       tracker.awaitSettlement(10, SECONDS);
-      Assertions.assertThat(tracker.remoteState()).isEqualTo(released());
+      assertThat(tracker.remoteState()).isEqualTo(released());
 
       connection.management().binding().sourceExchange(exchange).destinationQueue(q).bind();
 
       tracker = sender.send(Message.create());
       tracker.awaitSettlement(10, SECONDS);
-      Assertions.assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
+      assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
 
       connection.management().exchangeDeletion().delete(exchange);
       try {
@@ -312,12 +314,12 @@ public class ClientTest {
         while (count++ < 10) {
           tracker = sender.send(Message.create());
           tracker.awaitSettlement(10, SECONDS);
-          Assertions.assertThat(tracker.remoteState()).isEqualTo(released());
+          assertThat(tracker.remoteState()).isEqualTo(released());
           Thread.sleep(100);
         }
         fail("The sender link should have been closed after exchange deletion");
       } catch (ClientLinkRemotelyClosedException e) {
-        Assertions.assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
+        assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:not-found");
       }
     }
   }
@@ -355,7 +357,7 @@ public class ClientTest {
 
       assertThat(connectedLatch).completes();
       c.close();
-      Assertions.assertThat(called).isFalse();
+      assertThat(called).isFalse();
 
       CountDownLatch disconnectedLatch = new CountDownLatch(1);
       String name = UUID.randomUUID().toString();
@@ -369,7 +371,7 @@ public class ClientTest {
                       .reconnectedHandler((conn, connectionEvent) -> called.set(true)));
       closeConnection(name);
       assertThat(disconnectedLatch).completes();
-      Assertions.assertThat(called).isFalse();
+      assertThat(called).isFalse();
 
       AtomicReference<org.apache.qpid.protonj2.client.Connection> cRef = new AtomicReference<>(c);
       assertThatThrownBy(() -> cRef.get().openReceiver("does-not-matter"))
@@ -392,7 +394,7 @@ public class ClientTest {
       closeConnection(name);
       assertThat(interruptedLatch).completes();
       assertThat(reconnectedLatch).completes();
-      Assertions.assertThat(called).isFalse();
+      assertThat(called).isFalse();
 
       c.close();
     }

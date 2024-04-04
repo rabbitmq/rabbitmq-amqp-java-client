@@ -91,8 +91,7 @@ public class AmqpTest {
     String q = TestUtils.name(info);
     try {
       connection.management().queue().name(q).quorum().queue().declare();
-      String address = "/amq/queue/" + q;
-      Publisher publisher = connection.publisherBuilder().address(address).build();
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
 
       int messageCount = 100;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount);
@@ -121,7 +120,7 @@ public class AmqpTest {
       com.rabbitmq.model.Consumer consumer =
           connection
               .consumerBuilder()
-              .address(address)
+              .queue(q)
               .messageHandler(
                   (context, message) -> {
                     context.accept();
@@ -168,8 +167,8 @@ public class AmqpTest {
           .arguments(bindingArguments)
           .bind();
 
-      Publisher publisher1 = connection.publisherBuilder().address("/exchange/" + e1).build();
-      Publisher publisher2 = connection.publisherBuilder().address("/exchange/" + e2).build();
+      Publisher publisher1 = connection.publisherBuilder().exchange(e1).key(rk).build();
+      Publisher publisher2 = connection.publisherBuilder().exchange(e2).build();
 
       int messageCount = 1;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount * 2);
@@ -177,7 +176,7 @@ public class AmqpTest {
       Consumer<Publisher> publish =
           publisher ->
               publisher.publish(
-                  publisher.message().subject(rk).addData("hello".getBytes(StandardCharsets.UTF_8)),
+                  publisher.message().addData("hello".getBytes(StandardCharsets.UTF_8)),
                   context -> {
                     if (context.status() == Publisher.Status.ACCEPTED) {
                       confirmLatch.countDown();
@@ -193,7 +192,7 @@ public class AmqpTest {
       com.rabbitmq.model.Consumer consumer =
           connection
               .consumerBuilder()
-              .address(q)
+              .queue(q)
               .messageHandler(
                   (context, message) -> {
                     context.accept();

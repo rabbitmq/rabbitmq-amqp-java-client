@@ -87,7 +87,7 @@ public class AmqpConnectionRecoveryTest {
       Collection<UUID> receivedMessageIds = Collections.synchronizedList(new ArrayList<>());
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
       c.consumerBuilder()
-          .address(q)
+          .queue(q)
           .messageHandler(
               (context, message) -> {
                 context.accept();
@@ -105,7 +105,7 @@ public class AmqpConnectionRecoveryTest {
       AtomicInteger publisherOpenCount = new AtomicInteger(0);
       Publisher p =
           c.publisherBuilder()
-              .address("/queue/" + q)
+              .queue(q)
               .listeners(
                   context -> {
                     if (context.currentState() == OPEN) {

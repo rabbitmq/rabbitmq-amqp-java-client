@@ -28,15 +28,31 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   private final AmqpConnection connection;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
 
-  private String address;
+  private String exchange, key, queue;
 
   AmqpPublisherBuilder(AmqpConnection connection) {
     this.connection = connection;
   }
 
   @Override
-  public PublisherBuilder address(String address) {
-    this.address = address;
+  public PublisherBuilder exchange(String exchange) {
+    this.exchange = exchange;
+    this.queue = null;
+    return this;
+  }
+
+  @Override
+  public PublisherBuilder key(String key) {
+    this.key = key;
+    this.queue = null;
+    return this;
+  }
+
+  @Override
+  public PublisherBuilder queue(String queue) {
+    this.queue = queue;
+    this.exchange = null;
+    this.key = null;
     return this;
   }
 
@@ -64,6 +80,15 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   }
 
   String address() {
-    return address;
+    StringBuilder builder = new StringBuilder();
+    if (this.exchange != null) {
+      builder.append("/exchange/").append(this.exchange);
+      if (this.key != null && !this.key.isEmpty()) {
+        builder.append("/key/").append(this.key);
+      }
+    } else if (this.queue != null) {
+      builder.append("/queue/").append(this.queue);
+    }
+    return builder.length() == 0 ? null : builder.toString();
   }
 }

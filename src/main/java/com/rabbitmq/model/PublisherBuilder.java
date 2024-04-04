@@ -19,7 +19,11 @@ package com.rabbitmq.model;
 
 public interface PublisherBuilder {
 
-  PublisherBuilder address(String address);
+  PublisherBuilder exchange(String exchange);
+
+  PublisherBuilder key(String key);
+
+  PublisherBuilder queue(String queue);
 
   PublisherBuilder listeners(Resource.StateListener... listeners);
 

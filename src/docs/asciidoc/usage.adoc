@@ -39,13 +39,42 @@ include::{test-examples}/Api.java[tag=publisher-creation]
 --------
 include::{test-examples}/Api.java[tag=message-creation]
 --------
-<1> Routing key with `/exchange/{name}` address
 
 .Message publishing
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=message-publishing]
 --------
+
+.Target address format: exchange and key
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=target-address-exchange-key]
+--------
+<1> Translates to `/exchange/foo/key/bar`
+
+.Target address format: exchange
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=target-address-exchange]
+--------
+<1> Translates to `/exchange/foo`
+
+.Target address format: queue
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=target-address-queue]
+--------
+<1> Translates to `/queue/some-queue`
+
+.Target address format: address in `to` field
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=target-address-null]
+--------
+<1> No address specified, translates to `null`
+<2> Exchange and key in message `to` field
+<3> Exchange in message `to` field
 
 === Consuming
 

@@ -52,7 +52,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
     this.messageHandler = builder.messageHandler();
-    this.address = builder.address();
+    this.address = "/queue/" + builder.queue();
     this.nativeReceiver =
         createNativeReceiver(
             builder.connection().nativeSession(), this.address, this.initialCredits);

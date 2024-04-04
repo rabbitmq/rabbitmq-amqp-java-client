@@ -48,14 +48,13 @@ class Api {
     Connection connection = null;
     // tag::publisher-creation[]
     Publisher publisher = connection.publisherBuilder()
-        .address("/exchange/foo")
+        .exchange("foo").key("bar")
         .build();
     // end::publisher-creation[]
 
     // tag::message-creation[]
     Message message = publisher.message()
         .messageId(1L)
-        .subject("bar") // <1>
         .addData("hello".getBytes(StandardCharsets.UTF_8));
     // end::message-creation[]
 
@@ -70,11 +69,52 @@ class Api {
     // end::message-publishing[]
   }
 
+  void targetAddressFormatExchangeKey() {
+    Connection connection = null;
+    // tag::target-address-exchange-key[]
+    Publisher publisher = connection.publisherBuilder()
+        .exchange("foo").key("bar") // <1>
+        .build();
+    // end::target-address-exchange-key[]
+  }
+
+  void targetAddressFormatExchange() {
+    Connection connection = null;
+    // tag::target-address-exchange[]
+    Publisher publisher = connection.publisherBuilder()
+        .exchange("foo") // <1>
+        .build();
+    // end::target-address-exchange[]
+  }
+
+  void targetAddressFormatQueue() {
+    Connection connection = null;
+    // tag::target-address-queue[]
+    Publisher publisher = connection.publisherBuilder()
+        .queue("some-queue") // <1>
+        .build();
+    // end::target-address-queue[]
+  }
+
+  void targetAddressNull() {
+    Connection connection = null;
+    // tag::target-address-null[]
+    Publisher publisher = connection.publisherBuilder()
+        .build(); // <1>
+
+    Message message1 = publisher.message()
+        .to("/exchange/foo/key/bar"); // <2>
+
+    Message message2 = publisher.message()
+        .to("/exchange/foo"); // <3>
+    // end::target-address-null[]
+  }
+
   void consuming() {
     Connection connection = null;
     // tag::consumer[]
     connection.consumerBuilder()
-        .address("some-queue")
+        .queue("some-queue")
         .messageHandler((context, message) -> {
           // ... <1>
           context.accept(); // <2>
