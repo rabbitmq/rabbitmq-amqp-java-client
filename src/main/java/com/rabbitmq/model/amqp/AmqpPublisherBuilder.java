@@ -36,6 +36,10 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   @Override
   public PublisherBuilder exchange(String exchange) {
+    if (exchange != null && exchange.isEmpty()) {
+      throw new IllegalArgumentException(
+          "The default exchange is not supported, use '/queue/:queue' instead");
+    }
     this.exchange = exchange;
     this.queue = null;
     return this;
