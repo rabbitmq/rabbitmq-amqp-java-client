@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(f667d88)</span>
+<br><span id="revremark">(62e3454)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -607,7 +607,7 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 <div class="title">Publisher creation</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
-    .address(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo</span><span class="delimiter">&quot;</span></span>)
+    .exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>)
     .build();</code></pre>
 </div>
 </div>
@@ -616,17 +616,8 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">Message message = publisher.message()
     .messageId(<span class="integer">1L</span>)
-    .subject(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="1"></i><b>(1)</b>
     .addData(<span class="string"><span class="delimiter">&quot;</span><span class="content">hello</span><span class="delimiter">&quot;</span></span>.getBytes(StandardCharsets.UTF_8));</code></pre>
 </div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Routing key with <code>/exchange/{name}</code> address</td>
-</tr>
-</table>
 </div>
 <div class="listingblock">
 <div class="title">Message publishing</div>
@@ -640,6 +631,83 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 });</code></pre>
 </div>
 </div>
+<div class="listingblock">
+<div class="title">Target address format: exchange and key</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
+    .exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="1"></i><b>(1)</b>
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Translates to <code>/exchange/foo/key/bar</code></td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Target address format: exchange</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
+    .exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="1"></i><b>(1)</b>
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Translates to <code>/exchange/foo</code></td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Target address format: queue</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
+    .queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="1"></i><b>(1)</b>
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Translates to <code>/queue/some-queue</code></td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Target address format: address in <code>to</code> field</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
+    .build(); <i class="conum" data-value="1"></i><b>(1)</b>
+
+Message message1 = publisher.message()
+    .to(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo/key/bar</span><span class="delimiter">&quot;</span></span>); <i class="conum" data-value="2"></i><b>(2)</b>
+
+Message message2 = publisher.message()
+    .to(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo</span><span class="delimiter">&quot;</span></span>); <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>No address specified, translates to <code>null</code></td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Exchange and key in message <code>to</code> field</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Exchange in message <code>to</code> field</td>
+</tr>
+</table>
+</div>
 </div>
 <div class="sect2">
 <h3 id="consuming"><a class="anchor" href="#consuming"></a>Consuming</h3>
@@ -647,7 +715,7 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 <div class="title">Consuming from a queue</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">connection.consumerBuilder()
-    .address(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>)
+    .queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>)
     .messageHandler((context, message) -&gt; {
       <span class="comment">// ... </span><i class="conum" data-value="1"></i><b>(1)</b>
       context.accept(); <i class="conum" data-value="2"></i><b>(2)</b>
@@ -890,7 +958,7 @@ Snapshots are available from a repository which must be declared in the dependen
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-04-03 09:21:44 UTC
+Last updated 2024-04-04 07:56:19 UTC
 </div>
 </div>
 </body>
