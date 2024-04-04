@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(62e3454)</span>
+<br><span id="revremark">(2bd55e3)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -686,10 +686,12 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
     .build(); <i class="conum" data-value="1"></i><b>(1)</b>
 
 Message message1 = publisher.message()
-    .to(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo/key/bar</span><span class="delimiter">&quot;</span></span>); <i class="conum" data-value="2"></i><b>(2)</b>
+    .address().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="2"></i><b>(2)</b>
+    .message();
 
 Message message2 = publisher.message()
-    .to(<span class="string"><span class="delimiter">&quot;</span><span class="content">/exchange/foo</span><span class="delimiter">&quot;</span></span>); <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
+    .address().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="3"></i><b>(3)</b>
+    .message();</code></pre>
 </div>
 </div>
 <div class="colist arabic">
@@ -700,11 +702,11 @@ Message message2 = publisher.message()
 </tr>
 <tr>
 <td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Exchange and key in message <code>to</code> field</td>
+<td>Exchange and key automatically set in message <code>to</code> field</td>
 </tr>
 <tr>
 <td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Exchange in message <code>to</code> field</td>
+<td>Exchange automatically set in message <code>to</code> field</td>
 </tr>
 </table>
 </div>
@@ -958,7 +960,7 @@ Snapshots are available from a repository which must be declared in the dependen
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-04-04 07:56:19 UTC
+Last updated 2024-04-04 09:12:59 UTC
 </div>
 </div>
 </body>
