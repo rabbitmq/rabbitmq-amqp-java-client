@@ -73,8 +73,8 @@ include::{test-examples}/Api.java[tag=target-address-queue]
 include::{test-examples}/Api.java[tag=target-address-null]
 --------
 <1> No address specified, translates to `null`
-<2> Exchange and key in message `to` field
-<3> Exchange in message `to` field
+<2> Exchange and key automatically set in message `to` field
+<3> Exchange automatically set in message `to` field
 
 === Consuming
 

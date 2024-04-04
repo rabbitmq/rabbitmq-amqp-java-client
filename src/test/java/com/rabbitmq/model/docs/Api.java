@@ -103,10 +103,12 @@ class Api {
         .build(); // <1>
 
     Message message1 = publisher.message()
-        .to("/exchange/foo/key/bar"); // <2>
+        .address().exchange("foo").key("bar") // <2>
+        .message();
 
     Message message2 = publisher.message()
-        .to("/exchange/foo"); // <3>
+        .address().exchange("foo") // <3>
+        .message();
     // end::target-address-null[]
   }
 

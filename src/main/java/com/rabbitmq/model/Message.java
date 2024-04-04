@@ -109,9 +109,20 @@ public interface Message {
   boolean hasProperties();
 
   Object removeProperty(String key);
+
   // TODO support iteration over message application properties
 
   // TODO support message annotations
   // TODO support message headers
 
+  AddressBuilder address();
+
+  interface AddressBuilder {
+
+    AddressBuilder exchange(String exchange);
+
+    AddressBuilder key(String key);
+
+    Message message();
+  }
 }

@@ -276,6 +276,45 @@ class AmqpMessage implements Message {
     return returnFromDelegate(m -> m.removeProperty(key));
   }
 
+  @Override
+  public AddressBuilder address() {
+    return new DefaultAddressBuilder(this);
+  }
+
+  private static class DefaultAddressBuilder implements AddressBuilder {
+
+    private final Message message;
+    private String exchange, key;
+
+    private DefaultAddressBuilder(Message message) {
+      this.message = message;
+    }
+
+    @Override
+    public AddressBuilder exchange(String exchange) {
+      this.exchange = exchange;
+      return this;
+    }
+
+    @Override
+    public AddressBuilder key(String key) {
+      this.key = key;
+      return this;
+    }
+
+    @Override
+    public Message message() {
+      if (this.exchange != null) {
+        if (this.key != null && !this.key.isEmpty()) {
+          this.message.to("/exchange/" + this.exchange + "/key/" + this.key);
+        } else {
+          this.message.to("/exchange/" + this.exchange);
+        }
+      }
+      return this.message;
+    }
+  }
+
   private void callOnDelegate(CallableConsumer call) {
     try {
       call.accept(this.delegate);
