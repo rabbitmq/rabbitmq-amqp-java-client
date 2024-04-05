@@ -109,6 +109,10 @@ class Api {
     Message message2 = publisher.message()
         .address().exchange("foo") // <3>
         .message();
+
+    Message message3 = publisher.message()
+        .address().queue("my-queue") // <4>
+        .message();
     // end::target-address-null[]
   }
 

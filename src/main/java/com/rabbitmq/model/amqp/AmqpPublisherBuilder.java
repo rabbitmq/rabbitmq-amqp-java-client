@@ -27,8 +27,8 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   private final AmqpConnection connection;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
-
-  private String exchange, key, queue;
+  private final DefaultAddressBuilder<PublisherBuilder> addressBuilder =
+      new DefaultAddressBuilder<>(this) {};
 
   AmqpPublisherBuilder(AmqpConnection connection) {
     this.connection = connection;
@@ -36,28 +36,17 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   @Override
   public PublisherBuilder exchange(String exchange) {
-    if (exchange != null && exchange.isEmpty()) {
-      throw new IllegalArgumentException(
-          "The default exchange is not supported, use '/queue/:queue' instead");
-    }
-    this.exchange = exchange;
-    this.queue = null;
-    return this;
+    return this.addressBuilder.exchange(exchange);
   }
 
   @Override
   public PublisherBuilder key(String key) {
-    this.key = key;
-    this.queue = null;
-    return this;
+    return this.addressBuilder.key(key);
   }
 
   @Override
   public PublisherBuilder queue(String queue) {
-    this.queue = queue;
-    this.exchange = null;
-    this.key = null;
-    return this;
+    return this.addressBuilder.queue(queue);
   }
 
   @Override
@@ -84,15 +73,6 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   }
 
   String address() {
-    StringBuilder builder = new StringBuilder();
-    if (this.exchange != null) {
-      builder.append("/exchange/").append(this.exchange);
-      if (this.key != null && !this.key.isEmpty()) {
-        builder.append("/key/").append(this.key);
-      }
-    } else if (this.queue != null) {
-      builder.append("/queue/").append(this.queue);
-    }
-    return builder.length() == 0 ? null : builder.toString();
+    return this.addressBuilder.address();
   }
 }

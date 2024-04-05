@@ -115,13 +115,9 @@ public interface Message {
   // TODO support message annotations
   // TODO support message headers
 
-  AddressBuilder address();
+  MessageAddressBuilder address();
 
-  interface AddressBuilder {
-
-    AddressBuilder exchange(String exchange);
-
-    AddressBuilder key(String key);
+  interface MessageAddressBuilder extends AddressBuilder<MessageAddressBuilder> {
 
     Message message();
   }

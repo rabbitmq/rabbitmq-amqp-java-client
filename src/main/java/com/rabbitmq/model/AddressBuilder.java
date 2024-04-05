@@ -17,9 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface PublisherBuilder extends AddressBuilder<PublisherBuilder> {
+public interface AddressBuilder<T> {
 
-  PublisherBuilder listeners(Resource.StateListener... listeners);
+  T exchange(String exchange);
 
-  Publisher build();
+  T key(String key);
+
+  T queue(String queue);
 }

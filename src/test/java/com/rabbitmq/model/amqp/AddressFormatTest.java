@@ -194,7 +194,7 @@ public class AddressFormatTest {
           });
       assertThat(failedLatch).completes();
 
-      CountDownLatch consumeLatch = new CountDownLatch(1);
+      CountDownLatch consumeLatch = new CountDownLatch(2);
       connection
           .consumerBuilder()
           .queue(q)
@@ -206,6 +206,7 @@ public class AddressFormatTest {
           .build();
 
       publisher.publish(publisher.message().address().exchange(e).key(k).message(), ctx -> {});
+      publisher.publish(publisher.message().address().queue(q).message(), ctx -> {});
       assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);

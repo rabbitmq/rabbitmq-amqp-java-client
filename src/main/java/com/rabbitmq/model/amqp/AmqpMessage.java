@@ -277,40 +277,28 @@ class AmqpMessage implements Message {
   }
 
   @Override
-  public AddressBuilder address() {
-    return new DefaultAddressBuilder(this);
+  public MessageAddressBuilder address() {
+    return new DefaultMessageAddressBuilder(this);
   }
 
-  private static class DefaultAddressBuilder implements AddressBuilder {
+  private static class DefaultMessageAddressBuilder
+      extends DefaultAddressBuilder<MessageAddressBuilder> implements MessageAddressBuilder {
 
     private final Message message;
-    private String exchange, key;
 
-    private DefaultAddressBuilder(Message message) {
+    private DefaultMessageAddressBuilder(Message message) {
+      super(null);
       this.message = message;
     }
 
     @Override
-    public AddressBuilder exchange(String exchange) {
-      this.exchange = exchange;
-      return this;
-    }
-
-    @Override
-    public AddressBuilder key(String key) {
-      this.key = key;
+    MessageAddressBuilder result() {
       return this;
     }
 
     @Override
     public Message message() {
-      if (this.exchange != null) {
-        if (this.key != null && !this.key.isEmpty()) {
-          this.message.to("/exchange/" + this.exchange + "/key/" + this.key);
-        } else {
-          this.message.to("/exchange/" + this.exchange);
-        }
-      }
+      this.message.to(this.address());
       return this.message;
     }
   }
