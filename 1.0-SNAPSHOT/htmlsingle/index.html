@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(bd95532)</span>
+<br><span id="revremark">(9c40f67)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -548,6 +548,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#bindings">Bindings</a></li>
 </ul>
 </li>
+<li><a href="#lifecycle-listeners">Lifecycle Listeners</a></li>
 </ul>
 </li>
 <li><a href="#dependencies">Dependencies</a>
@@ -883,6 +884,101 @@ It is accessible from the <code>Environment</code>.</p>
 </div>
 </div>
 </div>
+<div class="sect2">
+<h3 id="lifecycle-listeners"><a class="anchor" href="#lifecycle-listeners"></a>Lifecycle Listeners</h3>
+<div class="paragraph">
+<p>It is possible to add one or several listeners when creating a <code>Connection</code> instance:</p>
+</div>
+<div class="listingblock">
+<div class="title">Setting a listener on a connection</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="predefined-type">Connection</span> connection =  environment.connectionBuilder()
+    .listeners(context -&gt; { <i class="conum" data-value="1"></i><b>(1)</b>
+  context.previousState(); <i class="conum" data-value="2"></i><b>(2)</b>
+  context.currentState(); <i class="conum" data-value="3"></i><b>(3)</b>
+  context.failureCause(); <i class="conum" data-value="4"></i><b>(4)</b>
+  context.resource(); <i class="conum" data-value="5"></i><b>(5)</b>
+}).build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Setting a listener</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>The previous state of the connection</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>The current (new) state of the connection</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>The cause of the failure (in case of failure)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>The connection instance (as a <code>Resource</code>)</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>It is also possible to set listeners on publisher instances:</p>
+</div>
+<div class="listingblock">
+<div class="title">Setting a listener on a publisher</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Publisher publisher = connection.publisherBuilder()
+    .listeners(context -&gt; { <i class="conum" data-value="1"></i><b>(1)</b>
+      <span class="comment">// ...</span>
+    })
+    .exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>)
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Setting a listener</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>And on consumer instances as well:</p>
+</div>
+<div class="listingblock">
+<div class="title">Setting a listener on a consumer</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Consumer consumer = connection.consumerBuilder()
+    .listeners(context -&gt; { <i class="conum" data-value="1"></i><b>(1)</b>
+      <span class="comment">// ...</span>
+    })
+    .queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>)
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Setting a listener</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The listener API is the same for connection, publishers, and consumers.
+They all implement the <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api//com/rabbitmq/model/Resource.html"><code>Resource</code></a> marker interface.
+The <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api//com/rabbitmq/model/Resource.StateListener.html"><code>StateListener</code></a> interface has only one method that takes a <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api//com/rabbitmq/model/Resource.Context.html"><code>Context</code></a> argument.
+See the snippet above for the information available in the <code>Context</code>.</p>
+</div>
+<div class="paragraph">
+<p>A resource <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api//com/rabbitmq/model/Resource.State.html"><code>State</code></a> can have the following values: <code>OPENING</code>, <code>OPEN</code>, <code>RECOVERING</code>, <code>CLOSING</code>, <code>CLOSED</code>.</p>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -968,7 +1064,7 @@ Snapshots are available from a repository which must be declared in the dependen
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-04-09 06:37:52 UTC
+Last updated 2024-04-09 07:39:48 UTC
 </div>
 </div>
 </body>
