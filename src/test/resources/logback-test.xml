@@ -8,6 +8,7 @@
     <logger name="com.rabbitmq.model" level="warn" />
     <logger name="com.rabbitmq.model.amqp.EntityRecovery" level="warn" />
     <logger name="com.rabbitmq.model.amqp.AmqpConnection" level="warn" />
+    <logger name="org.apache.qpid" level="warn" />
 
     <root level="warn">
         <appender-ref ref="STDOUT" />

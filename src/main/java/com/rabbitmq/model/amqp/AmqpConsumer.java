@@ -63,19 +63,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
 
   @Override
   public void close() {
-    if (this.closed.compareAndSet(false, true)) {
-      this.state(CLOSING);
-      this.connection.removeConsumer(this);
-      if (this.receiveLoop != null) {
-        this.receiveLoop.interrupt();
-      }
-      try {
-        this.nativeReceiver.close();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing receiver", e);
-      }
-      this.state(CLOSED);
-    }
+    this.close(null);
   }
 
   // internal API
@@ -143,8 +131,11 @@ class AmqpConsumer extends ResourceBase implements Consumer {
             messageHandler.handle(context, message);
           }
         }
-
-      } catch (ClientConnectionRemotelyClosedException | ClientLinkRemotelyClosedException e) {
+      } catch (ClientLinkRemotelyClosedException e) {
+        if (ExceptionUtils.notFound(e) || ExceptionUtils.resourceDeleted(e)) {
+          this.close(ExceptionUtils.convert(e));
+        }
+      } catch (ClientConnectionRemotelyClosedException e) {
         // receiver is closed
       } catch (ClientException e) {
         java.util.function.Consumer<String> log =
@@ -168,6 +159,22 @@ class AmqpConsumer extends ResourceBase implements Consumer {
         createNativeReceiver(
             this.connection.nativeSession(false), this.address, this.initialCredits);
     startReceivingLoop();
+  }
+
+  private void close(Throwable cause) {
+    if (this.closed.compareAndSet(false, true)) {
+      this.state(CLOSING, cause);
+      this.connection.removeConsumer(this);
+      if (this.receiveLoop != null) {
+        this.receiveLoop.interrupt();
+      }
+      try {
+        this.nativeReceiver.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing receiver", e);
+      }
+      this.state(CLOSED, cause);
+    }
   }
 
   long id() {

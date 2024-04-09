@@ -18,6 +18,7 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Resource.State.OPEN;
+import static com.rabbitmq.model.amqp.ExceptionUtils.resourceDeleted;
 
 import com.rabbitmq.model.Message;
 import com.rabbitmq.model.ModelException;
@@ -83,8 +84,8 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             callback.handle(new DefaultContext(message, status));
           });
     } catch (ClientLinkRemotelyClosedException e) {
-      if (ExceptionUtils.resourceDeleted(e)) {
-        this.close();
+      if (ExceptionUtils.notFound(e) || resourceDeleted(e)) {
+        this.close(ExceptionUtils.convert(e));
       }
     } catch (ClientException e) {
       throw new ModelException(e);
@@ -97,16 +98,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
 
   @Override
   public void close() {
-    if (this.closed.compareAndSet(false, true)) {
-      this.state(State.CLOSING);
-      this.connection.removePublisher(this);
-      try {
-        this.sender.close();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing sender", e);
-      }
-      this.state(State.CLOSED);
-    }
+    this.close(null);
   }
 
   // internal API
@@ -121,6 +113,19 @@ class AmqpPublisher extends ResourceBase implements Publisher {
       }
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating publisher to {}", address);
+    }
+  }
+
+  private void close(Throwable cause) {
+    if (this.closed.compareAndSet(false, true)) {
+      this.state(State.CLOSING, cause);
+      this.connection.removePublisher(this);
+      try {
+        this.sender.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing sender", e);
+      }
+      this.state(State.CLOSED, cause);
     }
   }
 

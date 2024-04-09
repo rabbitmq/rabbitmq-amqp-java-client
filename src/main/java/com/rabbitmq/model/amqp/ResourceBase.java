@@ -38,7 +38,7 @@ abstract class ResourceBase implements Resource {
   protected void checkOpen() {
     if (this.state.get() != OPEN) {
       throw new ModelException(
-          "Connection is not open, current state is %s", this.state.get().name());
+          "Resource is not open, current state is %s", this.state.get().name());
     }
   }
 

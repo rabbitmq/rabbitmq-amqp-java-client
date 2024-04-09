@@ -39,4 +39,9 @@ abstract class ExceptionUtils {
     return e.getErrorCondition() != null
         && "amqp:resource-deleted".equals(e.getErrorCondition().condition());
   }
+
+  static boolean notFound(ClientResourceRemotelyClosedException e) {
+    return e.getErrorCondition() != null
+        && "amqp:not-found".equals(e.getErrorCondition().condition());
+  }
 }
