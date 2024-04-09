@@ -221,4 +221,35 @@ class Api {
     // end::unbinding[]
   }
 
+  void listeners() {
+    Environment environment = null;
+    // tag::listener-connection[]
+    Connection connection =  environment.connectionBuilder()
+        .listeners(context -> { // <1>
+      context.previousState(); // <2>
+      context.currentState(); // <3>
+      context.failureCause(); // <4>
+      context.resource(); // <5>
+    }).build();
+    // end::listener-connection[]
+
+    // tag::listener-publisher[]
+    Publisher publisher = connection.publisherBuilder()
+        .listeners(context -> { // <1>
+          // ...
+        })
+        .exchange("foo").key("bar")
+        .build();
+    // end::listener-publisher[]
+
+    // tag::listener-consumer[]
+    Consumer consumer = connection.consumerBuilder()
+        .listeners(context -> { // <1>
+          // ...
+        })
+        .queue("my-queue")
+        .build();
+    // end::listener-consumer[]
+  }
+
 }

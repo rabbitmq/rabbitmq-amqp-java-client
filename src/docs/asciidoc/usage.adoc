@@ -168,6 +168,47 @@ include::{test-examples}/Api.java[tag=exchange-binding]
 include::{test-examples}/Api.java[tag=unbinding]
 --------
 
+=== Lifecycle Listeners
+
+It is possible to add one or several listeners when creating a `Connection` instance:
+
+.Setting a listener on a connection
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=listener-connection]
+--------
+<1> Setting a listener
+<2> The previous state of the connection
+<3> The current (new) state of the connection
+<4> The cause of the failure (in case of failure)
+<5> The connection instance (as a `Resource`)
+
+It is also possible to set listeners on publisher instances:
+
+.Setting a listener on a publisher
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=listener-publisher]
+--------
+<1> Setting a listener
+
+And on consumer instances as well:
+
+.Setting a listener on a consumer
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=listener-consumer]
+--------
+<1> Setting a listener
+
+The listener API is the same for connection, publishers, and consumers.
+They all implement the {javadoc-url}/com/rabbitmq/model/Resource.html[`Resource`] marker interface.
+The {javadoc-url}/com/rabbitmq/model/Resource.StateListener.html[`StateListener`] interface has only one method that takes a {javadoc-url}/com/rabbitmq/model/Resource.Context.html[`Context`] argument.
+See the snippet above for the information available in the `Context`.
+
+A resource {javadoc-url}/com/rabbitmq/model/Resource.State.html[`State`] can have the following values: `OPENING`, `OPEN`, `RECOVERING`, `CLOSING`, `CLOSED`.
+
+
 == Dependencies
 
 Use your favorite build management tool to add the client dependencies to your project.

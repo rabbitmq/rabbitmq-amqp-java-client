@@ -4,6 +4,7 @@
 ifndef::imagesdir[:imagesdir: images]
 ifndef::sourcedir[:sourcedir: ../../main/java]
 :source-highlighter: prettify
+:javadoc-url: https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/
 
 [[license]]
 == License
