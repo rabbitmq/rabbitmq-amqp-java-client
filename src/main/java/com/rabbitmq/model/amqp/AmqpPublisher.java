@@ -18,6 +18,7 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Resource.State.OPEN;
+import static com.rabbitmq.model.amqp.ExceptionUtils.notFound;
 import static com.rabbitmq.model.amqp.ExceptionUtils.resourceDeleted;
 
 import com.rabbitmq.model.Message;
@@ -84,7 +85,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             callback.handle(new DefaultContext(message, status));
           });
     } catch (ClientLinkRemotelyClosedException e) {
-      if (ExceptionUtils.notFound(e) || resourceDeleted(e)) {
+      if (notFound(e) || resourceDeleted(e)) {
         this.close(ExceptionUtils.convert(e));
       }
     } catch (ClientException e) {

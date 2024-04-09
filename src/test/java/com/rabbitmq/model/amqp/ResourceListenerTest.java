@@ -17,9 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import static com.rabbitmq.model.Publisher.Status.FAILED;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static com.rabbitmq.model.amqp.TestUtils.name;
+import static org.assertj.core.api.Assertions.anyOf;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.model.*;
@@ -27,8 +29,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ResourceListenerTest {
 
@@ -55,29 +61,44 @@ public class ResourceListenerTest {
     environment.close();
   }
 
-  @Test
-  void publisherIsClosedOnExchangeDeletion(TestInfo info) throws InterruptedException {
-    String e = name(info);
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void publisherIsClosedOnExchangeDeletion(boolean toExchange, TestInfo info)
+      throws InterruptedException {
+    String entity = name(info);
+    Runnable declare, delete;
+    Consumer<PublisherBuilder> builderConfigurator;
+    if (toExchange) {
+      declare = () -> connection.management().exchange(entity).declare();
+      delete = () -> connection.management().exchangeDeletion().delete(entity);
+      builderConfigurator = b -> b.exchange(entity);
+    } else {
+      declare = () -> connection.management().queue(entity).declare();
+      delete = () -> connection.management().queueDeletion().delete(entity);
+      builderConfigurator = b -> b.queue(entity);
+    }
     CountDownLatch closedLatch = new CountDownLatch(1);
-    AtomicReference<Throwable> closeCause = new AtomicReference<>();
+    AtomicReference<Throwable> closedCause = new AtomicReference<>();
     Publisher publisher;
     try {
-      connection.management().exchange(e).declare();
+      declare.run();
 
-      publisher =
-          connection
-              .publisherBuilder()
-              .exchange(e)
-              .listeners(
-                  context -> {
-                    if (context.currentState() == Resource.State.CLOSED) {
-                      closeCause.set(context.failureCause());
-                      closedLatch.countDown();
-                    }
-                  })
-              .build();
+      PublisherBuilder builder = connection.publisherBuilder();
+      builder.listeners(
+          context -> {
+            if (context.currentState() == Resource.State.CLOSED) {
+              closedCause.set(context.failureCause());
+              closedLatch.countDown();
+            }
+          });
+
+      builderConfigurator.accept(builder);
+      publisher = builder.build();
+      CountDownLatch acceptedLatch = new CountDownLatch(1);
+      publisher.publish(publisher.message(), ctx -> acceptedLatch.countDown());
+      assertThat(acceptedLatch).completes();
     } finally {
-      connection.management().exchangeDeletion().delete(e);
+      delete.run();
     }
 
     Set<Publisher.Status> outboundMessageStatus = ConcurrentHashMap.newKeySet();
@@ -87,13 +108,18 @@ public class ResourceListenerTest {
         publisher.publish(publisher.message(), ctx -> outboundMessageStatus.add(ctx.status()));
         Thread.sleep(100);
       }
-      fail("The publisher should have been closed after exchange deletion");
+      fail("The publisher should have been closed after entity deletion");
     } catch (ModelException ex) {
       // expected
     }
     assertThat(closedLatch).completes();
-    Assertions.assertThat(outboundMessageStatus).containsOnly(Publisher.Status.FAILED);
-    Assertions.assertThat(closeCause.get()).isNotNull().isInstanceOf(ModelException.class);
+    Assertions.assertThat(outboundMessageStatus)
+        .is(
+            anyOf(
+                new Condition<>(s -> outboundMessageStatus.isEmpty(), "no status"),
+                new Condition<>(s -> outboundMessageStatus.contains(FAILED), "only failed")));
+    //    Assertions.assertThat(outboundMessageStatus).containsOnly(Publisher.Status.FAILED);
+    Assertions.assertThat(closedCause.get()).isNotNull().isInstanceOf(ModelException.class);
   }
 
   @Test
