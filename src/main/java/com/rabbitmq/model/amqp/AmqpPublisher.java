@@ -85,9 +85,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             callback.handle(new DefaultContext(message, status));
           });
     } catch (ClientLinkRemotelyClosedException e) {
-      if (notFound(e) || resourceDeleted(e)) {
-        this.close(ExceptionUtils.convert(e));
-      }
+      this.close(ExceptionUtils.convert(e));
     } catch (ClientException e) {
       throw new ModelException(e);
     }
