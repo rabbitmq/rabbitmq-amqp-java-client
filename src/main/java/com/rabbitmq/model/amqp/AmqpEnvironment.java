@@ -26,11 +26,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class AmqpEnvironment implements Environment {
+
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
   private final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
 
@@ -41,14 +44,16 @@ class AmqpEnvironment implements Environment {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
   private final List<AmqpConnection> connections = Collections.synchronizedList(new ArrayList<>());
+  private final long id;
 
   AmqpEnvironment(String uri, ExecutorService executorService) {
+    this.id = ID_SEQUENCE.getAndIncrement();
     this.connectionParameters = connectionParameters(uri);
     ClientOptions clientOptions = new ClientOptions();
     this.client = Client.create(clientOptions);
 
     if (executorService == null) {
-      this.executorService = Utils.executorService();
+      this.executorService = Utils.executorService("rabbitmq-amqp-environment-%d-", this.id);
       this.internalExecutor = true;
     } else {
       this.executorService = executorService;
@@ -141,5 +146,10 @@ class AmqpEnvironment implements Environment {
 
   void addConnection(AmqpConnection connection) {
     this.connections.add(connection);
+  }
+
+  @Override
+  public String toString() {
+    return "rabbitmq-amqp-" + this.id;
   }
 }

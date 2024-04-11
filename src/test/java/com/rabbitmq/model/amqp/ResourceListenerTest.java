@@ -129,8 +129,10 @@ public class ResourceListenerTest {
     AtomicReference<Throwable> closeCause = new AtomicReference<>();
     try {
       connection.management().queue(q).declare();
+      CountDownLatch consumeLatch = new CountDownLatch(1);
       connection
           .consumerBuilder()
+          .messageHandler((ctx, msg) -> consumeLatch.countDown())
           .queue(q)
           .listeners(
               ctx -> {
@@ -140,6 +142,11 @@ public class ResourceListenerTest {
                 }
               })
           .build();
+
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeLatch).completes();
+
     } finally {
       connection.management().queueDeletion().delete(q);
     }

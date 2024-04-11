@@ -21,7 +21,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +30,6 @@ abstract class Utils {
   private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
   private static final Function<String, ExecutorService> EXECUTOR_SERVICE_FACTORY;
-
-  private static final BiFunction<String, Runnable, Thread> THREAD_FACTORY;
 
   static {
     if (isJava21OrMore()) {
@@ -65,40 +62,15 @@ abstract class Utils {
               throw new RuntimeException(e);
             }
           };
-      THREAD_FACTORY =
-          (name, operation) -> {
-            // Reflection code is the same as the following line:
-            // Thread.ofVirtual().name(name).unstarted(operation);
-            try {
-              Object builder = Thread.class.getDeclaredMethod("ofVirtual").invoke(null);
-              builder = builderClass.getDeclaredMethod("name", String.class).invoke(builder, name);
-              return (Thread)
-                  builderClass
-                      .getDeclaredMethod("unstarted", Runnable.class)
-                      .invoke(builder, operation);
-            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-              throw new RuntimeException(e);
-            }
-          };
     } else {
       EXECUTOR_SERVICE_FACTORY = prefix -> Executors.newCachedThreadPool(threadFactory(prefix));
-      THREAD_FACTORY =
-          (name, operation) -> {
-            Thread thread = Executors.defaultThreadFactory().newThread(operation);
-            thread.setName(name);
-            return thread;
-          };
     }
   }
 
   private Utils() {}
 
-  static ExecutorService executorService() {
-    return EXECUTOR_SERVICE_FACTORY.apply(null);
-  }
-
-  static Thread newThread(String name, Runnable operation) {
-    return THREAD_FACTORY.apply(name, operation);
+  static ExecutorService executorService(String prefixFormat, Object... args) {
+    return EXECUTOR_SERVICE_FACTORY.apply(String.format(prefixFormat, args));
   }
 
   private static boolean isJava21OrMore() {
@@ -196,18 +168,14 @@ abstract class Utils {
   }
 
   static String extractQueueFromSourceAddress(String address) {
-    // from
-    // https://github.com/rabbitmq/rabbitmq-server/blob/v3.12.x/deps/rabbitmq_amqp1_0/README.md#routing-and-addressing
     if (address == null) {
       return null;
-    } else if (address.startsWith("/exchange/") || address.startsWith("/topic/")) {
-      return null;
-    } else if (address.startsWith("/amq/queue/")) {
-      return address.replace("/amq/queue/", "");
     } else if (address.startsWith("/queue/")) {
       return address.replace("/queue/", "");
+    } else if (address.startsWith("/exchange/") || address.startsWith("/topic/")) {
+      return null;
     } else {
-      return address;
+      return null;
     }
   }
 

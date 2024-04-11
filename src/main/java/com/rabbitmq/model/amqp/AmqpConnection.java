@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
@@ -41,7 +42,10 @@ import org.slf4j.LoggerFactory;
 
 class AmqpConnection extends ResourceBase implements Connection {
 
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
+
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConnection.class);
+  private final long id;
   private final AmqpEnvironment environment;
   private final AmqpManagement management;
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
@@ -51,12 +55,13 @@ class AmqpConnection extends ResourceBase implements Connection {
   private final List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
   private volatile EntityRecovery entityRecovery;
-  private final Thread recoveryLoop;
+  private final Future<?> recoveryLoop;
   private final BlockingQueue<Runnable> recoveryRequestQueue;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
+    this.id = ID_SEQUENCE.getAndIncrement();
     this.environment = builder.environment();
 
     Utils.ConnectionParameters connectionParameters = this.environment.connectionParameters();
@@ -69,21 +74,20 @@ class AmqpConnection extends ResourceBase implements Connection {
     if (recoveryConfiguration.activated()) {
       this.recoveryRequestQueue = new ArrayBlockingQueue<>(10);
       this.recoveryLoop =
-          Utils.newThread(
-              "rabbitmq-amqp-connection-recovery",
-              () -> {
-                while (!Thread.currentThread().isInterrupted()) {
-                  try {
-                    Runnable recoveryTask = this.recoveryRequestQueue.take();
-                    recoveryTask.run();
-                  } catch (InterruptedException e) {
-                    return;
-                  } catch (Exception e) {
-                    LOGGER.warn("Error during connection recovery", e);
-                  }
-                }
-              });
-      this.recoveryLoop.start();
+          this.executorService()
+              .submit(
+                  () -> {
+                    while (!Thread.currentThread().isInterrupted()) {
+                      try {
+                        Runnable recoveryTask = this.recoveryRequestQueue.take();
+                        recoveryTask.run();
+                      } catch (InterruptedException e) {
+                        return;
+                      } catch (Exception e) {
+                        LOGGER.warn("Error during connection recovery", e);
+                      }
+                    }
+                  });
       disconnectHandler =
           recoveryDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
     } else {
@@ -137,7 +141,7 @@ class AmqpConnection extends ResourceBase implements Connection {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING);
       if (this.recoveryLoop != null) {
-        this.recoveryLoop.interrupt();
+        this.recoveryLoop.cancel(true);
       }
       if (this.topologyListener instanceof AutoCloseable) {
         try {
@@ -193,7 +197,7 @@ class AmqpConnection extends ResourceBase implements Connection {
   TopologyListener createTopologyListener(AmqpConnectionBuilder builder) {
     TopologyListener topologyListener;
     if (builder.recoveryConfiguration().topology()) {
-      RecordingTopologyListener rtl = new RecordingTopologyListener();
+      RecordingTopologyListener rtl = new RecordingTopologyListener(this.executorService());
       this.entityRecovery = new EntityRecovery(this, rtl);
       topologyListener = rtl;
     } else {
@@ -468,5 +472,10 @@ class AmqpConnection extends ResourceBase implements Connection {
   private void changeStateOfResources(
       List<? extends ResourceBase> resources, State newState, Throwable failure) {
     resources.forEach(r -> r.state(newState, failure));
+  }
+
+  @Override
+  public String toString() {
+    return this.environment.toString() + "-" + this.id;
   }
 }

@@ -25,13 +25,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 public class UtilsTest {
 
   @ParameterizedTest
-  @CsvSource({
-    "/exchange/foo/bar,",
-    "/topic/foo,",
-    "/amq/queue/foo,foo",
-    "/queue/foo,foo",
-    "foo,foo"
-  })
+  @CsvSource({"/exchange/foo/bar,", "/topic/foo,", "/queue/foo,foo", "foo,"})
   void extractQueueFromSourceAddress(String address, String expectedQueue) {
     assertThat(Utils.extractQueueFromSourceAddress(address)).isEqualTo(expectedQueue);
   }

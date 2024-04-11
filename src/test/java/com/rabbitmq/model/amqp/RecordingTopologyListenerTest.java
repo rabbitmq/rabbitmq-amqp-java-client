@@ -21,17 +21,28 @@ import static com.rabbitmq.model.amqp.RecordingTopologyListenerTest.RecoveryAsse
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.assertj.core.api.AbstractObjectAssert;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class RecordingTopologyListenerTest {
 
   RecordingTopologyListener recovery;
+  ExecutorService executorService;
 
   @BeforeEach
   void init() {
-    recovery = new RecordingTopologyListener();
+    executorService = Executors.newSingleThreadExecutor();
+    recovery = new RecordingTopologyListener(executorService);
+  }
+
+  @AfterEach
+  void tearDown() {
+    recovery.close();
+    executorService.shutdownNow();
   }
 
   @Test
@@ -86,20 +97,20 @@ public class RecordingTopologyListenerTest {
     recovery.queueDeclared(queue("q2"));
     recovery.queueDeclared(autoDeleteQueue("ad-q"));
 
-    recovery.consumerCreated(1, "q1");
-    recovery.consumerCreated(2, "q2");
-    recovery.consumerCreated(3, "ad-q");
-    recovery.consumerCreated(4, "ad-q");
+    recovery.consumerCreated(1, "/queue/q1");
+    recovery.consumerCreated(2, "/queue/q2");
+    recovery.consumerCreated(3, "/queue/ad-q");
+    recovery.consumerCreated(4, "/queue/ad-q");
 
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(1, "q1");
+    recovery.consumerDeleted(1, "/queue/q1");
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(3, "ad-q");
+    recovery.consumerDeleted(3, "/queue/ad-q");
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(4, "ad-q");
+    recovery.consumerDeleted(4, "/queue/ad-q");
     assertThat(recovery).hasQueueCount(2).hasQueues("q1", "q2");
   }
 

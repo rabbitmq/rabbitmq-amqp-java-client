@@ -38,13 +38,16 @@ class RecordingTopologyListener implements TopologyListener, AutoCloseable {
   private final Set<BindingSpec> bindings = new LinkedHashSet<>();
   private final Map<Long, ConsumerSpec> consumers = new LinkedHashMap<>();
   private final BlockingQueue<Runnable> taskQueue = new ArrayBlockingQueue<>(100);
-  private final Thread loop;
+  private final Future<?> loop;
+  private final AtomicReference<Thread> loopThread = new AtomicReference<>();
 
-  RecordingTopologyListener() {
+  RecordingTopologyListener(ExecutorService executorService) {
+    CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
     this.loop =
-        Utils.newThread(
-            "rabbitmq-amqp-recording-topology-listener",
+        executorService.submit(
             () -> {
+              loopThread.set(Thread.currentThread());
+              loopThreadSetLatch.countDown();
               while (!Thread.currentThread().isInterrupted()) {
                 try {
                   Runnable task = this.taskQueue.take();
@@ -56,7 +59,14 @@ class RecordingTopologyListener implements TopologyListener, AutoCloseable {
                 }
               }
             });
-    this.loop.start();
+    try {
+      if (!loopThreadSetLatch.await(10, TimeUnit.SECONDS)) {
+        throw new IllegalStateException("Recording topology loop could not start");
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new ModelException("Error while creating recording topology listener", e);
+    }
   }
 
   @Override
@@ -137,11 +147,11 @@ class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
   @Override
   public void close() {
-    this.loop.interrupt();
+    this.loop.cancel(true);
   }
 
   private void submit(Runnable task) {
-    if (Thread.currentThread().equals(this.loop)) {
+    if (Thread.currentThread().equals(this.loopThread.get())) {
       task.run();
     } else {
       CountDownLatch latch = new CountDownLatch(1);

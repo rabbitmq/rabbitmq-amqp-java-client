@@ -19,7 +19,6 @@ package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.amqp.UriUtils.encodeHttpParameter;
 import static com.rabbitmq.model.amqp.UriUtils.encodePathSegment;
-import static com.rabbitmq.model.amqp.Utils.newThread;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.model.Management;
@@ -29,6 +28,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,6 +57,7 @@ class AmqpManagement implements Management {
   private static final String CODE_204 = "204";
 
   private final AmqpConnection connection;
+  private final Long id;
   private volatile Session session;
   private volatile Sender sender;
   private volatile Receiver receiver;
@@ -65,10 +66,11 @@ class AmqpManagement implements Management {
   private final Duration rpcTimeout = Duration.ofSeconds(10);
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
       new ConcurrentHashMap<>();
-  private volatile Thread receiveLoop;
+  private volatile Future<?> receiveLoop;
   private final TopologyListener topologyListener;
 
   AmqpManagement(AmqpManagementParameters parameters) {
+    this.id = ID_SEQUENCE.getAndIncrement();
     this.connection = parameters.connection();
     this.topologyListener =
         parameters.topologyListener() == null
@@ -198,10 +200,7 @@ class AmqpManagement implements Management {
                 log.accept("Error while polling AMQP receiver");
               }
             };
-        this.receiveLoop =
-            newThread(
-                "rabbitmq-amqp-management-consumer-" + ID_SEQUENCE.getAndIncrement(), receiveTask);
-        this.receiveLoop.start();
+        this.receiveLoop = this.connection.executorService().submit(receiveTask);
       } catch (Exception e) {
         throw new ModelException(e);
       }
@@ -210,7 +209,7 @@ class AmqpManagement implements Management {
 
   void releaseResources() {
     if (this.receiveLoop != null) {
-      this.receiveLoop.interrupt();
+      this.receiveLoop.cancel(true);
     }
     this.initialized.set(false);
   }
@@ -545,5 +544,10 @@ class AmqpManagement implements Management {
           + consumerCount
           + '}';
     }
+  }
+
+  @Override
+  public String toString() {
+    return this.connection.toString() + "-" + this.id;
   }
 }

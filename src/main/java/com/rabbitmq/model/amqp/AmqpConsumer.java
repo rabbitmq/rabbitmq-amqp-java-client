@@ -18,7 +18,6 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Resource.State.*;
-import static com.rabbitmq.model.amqp.Utils.newThread;
 
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
@@ -40,7 +39,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
 
   private volatile Receiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile Thread receiveLoop;
+  private volatile Future<?> receiveLoop;
   private final int initialCredits;
   private final MessageHandler messageHandler;
   private final Long id;
@@ -150,8 +149,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private void startReceivingLoop() {
     Semaphore inFlightMessages = new Semaphore(initialCredits);
     Runnable receiveTask = createReceiveTask(nativeReceiver, messageHandler, inFlightMessages);
-    this.receiveLoop = newThread("rabbitmq-amqp-consumer-" + this.id, receiveTask);
-    this.receiveLoop.start();
+    this.receiveLoop = this.connection.executorService().submit(receiveTask);
   }
 
   void recoverAfterConnectionFailure() {
@@ -166,7 +164,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
       if (this.receiveLoop != null) {
-        this.receiveLoop.interrupt();
+        this.receiveLoop.cancel(true);
       }
       try {
         this.nativeReceiver.close();
