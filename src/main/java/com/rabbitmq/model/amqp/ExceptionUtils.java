@@ -41,7 +41,6 @@ abstract class ExceptionUtils {
   }
 
   static boolean notFound(ClientResourceRemotelyClosedException e) {
-    System.out.println(e.getMessage());
     return e.getErrorCondition() != null
         && "amqp:not-found".equals(e.getErrorCondition().condition());
   }

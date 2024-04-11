@@ -81,7 +81,6 @@ public class AmqpPerfTest {
                       })
                   .collect(Collectors.joining(", "));
           builder.append(counterReport);
-          System.out.println(builder);
 
           reportCount.incrementAndGet();
         },
