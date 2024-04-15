@@ -252,4 +252,38 @@ class Api {
     // end::listener-consumer[]
   }
 
+  void connectionRecoveryBackOff() {
+    Environment environment = null;
+    // tag::connection-recovery-back-off[]
+    Connection connection = environment.connectionBuilder()
+        .recovery() // <1>
+        .backOffDelayPolicy(BackOffDelayPolicy.fixed(Duration.ofSeconds(2))) // <2>
+        .connectionBuilder().build();
+    // end::connection-recovery-back-off[]
+  }
+
+  void connectionRecoveryNoTopologyRecovery() {
+    Environment environment = null;
+    // tag::connection-recovery-no-topology-recovery[]
+    Connection connection = environment.connectionBuilder()
+        .recovery()
+        .topology(false) // <1>
+        .connectionBuilder()
+        .listeners(context -> {
+          // <2>
+        })
+        .build();
+    // end::connection-recovery-no-topology-recovery[]
+  }
+
+  void connectionRecoveryDeactivate() {
+    Environment environment = null;
+    // tag::connection-recovery-deactivate[]
+    Connection connection = environment.connectionBuilder()
+        .recovery()
+        .activated(false) // <1>
+        .connectionBuilder().build();
+    // end::connection-recovery-deactivate[]
+  }
+
 }
