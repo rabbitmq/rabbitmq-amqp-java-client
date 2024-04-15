@@ -18,18 +18,15 @@
 package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Resource.State.OPEN;
-import static com.rabbitmq.model.amqp.ExceptionUtils.notFound;
-import static com.rabbitmq.model.amqp.ExceptionUtils.resourceDeleted;
 
 import com.rabbitmq.model.Message;
-import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.Publisher;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,10 +81,12 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             }
             callback.handle(new DefaultContext(message, status));
           });
-    } catch (ClientLinkRemotelyClosedException e) {
+    } catch (ClientIllegalStateException e) {
+      // the link is closed
       this.close(ExceptionUtils.convert(e));
+      throw ExceptionUtils.convert(e);
     } catch (ClientException e) {
-      throw new ModelException(e);
+      throw ExceptionUtils.convert(e);
     }
   }
 
