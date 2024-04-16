@@ -26,22 +26,16 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   private final DefaultEnvironmentConnectionSettings connectionSettings =
       new DefaultEnvironmentConnectionSettings(this);
-  private String uri = "amqp://guest:guest@localhost:5672/%2f";
   private ExecutorService executorService;
 
   public AmqpEnvironmentBuilder() {}
-
-  public AmqpEnvironmentBuilder uri(String uri) {
-    this.uri = uri;
-    return this;
-  }
 
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
     return this;
   }
 
-  DefaultEnvironmentConnectionSettings connectionSettings() {
+  public EnvironmentConnectionSettings connectionSettings() {
     return this.connectionSettings;
   }
 
@@ -50,7 +44,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return new AmqpEnvironment(executorService, connectionSettings);
   }
 
-  interface EnvironmentConnectionSettings
+  public interface EnvironmentConnectionSettings
       extends ConnectionSettings<EnvironmentConnectionSettings> {
 
     AmqpEnvironmentBuilder environmentBuilder();

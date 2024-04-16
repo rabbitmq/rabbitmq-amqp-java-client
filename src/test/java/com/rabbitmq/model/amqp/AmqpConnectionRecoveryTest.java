@@ -52,7 +52,7 @@ public class AmqpConnectionRecoveryTest {
 
   @BeforeAll
   static void initAll() {
-    environment = new AmqpEnvironment(null, new AmqpEnvironmentBuilder().connectionSettings());
+    environment = new AmqpEnvironment(null, DefaultConnectionSettings.instance());
   }
 
   @AfterAll

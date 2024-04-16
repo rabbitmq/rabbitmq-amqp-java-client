@@ -25,6 +25,20 @@ It exposes an API to create publishers, consumers, and to manage resources (exch
 include::{test-examples}/Api.java[tag=connection-creation]
 --------
 
+=== Connection Settings
+
+Connection settings (URI, credentials, etc) can be set at the environment level.
+They will then be re-used for each connection.
+It is possible to override the environment connection settings for a given connection:
+
+.Connection settings at the environment and connection levels
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=connection-settings]
+--------
+<1> Use the `guest` user by default
+<2> Use the `admin` user for this connection
+
 
 === Publishing
 

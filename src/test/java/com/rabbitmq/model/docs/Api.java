@@ -31,7 +31,6 @@ class Api {
   void environment() {
     // tag::environment-creation[]
     Environment environment = new AmqpEnvironmentBuilder()
-        .uri("amqp://guest:guest@localhost:5672/%2f")
         .build();
     // end::environment-creation[]
   }
@@ -43,6 +42,20 @@ class Api {
         .build();
     // end::connection-creation[]
   }
+
+  void connectionSettings() {
+    // tag::connection-settings[]
+    Environment environment = new AmqpEnvironmentBuilder()
+        .connectionSettings()
+        .uri("amqp://guest:guest@localhost:5672/%2f") // <1>
+        .environmentBuilder().build();
+
+    Connection connection = environment.connectionBuilder()
+        .uri("amqp://admin:admin@localhost:5672/%2f") // <2>
+        .build();
+    // end::connection-settings[]
+  }
+
 
   void publishing() {
     Connection connection = null;
