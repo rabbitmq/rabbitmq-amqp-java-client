@@ -139,7 +139,7 @@ class AmqpManagement implements Management {
 
   @Override
   public void close() {
-    if (this.closed.compareAndSet(false, true)) {
+    if (this.closed.compareAndSet(false, true) && this.initialized.get()) {
       this.releaseResources();
       this.receiver.close();
       this.sender.close();

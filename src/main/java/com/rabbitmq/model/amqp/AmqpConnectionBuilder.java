@@ -21,18 +21,67 @@ import com.rabbitmq.model.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 class AmqpConnectionBuilder implements ConnectionBuilder {
 
   private final AmqpEnvironment environment;
   private final AmqpRecoveryConfiguration recoveryConfiguration =
       new AmqpRecoveryConfiguration(this);
+  private final DefaultConnectionSettings<AmqpConnectionBuilder> connectionSettings =
+      new AmqpConnectionBuilderConnectionSettings(this);
   private final List<Resource.StateListener> listeners = new ArrayList<>();
   private String name;
   private TopologyListener topologyListener;
 
   AmqpConnectionBuilder(AmqpEnvironment environment) {
     this.environment = environment;
+    this.environment.connectionSettings().copyTo(this.connectionSettings);
+  }
+
+  @Override
+  public ConnectionBuilder uri(String uri) {
+    return this.connectionSettings.uri(uri);
+  }
+
+  @Override
+  public ConnectionBuilder uris(String... uris) {
+    return this.connectionSettings.uris(uris);
+  }
+
+  @Override
+  public ConnectionBuilder username(String username) {
+    return this.connectionSettings.username(username);
+  }
+
+  @Override
+  public ConnectionBuilder password(String password) {
+    return this.connectionSettings.password(password);
+  }
+
+  @Override
+  public ConnectionBuilder host(String host) {
+    return this.connectionSettings.host(host);
+  }
+
+  @Override
+  public ConnectionBuilder port(int port) {
+    return this.connectionSettings.port(port);
+  }
+
+  @Override
+  public ConnectionBuilder virtualHost(String virtualHost) {
+    return this.connectionSettings.virtualHost(virtualHost);
+  }
+
+  @Override
+  public ConnectionBuilder credentialsProvider(CredentialsProvider credentialsProvider) {
+    return this.connectionSettings.credentialsProvider(credentialsProvider);
+  }
+
+  @Override
+  public ConnectionBuilder addressSelector(Function<List<Address>, Address> selector) {
+    return null;
   }
 
   @Override
@@ -89,6 +138,10 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     return listeners;
   }
 
+  DefaultConnectionSettings<AmqpConnectionBuilder> connectionSettings() {
+    return this.connectionSettings;
+  }
+
   static class AmqpRecoveryConfiguration implements RecoveryConfiguration {
 
     private final AmqpConnectionBuilder connectionBuilder;
@@ -133,6 +186,21 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
     BackOffDelayPolicy backOffDelayPolicy() {
       return this.backOffDelayPolicy;
+    }
+  }
+
+  static class AmqpConnectionBuilderConnectionSettings
+      extends DefaultConnectionSettings<AmqpConnectionBuilder> {
+
+    private final AmqpConnectionBuilder builder;
+
+    private AmqpConnectionBuilderConnectionSettings(AmqpConnectionBuilder builder) {
+      this.builder = builder;
+    }
+
+    @Override
+    AmqpConnectionBuilder toReturn() {
+      return this.builder;
     }
   }
 }

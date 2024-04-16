@@ -17,22 +17,26 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder> {
+import java.util.List;
+import java.util.function.Function;
 
-  RecoveryConfiguration recovery();
+public interface ConnectionSettings<T> {
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+  T uri(String uri);
 
-  Connection build();
+  T uris(String... uris);
 
-  interface RecoveryConfiguration {
+  T username(String username);
 
-    RecoveryConfiguration activated(boolean activated);
+  T password(String password);
 
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
+  T host(String host);
 
-    RecoveryConfiguration topology(boolean activated);
+  T port(int port);
 
-    ConnectionBuilder connectionBuilder();
-  }
+  T virtualHost(String virtualHost);
+
+  T credentialsProvider(CredentialsProvider credentialsProvider);
+
+  T addressSelector(Function<List<Address>, Address> selector);
 }

@@ -17,22 +17,24 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder> {
+public class DefaultUsernamePasswordCredentialsProvider
+    implements UsernamePasswordCredentialsProvider {
 
-  RecoveryConfiguration recovery();
+  private final String username;
+  private final String password;
 
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
+  public DefaultUsernamePasswordCredentialsProvider(String username, String password) {
+    this.username = username;
+    this.password = password;
+  }
 
-  Connection build();
+  @Override
+  public String getUsername() {
+    return this.username;
+  }
 
-  interface RecoveryConfiguration {
-
-    RecoveryConfiguration activated(boolean activated);
-
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
-
-    RecoveryConfiguration topology(boolean activated);
-
-    ConnectionBuilder connectionBuilder();
+  @Override
+  public String getPassword() {
+    return this.password;
   }
 }

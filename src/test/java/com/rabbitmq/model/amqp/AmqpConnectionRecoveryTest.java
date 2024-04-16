@@ -52,7 +52,7 @@ public class AmqpConnectionRecoveryTest {
 
   @BeforeAll
   static void initAll() {
-    environment = new AmqpEnvironment("amqp://guest:guest@localhost:5672/%2f", null);
+    environment = new AmqpEnvironment(null, new AmqpEnvironmentBuilder().connectionSettings());
   }
 
   @AfterAll

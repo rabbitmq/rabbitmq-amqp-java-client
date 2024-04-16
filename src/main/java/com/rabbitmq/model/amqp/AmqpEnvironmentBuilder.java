@@ -17,12 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import com.rabbitmq.model.ConnectionSettings;
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.EnvironmentBuilder;
 import java.util.concurrent.ExecutorService;
 
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
+  private final DefaultEnvironmentConnectionSettings connectionSettings =
+      new DefaultEnvironmentConnectionSettings(this);
   private String uri = "amqp://guest:guest@localhost:5672/%2f";
   private ExecutorService executorService;
 
@@ -38,8 +41,39 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return this;
   }
 
+  DefaultEnvironmentConnectionSettings connectionSettings() {
+    return this.connectionSettings;
+  }
+
   @Override
   public Environment build() {
-    return new AmqpEnvironment(uri, executorService);
+    return new AmqpEnvironment(executorService, connectionSettings);
+  }
+
+  interface EnvironmentConnectionSettings
+      extends ConnectionSettings<EnvironmentConnectionSettings> {
+
+    AmqpEnvironmentBuilder environmentBuilder();
+  }
+
+  static class DefaultEnvironmentConnectionSettings
+      extends DefaultConnectionSettings<EnvironmentConnectionSettings>
+      implements EnvironmentConnectionSettings {
+
+    private final AmqpEnvironmentBuilder builder;
+
+    public DefaultEnvironmentConnectionSettings(AmqpEnvironmentBuilder builder) {
+      this.builder = builder;
+    }
+
+    @Override
+    EnvironmentConnectionSettings toReturn() {
+      return this;
+    }
+
+    @Override
+    public AmqpEnvironmentBuilder environmentBuilder() {
+      return this.builder;
+    }
   }
 }

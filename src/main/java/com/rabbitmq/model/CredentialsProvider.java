@@ -17,22 +17,4 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder> {
-
-  RecoveryConfiguration recovery();
-
-  ConnectionBuilder listeners(Resource.StateListener... listeners);
-
-  Connection build();
-
-  interface RecoveryConfiguration {
-
-    RecoveryConfiguration activated(boolean activated);
-
-    RecoveryConfiguration backOffDelayPolicy(BackOffDelayPolicy backOffDelayPolicy);
-
-    RecoveryConfiguration topology(boolean activated);
-
-    ConnectionBuilder connectionBuilder();
-  }
-}
+public interface CredentialsProvider {}

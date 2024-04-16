@@ -18,9 +18,6 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.*;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -37,18 +34,21 @@ class AmqpEnvironment implements Environment {
 
   private final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
 
-  private final Utils.ConnectionParameters connectionParameters;
-
   private final Client client;
   private final ExecutorService executorService;
+  private final DefaultConnectionSettings<?> connectionSettings =
+      DefaultConnectionSettings.instance();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
   private final List<AmqpConnection> connections = Collections.synchronizedList(new ArrayList<>());
   private final long id;
 
-  AmqpEnvironment(String uri, ExecutorService executorService) {
+  AmqpEnvironment(
+      ExecutorService executorService,
+      AmqpEnvironmentBuilder.DefaultEnvironmentConnectionSettings connectionSettings) {
     this.id = ID_SEQUENCE.getAndIncrement();
-    this.connectionParameters = connectionParameters(uri);
+    connectionSettings.copyTo(this.connectionSettings);
+    this.connectionSettings.consolidate();
     ClientOptions clientOptions = new ClientOptions();
     this.client = Client.create(clientOptions);
 
@@ -61,51 +61,12 @@ class AmqpEnvironment implements Environment {
     }
   }
 
-  Utils.ConnectionParameters connectionParameters() {
-    return this.connectionParameters;
+  DefaultConnectionSettings<?> connectionSettings() {
+    return this.connectionSettings;
   }
 
   Client client() {
     return this.client;
-  }
-
-  private Utils.ConnectionParameters connectionParameters(String uriString) {
-    String username = "guest";
-    String password = "guest";
-    String host = "localhost";
-    String virtualHost = "/";
-    int port = 5672;
-    URI uri = URI.create(uriString);
-    if (uri.getHost() != null) {
-      host = uri.getHost();
-    }
-
-    if (uri.getPort() != -1) {
-      port = uri.getPort();
-    }
-
-    String userInfo = uri.getRawUserInfo();
-    if (userInfo != null) {
-      String[] userPassword = userInfo.split(":");
-      if (userPassword.length > 2) {
-        throw new IllegalArgumentException("Bad user info in URI " + userInfo);
-      }
-
-      username = uriDecode(userPassword[0]);
-      if (userPassword.length == 2) {
-        password = uriDecode(userPassword[1]);
-      }
-    }
-
-    String path = uri.getRawPath();
-    if (path != null && !path.isEmpty()) {
-      if (path.indexOf('/', 1) != -1) {
-        throw new IllegalArgumentException("Multiple segments in path of URI: " + path);
-      }
-      virtualHost = uriDecode(uri.getPath().substring(1));
-    }
-
-    return new Utils.ConnectionParameters(username, password, host, virtualHost, port);
   }
 
   @Override
@@ -128,16 +89,6 @@ class AmqpEnvironment implements Environment {
   @Override
   public ConnectionBuilder connectionBuilder() {
     return new AmqpConnectionBuilder(this);
-  }
-
-  private static String uriDecode(String s) {
-    try {
-      // URLDecode decodes '+' to a space, as for
-      // form encoding. So protect plus signs.
-      return URLDecoder.decode(s.replace("+", "%2B"), "US-ASCII");
-    } catch (IOException e) {
-      throw new IllegalArgumentException(e);
-    }
   }
 
   ExecutorService executorService() {

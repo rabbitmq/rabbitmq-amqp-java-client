@@ -49,6 +49,7 @@ class AmqpConnection extends ResourceBase implements Connection {
   private final AmqpEnvironment environment;
   private final AmqpManagement management;
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
+  private volatile Address connectionAddress;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Session nativeSession;
   private final List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
@@ -58,13 +59,16 @@ class AmqpConnection extends ResourceBase implements Connection {
   private final Future<?> recoveryLoop;
   private final BlockingQueue<Runnable> recoveryRequestQueue;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
+  private final DefaultConnectionSettings<?> connectionSettings =
+      DefaultConnectionSettings.instance();
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.environment = builder.environment();
+    builder.connectionSettings().copyTo(this.connectionSettings);
+    this.connectionSettings.consolidate();
 
-    Utils.ConnectionParameters connectionParameters = this.environment.connectionParameters();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
     AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
         builder.recoveryConfiguration();
@@ -88,8 +92,7 @@ class AmqpConnection extends ResourceBase implements Connection {
                       }
                     }
                   });
-      disconnectHandler =
-          recoveryDisconnectHandler(recoveryConfiguration, connectionParameters, builder.name());
+      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, builder.name());
     } else {
       disconnectHandler =
           (c, e) -> {
@@ -103,7 +106,7 @@ class AmqpConnection extends ResourceBase implements Connection {
       this.recoveryRequestQueue = null;
       this.recoveryLoop = null;
     }
-    this.nativeConnection = connect(connectionParameters, builder.name(), disconnectHandler);
+    this.nativeConnection = connect(this.connectionSettings, builder.name(), disconnectHandler);
     this.management = createManagement();
     this.state(OPEN);
   }
@@ -166,14 +169,19 @@ class AmqpConnection extends ResourceBase implements Connection {
   // internal API
 
   private org.apache.qpid.protonj2.client.Connection connect(
-      Utils.ConnectionParameters connectionParameters,
+      DefaultConnectionSettings<?> connectionSettings,
       String name,
       BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
           disconnectHandler) {
+
     ConnectionOptions connectionOptions = new ConnectionOptions();
-    connectionOptions.user(connectionParameters.username());
-    connectionOptions.password(connectionParameters.password());
-    connectionOptions.virtualHost("vhost:" + connectionParameters.virtualHost());
+    if (connectionSettings.credentialsProvider() instanceof UsernamePasswordCredentialsProvider) {
+      UsernamePasswordCredentialsProvider credentialsProvider =
+          (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
+      connectionOptions.user(credentialsProvider.getUsername());
+      connectionOptions.password(credentialsProvider.getPassword());
+    }
+    connectionOptions.virtualHost("vhost:" + connectionSettings.virtualHost());
     // only the mechanisms supported in RabbitMQ
     connectionOptions.saslOptions().addAllowedMechanism("PLAIN").addAllowedMechanism("EXTERNAL");
     connectionOptions.disconnectedHandler(disconnectHandler);
@@ -181,10 +189,12 @@ class AmqpConnection extends ResourceBase implements Connection {
       connectionOptions.properties(singletonMap("connection_name", name));
     }
     try {
+      this.connectionAddress = connectionSettings.selectAddress();
       org.apache.qpid.protonj2.client.Connection connection =
           this.environment
               .client()
-              .connect(connectionParameters.host(), connectionParameters.port(), connectionOptions);
+              .connect(
+                  this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
       return connection.openFuture().get();
     } catch (ClientException | ExecutionException e) {
       throw new ModelException(e);
@@ -210,9 +220,7 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
       recoveryDisconnectHandler(
-          AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
-          Utils.ConnectionParameters connectionParameters,
-          String name) {
+          AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration, String name) {
     AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
@@ -225,11 +233,7 @@ class AmqpConnection extends ResourceBase implements Connection {
             this.recoveryRequestQueue.add(
                 () ->
                     recoverAfterConnectionFailure(
-                        recoveryConfiguration,
-                        connectionParameters,
-                        name,
-                        event.failureCause(),
-                        resultReference));
+                        recoveryConfiguration, name, event.failureCause(), resultReference));
           }
         };
 
@@ -239,27 +243,24 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private void recoverAfterConnectionFailure(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
-      Utils.ConnectionParameters connectionParameters,
       String connectionName,
       ClientIOException nativeFailureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
     ModelException failureCause = convert(nativeFailureCause, "Connection disconnected");
-    LOGGER.info("Connection to {} failed, trying to recover", connectionParameters.label());
+    LOGGER.info("Connection to {} failed, trying to recover", this.currentConnectionLabel());
     this.state(RECOVERING, failureCause);
     this.changeStateOfPublishers(RECOVERING, failureCause);
     this.changeStateOfConsumers(RECOVERING, failureCause);
     this.nativeConnection = null;
     this.nativeSession = null;
+    this.connectionAddress = null;
     this.releaseManagementResources();
     try {
       this.recoveringConnection.set(true);
       this.nativeConnection =
           recoverNativeConnection(
-              recoveryConfiguration,
-              connectionParameters,
-              connectionName,
-              disconnectedHandlerReference);
+              recoveryConfiguration, connectionName, disconnectedHandlerReference);
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -282,7 +283,7 @@ class AmqpConnection extends ResourceBase implements Connection {
         LOGGER.debug("Recovered topology");
       }
 
-      LOGGER.info("Recovered connection to {}", connectionParameters.label());
+      LOGGER.info("Recovered connection to {}", this.currentConnectionLabel());
       this.state(OPEN);
     } catch (Exception ex) {
       // likely InterruptedException or IO exception
@@ -292,7 +293,6 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   private org.apache.qpid.protonj2.client.Connection recoverNativeConnection(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
-      Utils.ConnectionParameters connectionParameters,
       String connectionName,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference)
@@ -314,9 +314,9 @@ class AmqpConnection extends ResourceBase implements Connection {
 
       try {
         org.apache.qpid.protonj2.client.Connection result =
-            connect(connectionParameters, connectionName, disconnectedHandlerReference.get());
+            connect(this.connectionSettings, connectionName, disconnectedHandlerReference.get());
         result.openFuture().get();
-        LOGGER.debug("Reconnected to {}", connectionParameters.label());
+        LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
         return result;
       } catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
@@ -472,6 +472,14 @@ class AmqpConnection extends ResourceBase implements Connection {
   private void changeStateOfResources(
       List<? extends ResourceBase> resources, State newState, Throwable failure) {
     resources.forEach(r -> r.state(newState, failure));
+  }
+
+  private String currentConnectionLabel() {
+    if (this.connectionAddress == null) {
+      return "<null>";
+    } else {
+      return this.connectionAddress.host() + ":" + this.connectionAddress.port();
+    }
   }
 
   @Override
