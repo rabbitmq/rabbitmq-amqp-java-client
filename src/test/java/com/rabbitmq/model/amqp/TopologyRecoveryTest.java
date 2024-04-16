@@ -48,6 +48,7 @@ public class TopologyRecoveryTest {
   TestInfo testInfo;
   String connectionName;
   AtomicReference<CountDownLatch> recoveredLatch;
+  AtomicInteger connectionAttemptCount;
 
   @BeforeAll
   static void initAll() {
@@ -59,6 +60,7 @@ public class TopologyRecoveryTest {
     this.testInfo = info;
     this.recoveredLatch = new AtomicReference<>(new CountDownLatch(1));
     this.connectionName = connectionName();
+    this.connectionAttemptCount = new AtomicInteger();
   }
 
   @AfterAll
@@ -169,10 +171,11 @@ public class TopologyRecoveryTest {
   void queueShouldNotBeRecoveredWhenNoTopologyRecovery() {
     try (Connection connection =
         connection(this.connectionName, this.recoveredLatch, b -> b.recovery().topology(false))) {
+      assertThat(connectionAttemptCount).hasValue(1);
       String q = queue();
       connection.management().queue(q).autoDelete(false).exclusive(true).declare();
       closeConnectionAndWaitForRecovery();
-
+      assertThat(connectionAttemptCount).hasValue(2);
       connection.management().queue(q).autoDelete(true).exclusive(true).declare();
     }
   }
@@ -187,6 +190,7 @@ public class TopologyRecoveryTest {
             b ->
                 b.listeners(
                     context -> events.add("connection " + context.currentState().name())))) {
+      assertThat(connectionAttemptCount).hasValue(1);
       String e = exchange();
       String q = queue();
       connection.management().exchange(e).type(FANOUT).autoDelete(true).declare();
@@ -208,6 +212,7 @@ public class TopologyRecoveryTest {
           .build();
 
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       String[] expectedStates =
           new String[] {
@@ -233,6 +238,7 @@ public class TopologyRecoveryTest {
   @Test
   void autoDeleteExchangeAndExclusiveQueueShouldBeRedeclared() {
     try (Connection connection = connection()) {
+      assertThat(connectionAttemptCount).hasValue(1);
       String e = exchange();
       String q = queue();
       connection.management().exchange(e).type(DIRECT).autoDelete(true).declare();
@@ -252,6 +258,7 @@ public class TopologyRecoveryTest {
       assertThat(consumeLatch).completes();
 
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       consumeLatch.set(new CountDownLatch(1));
 
@@ -263,6 +270,7 @@ public class TopologyRecoveryTest {
   @Test
   void autoDeleteExchangeAndExclusiveQueueWithE2eBindingShouldBeRedeclared() {
     try (Connection connection = connection()) {
+      assertThat(connectionAttemptCount).hasValue(1);
       String e1 = exchange();
       String e2 = exchange();
       String q = queue();
@@ -285,6 +293,7 @@ public class TopologyRecoveryTest {
       assertThat(consumeLatch).completes();
 
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       consumeLatch.set(new CountDownLatch(1));
 
@@ -298,6 +307,7 @@ public class TopologyRecoveryTest {
     String e = exchange();
     String q = queue();
     Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
       connection.management().queue(q).declare();
@@ -323,6 +333,7 @@ public class TopologyRecoveryTest {
       connection.management().unbind().sourceExchange(e).destinationQueue(q).unbind();
 
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       consumer.close();
 
@@ -349,6 +360,7 @@ public class TopologyRecoveryTest {
     String e2 = exchange();
     String q = queue();
     Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e1).type(FANOUT).declare();
       connection.management().exchange(e2).type(FANOUT).declare();
@@ -376,6 +388,7 @@ public class TopologyRecoveryTest {
       connection.management().unbind().sourceExchange(e1).destinationExchange(e2).unbind();
 
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       consumer.close();
 
@@ -401,10 +414,12 @@ public class TopologyRecoveryTest {
   void deletedExchangeIsNotRecovered() {
     String e = exchange();
     try (Connection connection = connection()) {
+      assertThat(connectionAttemptCount).hasValue(1);
       connection.management().exchange(e).declare();
       assertThat(exchangeExists(e)).isTrue();
       connection.management().exchangeDeletion().delete(e);
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
       assertThat(exchangeExists(e)).isFalse();
     }
   }
@@ -413,10 +428,12 @@ public class TopologyRecoveryTest {
   void deletedQueueIsNotRecovered() {
     String q = queue();
     try (Connection connection = connection()) {
+      assertThat(connectionAttemptCount).hasValue(1);
       connection.management().queue(q).declare();
       assertThat(connection.management().queueInfo(q)).hasName(q);
       connection.management().queueDeletion().delete(q);
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
       assertThatThrownBy(() -> connection.management().queueInfo(q))
           .isInstanceOf(ModelException.class)
           .hasMessageContaining("404");
@@ -427,6 +444,7 @@ public class TopologyRecoveryTest {
   void closedConsumerIsNotRecovered() throws Exception {
     String q = queue();
     Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().queue(q).declare();
       Consumer consumer =
@@ -434,6 +452,7 @@ public class TopologyRecoveryTest {
       waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 1);
       consumer.close();
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
       waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 0);
     } finally {
       connection.management().queueDeletion().delete(q);
@@ -446,6 +465,7 @@ public class TopologyRecoveryTest {
     String e = exchange();
     String q = queue();
     Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
       connection.management().queue(q).declare();
@@ -466,6 +486,7 @@ public class TopologyRecoveryTest {
       assertThat(consumeLatch).completes();
       assertThat(connection.management().queueInfo(q)).hasConsumerCount(consumerCount);
       closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
 
       consumeLatch.set(new CountDownLatch(consumerCount));
       range(0, consumerCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
@@ -483,6 +504,7 @@ public class TopologyRecoveryTest {
     String e = exchange();
     String q = queue();
     Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
       connection.management().queue(q).declare();
@@ -502,8 +524,9 @@ public class TopologyRecoveryTest {
 
       IntStream.range(0, 10)
           .forEach(
-              ignored -> {
+              i -> {
                 closeConnectionAndWaitForRecovery();
+                assertThat(connectionAttemptCount).hasValue(2 + i);
                 consumeLatch.set(new CountDownLatch(1));
                 publisher.publish(publisher.message(), ctx -> {});
                 assertThat(consumeLatch).completes();
@@ -540,6 +563,11 @@ public class TopologyRecoveryTest {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
     builder
         .name(name)
+        .addressSelector(
+            addresses -> {
+              connectionAttemptCount.incrementAndGet();
+              return addresses.get(0);
+            })
         .listeners(
             context -> {
               if (context.previousState() == Resource.State.RECOVERING

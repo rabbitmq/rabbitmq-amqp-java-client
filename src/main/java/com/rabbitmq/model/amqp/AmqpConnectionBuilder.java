@@ -81,7 +81,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
   @Override
   public ConnectionBuilder addressSelector(Function<List<Address>, Address> selector) {
-    return null;
+    return this.connectionSettings.addressSelector(selector);
   }
 
   @Override

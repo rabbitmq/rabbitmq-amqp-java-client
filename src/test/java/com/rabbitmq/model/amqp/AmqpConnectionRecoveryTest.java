@@ -39,20 +39,29 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.*;
 
 @DisabledIfRabbitMqCtlNotSet
 public class AmqpConnectionRecoveryTest {
 
   static AmqpEnvironment environment;
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = fixed(ofMillis(100));
+  static AtomicInteger connectionAttemptCount = new AtomicInteger();
 
   @BeforeAll
   static void initAll() {
-    environment = new AmqpEnvironment(null, DefaultConnectionSettings.instance());
+    DefaultConnectionSettings<?> connectionSettings = DefaultConnectionSettings.instance();
+    connectionSettings.addressSelector(
+        addresses -> {
+          connectionAttemptCount.incrementAndGet();
+          return addresses.get(0);
+        });
+    environment = new AmqpEnvironment(null, connectionSettings);
+  }
+
+  @BeforeEach
+  void init() {
+    connectionAttemptCount.set(0);
   }
 
   @AfterAll
@@ -81,6 +90,7 @@ public class AmqpConnectionRecoveryTest {
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
     Connection c = new AmqpConnection(builder);
+    assertThat(connectionAttemptCount).hasValue(1);
     try {
       c.management().queue().name(q).declare();
       AtomicInteger consumerOpenCount = new AtomicInteger(0);
@@ -136,6 +146,7 @@ public class AmqpConnectionRecoveryTest {
       closeConnection(connectionName);
       assertThat(stateLatches.get(RECOVERING)).is(completed());
       assertThat(stateLatches.get(OPEN)).is(completed());
+      assertThat(connectionAttemptCount).hasValue(2);
       waitAtMost(() -> consumerOpenCount.get() == 2);
       waitAtMost(() -> publisherOpenCount.get() == 2);
 
@@ -176,6 +187,7 @@ public class AmqpConnectionRecoveryTest {
                 .backOffDelayPolicy(fixed(ofMillis(500)))
                 .connectionBuilder();
     try (Connection c = new AmqpConnection(builder)) {
+      assertThat(connectionAttemptCount).hasValue(1);
       c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
       try {
         stopBroker();
@@ -195,6 +207,7 @@ public class AmqpConnectionRecoveryTest {
         startBroker();
       }
       assertThat(stateLatches.get(OPEN)).is(completed());
+      assertThat(connectionAttemptCount).hasValueGreaterThan(1);
       c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
     }
   }

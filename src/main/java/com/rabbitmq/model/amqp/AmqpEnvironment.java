@@ -44,8 +44,7 @@ class AmqpEnvironment implements Environment {
   private final long id;
 
   AmqpEnvironment(
-      ExecutorService executorService,
-      DefaultConnectionSettings<?> connectionSettings) {
+      ExecutorService executorService, DefaultConnectionSettings<?> connectionSettings) {
     this.id = ID_SEQUENCE.getAndIncrement();
     connectionSettings.copyTo(this.connectionSettings);
     this.connectionSettings.consolidate();
