@@ -25,11 +25,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
+import org.apache.qpid.protonj2.client.ConnectionOptions;
 
 abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
@@ -46,6 +48,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     copy.virtualHost(this.virtualHost);
     copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
     copy.addressSelector(this.addressSelector);
+    copy.idleTimeout(this.idleTimeout);
   }
 
   private String host = DEFAULT_HOST;
@@ -54,6 +57,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       new DefaultUsernamePasswordCredentialsProvider(DEFAULT_USERNAME, DEFAULT_PASSWORD);
   private String virtualHost = DEFAULT_VIRTUAL_HOST;
   private List<URI> uris = Collections.emptyList();
+  private Duration idleTimeout = Duration.ofMillis(ConnectionOptions.DEFAULT_IDLE_TIMEOUT);
   private static final Random RANDOM = new Random();
   private Function<List<Address>, Address> addressSelector =
       addresses -> {
@@ -132,6 +136,15 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   }
 
   @Override
+  public T idleTimeout(Duration idleTimeout) {
+    if (idleTimeout.isNegative()) {
+      throw new IllegalArgumentException("Idle timeout cannot be negative");
+    }
+    this.idleTimeout = idleTimeout;
+    return this.toReturn();
+  }
+
+  @Override
   public T addressSelector(Function<List<Address>, Address> selector) {
     this.addressSelector = selector;
     return this.toReturn();
@@ -143,6 +156,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   String virtualHost() {
     return virtualHost;
+  }
+
+  Duration idleTimeout() {
+    return idleTimeout;
   }
 
   Address selectAddress() {

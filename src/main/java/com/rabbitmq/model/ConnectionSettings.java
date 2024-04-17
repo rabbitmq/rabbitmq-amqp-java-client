@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.function.Function;
 
@@ -37,6 +38,8 @@ public interface ConnectionSettings<T> {
   T virtualHost(String virtualHost);
 
   T credentialsProvider(CredentialsProvider credentialsProvider);
+
+  T idleTimeout(Duration idleTimeout);
 
   T addressSelector(Function<List<Address>, Address> selector);
 }

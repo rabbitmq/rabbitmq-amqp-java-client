@@ -80,6 +80,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public ConnectionBuilder idleTimeout(Duration idleTimeout) {
+    return this.connectionSettings.idleTimeout(idleTimeout);
+  }
+
+  @Override
   public ConnectionBuilder addressSelector(Function<List<Address>, Address> selector) {
     return this.connectionSettings.addressSelector(selector);
   }
