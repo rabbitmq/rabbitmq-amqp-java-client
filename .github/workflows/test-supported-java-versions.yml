@@ -26,11 +26,15 @@ jobs:
           cache: 'maven'
       - name: Start broker
         run: ci/start-broker.sh
+      - name: Start toxiproxy
+        run: ci/start-toxiproxy.sh
       - name: Display Java version
         run: ./mvnw --version
       - name: Test
         run: |
           ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq \
             -Dnet.bytebuddy.experimental=true
+      - name: Stop toxiproxy
+        run: docker stop toxiproxy && docker rm toxiproxy
       - name: Stop broker
         run: docker stop rabbitmq && docker rm rabbitmq
