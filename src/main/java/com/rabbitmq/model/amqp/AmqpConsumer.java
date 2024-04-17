@@ -20,14 +20,11 @@ package com.rabbitmq.model.amqp;
 import static com.rabbitmq.model.Resource.State.*;
 
 import com.rabbitmq.model.Consumer;
-import com.rabbitmq.model.ModelException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,8 +97,10 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                     inFlightMessages.release();
                     try {
                       delivery.disposition(DeliveryState.accepted(), true);
+                    } catch (ClientIllegalStateException | ClientIOException e) {
+                      LOGGER.debug("message accept failed: {}", e.getMessage());
                     } catch (ClientException e) {
-                      throw new ModelException(e);
+                      throw ExceptionUtils.convert(e);
                     }
                   }
 
@@ -109,11 +108,11 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                   public void discard() {
                     inFlightMessages.release();
                     try {
-                      // TODO propagate condition and description for "rejected" delivery
-                      // state
                       delivery.disposition(DeliveryState.rejected("", ""), true);
+                    } catch (ClientIllegalStateException | ClientIOException e) {
+                      LOGGER.debug("message discard failed: {}", e.getMessage());
                     } catch (ClientException e) {
-                      throw new ModelException(e);
+                      throw ExceptionUtils.convert(e);
                     }
                   }
 
@@ -122,8 +121,10 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                     inFlightMessages.release();
                     try {
                       delivery.disposition(DeliveryState.released(), true);
+                    } catch (ClientIllegalStateException | ClientIOException e) {
+                      LOGGER.debug("message requeue failed: {}", e.getMessage());
                     } catch (ClientException e) {
-                      throw new ModelException(e);
+                      throw ExceptionUtils.convert(e);
                     }
                   }
                 };

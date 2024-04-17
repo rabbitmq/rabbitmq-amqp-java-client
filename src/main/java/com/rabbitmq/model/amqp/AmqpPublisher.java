@@ -62,10 +62,8 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   public void publish(Message message, Callback callback) {
     checkOpen();
     try {
-      // TODO catch ClientSendTimedOutException
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
           ((AmqpMessage) message).nativeMessage();
-      // TODO track confirmation task to cancel them during recovery
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
       this.executorService.submit(
           () -> {

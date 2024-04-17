@@ -22,6 +22,7 @@ import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.amqp.Cli.closeConnection;
 import static com.rabbitmq.model.amqp.Cli.exchangeExists;
+import static com.rabbitmq.model.amqp.RecordingTopologyListenerTest.queue;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
 import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
@@ -32,9 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rabbitmq.model.*;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
@@ -537,6 +536,56 @@ public class TopologyRecoveryTest {
       connection.management().queueDeletion().delete(q);
       connection.management().exchangeDeletion().delete(e);
       connection.close();
+    }
+  }
+
+  @Test
+  void disposeStaleMessageShouldBeSilent() throws Exception {
+    String q = queue();
+    Connection connection = connection();
+    assertThat(connectionAttemptCount).hasValue(1);
+    try {
+      connection.management().queue(q).declare();
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      BlockingQueue<Consumer.Context> messageContexts = new ArrayBlockingQueue<>(10);
+      CountDownLatch consumeLatch = new CountDownLatch(3);
+      connection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, m) -> {
+                messageContexts.add(ctx);
+                consumeLatch.countDown();
+              })
+          .build();
+
+      publisher.publish(publisher.message(), ctx -> {});
+      publisher.publish(publisher.message(), ctx -> {});
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeLatch).completes();
+      assertThat(messageContexts).hasSize(3);
+
+      closeConnectionAndWaitForRecovery();
+
+      // the messages are settled after the connection recovery
+      // their receiver instance is closed
+      // we make sure no exceptions are thrown
+      // this simulates long processing that spans over connection recovery
+      Consumer.Context ctx = messageContexts.poll(10, TimeUnit.SECONDS);
+      ctx.accept();
+      ctx = messageContexts.poll(10, TimeUnit.SECONDS);
+      ctx.discard();
+      ctx = messageContexts.poll(10, TimeUnit.SECONDS);
+      ctx.requeue();
+
+      // the messages are requeued automatically, so they should come back
+      messageContexts.poll(10, TimeUnit.SECONDS).accept();
+      messageContexts.poll(10, TimeUnit.SECONDS).accept();
+      messageContexts.poll(10, TimeUnit.SECONDS).accept();
+
+      waitAtMost(() -> connection.management().queueInfo(q).messageCount() == 0);
+    } finally {
+      connection.management().queueDeletion().delete(q);
     }
   }
 
