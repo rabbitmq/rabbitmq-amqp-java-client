@@ -22,8 +22,13 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.model.Management;
+import eu.rekawek.toxiproxy.Proxy;
+import eu.rekawek.toxiproxy.ToxiproxyClient;
+import java.io.IOException;
 import java.lang.annotation.*;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -248,12 +253,77 @@ public abstract class TestUtils {
     }
   }
 
+  static Proxy toxiproxy(ToxiproxyClient client, String name, int proxyPort) throws IOException {
+    Proxy proxy = client.getProxyOrNull(name);
+    if (proxy != null) {
+      proxy.delete();
+    }
+    proxy =
+        client.createProxy(
+            name,
+            "localhost:" + proxyPort,
+            DefaultConnectionSettings.DEFAULT_HOST + ":" + DefaultConnectionSettings.DEFAULT_PORT);
+    return proxy;
+  }
+
+  static int randomNetworkPort() throws IOException {
+    ServerSocket socket = new ServerSocket();
+    socket.bind(null);
+    int port = socket.getLocalPort();
+    socket.close();
+    return port;
+  }
+
   static UnsignedLong ulong(long value) {
     return UnsignedLong.valueOf(value);
   }
 
   public static AmqpEnvironmentBuilder environmentBuilder() {
     return new AmqpEnvironmentBuilder();
+  }
+
+  @SuppressWarnings("unchecked")
+  static ToxiproxyClient toxiproxyClient(ExtensionContext context) {
+    CloseableResourceWrapper<ToxiproxyClient> wrapper =
+        (CloseableResourceWrapper<ToxiproxyClient>)
+            context.getRoot().getStore(ExtensionContext.Namespace.GLOBAL).get("toxiproxy");
+    return wrapper == null ? null : wrapper.resource();
+  }
+
+  static void storeToxiproxyClient(ToxiproxyClient client, ExtensionContext context) {
+    context
+        .getRoot()
+        .getStore(ExtensionContext.Namespace.GLOBAL)
+        .put("toxiproxy", new CloseableResourceWrapper<>(client, c -> {}));
+  }
+
+  static class DisabledIfToxiproxyNotAvailableCondition implements ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      try {
+        ToxiproxyClient client = toxiproxyClient(context);
+        if (client == null) {
+          client = new ToxiproxyClient("localhost", 8474);
+          client.version();
+          storeToxiproxyClient(client, context);
+        }
+        if (context.getTestInstance().isPresent()) {
+          Object test = context.getTestInstance().get();
+          for (Field field : test.getClass().getDeclaredFields()) {
+            if (ToxiproxyClient.class.isAssignableFrom(field.getType())) {
+              field.setAccessible(true);
+              if (field.get(test) == null) {
+                field.set(test, client);
+              }
+            }
+          }
+        }
+        return ConditionEvaluationResult.enabled("toxiproxy is available");
+      } catch (Exception e) {
+        return ConditionEvaluationResult.disabled("toxiproxy is not available");
+      }
+    }
   }
 
   static class DisabledIfRabbitMqCtlNotSetCondition implements ExecutionCondition {
@@ -274,6 +344,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfRabbitMqCtlNotSetCondition.class)
   @interface DisabledIfRabbitMqCtlNotSet {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfToxiproxyNotAvailableCondition.class)
+  @interface DisabledIfToxiproxyNotAvailable {}
 
   static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {
 
@@ -366,6 +442,27 @@ public abstract class TestUtils {
         fail("Queue should have %s = %b but does not", label, actual);
       }
       return this;
+    }
+  }
+
+  private static class CloseableResourceWrapper<T>
+      implements ExtensionContext.Store.CloseableResource {
+
+    private final T resource;
+    private final Consumer<T> closing;
+
+    private CloseableResourceWrapper(T resource, Consumer<T> closing) {
+      this.resource = resource;
+      this.closing = closing;
+    }
+
+    T resource() {
+      return this.resource;
+    }
+
+    @Override
+    public void close() {
+      this.closing.accept(this.resource);
     }
   }
 }

@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import static com.rabbitmq.model.amqp.TestUtils.assertThat;
+import static com.rabbitmq.model.amqp.TestUtils.*;
 
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.Resource;
@@ -28,21 +28,20 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
+@TestUtils.DisabledIfToxiproxyNotAvailable
 public class IdleTimeoutTest {
+
+  ToxiproxyClient client;
 
   @Test
   void connectionShouldCloseAutomaticallyIfNoCommunicationWithBroker() throws Exception {
     Duration idleTimeout = Duration.ofSeconds(2);
-    ToxiproxyClient client = new ToxiproxyClient("localhost", 8474);
-    Proxy rabbitmqProxy = client.getProxyOrNull("rabbitmq");
-    if (rabbitmqProxy != null) {
-      rabbitmqProxy.delete();
-    }
-    rabbitmqProxy = client.createProxy("rabbitmq", "localhost:5673", "localhost:5672");
+    int proxyPort = randomNetworkPort();
+    Proxy proxy = toxiproxy(client, "rabbitmq", proxyPort);
     try (Environment environment =
         TestUtils.environmentBuilder()
             .connectionSettings()
-            .port(5673)
+            .port(proxyPort)
             .environmentBuilder()
             .build()) {
       CountDownLatch closedLatch = new CountDownLatch(1);
@@ -59,12 +58,12 @@ public class IdleTimeoutTest {
                 }
               })
           .build();
-      rabbitmqProxy
+      proxy
           .toxics()
           .latency("latency", ToxicDirection.DOWNSTREAM, idleTimeout.multipliedBy(10).toMillis());
       assertThat(closedLatch).completes();
     } finally {
-      rabbitmqProxy.delete();
+      proxy.delete();
     }
   }
 }
