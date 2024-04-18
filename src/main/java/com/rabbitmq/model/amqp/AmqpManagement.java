@@ -80,16 +80,19 @@ class AmqpManagement implements Management {
 
   @Override
   public QueueSpecification queue() {
+    checkAvailable();
     return new AmqpQueueSpecification(this);
   }
 
   @Override
   public QueueSpecification queue(String name) {
+    checkAvailable();
     return this.queue().name(name);
   }
 
   @Override
   public QueueInfo queueInfo(String name) {
+    checkAvailable();
     try {
       Map<String, Object> queueInfo = get(queueLocation(name)).responseBodyAsMap();
       return new DefaultQueueInfo(queueInfo);
@@ -100,6 +103,7 @@ class AmqpManagement implements Management {
 
   @Override
   public QueueDeletion queueDeletion() {
+    checkAvailable();
     return name -> {
       this.topologyListener.queueDeleted(name);
       Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
@@ -111,16 +115,19 @@ class AmqpManagement implements Management {
 
   @Override
   public ExchangeSpecification exchange() {
+    checkAvailable();
     return new AmqpExchangeSpecification(this);
   }
 
   @Override
   public ExchangeSpecification exchange(String name) {
+    checkAvailable();
     return this.exchange().name(name);
   }
 
   @Override
   public ExchangeDeletion exchangeDeletion() {
+    checkAvailable();
     return name -> {
       this.topologyListener.exchangeDeleted(name);
       this.delete(exchangeLocation(name), CODE_204);
@@ -129,11 +136,13 @@ class AmqpManagement implements Management {
 
   @Override
   public BindingSpecification binding() {
+    checkAvailable();
     return new AmqpBindingManagement.AmqpBindingSpecification(this);
   }
 
   @Override
   public UnbindSpecification unbind() {
+    checkAvailable();
     return new AmqpBindingManagement.AmqpUnbindSpecification(this);
   }
 
@@ -233,6 +242,7 @@ class AmqpManagement implements Management {
       String target,
       String operation,
       Collection<String> expectedResponseCodes) {
+    checkAvailable();
     UUID requestId = messageId();
     try {
       Message<?> request =
@@ -256,6 +266,7 @@ class AmqpManagement implements Management {
   }
 
   private Map<String, Object> delete(String target, String expectedResponseCode) {
+    checkAvailable();
     UUID requestId = messageId();
     try {
       Message<?> request =
@@ -362,6 +373,7 @@ class AmqpManagement implements Management {
   }
 
   private OutstandingRequest get(String target) throws ClientException {
+    checkAvailable();
     UUID requestId = messageId();
     Message<?> request =
         Message.create((Map<?, ?>) null)
@@ -543,6 +555,14 @@ class AmqpManagement implements Management {
           + ", consumerCount="
           + consumerCount
           + '}';
+    }
+  }
+
+  private void checkAvailable() {
+    if (this.closed.get()) {
+      throw new ModelException("Management is closed");
+    } else if (!this.initialized.get()) {
+      throw new ModelException("Management is not available");
     }
   }
 
