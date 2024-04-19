@@ -17,15 +17,24 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import com.rabbitmq.model.ModelException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 abstract class Utils {
+
+  static final Supplier<String> NAME_SUPPLIER = new NameSupplier("client.gen-");
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
@@ -182,6 +191,33 @@ abstract class Utils {
   static void throwIfInterrupted() throws InterruptedException {
     if (Thread.currentThread().isInterrupted()) {
       throw new InterruptedException();
+    }
+  }
+
+  private static class NameSupplier implements Supplier<String> {
+
+    private final String prefix;
+
+    private NameSupplier(String prefix) {
+      this.prefix = prefix;
+    }
+
+    @Override
+    public String get() {
+      String uuid = UUID.randomUUID().toString();
+      MessageDigest md = null;
+      try {
+        md = MessageDigest.getInstance("MD5");
+      } catch (NoSuchAlgorithmException e) {
+        throw new ModelException(e);
+      }
+      byte[] digest = md.digest(uuid.getBytes(StandardCharsets.UTF_8));
+      return prefix
+          + Base64.getEncoder()
+              .encodeToString(digest)
+              .replace('+', '-')
+              .replace('/', '_')
+              .replace("=", "");
     }
   }
 }

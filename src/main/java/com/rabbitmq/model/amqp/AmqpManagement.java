@@ -32,6 +32,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -52,9 +55,10 @@ class AmqpManagement implements Management {
   private static final String POST = "POST";
   private static final String PUT = "PUT";
   private static final String DELETE = "DELETE";
-  private static final String CODE_200 = "200";
-  private static final String CODE_201 = "201";
-  private static final String CODE_204 = "204";
+  private static final int CODE_200 = 200;
+  private static final int CODE_201 = 201;
+  private static final int CODE_204 = 204;
+  private static final int CODE_409 = 409;
 
   private final AmqpConnection connection;
   private final Long id;
@@ -68,6 +72,7 @@ class AmqpManagement implements Management {
       new ConcurrentHashMap<>();
   private volatile Future<?> receiveLoop;
   private final TopologyListener topologyListener;
+  private final Supplier<String> nameSupplier;
 
   AmqpManagement(AmqpManagementParameters parameters) {
     this.id = ID_SEQUENCE.getAndIncrement();
@@ -76,6 +81,7 @@ class AmqpManagement implements Management {
         parameters.topologyListener() == null
             ? TopologyListener.NO_OP
             : parameters.topologyListener();
+    this.nameSupplier = parameters.nameSupplier();
   }
 
   @Override
@@ -224,24 +230,34 @@ class AmqpManagement implements Management {
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {
-    return new DefaultQueueInfo(
-        this.declare(body, queueLocation(name), List.of(CODE_200, CODE_201)));
+    if (name == null || name.isBlank()) {
+      QueueInfo info = null;
+      while (info == null) {
+        name = this.nameSupplier.get();
+        Response<Map<String, Object>> response =
+            this.declare(body, queueLocation(name), CODE_200, CODE_201, CODE_409);
+        if (response.code() == CODE_201) {
+          info = new DefaultQueueInfo(response.body());
+        }
+      }
+      return info;
+    } else {
+      return new DefaultQueueInfo(
+          this.declare(body, queueLocation(name), CODE_200, CODE_201).body());
+    }
   }
 
   void declareExchange(String name, Map<String, Object> body) {
-    this.declare(body, exchangeLocation(name), List.of(CODE_204));
+    this.declare(body, exchangeLocation(name), CODE_204);
   }
 
-  private Map<String, Object> declare(
-      Map<String, Object> body, String target, Collection<String> expectedResponseCodes) {
+  private Response<Map<String, Object>> declare(
+      Map<String, Object> body, String target, int... expectedResponseCodes) {
     return this.declare(body, target, PUT, expectedResponseCodes);
   }
 
-  private Map<String, Object> declare(
-      Map<String, Object> body,
-      String target,
-      String operation,
-      Collection<String> expectedResponseCodes) {
+  private Response<Map<String, Object>> declare(
+      Map<String, Object> body, String target, String operation, int... expectedResponseCodes) {
     checkAvailable();
     UUID requestId = messageId();
     try {
@@ -251,8 +267,8 @@ class AmqpManagement implements Management {
       OutstandingRequest outstandingRequest = this.request(request);
       outstandingRequest.block();
 
-      checkResponse(outstandingRequest.response(), requestId, expectedResponseCodes);
-      return outstandingRequest.responseBodyAsMap();
+      checkResponse(outstandingRequest, requestId, expectedResponseCodes);
+      return outstandingRequest.mapResponse();
     } catch (ClientException e) {
       throw new ModelException("Error on PUT operation: " + target, e);
     }
@@ -265,7 +281,7 @@ class AmqpManagement implements Management {
     return outstandingRequest;
   }
 
-  private Map<String, Object> delete(String target, String expectedResponseCode) {
+  private Map<String, Object> delete(String target, int expectedResponseCode) {
     checkAvailable();
     UUID requestId = messageId();
     try {
@@ -278,7 +294,7 @@ class AmqpManagement implements Management {
 
       OutstandingRequest outstandingRequest = request(request);
       outstandingRequest.block();
-      checkResponse(outstandingRequest.response(), requestId, List.of(expectedResponseCode));
+      checkResponse(outstandingRequest, requestId, expectedResponseCode);
       return outstandingRequest.responseBodyAsMap();
     } catch (ClientException e) {
       throw new ModelException("Error on DELETE operation: " + target, e);
@@ -298,20 +314,25 @@ class AmqpManagement implements Management {
   }
 
   private static void checkResponse(
-      Message<?> response, UUID requestId, Collection<String> expectedResponseCodes)
+      OutstandingRequest request, UUID requestId, int... expectedResponseCodes)
       throws ClientException {
+    Message<?> response = request.responseMessage();
     if (!requestId.equals(response.correlationId())) {
       throw new ModelException("Unexpected correlation ID");
     }
-    if (!expectedResponseCodes.contains(response.subject())) {
+    int responseCode = request.mapResponse().code();
+    if (IntStream.of(expectedResponseCodes).noneMatch(c -> c == responseCode)) {
       throw new ModelException(
-          "Unexpected response code: %s instead of %s",
-          response.subject(), String.join(" or ", expectedResponseCodes));
+          "Unexpected response code: %d instead of %s",
+          responseCode,
+          IntStream.of(expectedResponseCodes)
+              .mapToObj(String::valueOf)
+              .collect(Collectors.joining(", ")));
     }
   }
 
   void bind(Map<String, Object> body) {
-    declare(body, "/bindings", POST, List.of(CODE_204));
+    declare(body, "/bindings", POST, CODE_204);
   }
 
   void unbind(
@@ -384,7 +405,7 @@ class AmqpManagement implements Management {
 
     OutstandingRequest outstandingRequest = request(request);
     outstandingRequest.block();
-    checkResponse(outstandingRequest.response(), requestId, List.of(CODE_200));
+    checkResponse(outstandingRequest, requestId, CODE_200);
     return outstandingRequest;
   }
 
@@ -403,7 +424,8 @@ class AmqpManagement implements Management {
   private static class OutstandingRequest {
 
     private final CountDownLatch latch = new CountDownLatch(1);
-    private final AtomicReference<Message<?>> response = new AtomicReference<>();
+    private final AtomicReference<Message<?>> responseMessage = new AtomicReference<>();
+    private final AtomicReference<Response<?>> response = new AtomicReference<>();
     private final Duration timeout;
 
     private OutstandingRequest(Duration timeout) {
@@ -423,23 +445,29 @@ class AmqpManagement implements Management {
       }
     }
 
-    void complete(Message<?> response) {
-      this.response.set(response);
+    void complete(Message<?> response) throws ClientException {
+      this.responseMessage.set(response);
+      this.response.set(new Response<>(Integer.parseInt(response.subject()), response.body()));
       this.latch.countDown();
     }
 
-    Message<?> response() {
-      return this.response.get();
+    Message<?> responseMessage() {
+      return this.responseMessage.get();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V> Response<Map<K, V>> mapResponse() {
+      return (Response<Map<K, V>>) this.response.get();
     }
 
     @SuppressWarnings("unchecked")
     private <K, V> Map<K, V> responseBodyAsMap() throws ClientException {
-      return (Map<K, V>) this.response.get().body();
+      return (Map<K, V>) this.responseMessage.get().body();
     }
 
     @SuppressWarnings("unchecked")
     private <T> List<T> responseBodyAsList() throws ClientException {
-      return (List<T>) this.response.get().body();
+      return (List<T>) this.responseMessage.get().body();
     }
   }
 
@@ -569,5 +597,24 @@ class AmqpManagement implements Management {
   @Override
   public String toString() {
     return this.connection.toString() + "-" + this.id;
+  }
+
+  private static class Response<T> {
+
+    private final int code;
+    private final T body;
+
+    private Response(int code, T body) {
+      this.code = code;
+      this.body = body;
+    }
+
+    int code() {
+      return this.code;
+    }
+
+    T body() {
+      return this.body;
+    }
   }
 }

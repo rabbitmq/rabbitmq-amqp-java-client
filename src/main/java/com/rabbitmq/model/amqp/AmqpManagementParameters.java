@@ -17,10 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import java.util.function.Supplier;
+
 class AmqpManagementParameters {
 
   private final AmqpConnection connection;
   private TopologyListener topologyListener;
+  private Supplier<String> nameSupplier = Utils.NAME_SUPPLIER;
 
   AmqpManagementParameters(AmqpConnection connection) {
     this.connection = connection;
@@ -31,11 +34,20 @@ class AmqpManagementParameters {
     return this;
   }
 
+  AmqpManagementParameters nameSupplier(Supplier<String> nameSupplier) {
+    this.nameSupplier = nameSupplier;
+    return this;
+  }
+
   AmqpConnection connection() {
     return this.connection;
   }
 
   TopologyListener topologyListener() {
     return this.topologyListener;
+  }
+
+  public Supplier<String> nameSupplier() {
+    return nameSupplier;
   }
 }

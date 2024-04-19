@@ -19,6 +19,7 @@ package com.rabbitmq.model.amqp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -28,5 +29,13 @@ public class UtilsTest {
   @CsvSource({"/exchange/foo/bar,", "/topic/foo,", "/queue/foo,foo", "foo,"})
   void extractQueueFromSourceAddress(String address, String expectedQueue) {
     assertThat(Utils.extractQueueFromSourceAddress(address)).isEqualTo(expectedQueue);
+  }
+
+  @Test
+  void nameSupplierShouldGenerateRandomNames() {
+    assertThat(Utils.NAME_SUPPLIER.get())
+        .hasSizeGreaterThan(20)
+        .isNotEqualTo(Utils.NAME_SUPPLIER.get())
+        .isNotEqualTo(Utils.NAME_SUPPLIER.get());
   }
 }

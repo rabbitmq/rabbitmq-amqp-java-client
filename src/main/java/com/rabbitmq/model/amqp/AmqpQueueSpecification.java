@@ -194,7 +194,9 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     body.put("auto_delete", this.autoDelete);
     body.put("arguments", this.arguments);
     Management.QueueInfo info = this.management.declareQueue(this.name, body);
-    this.management.recovery().queueDeclared(this);
+    AmqpQueueSpecification copy = this.duplicate();
+    copy.name(info.name());
+    this.management.recovery().queueDeclared(copy);
     return info;
   }
 
@@ -376,5 +378,13 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
 
   void arguments(BiConsumer<String, Object> consumer) {
     this.arguments.forEach(consumer);
+  }
+
+  AmqpQueueSpecification duplicate() {
+    AmqpQueueSpecification copy = new AmqpQueueSpecification(this.management);
+    copy.name(this.name).exclusive(this.exclusive).autoDelete(this.autoDelete);
+    copy.shortcutArguments = this.shortcutArguments;
+    copy.arguments.putAll(this.arguments);
+    return copy;
   }
 }

@@ -19,6 +19,7 @@ package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.model.Management.QueueType.CLASSIC;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
@@ -26,7 +27,6 @@ import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
-import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.*;
 import java.nio.charset.StandardCharsets;
@@ -220,6 +220,16 @@ public class AmqpTest {
       management.exchangeDeletion().delete(e2);
       management.exchangeDeletion().delete(e1);
       management.queueDeletion().delete(q);
+    }
+  }
+
+  //  @Test
+  void test(TestInfo info) {
+    String q = TestUtils.name(info);
+    try (Connection c = environment.connectionBuilder().build()) {
+      c.management().queue(q).type(CLASSIC).declare();
+      c.management().queue(q).type(CLASSIC).declare();
+      c.management().queue(q).type(QUORUM).declare();
     }
   }
 }
