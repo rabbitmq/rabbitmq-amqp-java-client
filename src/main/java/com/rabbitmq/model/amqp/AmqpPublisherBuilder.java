@@ -61,9 +61,6 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   @Override
   public Publisher build() {
-    if (this.addressBuilder.address() == null) {
-      throw new IllegalArgumentException("An address (exchange or queue) must be specified");
-    }
     return this.connection.createPublisher(this);
   }
 
