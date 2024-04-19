@@ -85,6 +85,9 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   @Override
   public Consumer build() {
+    if (this.queue == null || this.queue.isBlank()) {
+      throw new IllegalArgumentException("A queue must be specified");
+    }
     return this.connection.createConsumer(this);
   }
 }
