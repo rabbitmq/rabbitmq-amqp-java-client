@@ -592,15 +592,15 @@ public class TopologyRecoveryTest {
   @Test
   void autoDeleteClientNamedQueueShouldBeRecovered() throws Exception {
     try (Connection connection = connection()) {
-      Management.QueueInfo queueInfo = connection.management().queue().autoDelete(true).declare();
+      Management.QueueInfo queueInfo = connection.management().queue().exclusive(true).declare();
 
-      String generatedQueueName = queueInfo.name();
+      String queueName = queueInfo.name();
 
       AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
-      Publisher publisher = connection.publisherBuilder().queue(generatedQueueName).build();
+      Publisher publisher = connection.publisherBuilder().queue(queueName).build();
       connection
           .consumerBuilder()
-          .queue(generatedQueueName)
+          .queue(queueName)
           .messageHandler(
               (ctx, message) -> {
                 ctx.accept();
@@ -615,7 +615,7 @@ public class TopologyRecoveryTest {
 
       publisher.publish(publisher.message(), ctx -> {});
       assertThat(consumeLatch).completes();
-      waitAtMost(() -> connection.management().queueInfo(generatedQueueName).messageCount() == 0);
+      waitAtMost(() -> connection.management().queueInfo(queueName).messageCount() == 0);
     }
   }
 
