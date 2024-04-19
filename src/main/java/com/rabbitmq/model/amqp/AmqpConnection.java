@@ -197,12 +197,25 @@ class AmqpConnection extends ResourceBase implements Connection {
               .client()
               .connect(
                   this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
-      return connection.openFuture().get();
+      connection.openFuture().get();
+      checkBrokerVersion(connection);
+      return connection;
     } catch (ClientException | ExecutionException e) {
       throw new ModelException(e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ModelException(e);
+    }
+  }
+
+  private static void checkBrokerVersion(org.apache.qpid.protonj2.client.Connection connection)
+      throws ClientException {
+    String version = (String) connection.properties().get("version");
+    if (version == null) {
+      throw new ModelException("No broker version set in connection properties");
+    }
+    if (!Utils.is4_0_OrMore(version)) {
+      throw new ModelException("The AMQP client library requires RabbitMQ 4.0 or more");
     }
   }
 
