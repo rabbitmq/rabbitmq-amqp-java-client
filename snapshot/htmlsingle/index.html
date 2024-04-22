@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(656c671)</span>
+<br><span id="revremark">(ddc4e23)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -649,9 +649,9 @@ It is possible to override the environment connection settings for a given conne
 <div class="listingblock">
 <div class="title">Message creation</div>
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="java">Message message = publisher.message()
-    .messageId(<span class="integer">1L</span>)
-    .addData(<span class="string"><span class="delimiter">&quot;</span><span class="content">hello</span><span class="delimiter">&quot;</span></span>.getBytes(StandardCharsets.UTF_8));</code></pre>
+<pre class="CodeRay highlight"><code data-lang="java">Message&lt;<span class="type">byte</span><span class="type">[]</span>&gt; message = publisher
+    .message(<span class="string"><span class="delimiter">&quot;</span><span class="content">hello</span><span class="delimiter">&quot;</span></span>.getBytes(StandardCharsets.UTF_8))
+    .messageId(<span class="integer">1L</span>);</code></pre>
 </div>
 </div>
 <div class="listingblock">
@@ -757,13 +757,14 @@ Message message3 = publisher.message()
 <div class="sect2">
 <h3 id="consuming"><a class="anchor" href="#consuming"></a>Consuming</h3>
 <div class="listingblock">
-<div class="title">Consuming from a queue</div>
+<div class="title">Consuming from a queue (generic body)</div>
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="java">connection.consumerBuilder()
     .queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>)
     .messageHandler((context, message) -&gt; {
-      <span class="comment">// ... </span><i class="conum" data-value="1"></i><b>(1)</b>
-      context.accept(); <i class="conum" data-value="2"></i><b>(2)</b>
+      <span class="predefined-type">Object</span> body = message.body(); <i class="conum" data-value="1"></i><b>(1)</b>
+      <span class="comment">// ... </span><i class="conum" data-value="2"></i><b>(2)</b>
+      context.accept(); <i class="conum" data-value="3"></i><b>(3)</b>
     })
     .build();</code></pre>
 </div>
@@ -772,10 +773,47 @@ Message message3 = publisher.message()
 <table>
 <tr>
 <td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Process the message</td>
+<td>Get message body as object</td>
 </tr>
 <tr>
 <td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Process the message</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Accept (acknowledge) the message</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Consuming from a queue (strongly-typed body)</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">connection.consumerBuilder(<span class="predefined-type">String</span>.class) <i class="conum" data-value="1"></i><b>(1)</b>
+    .queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">some-queue</span><span class="delimiter">&quot;</span></span>)
+    .messageHandler((context, message) -&gt; {
+      <span class="predefined-type">String</span> body = message.body(); <i class="conum" data-value="2"></i><b>(2)</b>
+      <span class="comment">// ... </span><i class="conum" data-value="3"></i><b>(3)</b>
+      context.accept(); <i class="conum" data-value="4"></i><b>(4)</b>
+    })
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Set expected body type</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Get message body as expected type</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Process the message</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
 <td>Accept (acknowledge) the message</td>
 </tr>
 </table>
@@ -1180,7 +1218,7 @@ Snapshots are available from a repository which must be declared in the dependen
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-04-19 15:08:38 UTC
+Last updated 2024-04-22 10:23:43 UTC
 </div>
 </div>
 </body>
