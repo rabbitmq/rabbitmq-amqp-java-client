@@ -204,7 +204,7 @@ class AmqpConnection extends ResourceBase implements Connection {
               .connect(
                   this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
       connection.openFuture().get();
-      checkBrokerVersion(connection);
+//      checkBrokerVersion(connection);
       return connection;
     } catch (ClientException | ExecutionException e) {
       throw new ModelException(e);
