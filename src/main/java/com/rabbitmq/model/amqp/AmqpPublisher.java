@@ -54,16 +54,22 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   }
 
   @Override
-  public Message message() {
-    return new AmqpMessage();
+  public <T> Message<T> message() {
+    return new AmqpMessage<>();
   }
 
   @Override
-  public void publish(Message message, Callback callback) {
+  public <T> Message<T> message(T body) {
+    return new AmqpMessage<>(body);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <T> void publish(Message<? extends T> message, Callback<? super T> callback) {
     checkOpen();
     try {
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
-          ((AmqpMessage) message).nativeMessage();
+          ((AmqpMessage<? extends T>) message).nativeMessage();
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
       this.executorService.submit(
           () -> {
@@ -77,7 +83,9 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             } catch (InterruptedException | ExecutionException e) {
               status = Status.FAILED;
             }
-            callback.handle(new DefaultContext(message, status));
+            @SuppressWarnings("rawtypes")
+            DefaultContext defaultContext = new DefaultContext(message, status);
+            callback.handle(defaultContext);
           });
     } catch (ClientIllegalStateException e) {
       // the link is closed
@@ -125,18 +133,18 @@ class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private static class DefaultContext implements Publisher.Context {
+  private static class DefaultContext<T> implements Publisher.Context<T> {
 
-    private final Message message;
+    private final Message<T> message;
     private final Status status;
 
-    private DefaultContext(Message message, Status status) {
+    private DefaultContext(Message<T> message, Status status) {
       this.message = message;
       this.status = status;
     }
 
     @Override
-    public Message message() {
+    public Message<T> message() {
       return this.message;
     }
 

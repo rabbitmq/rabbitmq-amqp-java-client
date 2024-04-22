@@ -38,12 +38,12 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Future<?> receiveLoop;
   private final int initialCredits;
-  private final MessageHandler messageHandler;
+  private final MessageHandler<?> messageHandler;
   private final Long id;
   private final String address;
   private final AmqpConnection connection;
 
-  AmqpConsumer(AmqpConsumerBuilder builder) {
+  AmqpConsumer(AmqpConsumerBuilder<?> builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
@@ -78,14 +78,16 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private Runnable createReceiveTask(
-      Receiver receiver, MessageHandler messageHandler, Semaphore inFlightMessages) {
+      Receiver receiver, MessageHandler<?> messageHandler, Semaphore inFlightMessages) {
     return () -> {
       try {
         while (!Thread.currentThread().isInterrupted()) {
           Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
           if (delivery != null) {
             inFlightMessages.acquire();
+            @SuppressWarnings("rawtypes")
             AmqpMessage message = new AmqpMessage(delivery.message());
             // FIXME handle ClientIllegalStateException on disposition
             // (the consumer has recovered between the callback and the disposition)

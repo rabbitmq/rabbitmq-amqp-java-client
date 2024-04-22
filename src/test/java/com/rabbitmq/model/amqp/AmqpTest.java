@@ -19,7 +19,6 @@ package com.rabbitmq.model.amqp;
 
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.model.Management.QueueType.CLASSIC;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
@@ -27,13 +26,17 @@ import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -101,8 +104,7 @@ public class AmqpTest {
                 UUID messageId = UUID.randomUUID();
                 publisher.publish(
                     publisher
-                        .message()
-                        .addData("hello".getBytes(StandardCharsets.UTF_8))
+                        .message("hello".getBytes(StandardCharsets.UTF_8))
                         .messageId(messageId),
                     context -> {
                       if (context.status() == Publisher.Status.ACCEPTED) {
@@ -111,7 +113,7 @@ public class AmqpTest {
                     });
               });
 
-      assertThat(confirmLatch).is(completed());
+      Assertions.assertThat(confirmLatch).is(completed());
 
       Management.QueueInfo queueInfo = connection.management().queueInfo(q);
       assertThat(queueInfo).hasName(q).hasNoConsumers().hasMessageCount(messageCount);
@@ -127,7 +129,7 @@ public class AmqpTest {
                     consumeLatch.countDown();
                   })
               .build();
-      assertThat(consumeLatch).is(completed());
+      Assertions.assertThat(consumeLatch).is(completed());
 
       queueInfo = connection.management().queueInfo(q);
       assertThat(queueInfo).hasConsumerCount(1).isEmpty();
@@ -176,7 +178,7 @@ public class AmqpTest {
       Consumer<Publisher> publish =
           publisher ->
               publisher.publish(
-                  publisher.message().addData("hello".getBytes(StandardCharsets.UTF_8)),
+                  publisher.message("hello".getBytes(StandardCharsets.UTF_8)),
                   context -> {
                     if (context.status() == Publisher.Status.ACCEPTED) {
                       confirmLatch.countDown();
@@ -186,7 +188,7 @@ public class AmqpTest {
       range(0, messageCount).forEach(ignored -> publish.accept(publisher1));
       range(0, messageCount).forEach(ignored -> publish.accept(publisher2));
 
-      assertThat(confirmLatch).is(completed());
+      Assertions.assertThat(confirmLatch).is(completed());
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount * 2);
       com.rabbitmq.model.Consumer consumer =
@@ -199,7 +201,7 @@ public class AmqpTest {
                     consumeLatch.countDown();
                   })
               .build();
-      assertThat(consumeLatch).is(completed());
+      Assertions.assertThat(consumeLatch).is(completed());
       publisher1.close();
       publisher2.close();
       consumer.close();
@@ -223,13 +225,92 @@ public class AmqpTest {
     }
   }
 
-  //  @Test
-  void test(TestInfo info) {
-    String q = TestUtils.name(info);
-    try (Connection c = environment.connectionBuilder().build()) {
-      c.management().queue(q).type(CLASSIC).declare();
-      c.management().queue(q).type(CLASSIC).declare();
-      c.management().queue(q).type(QUORUM).declare();
-    }
+  @Test
+  void sameTypeMessagesInQueue() {
+    String q = connection.management().queue().exclusive(true).declare().name();
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+
+    Set<String> messageBodies = ConcurrentHashMap.newKeySet(2);
+    CountDownLatch consumeLatch = new CountDownLatch(2);
+    connection
+        .consumerBuilder(String.class)
+        .queue(q)
+        .messageHandler(
+            (ctx, message) -> {
+              ctx.accept();
+              messageBodies.add(message.body());
+              consumeLatch.countDown();
+            })
+        .build();
+
+    publisher.publish(publisher.message("one"), ctx -> {});
+    publisher.publish(publisher.message("two"), ctx -> {});
+
+    assertThat(consumeLatch).completes();
+    assertThat(messageBodies).hasSize(2).containsOnly("one", "two");
+  }
+
+  @Test
+  void differentTypeMessagesInQueue() {
+    String q = connection.management().queue().exclusive(true).declare().name();
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+
+    Set<Object> messageBodies = ConcurrentHashMap.newKeySet(2);
+    CountDownLatch consumeLatch = new CountDownLatch(2);
+    connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (ctx, message) -> {
+              ctx.accept();
+              messageBodies.add(message.body());
+              consumeLatch.countDown();
+            })
+        .build();
+
+    publisher.publish(publisher.message("one"), ctx -> {});
+    publisher.publish(publisher.message(Map.of("key", "value")), ctx -> {});
+
+    assertThat(consumeLatch).completes();
+    assertThat(messageBodies).hasSize(2).containsOnly("one", Map.of("key", "value"));
+  }
+
+  @Test
+  void publisherCallbackCanUseParentClass() {
+    String q = connection.management().queue().exclusive(true).declare().name();
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+
+    Number value = 1;
+    Message<Integer> integerMessage = publisher.message(value.intValue());
+    publisher.publish(
+        publisher.message(1),
+        ctx -> {
+          Integer body = ctx.message().body();
+          assertThat(body).isEqualTo(integerMessage.body());
+          latch.countDown();
+        });
+
+    Message<Long> longMessage = publisher.message(value.longValue());
+    publisher.publish(
+        publisher.message(1L),
+        ctx -> {
+          Long body = ctx.message().body();
+          assertThat(body).isEqualTo(longMessage.body());
+          latch.countDown();
+        });
+
+    Publisher.Callback<Number> callback =
+        context -> {
+          Number body = context.message().body();
+          assertThat(body).isEqualTo(value);
+          latch.countDown();
+        };
+
+    publisher.publish(integerMessage, callback);
+    publisher.publish(longMessage, callback);
+
+    assertThat(latch).completes();
   }
 }

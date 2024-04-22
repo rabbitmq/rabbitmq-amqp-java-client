@@ -93,13 +93,24 @@ include::{test-examples}/Api.java[tag=target-address-null]
 
 === Consuming
 
-.Consuming from a queue
+.Consuming from a queue (generic body)
 [source,java,indent=0]
 --------
-include::{test-examples}/Api.java[tag=consumer]
+include::{test-examples}/Api.java[tag=consumer-generic-body]
 --------
-<1> Process the message
-<2> Accept (acknowledge) the message
+<1> Get message body as object
+<2> Process the message
+<3> Accept (acknowledge) the message
+
+.Consuming from a queue (strongly-typed body)
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer-strongly-typed-body]
+--------
+<1> Set expected body type
+<2> Get message body as expected type
+<3> Process the message
+<4> Accept (acknowledge) the message
 
 === Resource Management
 

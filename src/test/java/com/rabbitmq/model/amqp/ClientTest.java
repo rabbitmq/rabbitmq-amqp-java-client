@@ -89,8 +89,7 @@ public class ClientTest {
           .forEach(
               ignored ->
                   publisher.publish(
-                      publisher.message().addData("".getBytes(UTF_8)),
-                      context -> publishLatch.countDown()));
+                      publisher.message("".getBytes(UTF_8)), context -> publishLatch.countDown()));
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
       Receiver receiver = protonConnection.openReceiver("/queue/" + q, new ReceiverOptions());

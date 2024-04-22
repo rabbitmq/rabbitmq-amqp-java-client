@@ -22,9 +22,9 @@ public interface Consumer extends AutoCloseable {
   @Override
   void close();
 
-  interface MessageHandler {
+  interface MessageHandler<T> {
 
-    void handle(Context context, Message message);
+    void handle(Context context, Message<T> message);
   }
 
   interface Context {

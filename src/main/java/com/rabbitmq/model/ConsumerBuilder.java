@@ -17,15 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-public interface ConsumerBuilder {
+public interface ConsumerBuilder<T> {
 
-  ConsumerBuilder queue(String queue);
+  ConsumerBuilder<T> queue(String queue);
 
-  ConsumerBuilder messageHandler(Consumer.MessageHandler handler);
+  ConsumerBuilder<T> messageHandler(Consumer.MessageHandler<T> handler);
 
-  ConsumerBuilder initialCredits(int initialCredits);
+  ConsumerBuilder<T> initialCredits(int initialCredits);
 
-  ConsumerBuilder listeners(Resource.StateListener... listeners);
+  ConsumerBuilder<T> listeners(Resource.StateListener... listeners);
 
   Consumer build();
 }

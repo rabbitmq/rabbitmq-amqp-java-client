@@ -20,10 +20,11 @@ package com.rabbitmq.model;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-public interface Message {
+public interface Message<T> {
 
-  // TODO support the possible body types
-  Message addData(byte[] data);
+  Message<T> body(T body);
+
+  T body();
 
   // properties
   Object messageId();
@@ -44,65 +45,65 @@ public interface Message {
 
   String replyTo();
 
-  Message messageId(String id);
+  Message<T> messageId(String id);
 
-  Message messageId(long id);
+  Message<T> messageId(long id);
 
-  Message messageId(byte[] id);
+  Message<T> messageId(byte[] id);
 
-  Message messageId(UUID id);
+  Message<T> messageId(UUID id);
 
-  Message userId(byte[] userId);
+  Message<T> userId(byte[] userId);
 
-  Message to(String address);
+  Message<T> to(String address);
 
-  Message subject(String subject);
+  Message<T> subject(String subject);
 
-  Message replyTo(String replyTo);
+  Message<T> replyTo(String replyTo);
 
   // TODO handle remaining properties
 
   Object property(String key);
 
-  Message property(String key, boolean value);
+  Message<T> property(String key, boolean value);
 
-  Message property(String key, byte value);
+  Message<T> property(String key, byte value);
 
-  Message property(String key, short value);
+  Message<T> property(String key, short value);
 
-  Message property(String key, int value);
+  Message<T> property(String key, int value);
 
-  Message property(String key, long value);
+  Message<T> property(String key, long value);
 
-  Message propertyUnsigned(String key, byte value);
+  Message<T> propertyUnsigned(String key, byte value);
 
-  Message propertyUnsigned(String key, short value);
+  Message<T> propertyUnsigned(String key, short value);
 
-  Message propertyUnsigned(String key, int value);
+  Message<T> propertyUnsigned(String key, int value);
 
-  Message propertyUnsigned(String key, long value);
+  Message<T> propertyUnsigned(String key, long value);
 
-  Message property(String key, float value);
+  Message<T> property(String key, float value);
 
-  Message property(String key, double value);
+  Message<T> property(String key, double value);
 
-  Message propertyDecimal32(String key, BigDecimal value);
+  Message<T> propertyDecimal32(String key, BigDecimal value);
 
-  Message propertyDecimal64(String key, BigDecimal value);
+  Message<T> propertyDecimal64(String key, BigDecimal value);
 
-  Message propertyDecimal128(String key, BigDecimal value);
+  Message<T> propertyDecimal128(String key, BigDecimal value);
 
-  Message property(String key, char value);
+  Message<T> property(String key, char value);
 
-  Message propertyTimestamp(String key, long value);
+  Message<T> propertyTimestamp(String key, long value);
 
-  Message property(String key, UUID value);
+  Message<T> property(String key, UUID value);
 
-  Message property(String key, byte[] value);
+  Message<T> property(String key, byte[] value);
 
-  Message property(String key, String value);
+  Message<T> property(String key, String value);
 
-  Message propertySymbol(String key, String value);
+  Message<T> propertySymbol(String key, String value);
 
   boolean hasProperty(String key);
 
@@ -115,10 +116,10 @@ public interface Message {
   // TODO support message annotations
   // TODO support message headers
 
-  MessageAddressBuilder address();
+  MessageAddressBuilder<T> address();
 
-  interface MessageAddressBuilder extends AddressBuilder<MessageAddressBuilder> {
+  interface MessageAddressBuilder<T> extends AddressBuilder<MessageAddressBuilder<T>> {
 
-    Message message();
+    Message<T> message();
   }
 }

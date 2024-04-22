@@ -65,10 +65,11 @@ class Api {
         .build();
     // end::publisher-creation[]
 
+
     // tag::message-creation[]
-    Message message = publisher.message()
-        .messageId(1L)
-        .addData("hello".getBytes(StandardCharsets.UTF_8));
+    Message<byte[]> message = publisher
+        .message("hello".getBytes(StandardCharsets.UTF_8))
+        .messageId(1L);
     // end::message-creation[]
 
     // tag::message-publishing[]
@@ -131,15 +132,27 @@ class Api {
 
   void consuming() {
     Connection connection = null;
-    // tag::consumer[]
+    // tag::consumer-generic-body[]
     connection.consumerBuilder()
         .queue("some-queue")
         .messageHandler((context, message) -> {
-          // ... <1>
-          context.accept(); // <2>
+          Object body = message.body(); // <1>
+          // ... <2>
+          context.accept(); // <3>
         })
         .build();
-    // end::consumer[]
+    // end::consumer-generic-body[]
+
+    // tag::consumer-strongly-typed-body[]
+    connection.consumerBuilder(String.class) // <1>
+        .queue("some-queue")
+        .messageHandler((context, message) -> {
+          String body = message.body(); // <2>
+          // ... <3>
+          context.accept(); // <4>
+        })
+        .build();
+    // end::consumer-strongly-typed-body[]
   }
 
   void management() {

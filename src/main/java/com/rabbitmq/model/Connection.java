@@ -25,7 +25,9 @@ public interface Connection extends Closeable, Resource {
 
   PublisherBuilder publisherBuilder();
 
-  ConsumerBuilder consumerBuilder();
+  <T> ConsumerBuilder<T> consumerBuilder();
+
+  <T> ConsumerBuilder<T> consumerBuilder(Class<? extends T> bodyClass);
 
   @Override
   void close();

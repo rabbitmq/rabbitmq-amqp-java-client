@@ -472,7 +472,7 @@ public class TopologyRecoveryTest {
       int consumerCount = 100;
       AtomicReference<CountDownLatch> consumeLatch =
           new AtomicReference<>(new CountDownLatch(consumerCount));
-      Consumer.MessageHandler handler =
+      Consumer.MessageHandler<Object> handler =
           (ctx, m) -> {
             consumeLatch.get().countDown();
             ctx.accept();
