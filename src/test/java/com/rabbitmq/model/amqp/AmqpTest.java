@@ -20,9 +20,10 @@ package com.rabbitmq.model.amqp;
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
-import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
+import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
+import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
@@ -30,12 +31,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -312,5 +316,39 @@ public class AmqpTest {
     publisher.publish(longMessage, callback);
 
     assertThat(latch).completes();
+  }
+
+  @Test
+  void pauseShouldStopMessageArrivalUnpauseShouldResumeIt() throws Exception {
+    String q = connection.management().queue().exclusive(true).declare().name();
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+    int messageCount = 100;
+    CountDownLatch publishLatch = new CountDownLatch(messageCount);
+    Publisher.Callback<?> callback = ctx -> publishLatch.countDown();
+    IntStream.range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), callback));
+
+    assertThat(publishLatch).completes();
+
+    int initialCredits = 10;
+    Set<com.rabbitmq.model.Consumer.Context> messageContexts = ConcurrentHashMap.newKeySet();
+    com.rabbitmq.model.Consumer consumer = connection.consumerBuilder().queue(q)
+        .initialCredits(initialCredits)
+        .messageHandler((ctx, msg) -> {
+          messageContexts.add(ctx);
+        }).build();
+
+    waitAtMost(() -> messageContexts.size() == initialCredits);
+
+    assertThat(connection.management().queueInfo(q)).hasMessageCount(messageCount - initialCredits);
+
+    assertThat(Cli.queueInfo(q).unackedMessageCount()).isEqualTo(initialCredits);
+
+    ((AmqpConsumer) consumer).pause();
+    new ArrayList<>(messageContexts).forEach(com.rabbitmq.model.Consumer.Context::accept);
+
+    waitAtMost(() -> Cli.queueInfo(q).unackedMessageCount() == 0);
+    waitAtMost(() -> messageContexts.size() == initialCredits);
+    ((AmqpConsumer) consumer).unpause();
+    waitAtMost(() -> messageContexts.size() == initialCredits * 2);
   }
 }

@@ -83,6 +83,15 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.qpid</groupId>
+            <artifactId>protonj2</artifactId>
+            <version>${protonj2.version}</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/protonj2-1.0.0-M21-SNAPSHOT.jar</systemPath>
+        </dependency>
+
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
             <scope>test</scope>

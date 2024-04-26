@@ -167,6 +167,26 @@ abstract class Cli {
     return xs.stream().filter(predicate).findFirst().orElse(null);
   }
 
+  static List<QueueInfo> listQueues() {
+    String output = rabbitmqctl("list_queues -q name,messages,messages_ready,messages_unacknowledged").output();
+    String[] allLines = output.split("\n");
+    List<QueueInfo> result = new ArrayList<>();
+    for (int i = 1; i < allLines.length; i++) {
+      String line = allLines[i];
+      if (line != null && !line.trim().isEmpty()) {
+        String[] columns = line.split("\t");
+        result.add(new QueueInfo(columns[0], Integer.parseInt(columns[1]),
+            Integer.parseInt(columns[2]), Integer.parseInt(columns[3])));
+      }
+    }
+    return result;
+  }
+
+  static QueueInfo queueInfo(String q) {
+    return listQueues().stream().filter(info -> q.equals(info.name())).findFirst().get();
+  }
+
+
   private static class ConnectionInfo {
     private final String pid;
     private final int peerPort;
@@ -211,6 +231,36 @@ abstract class Cli {
           + clientProvidedName
           + '\''
           + '}';
+    }
+  }
+
+  static class QueueInfo {
+    private final String name;
+    private final int messsageCount;
+    private final int readyMessageCount;
+    private final int unackedMessageCount;
+
+    QueueInfo(String name, int messsageCount, int readyMessageCount, int unackedMessageCount) {
+      this.name = name;
+      this.messsageCount = messsageCount;
+      this.readyMessageCount = readyMessageCount;
+      this.unackedMessageCount = unackedMessageCount;
+    }
+
+    String name() {
+      return name;
+    }
+
+    int messsageCount() {
+      return messsageCount;
+    }
+
+    int readyMessageCount() {
+      return readyMessageCount;
+    }
+
+    int unackedMessageCount() {
+      return unackedMessageCount;
     }
   }
 

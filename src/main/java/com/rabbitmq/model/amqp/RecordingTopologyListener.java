@@ -23,6 +23,7 @@ import com.rabbitmq.model.ModelException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,7 @@ class RecordingTopologyListener implements TopologyListener, AutoCloseable {
   private final BlockingQueue<Runnable> taskQueue = new ArrayBlockingQueue<>(100);
   private final Future<?> loop;
   private final AtomicReference<Thread> loopThread = new AtomicReference<>();
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   RecordingTopologyListener(ExecutorService executorService) {
     CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
@@ -147,40 +149,44 @@ class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
   @Override
   public void close() {
-    this.loop.cancel(true);
+    if (this.closed.compareAndSet(false, true)) {
+      this.loop.cancel(true);
+    }
   }
 
   private void submit(Runnable task) {
-    if (Thread.currentThread().equals(this.loopThread.get())) {
-      task.run();
-    } else {
-      CountDownLatch latch = new CountDownLatch(1);
-      try {
-        boolean added =
-            this.taskQueue.offer(
-                () -> {
-                  try {
-                    task.run();
-                  } catch (Exception e) {
-                    LOGGER.info("Error during topology recording task", e);
-                  } finally {
-                    latch.countDown();
-                  }
-                },
-                TIMEOUT.toMillis(),
-                TimeUnit.MILLISECONDS);
-        if (!added) {
-          throw new ModelException("Enqueueing of topology task timed out");
+    if (!this.closed.get()) {
+      if (Thread.currentThread().equals(this.loopThread.get())) {
+        task.run();
+      } else {
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+          boolean added =
+              this.taskQueue.offer(
+                  () -> {
+                    try {
+                      task.run();
+                    } catch (Exception e) {
+                      LOGGER.info("Error during topology recording task", e);
+                    } finally {
+                      latch.countDown();
+                    }
+                  },
+                  TIMEOUT.toMillis(),
+                  TimeUnit.MILLISECONDS);
+          if (!added) {
+            throw new ModelException("Enqueueing of topology task timed out");
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new ModelException("Topology task enqueueing has been interrupted", e);
         }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new ModelException("Topology task enqueueing has been interrupted", e);
-      }
-      try {
-        latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new ModelException("Topology task processing has been interrupted", e);
+        try {
+          latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new ModelException("Topology task processing has been interrupted", e);
+        }
       }
     }
   }

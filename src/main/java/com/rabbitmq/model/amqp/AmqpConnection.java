@@ -163,6 +163,10 @@ class AmqpConnection extends ResourceBase implements Connection {
       for (AmqpPublisher publisher : this.publishers) {
         publisher.close();
       }
+      for (AmqpConsumer consumer : this.consumers) {
+        consumer.close();
+      }
+
       try {
         this.nativeConnection.close();
       } catch (Exception e) {
