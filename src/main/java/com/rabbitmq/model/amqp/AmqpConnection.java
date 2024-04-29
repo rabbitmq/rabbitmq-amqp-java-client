@@ -31,9 +31,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
+import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
+import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIOException;
@@ -41,6 +44,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class AmqpConnection extends ResourceBase implements Connection {
+
+  private static final Predicate<Throwable> RECOVERY_PREDICATE =
+      t -> {
+        if (t instanceof SSLException
+            || (t.getCause() != null && t.getCause() instanceof SSLException)) {
+          return false;
+        } else {
+          return true;
+        }
+      };
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
@@ -200,6 +213,14 @@ class AmqpConnection extends ResourceBase implements Connection {
     if (name != null) {
       connectionOptions.properties(singletonMap("connection_name", name));
     }
+    if (connectionSettings.tlsEnabled()) {
+      DefaultConnectionSettings.DefaultTlsSettings<?> tlsSettings =
+          connectionSettings.tlsSettings();
+      connectionOptions.sslEnabled(true);
+      SslOptions sslOptions = connectionOptions.sslOptions();
+      sslOptions.sslContextOverride(tlsSettings.sslContext());
+      sslOptions.verifyHost(tlsSettings.isHostnameVerification());
+    }
     try {
       this.connectionAddress = connectionSettings.selectAddress();
       org.apache.qpid.protonj2.client.Connection connection =
@@ -210,11 +231,13 @@ class AmqpConnection extends ResourceBase implements Connection {
       connection.openFuture().get();
       checkBrokerVersion(connection);
       return connection;
-    } catch (ClientException | ExecutionException e) {
-      throw new ModelException(e);
+    } catch (ClientException e) {
+      throw ExceptionUtils.convert(e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ModelException(e);
+    } catch (ExecutionException e) {
+      throw ExceptionUtils.convert(e);
     }
   }
 
@@ -250,15 +273,20 @@ class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
-          if (event.failureCause() instanceof ClientConnectionRemotelyClosedException
-              && this.recoveringConnection.get()) {
-            LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
+          if (RECOVERY_PREDICATE.test(event.failureCause())) {
+            if (event.failureCause() instanceof ClientConnectionRemotelyClosedException
+                && this.recoveringConnection.get()) {
+              LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
+            } else {
+              LOGGER.debug("Queueing recovery task");
+              this.recoveryRequestQueue.add(
+                  () ->
+                      recoverAfterConnectionFailure(
+                          recoveryConfiguration, name, event.failureCause(), resultReference));
+            }
           } else {
-            LOGGER.debug("Queueing recovery task");
-            this.recoveryRequestQueue.add(
-                () ->
-                    recoverAfterConnectionFailure(
-                        recoveryConfiguration, name, event.failureCause(), resultReference));
+            LOGGER.debug(
+                "Not recovering connection for error {}", event.failureCause().getMessage());
           }
         };
 

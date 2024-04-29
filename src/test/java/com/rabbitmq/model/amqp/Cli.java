@@ -49,11 +49,19 @@ abstract class Cli {
     }
   }
 
-  private static ProcessState rabbitmqctl(String command) {
+  static ProcessState rabbitmqctl(String command) {
     return executeCommand(rabbitmqctlCommand() + " " + command);
   }
 
+  static ProcessState rabbitmqctlIgnoreError(String command) {
+    return executeCommand(rabbitmqctlCommand() + " " + command, true);
+  }
+
   private static ProcessState executeCommand(String command) {
+    return executeCommand(command, false);
+  }
+
+  private static ProcessState executeCommand(String command, boolean ignoreError) {
     Process pr = executeCommandProcess(command);
     InputStreamPumpState inputState = new InputStreamPumpState(pr.getInputStream());
     InputStreamPumpState errorState = new InputStreamPumpState(pr.getErrorStream());
@@ -61,7 +69,7 @@ abstract class Cli {
     int ev = waitForExitValue(pr, inputState, errorState);
     inputState.pump();
     errorState.pump();
-    if (ev != 0) {
+    if (ev != 0 && !ignoreError) {
       throw new RuntimeException(
           "unexpected command exit value: "
               + ev
@@ -168,15 +176,20 @@ abstract class Cli {
   }
 
   static List<QueueInfo> listQueues() {
-    String output = rabbitmqctl("list_queues -q name,messages,messages_ready,messages_unacknowledged").output();
+    String output =
+        rabbitmqctl("list_queues -q name,messages,messages_ready,messages_unacknowledged").output();
     String[] allLines = output.split("\n");
     List<QueueInfo> result = new ArrayList<>();
     for (int i = 1; i < allLines.length; i++) {
       String line = allLines[i];
       if (line != null && !line.trim().isEmpty()) {
         String[] columns = line.split("\t");
-        result.add(new QueueInfo(columns[0], Integer.parseInt(columns[1]),
-            Integer.parseInt(columns[2]), Integer.parseInt(columns[3])));
+        result.add(
+            new QueueInfo(
+                columns[0],
+                Integer.parseInt(columns[1]),
+                Integer.parseInt(columns[2]),
+                Integer.parseInt(columns[3])));
       }
     }
     return result;
@@ -185,7 +198,6 @@ abstract class Cli {
   static QueueInfo queueInfo(String q) {
     return listQueues().stream().filter(info -> q.equals(info.name())).findFirst().get();
   }
-
 
   private static class ConnectionInfo {
     private final String pid;
@@ -264,7 +276,7 @@ abstract class Cli {
     }
   }
 
-  private static class ProcessState {
+  static class ProcessState {
 
     private final InputStreamPumpState inputState;
 
@@ -272,7 +284,7 @@ abstract class Cli {
       this.inputState = inputState;
     }
 
-    private String output() {
+    String output() {
       return inputState.buffer.toString();
     }
   }
@@ -308,5 +320,9 @@ abstract class Cli {
     } else {
       return null;
     }
+  }
+
+  static String hostname() {
+    return executeCommand("hostname").output();
   }
 }

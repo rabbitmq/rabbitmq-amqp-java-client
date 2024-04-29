@@ -12,6 +12,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout tls-gen
+        uses: actions/checkout@v4
+        with:
+          repository: rabbitmq/tls-gen
+          path: './tls-gen'
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -26,7 +31,10 @@ jobs:
         run: ./mvnw --version
       - name: Test
         run: |
-          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq
+          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq \
+            -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
+            -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
+            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem
       - name: Stop toxiproxy
         run: docker stop toxiproxy && docker rm toxiproxy
       - name: Stop broker

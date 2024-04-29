@@ -20,10 +20,10 @@ package com.rabbitmq.model.amqp;
 import static com.rabbitmq.model.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.model.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.model.Management.QueueType.QUORUM;
-import static com.rabbitmq.model.amqp.TestUtils.assertThat;
-import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
-import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.model.amqp.TestUtils.assertThat;
+import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
+import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
@@ -39,7 +39,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
-
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -325,17 +324,23 @@ public class AmqpTest {
     int messageCount = 100;
     CountDownLatch publishLatch = new CountDownLatch(messageCount);
     Publisher.Callback<?> callback = ctx -> publishLatch.countDown();
-    IntStream.range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), callback));
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), callback));
 
     assertThat(publishLatch).completes();
 
     int initialCredits = 10;
     Set<com.rabbitmq.model.Consumer.Context> messageContexts = ConcurrentHashMap.newKeySet();
-    com.rabbitmq.model.Consumer consumer = connection.consumerBuilder().queue(q)
-        .initialCredits(initialCredits)
-        .messageHandler((ctx, msg) -> {
-          messageContexts.add(ctx);
-        }).build();
+    com.rabbitmq.model.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(q)
+            .initialCredits(initialCredits)
+            .messageHandler(
+                (ctx, msg) -> {
+                  messageContexts.add(ctx);
+                })
+            .build();
 
     waitAtMost(() -> messageContexts.size() == initialCredits);
 

@@ -90,6 +90,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public TlsSettings<? extends ConnectionBuilder> tls() {
+    return this.connectionSettings.tls();
+  }
+
+  @Override
   public ConnectionBuilder listeners(Resource.StateListener... listeners) {
     if (listeners == null || listeners.length == 0) {
       this.listeners.clear();
@@ -206,6 +211,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     @Override
     AmqpConnectionBuilder toReturn() {
       return this.builder;
+    }
+
+    @Override
+    public TlsSettings<AmqpConnectionBuilder> tls() {
+      return super.tls();
     }
   }
 }

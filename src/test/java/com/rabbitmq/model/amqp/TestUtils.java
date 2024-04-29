@@ -35,6 +35,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.Connection;
@@ -297,6 +298,22 @@ public abstract class TestUtils {
         .put("toxiproxy", new CloseableResourceWrapper<>(client, c -> {}));
   }
 
+  static boolean tlsAvailable() {
+    return Cli.rabbitmqctl("status").output().contains("stream/ssl");
+  }
+
+  static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      if (tlsAvailable()) {
+        return ConditionEvaluationResult.enabled("TLS is enabled");
+      } else {
+        return ConditionEvaluationResult.disabled("TLS is disabled");
+      }
+    }
+  }
+
   static class DisabledIfToxiproxyNotAvailableCondition implements ExecutionCondition {
 
     @Override
@@ -339,6 +356,48 @@ public abstract class TestUtils {
     }
   }
 
+  private abstract static class DisabledIfPluginNotEnabledCondition implements ExecutionCondition {
+
+    private final String pluginLabel;
+    private final Predicate<String> condition;
+
+    DisabledIfPluginNotEnabledCondition(String pluginLabel, Predicate<String> condition) {
+      this.pluginLabel = pluginLabel;
+      this.condition = condition;
+    }
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      try {
+        String output = Cli.rabbitmqctl("status").output();
+        if (condition.test(output)) {
+          return ConditionEvaluationResult.enabled(format("%s plugin enabled", pluginLabel));
+        } else {
+          return ConditionEvaluationResult.disabled(format("%s plugin disabled", pluginLabel));
+        }
+      } catch (Exception e) {
+        return ConditionEvaluationResult.disabled(
+            format("Error while trying to detect %s plugin: " + e.getMessage(), pluginLabel));
+      }
+    }
+  }
+
+  private static class DisabledIfAuthMechanismSslNotEnabledCondition
+      extends DisabledIfPluginNotEnabledCondition {
+
+    DisabledIfAuthMechanismSslNotEnabledCondition() {
+      super(
+          "X509 authentication mechanism",
+          output -> output.contains("rabbitmq_auth_mechanism_ssl"));
+    }
+  }
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfTlsNotEnabledCondition.class)
+  public @interface DisabledIfTlsNotEnabled {}
+
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)
   @Documented
@@ -350,6 +409,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfToxiproxyNotAvailableCondition.class)
   @interface DisabledIfToxiproxyNotAvailable {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfAuthMechanismSslNotEnabledCondition.class)
+  @interface DisabledIfAuthMechanismSslNotEnabled {}
 
   static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {
 

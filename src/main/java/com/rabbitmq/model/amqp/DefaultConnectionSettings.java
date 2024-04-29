@@ -25,31 +25,30 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(DefaultConnectionSettings.class);
 
   static final String DEFAULT_USERNAME = "guest";
   static final String DEFAULT_PASSWORD = DEFAULT_USERNAME;
   static final String DEFAULT_HOST = "localhost";
   static final int DEFAULT_PORT = 5672;
+  static final int DEFAULT_TLS_PORT = 5671;
   static final String DEFAULT_VIRTUAL_HOST = "/";
-
-  void copyTo(ConnectionSettings<?> copy) {
-    copy.host(this.host);
-    copy.port(this.port);
-    copy.credentialsProvider(this.credentialsProvider);
-    copy.virtualHost(this.virtualHost);
-    copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
-    copy.addressSelector(this.addressSelector);
-    copy.idleTimeout(this.idleTimeout);
-  }
 
   private String host = DEFAULT_HOST;
   private int port = DEFAULT_PORT;
@@ -70,6 +69,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
         }
       };
   private final List<Address> addresses = new CopyOnWriteArrayList<>();
+  private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
 
   @Override
   public T uri(String uriString) {
@@ -82,6 +82,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       throw new IllegalArgumentException("URIs parameter cannot be null");
     }
     this.uris = stream(uris).map(DefaultConnectionSettings::toUri).collect(toUnmodifiableList());
+    boolean tls = this.uris.stream().anyMatch(uri -> uri.getScheme().equalsIgnoreCase("amqps"));
+    if (tls) {
+      this.tlsSettings.enable();
+    }
     return toReturn();
   }
 
@@ -168,9 +172,35 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   abstract T toReturn();
 
+  boolean tlsEnabled() {
+    return this.tlsSettings.enabled();
+  }
+
+  DefaultTlsSettings<?> tlsSettings() {
+    return this.tlsSettings;
+  }
+
+  void copyTo(DefaultConnectionSettings<?> copy) {
+    copy.host(this.host);
+    copy.port(this.port);
+    copy.credentialsProvider(this.credentialsProvider);
+    copy.virtualHost(this.virtualHost);
+    copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
+    copy.addressSelector(this.addressSelector);
+    copy.idleTimeout(this.idleTimeout);
+
+    if (this.tlsSettings.enabled()) {
+      this.tlsSettings.copyTo((DefaultTlsSettings<?>) copy.tls());
+    }
+  }
+
   DefaultConnectionSettings<?> consolidate() {
     if (this.uris.isEmpty()) {
-      this.addresses.add(new Address(this.host, this.port));
+      int p = this.port;
+      if (this.tlsEnabled() && this.port == DEFAULT_PORT) {
+        p = DEFAULT_TLS_PORT;
+      }
+      this.addresses.add(new Address(this.host, p));
     } else {
       URI uri = uris.get(0);
       String host = uri.getHost();
@@ -203,18 +233,30 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
         }
         this.virtualHost(uriDecode(uri.getPath().substring(1)));
       }
+
+      boolean tls =
+          this.tlsEnabled()
+              || this.uris.stream().anyMatch(u -> u.getScheme().equalsIgnoreCase("amqps"));
+
+      int defaultPort = tls ? DEFAULT_TLS_PORT : DEFAULT_PORT;
       List<Address> addrs =
           this.uris.stream()
               .map(
                   uriItem ->
                       new Address(
                           uriItem.getHost() == null ? DEFAULT_HOST : uriItem.getHost(),
-                          uriItem.getPort() == -1 ? DEFAULT_PORT : uriItem.getPort()))
+                          uriItem.getPort() == -1 ? defaultPort : uriItem.getPort()))
               .collect(toList());
       this.addresses.clear();
       this.addresses.addAll(addrs);
     }
     return this;
+  }
+
+  @Override
+  public TlsSettings<T> tls() {
+    this.tlsSettings.enable();
+    return this.tlsSettings;
   }
 
   static DefaultConnectionSettings<?> instance() {
@@ -246,6 +288,93 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       return URLDecoder.decode(s.replace("+", "%2B"), "US-ASCII");
     } catch (IOException e) {
       throw new IllegalArgumentException(e);
+    }
+  }
+
+  static class DefaultTlsSettings<T> implements TlsSettings<T> {
+
+    private final DefaultConnectionSettings<T> connectionSettings;
+
+    private boolean enabled = false;
+    private boolean hostnameVerification = true;
+    private SSLContext sslContext;
+
+    private DefaultTlsSettings(DefaultConnectionSettings<T> connectionSettings) {
+      this.connectionSettings = connectionSettings;
+    }
+
+    @Override
+    public TlsSettings<T> hostnameVerification() {
+      this.hostnameVerification = true;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> hostnameVerification(boolean hostnameVerification) {
+      this.hostnameVerification = hostnameVerification;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> sslContext(SSLContext sslContext) {
+      this.sslContext = sslContext;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> trustEverything() {
+      LOGGER.warn(
+          "SECURITY ALERT: this feature trusts every server certificate, effectively disabling peer verification. "
+              + "This is convenient for local development but offers no protection against man-in-the-middle attacks. "
+              + "Please see https://www.rabbitmq.com/ssl.html to learn more about peer certificate verification.");
+      SSLContext context = null;
+      for (String protocol : TlsUtils.PROTOCOLS) {
+        try {
+          context = SSLContext.getInstance(protocol);
+        } catch (NoSuchAlgorithmException ignored) {
+          // OK, trying the next protocol
+        }
+      }
+      if (context == null) {
+        throw new IllegalStateException(
+            "None of the mandatory TLS protocols supported:"
+                + String.join(", ", TlsUtils.PROTOCOLS)
+                + ".");
+      }
+      try {
+        context.init(null, new TrustManager[] {TlsUtils.TRUST_EVERYTHING_TRUST_MANAGER}, null);
+      } catch (KeyManagementException e) {
+        throw new ModelException(e);
+      }
+      this.sslContext = context;
+      return this;
+    }
+
+    @Override
+    public T connection() {
+      return this.connectionSettings.toReturn();
+    }
+
+    void copyTo(DefaultTlsSettings<?> copy) {
+      copy.enabled = this.enabled;
+      copy.sslContext(this.sslContext);
+      copy.hostnameVerification(this.hostnameVerification);
+    }
+
+    void enable() {
+      this.enabled = true;
+    }
+
+    boolean enabled() {
+      return this.enabled;
+    }
+
+    SSLContext sslContext() {
+      return this.sslContext;
+    }
+
+    boolean isHostnameVerification() {
+      return this.hostnameVerification;
     }
   }
 }

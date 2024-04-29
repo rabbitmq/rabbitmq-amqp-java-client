@@ -18,6 +18,8 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.ModelException;
+import java.util.concurrent.ExecutionException;
+import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 
@@ -27,7 +29,20 @@ abstract class ExceptionUtils {
 
   static ModelException convert(ClientException e) {
     // TODO convert Proton exception into exception of lib hierarchy
-    return new ModelException(e);
+    if (e.getCause() != null && e.getCause() instanceof SSLException) {
+      return new ModelException(e.getCause());
+    } else {
+      return new ModelException(e);
+    }
+  }
+
+  static ModelException convert(ExecutionException e) {
+    // TODO convert Proton exception into exception of lib hierarchy
+    if (e.getCause() != null && e.getCause() instanceof ClientException) {
+      return convert((ClientException) e.getCause());
+    } else {
+      return new ModelException(e);
+    }
   }
 
   static ModelException convert(ClientException e, String format, Object... args) {

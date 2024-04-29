@@ -29,7 +29,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.*;
 import org.apache.qpid.protonj2.client.impl.ClientLinkType;
@@ -66,7 +65,6 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private DeliveryQueue protonDeliveryQueue;
   private ProtonSessionIncomingWindow sessionWindow;
   private ProtonLinkCreditState creditState;
-
 
   AmqpConsumer(AmqpConsumerBuilder<?> builder) {
     super(builder.listeners());
@@ -229,7 +227,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   @SuppressWarnings("unchecked")
   static <T> T invoke(Class<?> lookupClass, String name, Object obj, Object... args) {
     try {
-      Class<?> [] argTypes = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+      Class<?>[] argTypes = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
       Method method = lookupClass.getDeclaredMethod(name, argTypes);
       method.setAccessible(true);
       return (T) method.invoke(obj, args);
@@ -249,7 +247,8 @@ class AmqpConsumer extends ResourceBase implements Consumer {
             this.sessionWindow = field("sessionWindow", this.protonReceiver);
             this.protonDeliveryQueue = field("deliveryQueue", receiver);
 
-            EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler = field("linkCreditUpdatedHandler", this.protonReceiver);
+            EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
+                field("linkCreditUpdatedHandler", this.protonReceiver);
             EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
                 target -> {
                   eventHandler.handle(target);
@@ -305,9 +304,9 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private void doPause() {
-      this.creditState.updateCredit(0);
-      this.creditState.updateEcho(true);
-      invoke(this.sessionWindow.getClass(), "writeFlow", this.sessionWindow, this.protonReceiver);
+    this.creditState.updateCredit(0);
+    this.creditState.updateEcho(true);
+    invoke(this.sessionWindow.getClass(), "writeFlow", this.sessionWindow, this.protonReceiver);
   }
 
   void unpause() {

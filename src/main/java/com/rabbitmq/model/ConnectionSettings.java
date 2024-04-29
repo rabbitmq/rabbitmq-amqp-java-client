@@ -20,6 +20,7 @@ package com.rabbitmq.model;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Function;
+import javax.net.ssl.SSLContext;
 
 public interface ConnectionSettings<T> {
 
@@ -42,4 +43,19 @@ public interface ConnectionSettings<T> {
   T idleTimeout(Duration idleTimeout);
 
   T addressSelector(Function<List<Address>, Address> selector);
+
+  TlsSettings<? extends T> tls();
+
+  interface TlsSettings<T> {
+
+    TlsSettings<T> hostnameVerification();
+
+    TlsSettings<T> hostnameVerification(boolean hostnameVerification);
+
+    TlsSettings<T> sslContext(SSLContext sslContext);
+
+    TlsSettings<T> trustEverything();
+
+    T connection();
+  }
 }
