@@ -299,7 +299,7 @@ public abstract class TestUtils {
   }
 
   static boolean tlsAvailable() {
-    return Cli.rabbitmqctl("status").output().contains("stream/ssl");
+    return Cli.rabbitmqctl("status").output().contains("amqp/ssl");
   }
 
   static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
