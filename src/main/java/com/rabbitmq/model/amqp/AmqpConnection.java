@@ -205,8 +205,7 @@ class AmqpConnection extends ResourceBase implements Connection {
       connectionOptions.password(credentialsProvider.getPassword());
     }
     connectionOptions.virtualHost("vhost:" + connectionSettings.virtualHost());
-    // only the mechanisms supported in RabbitMQ
-    connectionOptions.saslOptions().addAllowedMechanism("PLAIN").addAllowedMechanism("EXTERNAL");
+    connectionOptions.saslOptions().addAllowedMechanism(connectionSettings.saslMechanism());
     connectionOptions.idleTimeout(
         connectionSettings.idleTimeout().toMillis(), TimeUnit.MILLISECONDS);
     connectionOptions.disconnectedHandler(disconnectHandler);

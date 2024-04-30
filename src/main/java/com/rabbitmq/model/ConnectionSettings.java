@@ -24,6 +24,9 @@ import javax.net.ssl.SSLContext;
 
 public interface ConnectionSettings<T> {
 
+  String SASL_MECHANISM_PLAIN = "PLAIN";
+  String SASL_MECHANISM_EXTERNAL = "EXTERNAL";
+
   T uri(String uri);
 
   T uris(String... uris);
@@ -43,6 +46,8 @@ public interface ConnectionSettings<T> {
   T idleTimeout(Duration idleTimeout);
 
   T addressSelector(Function<List<Address>, Address> selector);
+
+  T saslMechanism(String mechanism);
 
   TlsSettings<? extends T> tls();
 

@@ -23,6 +23,7 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.model.Connection;
+import com.rabbitmq.model.ConnectionSettings;
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.amqp.TestUtils.DisabledIfAuthMechanismSslNotEnabled;
@@ -97,6 +98,7 @@ public class TlsTest {
           environment
               .connectionBuilder()
               .username(UUID.randomUUID().toString())
+              .saslMechanism(ConnectionSettings.SASL_MECHANISM_EXTERNAL)
               .tls()
               .sslContext(sslContext)
               .connection()

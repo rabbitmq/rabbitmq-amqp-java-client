@@ -69,6 +69,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
         }
       };
   private final List<Address> addresses = new CopyOnWriteArrayList<>();
+  private String saslMechanism = ConnectionSettings.SASL_MECHANISM_PLAIN;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
 
   @Override
@@ -154,6 +155,18 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return this.toReturn();
   }
 
+  @Override
+  public T saslMechanism(String mechanism) {
+    if (!SASL_MECHANISM_PLAIN.equals(mechanism) && !SASL_MECHANISM_EXTERNAL.equals(mechanism)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Unsupported SASL mechanism: '%s'. " + "Supported mechanisms are '%s' and '%s'.",
+              mechanism, SASL_MECHANISM_PLAIN, SASL_MECHANISM_EXTERNAL));
+    }
+    this.saslMechanism = mechanism;
+    return this.toReturn();
+  }
+
   CredentialsProvider credentialsProvider() {
     return credentialsProvider;
   }
@@ -168,6 +181,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   Address selectAddress() {
     return this.addressSelector.apply(this.addresses);
+  }
+
+  String saslMechanism() {
+    return this.saslMechanism;
   }
 
   abstract T toReturn();
@@ -188,6 +205,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
     copy.addressSelector(this.addressSelector);
     copy.idleTimeout(this.idleTimeout);
+    copy.saslMechanism(this.saslMechanism);
 
     if (this.tlsSettings.enabled()) {
       this.tlsSettings.copyTo((DefaultTlsSettings<?>) copy.tls());

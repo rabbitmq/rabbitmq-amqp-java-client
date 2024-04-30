@@ -90,6 +90,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public ConnectionBuilder saslMechanism(String mechanism) {
+    return this.connectionSettings.saslMechanism(mechanism);
+  }
+
+  @Override
   public TlsSettings<? extends ConnectionBuilder> tls() {
     return this.connectionSettings.tls();
   }
