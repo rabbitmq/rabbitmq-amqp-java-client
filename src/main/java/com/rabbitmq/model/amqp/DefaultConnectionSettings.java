@@ -344,7 +344,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       LOGGER.warn(
           "SECURITY ALERT: this feature trusts every server certificate, effectively disabling peer verification. "
               + "This is convenient for local development but offers no protection against man-in-the-middle attacks. "
-              + "Please see https://www.rabbitmq.com/ssl.html to learn more about peer certificate verification.");
+              + "Please see https://www.rabbitmq.com/docs/ssl to learn more about peer certificate verification.");
       SSLContext context = null;
       for (String protocol : TlsUtils.PROTOCOLS) {
         try {

@@ -22,14 +22,13 @@ import static com.rabbitmq.model.amqp.TlsTestUtils.*;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.model.Connection;
-import com.rabbitmq.model.ConnectionSettings;
-import com.rabbitmq.model.Environment;
-import com.rabbitmq.model.ModelException;
+import com.rabbitmq.model.*;
 import com.rabbitmq.model.amqp.TestUtils.DisabledIfAuthMechanismSslNotEnabled;
 import com.rabbitmq.model.amqp.TestUtils.DisabledIfTlsNotEnabled;
 import java.security.cert.X509Certificate;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.IntStream;
 import javax.net.ssl.*;
 import org.junit.jupiter.api.*;
 
@@ -46,6 +45,79 @@ public class TlsTest {
   @AfterAll
   static void tearDownAll() {
     environment.close();
+  }
+
+  @Test
+  void publishWithVerifiedConnectionConsumeWithUnverifiedConnection(TestInfo info)
+      throws Exception {
+    try (Connection publishingConnection =
+            environment
+                .connectionBuilder()
+                .tls()
+                .sslContext(sslContext(trustManagerFactory(caCertificate())))
+                .connection()
+                .build();
+        Connection consumingConnection =
+            environment
+                .connectionBuilder()
+                .tls()
+                .sslContext(alwaysTrustSslContext())
+                .connection()
+                .build()) {
+
+      int messageCount = 1000;
+      String q = TestUtils.name(info);
+      Management management = publishingConnection.management();
+      management.queue(q).autoDelete(true).declare();
+      Publisher publisher = publishingConnection.publisherBuilder().queue(q).build();
+      CountDownLatch publishLatch = new CountDownLatch(messageCount);
+      IntStream.range(0, messageCount)
+          .forEach(
+              ignored ->
+                  publisher.publish(publisher.message("hello"), ctx -> publishLatch.countDown()));
+      TestUtils.assertThat(publishLatch).completes();
+      TestUtils.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
+
+      CountDownLatch consumeLatch = new CountDownLatch(messageCount);
+      publishingConnection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                consumeLatch.countDown();
+                ctx.accept();
+              })
+          .build();
+      TestUtils.assertThat(consumeLatch).completes();
+      TestUtils.waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
+    }
+  }
+
+  @Test
+  void connectionConfigurationShouldOverrideEnvironmentConfiguration() throws Exception {
+    try (Environment env =
+        environmentBuilder()
+            .connectionSettings()
+            .tls()
+            .sslContext(alwaysTrustSslContext())
+            .connection()
+            .environmentBuilder()
+            .build()) {
+
+      // default environment settings, should work
+      env.connectionBuilder().build();
+
+      // using the client certificate in the trust manager, should fail
+      assertThatThrownBy(
+              () ->
+                  env.connectionBuilder()
+                      .tls()
+                      .sslContext(sslContext(trustManagerFactory(clientCertificate())))
+                      .connection()
+                      .build())
+          .isInstanceOf(ModelException.class)
+          .hasCauseInstanceOf(SSLHandshakeException.class);
+    }
   }
 
   @Test
