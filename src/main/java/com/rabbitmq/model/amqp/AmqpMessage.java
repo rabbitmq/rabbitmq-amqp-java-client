@@ -27,24 +27,24 @@ import java.util.UUID;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.*;
 
-class AmqpMessage<T> implements Message<T> {
+class AmqpMessage implements Message {
 
-  private final org.apache.qpid.protonj2.client.Message<T> delegate;
+  private final org.apache.qpid.protonj2.client.Message<byte[]> delegate;
 
   AmqpMessage() {
     this(org.apache.qpid.protonj2.client.Message.create());
   }
 
-  AmqpMessage(T body) {
+  AmqpMessage(byte[] body) {
     this(org.apache.qpid.protonj2.client.Message.create(body));
   }
 
-  AmqpMessage(org.apache.qpid.protonj2.client.Message<T> delegate) {
+  AmqpMessage(org.apache.qpid.protonj2.client.Message<byte[]> delegate) {
     this.delegate = delegate;
   }
 
   @Override
-  public Message<T> body(T body) {
+  public Message body(byte[] body) {
     try {
       this.delegate.body(body);
     } catch (ClientException e) {
@@ -54,7 +54,7 @@ class AmqpMessage<T> implements Message<T> {
   }
 
   @Override
-  public T body() {
+  public byte[] body() {
     try {
       return this.delegate.body();
     } catch (ClientException e) {
@@ -108,49 +108,49 @@ class AmqpMessage<T> implements Message<T> {
   }
 
   @Override
-  public Message<T> messageId(String id) {
+  public Message messageId(String id) {
     callOnDelegate(m -> m.messageId(id));
     return this;
   }
 
   @Override
-  public Message<T> messageId(long id) {
+  public Message messageId(long id) {
     callOnDelegate(m -> m.messageId(new UnsignedLong(id)));
     return this;
   }
 
   @Override
-  public Message<T> messageId(byte[] id) {
+  public Message messageId(byte[] id) {
     callOnDelegate(m -> m.messageId(new Binary(id)));
     return this;
   }
 
   @Override
-  public Message<T> messageId(UUID id) {
+  public Message messageId(UUID id) {
     callOnDelegate(m -> m.messageId(id));
     return this;
   }
 
   @Override
-  public Message<T> userId(byte[] userId) {
+  public Message userId(byte[] userId) {
     callOnDelegate(m -> m.userId(userId));
     return this;
   }
 
   @Override
-  public Message<T> to(String address) {
+  public Message to(String address) {
     callOnDelegate(m -> m.to(address));
     return this;
   }
 
   @Override
-  public Message<T> subject(String subject) {
+  public Message subject(String subject) {
     callOnDelegate(m -> m.subject(subject));
     return this;
   }
 
   @Override
-  public Message<T> replyTo(String replyTo) {
+  public Message replyTo(String replyTo) {
     callOnDelegate(m -> m.replyTo(replyTo));
     return this;
   }
@@ -161,121 +161,121 @@ class AmqpMessage<T> implements Message<T> {
   }
 
   @Override
-  public Message<T> property(String key, boolean value) {
+  public Message property(String key, boolean value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, byte value) {
+  public Message property(String key, byte value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, short value) {
+  public Message property(String key, short value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, int value) {
+  public Message property(String key, int value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, long value) {
+  public Message property(String key, long value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> propertyUnsigned(String key, byte value) {
+  public Message propertyUnsigned(String key, byte value) {
     callOnDelegate(m -> m.property(key, new UnsignedByte(value)));
     return this;
   }
 
   @Override
-  public Message<T> propertyUnsigned(String key, short value) {
+  public Message propertyUnsigned(String key, short value) {
     callOnDelegate(m -> m.property(key, new UnsignedShort(value)));
     return this;
   }
 
   @Override
-  public Message<T> propertyUnsigned(String key, int value) {
+  public Message propertyUnsigned(String key, int value) {
     callOnDelegate(m -> m.property(key, new UnsignedInteger(value)));
     return this;
   }
 
   @Override
-  public Message<T> propertyUnsigned(String key, long value) {
+  public Message propertyUnsigned(String key, long value) {
     callOnDelegate(m -> m.property(key, new UnsignedLong(value)));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, float value) {
+  public Message property(String key, float value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, double value) {
+  public Message property(String key, double value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> propertyDecimal32(String key, BigDecimal value) {
+  public Message propertyDecimal32(String key, BigDecimal value) {
     callOnDelegate(m -> m.property(key, new Decimal32(value)));
     return this;
   }
 
   @Override
-  public Message<T> propertyDecimal64(String key, BigDecimal value) {
+  public Message propertyDecimal64(String key, BigDecimal value) {
     callOnDelegate(m -> m.property(key, new Decimal64(value)));
     return this;
   }
 
   @Override
-  public Message<T> propertyDecimal128(String key, BigDecimal value) {
+  public Message propertyDecimal128(String key, BigDecimal value) {
     callOnDelegate(m -> m.property(key, new Decimal128(value)));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, char value) {
+  public Message property(String key, char value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> propertyTimestamp(String key, long value) {
+  public Message propertyTimestamp(String key, long value) {
     callOnDelegate(m -> m.property(key, new Date(value)));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, UUID value) {
+  public Message property(String key, UUID value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, byte[] value) {
+  public Message property(String key, byte[] value) {
     callOnDelegate(m -> m.property(key, new Binary(value)));
     return this;
   }
 
   @Override
-  public Message<T> property(String key, String value) {
+  public Message property(String key, String value) {
     callOnDelegate(m -> m.property(key, value));
     return this;
   }
 
   @Override
-  public Message<T> propertySymbol(String key, String value) {
+  public Message propertySymbol(String key, String value) {
     callOnDelegate(m -> m.property(key, Symbol.getSymbol(value)));
     return this;
   }
@@ -296,27 +296,27 @@ class AmqpMessage<T> implements Message<T> {
   }
 
   @Override
-  public MessageAddressBuilder<T> address() {
+  public MessageAddressBuilder address() {
     return new DefaultMessageAddressBuilder<>(this);
   }
 
   private static class DefaultMessageAddressBuilder<T>
-      extends DefaultAddressBuilder<MessageAddressBuilder<T>> implements MessageAddressBuilder<T> {
+      extends DefaultAddressBuilder<MessageAddressBuilder> implements MessageAddressBuilder {
 
-    private final Message<T> message;
+    private final Message message;
 
-    private DefaultMessageAddressBuilder(Message<T> message) {
+    private DefaultMessageAddressBuilder(Message message) {
       super(null);
       this.message = message;
     }
 
     @Override
-    MessageAddressBuilder<T> result() {
+    MessageAddressBuilder result() {
       return this;
     }
 
     @Override
-    public Message<T> message() {
+    public Message message() {
       this.message.to(this.address());
       return this.message;
     }

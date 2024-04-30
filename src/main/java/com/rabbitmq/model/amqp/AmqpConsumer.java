@@ -53,7 +53,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Future<?> receiveLoop;
   private final int initialCredits;
-  private final MessageHandler<?> messageHandler;
+  private final MessageHandler messageHandler;
   private final Long id;
   private final String address;
   private final AmqpConnection connection;
@@ -66,7 +66,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private ProtonSessionIncomingWindow sessionWindow;
   private ProtonLinkCreditState creditState;
 
-  AmqpConsumer(AmqpConsumerBuilder<?> builder) {
+  AmqpConsumer(AmqpConsumerBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
@@ -100,15 +100,13 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private Runnable createReceiveTask(Receiver receiver, MessageHandler<?> messageHandler) {
+  private Runnable createReceiveTask(Receiver receiver, MessageHandler messageHandler) {
     return () -> {
       try {
         receiver.addCredit(this.initialCredits);
         while (!Thread.currentThread().isInterrupted()) {
           Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
           if (delivery != null) {
-            @SuppressWarnings("rawtypes")
             AmqpMessage message = new AmqpMessage(delivery.message());
             // TODO make disposition idempotent
             Consumer.Context context =

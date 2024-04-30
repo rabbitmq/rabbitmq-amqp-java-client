@@ -129,12 +129,12 @@ public class AmqpPerfTest {
       executorService.submit(
           () -> {
             Publisher publisher = connection.publisherBuilder().exchange(e).key(rk).build();
-            Publisher.Callback<Object> callback =
+            Publisher.Callback callback =
                 context -> {
                   confirmed.increment();
                 };
             while (!Thread.currentThread().isInterrupted()) {
-              Message<Object> message = publisher.message();
+              Message message = publisher.message();
               publisher.publish(message, callback);
               published.increment();
             }

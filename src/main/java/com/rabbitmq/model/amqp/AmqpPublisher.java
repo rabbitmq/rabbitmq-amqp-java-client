@@ -54,22 +54,21 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   }
 
   @Override
-  public <T> Message<T> message() {
-    return new AmqpMessage<>();
+  public Message message() {
+    return new AmqpMessage();
   }
 
   @Override
-  public <T> Message<T> message(T body) {
-    return new AmqpMessage<>(body);
+  public Message message(byte[] body) {
+    return new AmqpMessage(body);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
-  public <T> void publish(Message<? extends T> message, Callback<? super T> callback) {
+  public void publish(Message message, Callback callback) {
     checkOpen();
     try {
       org.apache.qpid.protonj2.client.Message<?> nativeMessage =
-          ((AmqpMessage<? extends T>) message).nativeMessage();
+          ((AmqpMessage) message).nativeMessage();
       Tracker tracker = this.sender.send(nativeMessage.durable(true));
       this.executorService.submit(
           () -> {
@@ -133,18 +132,18 @@ class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private static class DefaultContext<T> implements Publisher.Context<T> {
+  private static class DefaultContext implements Publisher.Context {
 
-    private final Message<T> message;
+    private final Message message;
     private final Status status;
 
-    private DefaultContext(Message<T> message, Status status) {
+    private DefaultContext(Message message, Status status) {
       this.message = message;
       this.status = status;
     }
 
     @Override
-    public Message<T> message() {
+    public Message message() {
       return this.message;
     }
 

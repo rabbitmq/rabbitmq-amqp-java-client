@@ -147,15 +147,9 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   @Override
-  public <T> ConsumerBuilder<T> consumerBuilder() {
+  public ConsumerBuilder consumerBuilder() {
     checkOpen();
-    return new AmqpConsumerBuilder<>(this);
-  }
-
-  @Override
-  public <T> ConsumerBuilder<T> consumerBuilder(Class<? extends T> bodyClass) {
-    checkOpen();
-    return new AmqpConsumerBuilder<>(this);
+    return new AmqpConsumerBuilder(this);
   }
 
   @Override

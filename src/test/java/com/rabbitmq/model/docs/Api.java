@@ -67,7 +67,7 @@ class Api {
 
 
     // tag::message-creation[]
-    Message<byte[]> message = publisher
+    Message message = publisher
         .message("hello".getBytes(StandardCharsets.UTF_8))
         .messageId(1L);
     // end::message-creation[]
@@ -132,27 +132,16 @@ class Api {
 
   void consuming() {
     Connection connection = null;
-    // tag::consumer-generic-body[]
+    // tag::consumer-consume[]
     connection.consumerBuilder()
         .queue("some-queue")
         .messageHandler((context, message) -> {
-          Object body = message.body(); // <1>
+          byte[] body = message.body(); // <1>
           // ... <2>
           context.accept(); // <3>
         })
         .build();
-    // end::consumer-generic-body[]
-
-    // tag::consumer-strongly-typed-body[]
-    connection.consumerBuilder(String.class) // <1>
-        .queue("some-queue")
-        .messageHandler((context, message) -> {
-          String body = message.body(); // <2>
-          // ... <3>
-          context.accept(); // <4>
-        })
-        .build();
-    // end::consumer-strongly-typed-body[]
+    // end::consumer-consume[]
   }
 
   void management() {

@@ -20,6 +20,7 @@ package com.rabbitmq.model.amqp;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static com.rabbitmq.model.amqp.TlsTestUtils.*;
 import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.model.*;
@@ -74,7 +75,8 @@ public class TlsTest {
       IntStream.range(0, messageCount)
           .forEach(
               ignored ->
-                  publisher.publish(publisher.message("hello"), ctx -> publishLatch.countDown()));
+                  publisher.publish(
+                      publisher.message("hello".getBytes(UTF_8)), ctx -> publishLatch.countDown()));
       TestUtils.assertThat(publishLatch).completes();
       TestUtils.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
 

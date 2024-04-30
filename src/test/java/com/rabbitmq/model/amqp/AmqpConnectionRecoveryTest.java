@@ -124,7 +124,7 @@ public class AmqpConnectionRecoveryTest {
                   })
               .build();
       Collection<UUID> publishedMessageIds = Collections.synchronizedList(new ArrayList<>());
-      Publisher.Callback<Object> outboundMessageCallback =
+      Publisher.Callback outboundMessageCallback =
           context -> {
             if (context.status() == ACCEPTED) {
               publishedMessageIds.add(context.message().messageIdAsUuid());

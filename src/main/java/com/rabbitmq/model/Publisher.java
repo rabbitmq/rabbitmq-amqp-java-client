@@ -19,23 +19,23 @@ package com.rabbitmq.model;
 
 public interface Publisher extends AutoCloseable, Resource {
 
-  <T> Message<T> message();
+  Message message();
 
-  <T> Message<T> message(T body);
+  Message message(byte[] body);
 
-  <T> void publish(Message<? extends T> message, Callback<? super T> callback);
+  void publish(Message message, Callback callback);
 
   @Override
   void close();
 
-  interface Callback<T> {
+  interface Callback {
 
-    void handle(Context<T> context);
+    void handle(Context context);
   }
 
-  interface Context<T> {
+  interface Context {
 
-    Message<T> message();
+    Message message();
 
     Status status();
   }

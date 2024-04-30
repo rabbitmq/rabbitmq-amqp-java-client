@@ -24,13 +24,13 @@ import static com.rabbitmq.model.amqp.TestUtils.CountDownLatchConditions.complet
 import static com.rabbitmq.model.amqp.TestUtils.assertThat;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
+import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.model.*;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
@@ -106,9 +106,7 @@ public class AmqpTest {
               ignored -> {
                 UUID messageId = UUID.randomUUID();
                 publisher.publish(
-                    publisher
-                        .message("hello".getBytes(StandardCharsets.UTF_8))
-                        .messageId(messageId),
+                    publisher.message("hello".getBytes(UTF_8)).messageId(messageId),
                     context -> {
                       if (context.status() == Publisher.Status.ACCEPTED) {
                         confirmLatch.countDown();
@@ -181,7 +179,7 @@ public class AmqpTest {
       Consumer<Publisher> publish =
           publisher ->
               publisher.publish(
-                  publisher.message("hello".getBytes(StandardCharsets.UTF_8)),
+                  publisher.message("hello".getBytes(UTF_8)),
                   context -> {
                     if (context.status() == Publisher.Status.ACCEPTED) {
                       confirmLatch.countDown();
@@ -233,32 +231,7 @@ public class AmqpTest {
     String q = connection.management().queue().exclusive(true).declare().name();
     Publisher publisher = connection.publisherBuilder().queue(q).build();
 
-    Set<String> messageBodies = ConcurrentHashMap.newKeySet(2);
-    CountDownLatch consumeLatch = new CountDownLatch(2);
-    connection
-        .consumerBuilder(String.class)
-        .queue(q)
-        .messageHandler(
-            (ctx, message) -> {
-              ctx.accept();
-              messageBodies.add(message.body());
-              consumeLatch.countDown();
-            })
-        .build();
-
-    publisher.publish(publisher.message("one"), ctx -> {});
-    publisher.publish(publisher.message("two"), ctx -> {});
-
-    assertThat(consumeLatch).completes();
-    assertThat(messageBodies).hasSize(2).containsOnly("one", "two");
-  }
-
-  @Test
-  void differentTypeMessagesInQueue() {
-    String q = connection.management().queue().exclusive(true).declare().name();
-    Publisher publisher = connection.publisherBuilder().queue(q).build();
-
-    Set<Object> messageBodies = ConcurrentHashMap.newKeySet(2);
+    Set<byte[]> messageBodies = ConcurrentHashMap.newKeySet(2);
     CountDownLatch consumeLatch = new CountDownLatch(2);
     connection
         .consumerBuilder()
@@ -271,50 +244,11 @@ public class AmqpTest {
             })
         .build();
 
-    publisher.publish(publisher.message("one"), ctx -> {});
-    publisher.publish(publisher.message(Map.of("key", "value")), ctx -> {});
+    publisher.publish(publisher.message("one".getBytes(UTF_8)), ctx -> {});
+    publisher.publish(publisher.message("two".getBytes(UTF_8)), ctx -> {});
 
     assertThat(consumeLatch).completes();
-    assertThat(messageBodies).hasSize(2).containsOnly("one", Map.of("key", "value"));
-  }
-
-  @Test
-  void publisherCallbackCanUseParentClass() {
-    String q = connection.management().queue().exclusive(true).declare().name();
-    Publisher publisher = connection.publisherBuilder().queue(q).build();
-
-    CountDownLatch latch = new CountDownLatch(1);
-
-    Number value = 1;
-    Message<Integer> integerMessage = publisher.message(value.intValue());
-    publisher.publish(
-        publisher.message(1),
-        ctx -> {
-          Integer body = ctx.message().body();
-          assertThat(body).isEqualTo(integerMessage.body());
-          latch.countDown();
-        });
-
-    Message<Long> longMessage = publisher.message(value.longValue());
-    publisher.publish(
-        publisher.message(1L),
-        ctx -> {
-          Long body = ctx.message().body();
-          assertThat(body).isEqualTo(longMessage.body());
-          latch.countDown();
-        });
-
-    Publisher.Callback<Number> callback =
-        context -> {
-          Number body = context.message().body();
-          assertThat(body).isEqualTo(value);
-          latch.countDown();
-        };
-
-    publisher.publish(integerMessage, callback);
-    publisher.publish(longMessage, callback);
-
-    assertThat(latch).completes();
+    assertThat(messageBodies).hasSize(2).containsOnly("one".getBytes(UTF_8), "two".getBytes(UTF_8));
   }
 
   @Test
@@ -323,7 +257,7 @@ public class AmqpTest {
     Publisher publisher = connection.publisherBuilder().queue(q).build();
     int messageCount = 100;
     CountDownLatch publishLatch = new CountDownLatch(messageCount);
-    Publisher.Callback<?> callback = ctx -> publishLatch.countDown();
+    Publisher.Callback callback = ctx -> publishLatch.countDown();
     IntStream.range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), callback));
 

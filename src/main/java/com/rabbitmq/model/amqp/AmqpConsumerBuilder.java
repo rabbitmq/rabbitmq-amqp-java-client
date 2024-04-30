@@ -23,11 +23,11 @@ import com.rabbitmq.model.Resource;
 import java.util.ArrayList;
 import java.util.List;
 
-class AmqpConsumerBuilder<T> implements ConsumerBuilder<T> {
+class AmqpConsumerBuilder implements ConsumerBuilder {
 
   private final AmqpConnection connection;
   private String queue;
-  private Consumer.MessageHandler<?> messageHandler;
+  private Consumer.MessageHandler messageHandler;
   private int initialCredits = 10;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
 
@@ -36,25 +36,25 @@ class AmqpConsumerBuilder<T> implements ConsumerBuilder<T> {
   }
 
   @Override
-  public ConsumerBuilder<T> queue(String queue) {
+  public ConsumerBuilder queue(String queue) {
     this.queue = queue;
     return this;
   }
 
   @Override
-  public ConsumerBuilder<T> messageHandler(Consumer.MessageHandler handler) {
+  public ConsumerBuilder messageHandler(Consumer.MessageHandler handler) {
     this.messageHandler = handler;
     return this;
   }
 
   @Override
-  public ConsumerBuilder<T> initialCredits(int initialCredits) {
+  public ConsumerBuilder initialCredits(int initialCredits) {
     this.initialCredits = initialCredits;
     return this;
   }
 
   @Override
-  public ConsumerBuilder<T> listeners(Resource.StateListener... listeners) {
+  public ConsumerBuilder listeners(Resource.StateListener... listeners) {
     if (listeners == null || listeners.length == 0) {
       this.listeners.clear();
     } else {
@@ -71,7 +71,7 @@ class AmqpConsumerBuilder<T> implements ConsumerBuilder<T> {
     return queue;
   }
 
-  Consumer.MessageHandler<?> messageHandler() {
+  Consumer.MessageHandler messageHandler() {
     return messageHandler;
   }
 
