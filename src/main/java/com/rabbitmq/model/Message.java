@@ -37,6 +37,16 @@ public interface Message {
 
   UUID messageIdAsUuid();
 
+  Object correlationId();
+
+  String correlationIdAsString();
+
+  long correlationIdAsLong();
+
+  byte[] correlationIdAsBinary();
+
+  UUID correlationIdAsUuid();
+
   byte[] userId();
 
   String to();
@@ -45,6 +55,8 @@ public interface Message {
 
   String replyTo();
 
+  Message messageId(Object id);
+
   Message messageId(String id);
 
   Message messageId(long id);
@@ -52,6 +64,16 @@ public interface Message {
   Message messageId(byte[] id);
 
   Message messageId(UUID id);
+
+  Message correlationId(Object correlationId);
+
+  Message correlationId(String correlationId);
+
+  Message correlationId(long correlationId);
+
+  Message correlationId(byte[] correlationId);
+
+  Message correlationId(UUID correlationId);
 
   Message userId(byte[] userId);
 

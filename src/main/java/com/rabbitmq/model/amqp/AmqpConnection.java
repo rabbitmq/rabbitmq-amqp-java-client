@@ -153,6 +153,16 @@ class AmqpConnection extends ResourceBase implements Connection {
   }
 
   @Override
+  public RpcClientBuilder rpcClientBuilder() {
+    return new RpcSupport.AmqpRpcClientBuilder(this);
+  }
+
+  @Override
+  public RpcServerBuilder rpcServerBuilder() {
+    return new RpcSupport.AmqpRpcServerBuilder(this);
+  }
+
+  @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING);

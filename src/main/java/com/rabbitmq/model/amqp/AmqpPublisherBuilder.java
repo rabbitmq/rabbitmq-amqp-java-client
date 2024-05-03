@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import com.rabbitmq.model.AddressBuilder;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.PublisherBuilder;
 import com.rabbitmq.model.Resource;
@@ -70,6 +71,10 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   List<Resource.StateListener> listeners() {
     return listeners;
+  }
+
+  AddressBuilder<?> addressBuilder() {
+    return this.addressBuilder;
   }
 
   String address() {

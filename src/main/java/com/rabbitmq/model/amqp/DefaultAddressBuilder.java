@@ -67,5 +67,10 @@ abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
   T result() {
     return this.owner;
   }
-  ;
+
+  void copyTo(AddressBuilder<?> copy) {
+    copy.exchange(this.exchange);
+    copy.key(this.key);
+    copy.queue(this.queue);
+  }
 }

@@ -17,19 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-import java.io.Closeable;
+import java.util.concurrent.CompletableFuture;
 
-public interface Connection extends Closeable, Resource {
+public interface RpcClient extends AutoCloseable {
 
-  Management management();
+  Message message();
 
-  PublisherBuilder publisherBuilder();
+  Message message(byte[] body);
 
-  ConsumerBuilder consumerBuilder();
-
-  RpcClientBuilder rpcClientBuilder();
-
-  RpcServerBuilder rpcServerBuilder();
+  CompletableFuture<Message> publish(Message message);
 
   @Override
   void close();

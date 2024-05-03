@@ -17,19 +17,19 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
-import java.io.Closeable;
+public interface RpcServer extends AutoCloseable {
 
-public interface Connection extends Closeable, Resource {
+  interface Handler {
 
-  Management management();
+    Message handle(Context ctx, Message request);
+  }
 
-  PublisherBuilder publisherBuilder();
+  interface Context {
 
-  ConsumerBuilder consumerBuilder();
+    Message message();
 
-  RpcClientBuilder rpcClientBuilder();
-
-  RpcServerBuilder rpcServerBuilder();
+    Message message(byte[] body);
+  }
 
   @Override
   void close();

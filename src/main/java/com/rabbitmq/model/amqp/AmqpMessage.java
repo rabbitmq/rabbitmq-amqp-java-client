@@ -88,6 +88,31 @@ class AmqpMessage implements Message {
   }
 
   @Override
+  public Object correlationId() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::correlationId);
+  }
+
+  @Override
+  public String correlationIdAsString() {
+    return returnFromDelegate(m -> (String) m.correlationId());
+  }
+
+  @Override
+  public long correlationIdAsLong() {
+    return returnFromDelegate(m -> ((UnsignedLong) m.correlationId())).longValue();
+  }
+
+  @Override
+  public byte[] correlationIdAsBinary() {
+    return returnFromDelegate(m -> ((Binary) m.correlationId()).asByteArray());
+  }
+
+  @Override
+  public UUID correlationIdAsUuid() {
+    return returnFromDelegate(m -> (UUID) m.correlationId());
+  }
+
+  @Override
   public byte[] userId() {
     return returnFromDelegate(org.apache.qpid.protonj2.client.Message::userId);
   }
@@ -105,6 +130,12 @@ class AmqpMessage implements Message {
   @Override
   public String replyTo() {
     return returnFromDelegate(org.apache.qpid.protonj2.client.Message::replyTo);
+  }
+
+  @Override
+  public Message messageId(Object id) {
+    callOnDelegate(m -> m.messageId(id));
+    return this;
   }
 
   @Override
@@ -128,6 +159,36 @@ class AmqpMessage implements Message {
   @Override
   public Message messageId(UUID id) {
     callOnDelegate(m -> m.messageId(id));
+    return this;
+  }
+
+  @Override
+  public Message correlationId(Object correlationId) {
+    callOnDelegate(m -> m.correlationId(correlationId));
+    return this;
+  }
+
+  @Override
+  public Message correlationId(String correlationId) {
+    callOnDelegate(m -> m.correlationId(correlationId));
+    return this;
+  }
+
+  @Override
+  public Message correlationId(long correlationId) {
+    callOnDelegate(m -> m.correlationId(correlationId));
+    return this;
+  }
+
+  @Override
+  public Message correlationId(byte[] correlationId) {
+    callOnDelegate(m -> m.correlationId(correlationId));
+    return this;
+  }
+
+  @Override
+  public Message correlationId(UUID correlationId) {
+    callOnDelegate(m -> m.correlationId(correlationId));
     return this;
   }
 
@@ -297,10 +358,10 @@ class AmqpMessage implements Message {
 
   @Override
   public MessageAddressBuilder address() {
-    return new DefaultMessageAddressBuilder<>(this);
+    return new DefaultMessageAddressBuilder(this);
   }
 
-  private static class DefaultMessageAddressBuilder<T>
+  private static class DefaultMessageAddressBuilder
       extends DefaultAddressBuilder<MessageAddressBuilder> implements MessageAddressBuilder {
 
     private final Message message;
