@@ -29,10 +29,12 @@ import org.apache.qpid.protonj2.types.*;
 
 class AmqpMessage implements Message {
 
+  private static final byte[] EMPTY_BODY = new byte[0];
+
   private final org.apache.qpid.protonj2.client.Message<byte[]> delegate;
 
   AmqpMessage() {
-    this(org.apache.qpid.protonj2.client.Message.create());
+    this(org.apache.qpid.protonj2.client.Message.create(EMPTY_BODY));
   }
 
   AmqpMessage(byte[] body) {

@@ -292,18 +292,19 @@ public class ClientTest {
         Client client = client()) {
       connection.management().exchange().name(exchange).type(FANOUT).declare();
 
+      byte[] body = new byte[0];
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
       Session session = protonConnection.openSession();
       Sender sender =
           session.openSender(
               "/exchange/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
-      Tracker tracker = sender.send(Message.create());
+      Tracker tracker = sender.send(Message.create(body));
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(released());
 
       connection.management().binding().sourceExchange(exchange).destinationQueue(q).bind();
 
-      tracker = sender.send(Message.create());
+      tracker = sender.send(Message.create(body));
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
 
@@ -311,7 +312,7 @@ public class ClientTest {
       try {
         int count = 0;
         while (count++ < 10) {
-          tracker = sender.send(Message.create());
+          tracker = sender.send(Message.create(body));
           tracker.awaitSettlement(10, SECONDS);
           assertThat(tracker.remoteState()).isEqualTo(released());
           Thread.sleep(100);
