@@ -47,7 +47,7 @@
         <protonj2.version>1.0.0-M21-SNAPSHOT</protonj2.version>
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
         <assertj.version>3.25.3</assertj.version>
-        <mockito.version>5.11.0</mockito.version>
+        <mockito.version>5.12.0</mockito.version>
         <amqp-client.version>5.20.0</amqp-client.version>
         <metrics.version>4.2.25</metrics.version>
         <micrometer.version>1.12.5</micrometer.version>
