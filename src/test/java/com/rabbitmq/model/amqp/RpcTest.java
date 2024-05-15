@@ -17,9 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
+import static com.rabbitmq.model.BackOffDelayPolicy.fixed;
+import static com.rabbitmq.model.amqp.Cli.closeConnection;
 import static com.rabbitmq.model.amqp.TestUtils.environmentBuilder;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.model.*;
 import java.util.UUID;
@@ -162,7 +166,96 @@ public class RpcTest {
     }
   }
 
+  @Test
+  void rpcShouldRecoverAfterConnectionIsClosed()
+      throws ExecutionException, InterruptedException, TimeoutException {
+    String clientConnectionName = UUID.randomUUID().toString();
+    CountDownLatch clientConnectionLatch = new CountDownLatch(1);
+    String serverConnectionName = UUID.randomUUID().toString();
+    CountDownLatch serverConnectionLatch = new CountDownLatch(1);
+
+    BackOffDelayPolicy backOffDelayPolicy = fixed(ofMillis(100));
+    Connection serverConnection =
+        connectionBuilder()
+            .name(serverConnectionName)
+            .listeners(recoveredListener(serverConnectionLatch))
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+    String requestQueue = serverConnection.management().queue().declare().name();
+    try (Connection clientConnection =
+        connectionBuilder()
+            .name(clientConnectionName)
+            .listeners(recoveredListener(clientConnectionLatch))
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build()) {
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      serverConnection.rpcServerBuilder().requestQueue(requestQueue).handler(HANDLER).build();
+
+      byte[] requestBody = request(UUID.randomUUID().toString());
+      CompletableFuture<Message> response =
+          rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
+
+      closeConnection(clientConnectionName);
+      requestBody = request(UUID.randomUUID().toString());
+      try {
+        rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+        fail("Client connection is recovering, the call should have failed");
+      } catch (ModelException e) {
+        // OK
+      }
+      TestUtils.assertThat(clientConnectionLatch).completes();
+      requestBody = request(UUID.randomUUID().toString());
+      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
+
+      closeConnection(serverConnectionName);
+      requestBody = request(UUID.randomUUID().toString());
+      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
+      TestUtils.assertThat(serverConnectionLatch).completes();
+      requestBody = request(UUID.randomUUID().toString());
+      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
+    } finally {
+      serverConnection.management().queueDeletion().delete(requestQueue);
+      serverConnection.close();
+    }
+  }
+
+  private static AmqpConnectionBuilder connectionBuilder() {
+    return (AmqpConnectionBuilder) environment.connectionBuilder();
+  }
+
   private static String process(String in) {
     return "*** " + in + " ***";
+  }
+
+  private static byte[] request(String request) {
+    return request.getBytes(UTF_8);
+  }
+
+  private static byte[] process(byte[] in) {
+    return process(new String(in, UTF_8)).getBytes(UTF_8);
+  }
+
+  private static Resource.StateListener recoveredListener(CountDownLatch latch) {
+    return context -> {
+      if (context.previousState() == Resource.State.RECOVERING
+          && context.currentState() == Resource.State.OPEN) {
+        latch.countDown();
+      }
+    };
   }
 }
