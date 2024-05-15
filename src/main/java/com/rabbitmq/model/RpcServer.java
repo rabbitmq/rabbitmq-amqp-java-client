@@ -19,6 +19,7 @@ package com.rabbitmq.model;
 
 public interface RpcServer extends AutoCloseable {
 
+  @FunctionalInterface
   interface Handler {
 
     Message handle(Context ctx, Message request);

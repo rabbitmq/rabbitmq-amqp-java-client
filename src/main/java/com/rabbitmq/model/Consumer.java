@@ -22,6 +22,7 @@ public interface Consumer extends AutoCloseable {
   @Override
   void close();
 
+  @FunctionalInterface
   interface MessageHandler {
 
     void handle(Context context, Message message);

@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 class AmqpRpcClient implements RpcClient {
@@ -32,11 +33,11 @@ class AmqpRpcClient implements RpcClient {
 
   private final Publisher publisher;
   private final Consumer consumer;
-  private final String replyToAddress;
   private final Map<Object, CompletableFuture<Message>> outstandingRequests =
       new ConcurrentHashMap<>();
   private final Supplier<Object> correlationIdSupplier;
   private final BiFunction<Message, Object, Message> requestPostProcessor;
+  private final Function<Message, Object> correlationIdExtractor;
 
   AmqpRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
     AmqpConnection connection = builder.connection();
@@ -52,6 +53,11 @@ class AmqpRpcClient implements RpcClient {
           connection.management().queue().exclusive(true).autoDelete(true).declare();
       replyTo = queueInfo.name();
     }
+    if (builder.correlationIdExtractor() == null) {
+      this.correlationIdExtractor = Message::correlationId;
+    } else {
+      this.correlationIdExtractor = builder.correlationIdExtractor();
+    }
     this.consumer =
         connection
             .consumerBuilder()
@@ -60,22 +66,31 @@ class AmqpRpcClient implements RpcClient {
                 (ctx, msg) -> {
                   ctx.accept();
                   CompletableFuture<Message> result =
-                      this.outstandingRequests.remove(msg.correlationId());
+                      this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
                   if (result != null) {
                     result.complete(msg);
                   }
                 })
             .build();
-    DefaultAddressBuilder<?> addressBuilder = new DefaultAddressBuilder<>(null) {};
-    addressBuilder.queue(replyTo);
-    this.replyToAddress = addressBuilder.address();
 
-    String correlationIdPrefix = UUID.randomUUID().toString();
-    AtomicLong correlationIdSequence = new AtomicLong();
-    this.correlationIdSupplier =
-        () -> correlationIdPrefix + "-" + correlationIdSequence.getAndIncrement();
-    this.requestPostProcessor =
-        (request, correlationId) -> request.replyTo(this.replyToAddress).messageId(correlationId);
+    if (builder.correlationIdSupplier() == null) {
+      String correlationIdPrefix = UUID.randomUUID().toString();
+      AtomicLong correlationIdSequence = new AtomicLong();
+      this.correlationIdSupplier =
+          () -> correlationIdPrefix + "-" + correlationIdSequence.getAndIncrement();
+    } else {
+      this.correlationIdSupplier = builder.correlationIdSupplier();
+    }
+
+    if (builder.requestPostProcessor() == null) {
+      DefaultAddressBuilder<?> addressBuilder = new DefaultAddressBuilder<>(null) {};
+      addressBuilder.queue(replyTo);
+      String replyToAddress = addressBuilder.address();
+      this.requestPostProcessor =
+          (request, correlationId) -> request.replyTo(replyToAddress).messageId(correlationId);
+    } else {
+      this.requestPostProcessor = builder.requestPostProcessor();
+    }
   }
 
   @Override
@@ -93,7 +108,7 @@ class AmqpRpcClient implements RpcClient {
     Object correlationId = this.correlationIdSupplier.get();
     message = this.requestPostProcessor.apply(message, correlationId);
     CompletableFuture<Message> result = new CompletableFuture<>();
-    this.outstandingRequests.put(message.messageId(), result);
+    this.outstandingRequests.put(correlationId, result);
     this.publisher.publish(message, NO_OP_CALLBACK);
     return result;
   }

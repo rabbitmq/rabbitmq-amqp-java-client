@@ -17,6 +17,9 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
 public interface RpcServerBuilder {
 
   RpcServerBuilder requestQueue(String requestQueue);
@@ -24,6 +27,10 @@ public interface RpcServerBuilder {
   RpcServerBuilder handler(RpcServer.Handler handler);
 
   RpcServerAddressBuilder replyToAddress();
+
+  RpcServerBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
+
+  RpcServerBuilder replyPostProcessor(BiFunction<Message, Object, Message> replyPostProcessor);
 
   RpcServer build();
 

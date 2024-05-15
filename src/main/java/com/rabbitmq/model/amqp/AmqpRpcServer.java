@@ -51,8 +51,16 @@ class AmqpRpcServer implements RpcServer {
             return publisher.message(body);
           }
         };
-    this.correlationIdExtractor = Message::messageId;
-    this.replyPostProcessor = Message::correlationId;
+    if (builder.correlationIdExtractor() == null) {
+      this.correlationIdExtractor = Message::messageId;
+    } else {
+      this.correlationIdExtractor = builder.correlationIdExtractor();
+    }
+    if (builder.replyPostProcessor() == null) {
+      this.replyPostProcessor = Message::correlationId;
+    } else {
+      this.replyPostProcessor = builder.replyPostProcessor();
+    }
     this.consumer =
         connection
             .consumerBuilder()
@@ -61,7 +69,9 @@ class AmqpRpcServer implements RpcServer {
                 (ctx, msg) -> {
                   ctx.accept();
                   Message reply = handler.handle(context, msg);
-                  reply.to(msg.replyTo());
+                  if (msg.replyTo() != null) {
+                    reply.to(msg.replyTo());
+                  }
                   Object correlationId = correlationIdExtractor.apply(msg);
                   reply = replyPostProcessor.apply(reply, correlationId);
                   this.publisher.publish(reply, NO_OP_CALLBACK);

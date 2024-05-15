@@ -17,11 +17,21 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
 public interface RpcClientBuilder {
 
   RpcClientAddressBuilder requestAddress();
 
   RpcClientBuilder replyToQueue(String replyToQueue);
+
+  RpcClientBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier);
+
+  RpcClientBuilder requestPostProcessor(BiFunction<Message, Object, Message> requestPostProcessor);
+
+  RpcClientBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
 
   RpcClient build();
 

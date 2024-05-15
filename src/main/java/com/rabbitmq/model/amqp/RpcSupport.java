@@ -18,6 +18,9 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 abstract class RpcSupport {
 
@@ -30,6 +33,9 @@ abstract class RpcSupport {
     private final DefaultRpcClientAddressBuilder requestAddressBuilder =
         new DefaultRpcClientAddressBuilder(this);
     private String replyToQueue;
+    private Supplier<Object> correlationIdSupplier;
+    private BiFunction<Message, Object, Message> requestPostProcessor;
+    private Function<Message, Object> correlationIdExtractor;
 
     AmqpRpcClientBuilder(AmqpConnection connection) {
       this.connection = connection;
@@ -47,7 +53,34 @@ abstract class RpcSupport {
     }
 
     @Override
+    public RpcClientBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier) {
+      this.correlationIdSupplier = correlationIdSupplier;
+      return this;
+    }
+
+    @Override
+    public RpcClientBuilder requestPostProcessor(
+        BiFunction<Message, Object, Message> requestPostProcessor) {
+      this.requestPostProcessor = requestPostProcessor;
+      return this;
+    }
+
+    @Override
+    public RpcClientBuilder correlationIdExtractor(
+        Function<Message, Object> correlationIdExtractor) {
+      this.correlationIdExtractor = correlationIdExtractor;
+      return this;
+    }
+
+    Function<Message, Object> correlationIdExtractor() {
+      return correlationIdExtractor;
+    }
+
+    @Override
     public RpcClient build() {
+      if (this.requestAddressBuilder.address() == null) {
+        throw new IllegalArgumentException("Request address cannot be null");
+      }
       return new AmqpRpcClient(this);
     }
 
@@ -57,6 +90,14 @@ abstract class RpcSupport {
 
     String replyToQueue() {
       return this.replyToQueue;
+    }
+
+    Supplier<Object> correlationIdSupplier() {
+      return this.correlationIdSupplier;
+    }
+
+    BiFunction<Message, Object, Message> requestPostProcessor() {
+      return this.requestPostProcessor;
     }
   }
 
@@ -90,6 +131,8 @@ abstract class RpcSupport {
     private RpcServer.Handler handler;
     private final DefaultRpcServerAddressBuilder replyToAddressBuilder =
         new DefaultRpcServerAddressBuilder(this);
+    private Function<Message, Object> correlationIdExtractor;
+    private BiFunction<Message, Object, Message> replyPostProcessor;
 
     AmqpRpcServerBuilder(AmqpConnection connection) {
       this.connection = connection;
@@ -113,6 +156,20 @@ abstract class RpcSupport {
     }
 
     @Override
+    public RpcServerBuilder correlationIdExtractor(
+        Function<Message, Object> correlationIdExtractor) {
+      this.correlationIdExtractor = correlationIdExtractor;
+      return this;
+    }
+
+    @Override
+    public RpcServerBuilder replyPostProcessor(
+        BiFunction<Message, Object, Message> replyPostProcessor) {
+      this.replyPostProcessor = replyPostProcessor;
+      return this;
+    }
+
+    @Override
     public RpcServer build() {
       return new AmqpRpcServer(this);
     }
@@ -127,6 +184,14 @@ abstract class RpcSupport {
 
     RpcServer.Handler handler() {
       return this.handler;
+    }
+
+    Function<Message, Object> correlationIdExtractor() {
+      return this.correlationIdExtractor;
+    }
+
+    BiFunction<Message, Object, Message> replyPostProcessor() {
+      return this.replyPostProcessor;
     }
   }
 

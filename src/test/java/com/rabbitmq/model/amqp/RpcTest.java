@@ -24,21 +24,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.model.*;
 import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 
 public class RpcTest {
 
+  private static final RpcServer.Handler HANDLER =
+      (ctx, request) -> {
+        String in = new String(request.body(), UTF_8);
+        return ctx.message(process(in).getBytes(UTF_8));
+      };
+
   static Environment environment;
+  static ExecutorService executorService;
   Connection connection;
 
   @BeforeAll
   static void initAll() {
     environment = environmentBuilder().build();
+    executorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
   }
 
   @AfterAll
   static void tearDownAll() {
+    executorService.shutdownNow();
     environment.close();
   }
 
@@ -53,7 +63,7 @@ public class RpcTest {
   }
 
   @Test
-  void rpc() throws ExecutionException, InterruptedException, TimeoutException {
+  void rpcWithDefaults() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
@@ -67,32 +77,92 @@ public class RpcTest {
               .rpcClient()
               .build();
 
-      serverConnection
-          .rpcServerBuilder()
-          .requestQueue(requestQueue)
-          .handler(
-              (ctx, msg) -> {
-                String request = new String(msg.body(), UTF_8);
-                return ctx.message(("*** " + request + " ***").getBytes(UTF_8));
-              })
-          .build();
+      serverConnection.rpcServerBuilder().requestQueue(requestQueue).handler(HANDLER).build();
 
-      CompletableFuture<Message> responseFuture =
-          rpcClient.publish(
-              rpcClient.message("hello".getBytes(UTF_8)).messageId(UUID.randomUUID()));
-      Message response = responseFuture.get(10, TimeUnit.SECONDS);
-      assertThat(response.body()).asString(UTF_8).isEqualTo("*** hello ***");
+      int requestCount = 100;
+      CountDownLatch latch = new CountDownLatch(requestCount);
+      IntStream.range(0, requestCount)
+          .forEach(
+              ignored ->
+                  executorService.submit(
+                      () -> {
+                        String request = UUID.randomUUID().toString();
+                        CompletableFuture<Message> responseFuture =
+                            rpcClient.publish(
+                                rpcClient
+                                    .message(request.getBytes(UTF_8))
+                                    .messageId(UUID.randomUUID()));
+                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+                        latch.countDown();
+                        return null;
+                      }));
+      TestUtils.assertThat(latch).completes();
     }
   }
 
-  private static class OutstandingRequest {
+  @Test
+  void rpcWithCustomSettings() {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
 
-    private final String request;
-    private final CountDownLatch latch = new CountDownLatch(1);
-    private AtomicReference<String> response = new AtomicReference<>();
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
-    private OutstandingRequest(String request) {
-      this.request = request;
+      String replyToQueue = clientConnection.management().queue().exclusive(true).declare().name();
+      AtomicLong correlationIdSequence = new AtomicLong(0);
+
+      // we are using application properties for the correlation ID and the reply-to queue
+      // (instead of the standard properties)
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .correlationIdSupplier(correlationIdSequence::getAndIncrement)
+              .requestPostProcessor(
+                  (msg, corrId) ->
+                      msg.property("reply-to-queue", replyToQueue)
+                          .property("message-id", (Long) corrId))
+              .correlationIdExtractor(msg -> msg.property("correlation-id"))
+              .replyToQueue(replyToQueue)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      serverConnection
+          .rpcServerBuilder()
+          .correlationIdExtractor(msg -> msg.property("message-id"))
+          .replyPostProcessor((msg, corrId) -> msg.property("correlation-id", (Long) corrId))
+          .requestQueue(requestQueue)
+          .handler(
+              (ctx, request) -> {
+                Message reply = HANDLER.handle(ctx, request);
+                return reply
+                    .address()
+                    .queue(request.property("reply-to-queue").toString())
+                    .message();
+              })
+          .build();
+
+      int requestCount = 100;
+      CountDownLatch latch = new CountDownLatch(requestCount);
+      IntStream.range(0, requestCount)
+          .forEach(
+              ignored ->
+                  executorService.submit(
+                      () -> {
+                        String request = UUID.randomUUID().toString();
+                        CompletableFuture<Message> responseFuture =
+                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+                        latch.countDown();
+                        return null;
+                      }));
+      TestUtils.assertThat(latch).completes();
     }
+  }
+
+  private static String process(String in) {
+    return "*** " + in + " ***";
   }
 }
