@@ -22,15 +22,21 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class AmqpRpcClient implements RpcClient {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcClient.class);
+
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
 
+  private final AmqpConnection connection;
   private final Publisher publisher;
   private final Consumer consumer;
   private final Map<Object, CompletableFuture<Message>> outstandingRequests =
@@ -38,18 +44,20 @@ class AmqpRpcClient implements RpcClient {
   private final Supplier<Object> correlationIdSupplier;
   private final BiFunction<Message, Object, Message> requestPostProcessor;
   private final Function<Message, Object> correlationIdExtractor;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
-    AmqpConnection connection = builder.connection();
+    this.connection = builder.connection();
 
-    AmqpPublisherBuilder publisherBuilder = (AmqpPublisherBuilder) connection.publisherBuilder();
+    AmqpPublisherBuilder publisherBuilder =
+        (AmqpPublisherBuilder) this.connection.publisherBuilder();
     ((DefaultAddressBuilder<?>) builder.requestAddress()).copyTo(publisherBuilder.addressBuilder());
     this.publisher = publisherBuilder.build();
 
     String replyTo = builder.replyToQueue();
     if (replyTo == null) {
       Management.QueueInfo queueInfo =
-          connection.management().queue().exclusive(true).autoDelete(true).declare();
+          this.connection.management().queue().exclusive(true).autoDelete(true).declare();
       replyTo = queueInfo.name();
     }
     if (builder.correlationIdExtractor() == null) {
@@ -58,7 +66,7 @@ class AmqpRpcClient implements RpcClient {
       this.correlationIdExtractor = builder.correlationIdExtractor();
     }
     this.consumer =
-        connection
+        this.connection
             .consumerBuilder()
             .queue(replyTo)
             .messageHandler(
@@ -114,7 +122,18 @@ class AmqpRpcClient implements RpcClient {
 
   @Override
   public void close() {
-    this.publisher.close();
-    this.consumer.close();
+    if (this.closed.compareAndSet(false, true)) {
+      this.connection.removeRpcClient(this);
+      try {
+        this.publisher.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing RPC client publisher: {}", e.getMessage());
+      }
+      try {
+        this.consumer.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing RPC client consumer: {}", e.getMessage());
+      }
+    }
   }
 }

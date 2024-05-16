@@ -78,7 +78,7 @@ abstract class RpcSupport {
 
     @Override
     public RpcClient build() {
-      return new AmqpRpcClient(this);
+      return this.connection.createRpcClient(this);
     }
 
     AmqpConnection connection() {
@@ -168,7 +168,7 @@ abstract class RpcSupport {
 
     @Override
     public RpcServer build() {
-      return new AmqpRpcServer(this);
+      return this.connection.createRpcServer(this);
     }
 
     AmqpConnection connection() {

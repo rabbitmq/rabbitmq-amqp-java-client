@@ -21,23 +21,30 @@ import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.Message;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.RpcServer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class AmqpRpcServer implements RpcServer {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcServer.class);
+
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
 
+  private final AmqpConnection connection;
   private final Publisher publisher;
   private final Consumer consumer;
   private final Function<Message, Object> correlationIdExtractor;
   private final BiFunction<Message, Object, Message> replyPostProcessor;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpRpcServer(RpcSupport.AmqpRpcServerBuilder builder) {
-    AmqpConnection connection = builder.connection();
+    this.connection = builder.connection();
     Handler handler = builder.handler();
 
-    this.publisher = connection.publisherBuilder().build();
+    this.publisher = this.connection.publisherBuilder().build();
 
     Context context =
         new Context() {
@@ -62,7 +69,7 @@ class AmqpRpcServer implements RpcServer {
       this.replyPostProcessor = builder.replyPostProcessor();
     }
     this.consumer =
-        connection
+        this.connection
             .consumerBuilder()
             .queue(builder.requestQueue())
             .messageHandler(
@@ -81,7 +88,18 @@ class AmqpRpcServer implements RpcServer {
 
   @Override
   public void close() {
-    this.consumer.close();
-    this.publisher.close();
+    if (this.closed.compareAndSet(false, true)) {
+      this.connection.removeRpcServer(this);
+      try {
+        this.consumer.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing RPC server consumer: {}", e.getMessage());
+      }
+      try {
+        this.publisher.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing RPC server publisher: {}", e.getMessage());
+      }
+    }
   }
 }

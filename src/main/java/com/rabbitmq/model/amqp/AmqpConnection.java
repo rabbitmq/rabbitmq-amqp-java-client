@@ -67,6 +67,8 @@ class AmqpConnection extends ResourceBase implements Connection {
   private volatile Session nativeSession;
   private final List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
   private final List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
+  private final List<RpcClient> rpcClients = new CopyOnWriteArrayList<>();
+  private final List<RpcServer> rpcServers = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
   private volatile EntityRecovery entityRecovery;
   private final Future<?> recoveryLoop;
@@ -177,13 +179,18 @@ class AmqpConnection extends ResourceBase implements Connection {
         }
       }
       this.closeManagement();
+      for (RpcClient rpcClient : this.rpcClients) {
+        rpcClient.close();
+      }
+      for (RpcServer rpcServer : this.rpcServers) {
+        rpcServer.close();
+      }
       for (AmqpPublisher publisher : this.publishers) {
         publisher.close();
       }
       for (AmqpConsumer consumer : this.consumers) {
         consumer.close();
       }
-
       try {
         this.nativeConnection.close();
       } catch (Exception e) {
@@ -515,6 +522,26 @@ class AmqpConnection extends ResourceBase implements Connection {
   void removeConsumer(AmqpConsumer consumer) {
     this.consumers.remove(consumer);
     this.topologyListener.consumerDeleted(consumer.id(), consumer.address());
+  }
+
+  RpcClient createRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
+    RpcClient rpcClient = new AmqpRpcClient(builder);
+    this.rpcClients.add(rpcClient);
+    return rpcClient;
+  }
+
+  void removeRpcClient(RpcClient rpcClient) {
+    this.rpcClients.remove(rpcClient);
+  }
+
+  RpcServer createRpcServer(RpcSupport.AmqpRpcServerBuilder builder) {
+    RpcServer rpcServer = new AmqpRpcServer(builder);
+    this.rpcServers.add(rpcServer);
+    return rpcServer;
+  }
+
+  void removeRpcServer(RpcServer rpcServer) {
+    this.rpcServers.remove(rpcServer);
   }
 
   private void changeStateOfPublishers(State newState, Throwable failure) {
