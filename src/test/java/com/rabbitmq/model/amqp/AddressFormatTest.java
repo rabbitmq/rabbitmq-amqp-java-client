@@ -179,14 +179,14 @@ public class AddressFormatTest {
 
       CountDownLatch failedLatch = new CountDownLatch(2);
       publisher.publish(
-          publisher.message().address().exchange(e).message(),
+          publisher.message().toAddress().exchange(e).message(),
           ctx -> {
             if (ctx.status() == Publisher.Status.FAILED) {
               failedLatch.countDown();
             }
           });
       publisher.publish(
-          publisher.message().address().exchange(e).key("foo").message(),
+          publisher.message().toAddress().exchange(e).key("foo").message(),
           ctx -> {
             if (ctx.status() == Publisher.Status.FAILED) {
               failedLatch.countDown();
@@ -205,8 +205,8 @@ public class AddressFormatTest {
               })
           .build();
 
-      publisher.publish(publisher.message().address().exchange(e).key(k).message(), ctx -> {});
-      publisher.publish(publisher.message().address().queue(q).message(), ctx -> {});
+      publisher.publish(publisher.message().toAddress().exchange(e).key(k).message(), ctx -> {});
+      publisher.publish(publisher.message().toAddress().queue(q).message(), ctx -> {});
       assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);

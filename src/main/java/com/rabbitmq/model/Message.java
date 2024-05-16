@@ -138,7 +138,9 @@ public interface Message {
   // TODO support message annotations
   // TODO support message headers
 
-  MessageAddressBuilder address();
+  MessageAddressBuilder toAddress();
+
+  MessageAddressBuilder replyToAddress();
 
   interface MessageAddressBuilder extends AddressBuilder<MessageAddressBuilder> {
 

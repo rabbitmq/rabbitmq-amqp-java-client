@@ -42,7 +42,6 @@ class AmqpRpcClient implements RpcClient {
   AmqpRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
     AmqpConnection connection = builder.connection();
 
-    // TODO request address cannot be null
     AmqpPublisherBuilder publisherBuilder = (AmqpPublisherBuilder) connection.publisherBuilder();
     ((DefaultAddressBuilder<?>) builder.requestAddress()).copyTo(publisherBuilder.addressBuilder());
     this.publisher = publisherBuilder.build();

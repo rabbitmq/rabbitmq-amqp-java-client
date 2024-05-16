@@ -117,15 +117,15 @@ class Api {
         .build(); // <1>
 
     Message message1 = publisher.message()
-        .address().exchange("foo").key("bar") // <2>
+        .toAddress().exchange("foo").key("bar") // <2>
         .message();
 
     Message message2 = publisher.message()
-        .address().exchange("foo") // <3>
+        .toAddress().exchange("foo") // <3>
         .message();
 
     Message message3 = publisher.message()
-        .address().queue("my-queue") // <4>
+        .toAddress().queue("my-queue") // <4>
         .message();
     // end::target-address-null[]
   }

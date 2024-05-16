@@ -78,9 +78,6 @@ abstract class RpcSupport {
 
     @Override
     public RpcClient build() {
-      if (this.requestAddressBuilder.address() == null) {
-        throw new IllegalArgumentException("Request address cannot be null");
-      }
       return new AmqpRpcClient(this);
     }
 

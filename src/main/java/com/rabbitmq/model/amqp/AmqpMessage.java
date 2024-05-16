@@ -24,6 +24,7 @@ import com.rabbitmq.model.ModelException;
 import java.math.BigDecimal;
 import java.util.Date;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.*;
 
@@ -359,18 +360,29 @@ class AmqpMessage implements Message {
   }
 
   @Override
-  public MessageAddressBuilder address() {
-    return new DefaultMessageAddressBuilder(this);
+  public MessageAddressBuilder toAddress() {
+    return new DefaultMessageAddressBuilder(this, DefaultMessageAddressBuilder.TO_CALLBACK);
+  }
+
+  @Override
+  public MessageAddressBuilder replyToAddress() {
+    return new DefaultMessageAddressBuilder(this, DefaultMessageAddressBuilder.REPLY_TO_CALLBACK);
   }
 
   private static class DefaultMessageAddressBuilder
       extends DefaultAddressBuilder<MessageAddressBuilder> implements MessageAddressBuilder {
 
-    private final Message message;
+    private static final BiConsumer<Message, String> TO_CALLBACK = Message::to;
+    private static final BiConsumer<Message, String> REPLY_TO_CALLBACK = Message::replyTo;
 
-    private DefaultMessageAddressBuilder(Message message) {
+    private final Message message;
+    private final BiConsumer<Message, String> buildCallback;
+
+    private DefaultMessageAddressBuilder(
+        Message message, BiConsumer<Message, String> buildCallback) {
       super(null);
       this.message = message;
+      this.buildCallback = buildCallback;
     }
 
     @Override
@@ -380,7 +392,7 @@ class AmqpMessage implements Message {
 
     @Override
     public Message message() {
-      this.message.to(this.address());
+      this.buildCallback.accept(this.message, this.address());
       return this.message;
     }
   }

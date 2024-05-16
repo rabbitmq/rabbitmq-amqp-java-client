@@ -92,10 +92,7 @@ public class RpcTest {
                       () -> {
                         String request = UUID.randomUUID().toString();
                         CompletableFuture<Message> responseFuture =
-                            rpcClient.publish(
-                                rpcClient
-                                    .message(request.getBytes(UTF_8))
-                                    .messageId(UUID.randomUUID()));
+                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
                         latch.countDown();
@@ -141,10 +138,58 @@ public class RpcTest {
               (ctx, request) -> {
                 Message reply = HANDLER.handle(ctx, request);
                 return reply
-                    .address()
+                    .toAddress()
                     .queue(request.property("reply-to-queue").toString())
                     .message();
               })
+          .build();
+
+      int requestCount = 100;
+      CountDownLatch latch = new CountDownLatch(requestCount);
+      IntStream.range(0, requestCount)
+          .forEach(
+              ignored ->
+                  executorService.submit(
+                      () -> {
+                        String request = UUID.randomUUID().toString();
+                        CompletableFuture<Message> responseFuture =
+                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+                        latch.countDown();
+                        return null;
+                      }));
+      TestUtils.assertThat(latch).completes();
+    }
+  }
+
+  @Test
+  void rpcUseCorrelationIdRequestProperty() {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      String replyToQueue =
+          clientConnection.management().queue().autoDelete(true).exclusive(true).declare().name();
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .correlationIdSupplier(UUID::randomUUID)
+              .requestPostProcessor(
+                  (msg, corrId) ->
+                      msg.correlationId(corrId).replyToAddress().queue(replyToQueue).message())
+              .replyToQueue(replyToQueue)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      serverConnection
+          .rpcServerBuilder()
+          .correlationIdExtractor(Message::correlationId)
+          .requestQueue(requestQueue)
+          .handler(HANDLER)
           .build();
 
       int requestCount = 100;
