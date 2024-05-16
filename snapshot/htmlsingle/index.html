@@ -529,7 +529,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(38e8739)</span>
+<br><span id="revremark">(83aba18)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -551,6 +551,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 </li>
 <li><a href="#lifecycle-listeners">Lifecycle Listeners</a></li>
 <li><a href="#recovery">Recovery</a></li>
+<li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
 </ul>
 </li>
 <li><a href="#dependencies">Dependencies</a>
@@ -721,15 +722,15 @@ It is possible to override the environment connection settings for a given conne
     .build(); <i class="conum" data-value="1"></i><b>(1)</b>
 
 Message message1 = publisher.message()
-    .address().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="2"></i><b>(2)</b>
+    .toAddress().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>).key(<span class="string"><span class="delimiter">&quot;</span><span class="content">bar</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="2"></i><b>(2)</b>
     .message();
 
 Message message2 = publisher.message()
-    .address().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="3"></i><b>(3)</b>
+    .toAddress().exchange(<span class="string"><span class="delimiter">&quot;</span><span class="content">foo</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="3"></i><b>(3)</b>
     .message();
 
 Message message3 = publisher.message()
-    .address().queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="4"></i><b>(4)</b>
+    .toAddress().queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">my-queue</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="4"></i><b>(4)</b>
     .message();</code></pre>
 </div>
 </div>
@@ -1100,6 +1101,234 @@ The application would usually register a connection <a href="#lifecycle-listener
 </table>
 </div>
 </div>
+<div class="sect2">
+<h3 id="remote-procedure-call-rpc"><a class="anchor" href="#remote-procedure-call-rpc"></a>Remote Procedure Call (RPC)</h3>
+<div class="paragraph">
+<p>Remote procedure call with RabbitMQ consists in a client sending a request message and a server replying with a response message.
+Both the RPC client and server are <em>client applications</em> and the messages flow through the broker.
+The RPC client must send a reply-to queue address with the request.
+The RPC server uses this reply-to queue address to send the response.
+There must also be a way to correlate a request with its response, this is usually handled with a header that the RPC client and server agree on.</p>
+</div>
+<div class="paragraph">
+<p>The library provides RPC client and server support classes.
+They use sensible defaults and some of the internal mechanics are configurable.
+They should meet the requirements of most RPC use cases.
+It is still possible to implement one part or the other with regular publishers and consumers for special cases, as this is what the RPC support classes do.</p>
+</div>
+<div class="paragraph">
+<p>Here is how to create an RPC server instance:</p>
+</div>
+<div class="listingblock">
+<div class="title">Creating an RPC server</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">RpcServer rpcServer = connection.rpcServerBuilder() <i class="conum" data-value="1"></i><b>(1)</b>
+    .requestQueue(<span class="string"><span class="delimiter">&quot;</span><span class="content">rpc-server</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="2"></i><b>(2)</b>
+    .handler((ctx, req) -&gt; { <i class="conum" data-value="3"></i><b>(3)</b>
+      <span class="predefined-type">String</span> in = <span class="keyword">new</span> <span class="predefined-type">String</span>(req.body(), UTF_8);
+      <span class="predefined-type">String</span> out = <span class="string"><span class="delimiter">&quot;</span><span class="content">*** </span><span class="delimiter">&quot;</span></span> + in + <span class="string"><span class="delimiter">&quot;</span><span class="content"> ***</span><span class="delimiter">&quot;</span></span>;
+      <span class="keyword">return</span> ctx.message(out.getBytes(UTF_8)); <i class="conum" data-value="4"></i><b>(4)</b>
+    }).build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Use builder from connection</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Set the queue to consume requests from (it must exist)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Define the processing logic</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Create the reply message</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Note the RPC server does not create the queue it waits requests on.
+It must be created beforehand.</p>
+</div>
+<div class="paragraph">
+<p>Here is how to create an RPC client:</p>
+</div>
+<div class="listingblock">
+<div class="title">Creating an RPC client</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">RpcClient rpcClient = connection.rpcClientBuilder() <i class="conum" data-value="1"></i><b>(1)</b>
+    .requestAddress().queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">rpc-server</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="2"></i><b>(2)</b>
+    .rpcClient()
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Use builder from connection</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Set the address to send request messages to</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The RPC client will send its request to the configured destination.
+It can be an exchange or a queue, like in the example above.</p>
+</div>
+<div class="paragraph">
+<p>Here is how to send a request:</p>
+</div>
+<div class="listingblock">
+<div class="title">Sending a request</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">Message request = rpcClient.message(<span class="string"><span class="delimiter">&quot;</span><span class="content">hello</span><span class="delimiter">&quot;</span></span>.getBytes(UTF_8)); <i class="conum" data-value="1"></i><b>(1)</b>
+CompletableFuture&lt;Message&gt; replyFuture = rpcClient.publish(request); <i class="conum" data-value="2"></i><b>(2)</b>
+Message reply = replyFuture.get(<span class="integer">10</span>, <span class="predefined-type">TimeUnit</span>.SECONDS); <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Create the message request</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Send the request</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Wait for the reply (synchronously)</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The <code>RpcClient#publish(Message)</code> method returns a <code>CompletableFuture&lt;Message&gt;</code> that holds the reply message.
+It is then possible to wait for the reply asynchronously or synchronously.</p>
+</div>
+<div class="paragraph">
+<p>The RPC server uses the following defaults:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>it uses the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>message-id</code> property</a> for the correlation ID.</p>
+</li>
+<li>
+<p>it assigns the correlation ID (so the <em>request</em> <code>message-id</code> by default) to the <em>reply</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>correlation-id</code> property</a>.</p>
+</li>
+<li>
+<p>it assigns the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>reply-to</code> property</a> to the <em>reply</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>to</code> property</a> if it is defined.
+This behavior is hardcoded but it is possible to cancel it thanks to a reply post-processor.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The RPC client uses the following defaults:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>it creates and waits for replies on an auto-delete, exclusive queue if no reply-to queue is set.</p>
+</li>
+<li>
+<p>it uses a string-based correlation ID generator, with a fixed random UUID prefix and a strictly monotonic increasing sequence suffix (<code>{UUID}-{sequence}</code>, e.g. <code>6f839461-6b19-47e1-80b3-6be10d899d85-42</code>).
+The prefix is different for each <code>RpcClient</code> instance and the suffix is incremented by one for each request.</p>
+</li>
+<li>
+<p>it sets the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>reply-to</code> property</a> to the reply-to queue address (defined by the user or created automatically, see above).</p>
+</li>
+<li>
+<p>it sets the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>message-id</code> property</a> to the generated correlation ID.</p>
+</li>
+<li>
+<p>it extracts the correlation ID from the <em>reply</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>correlation-id</code> property</a> to correlate a reply with the appropriate request.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s see how to customize some of the RPC support mechanics.
+Imagine the request <code>message-id</code> property is a critical piece of information and we do not want to use it as the correlation ID.
+The request can use the <code>correlation-id</code> property and the RPC server just has to extract the correlation ID from this property (instead of the <code>message-id</code> property by default).
+Let&#8217;s also use a random UUID for the correlation ID generation (avoids doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).</p>
+</div>
+<div class="paragraph">
+<p>Here is how to declare the RPC client:</p>
+</div>
+<div class="listingblock">
+<div class="title">Customizing the RPC client</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="predefined-type">String</span> replyToQueue = connection.management().queue()
+    .autoDelete(<span class="predefined-constant">true</span>).exclusive(<span class="predefined-constant">true</span>)
+    .declare().name(); <i class="conum" data-value="1"></i><b>(1)</b>
+RpcClient rpcClient = connection.rpcClientBuilder()
+    .correlationIdSupplier(<span class="predefined-type">UUID</span>::randomUUID) <i class="conum" data-value="2"></i><b>(2)</b>
+    .requestPostProcessor((msg, corrId) -&gt;
+        msg.correlationId(corrId) <i class="conum" data-value="3"></i><b>(3)</b>
+           .replyToAddress().queue(replyToQueue).message()) <i class="conum" data-value="4"></i><b>(4)</b>
+    .replyToQueue(replyToQueue)
+    .requestAddress().queue(<span class="string"><span class="delimiter">&quot;</span><span class="content">rpc-server</span><span class="delimiter">&quot;</span></span>) <i class="conum" data-value="5"></i><b>(5)</b>
+    .rpcClient()
+    .build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Declare the reply-to queue</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Use a random UUID as correlation ID</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Use the <code>correlation-id</code> property for the request</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Set the <code>reply-to</code> property</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>Set the address to send request messages to</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>We just have to tell the RPC server to get the correlation ID from the request <code>correlation-id</code> property:</p>
+</div>
+<div class="listingblock">
+<div class="title">Customizing the RPC server</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">RpcServer rpcServer = connection.rpcServerBuilder()
+    .correlationIdExtractor(Message::correlationId) <i class="conum" data-value="1"></i><b>(1)</b>
+    .requestQueue(<span class="string"><span class="delimiter">&quot;</span><span class="content">rpc-server</span><span class="delimiter">&quot;</span></span>)
+    .handler((ctx, req) -&gt; {
+      <span class="predefined-type">String</span> in = <span class="keyword">new</span> <span class="predefined-type">String</span>(req.body(), UTF_8);
+      <span class="predefined-type">String</span> out = <span class="string"><span class="delimiter">&quot;</span><span class="content">*** </span><span class="delimiter">&quot;</span></span> + in + <span class="string"><span class="delimiter">&quot;</span><span class="content"> ***</span><span class="delimiter">&quot;</span></span>;
+      <span class="keyword">return</span> ctx.message(out.getBytes(UTF_8));
+    }).build();</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Get the correlation ID from the request <code>correlation-id</code> property</td>
+</tr>
+</table>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -1185,7 +1414,7 @@ Snapshots are available from a repository which must be declared in the dependen
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-05-15 15:55:43 UTC
+Last updated 2024-05-16 13:03:48 UTC
 </div>
 </div>
 </body>
