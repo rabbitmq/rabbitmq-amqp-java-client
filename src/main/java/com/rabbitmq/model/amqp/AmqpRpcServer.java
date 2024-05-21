@@ -76,12 +76,14 @@ class AmqpRpcServer implements RpcServer {
                 (ctx, msg) -> {
                   ctx.accept();
                   Message reply = handler.handle(context, msg);
-                  if (msg.replyTo() != null) {
+                  if (reply != null && msg.replyTo() != null) {
                     reply.to(msg.replyTo());
                   }
                   Object correlationId = correlationIdExtractor.apply(msg);
                   reply = replyPostProcessor.apply(reply, correlationId);
-                  this.publisher.publish(reply, NO_OP_CALLBACK);
+                  if (reply != null) {
+                    this.publisher.publish(reply, NO_OP_CALLBACK);
+                  }
                 })
             .build();
   }

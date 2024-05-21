@@ -18,6 +18,7 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.*;
+import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -28,6 +29,8 @@ abstract class RpcSupport {
 
   static class AmqpRpcClientBuilder implements RpcClientBuilder {
 
+    private static final Duration REQUEST_TIMEOUT_MIN = Duration.ofSeconds(1);
+
     private final AmqpConnection connection;
 
     private final DefaultRpcClientAddressBuilder requestAddressBuilder =
@@ -36,6 +39,7 @@ abstract class RpcSupport {
     private Supplier<Object> correlationIdSupplier;
     private BiFunction<Message, Object, Message> requestPostProcessor;
     private Function<Message, Object> correlationIdExtractor;
+    private Duration requestTimeout = Duration.ofSeconds(30);
 
     AmqpRpcClientBuilder(AmqpConnection connection) {
       this.connection = connection;
@@ -72,6 +76,19 @@ abstract class RpcSupport {
       return this;
     }
 
+    @Override
+    public RpcClientBuilder requestTimeout(Duration timeout) {
+      if (timeout == null) {
+        throw new IllegalArgumentException("Request timeout cannot be null");
+      }
+      if (timeout.compareTo(REQUEST_TIMEOUT_MIN) < 0) {
+        throw new IllegalArgumentException(
+            "Request timeout cannot be less than " + REQUEST_TIMEOUT_MIN);
+      }
+      this.requestTimeout = timeout;
+      return this;
+    }
+
     Function<Message, Object> correlationIdExtractor() {
       return correlationIdExtractor;
     }
@@ -95,6 +112,10 @@ abstract class RpcSupport {
 
     BiFunction<Message, Object, Message> requestPostProcessor() {
       return this.requestPostProcessor;
+    }
+
+    Duration requestTimeout() {
+      return this.requestTimeout;
     }
   }
 

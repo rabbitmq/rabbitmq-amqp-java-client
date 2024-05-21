@@ -21,7 +21,7 @@ import com.rabbitmq.model.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
@@ -42,6 +42,10 @@ class AmqpEnvironment implements Environment {
   private final boolean internalExecutor;
   private final List<AmqpConnection> connections = Collections.synchronizedList(new ArrayList<>());
   private final long id;
+  private final Clock clock = new Clock();
+  private final ScheduledExecutorService scheduledExecutorService;
+  private volatile ScheduledFuture<?> clockRefreshFuture;
+  private final AtomicBoolean clockRefreshSet = new AtomicBoolean(false);
 
   AmqpEnvironment(
       ExecutorService executorService, DefaultConnectionSettings<?> connectionSettings) {
@@ -58,6 +62,8 @@ class AmqpEnvironment implements Environment {
       this.executorService = executorService;
       this.internalExecutor = false;
     }
+    this.scheduledExecutorService =
+        Executors.newScheduledThreadPool(0, Utils.defaultThreadFactory());
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -66,6 +72,15 @@ class AmqpEnvironment implements Environment {
 
   Client client() {
     return this.client;
+  }
+
+  Clock clock() {
+    if (this.clockRefreshSet.compareAndSet(false, true)) {
+      this.clockRefreshFuture =
+          this.scheduledExecutorService.scheduleAtFixedRate(
+              this.clock::refresh, 1, 1, TimeUnit.SECONDS);
+    }
+    return this.clock;
   }
 
   @Override
@@ -82,6 +97,10 @@ class AmqpEnvironment implements Environment {
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
       }
+      if (this.clockRefreshFuture != null) {
+        this.clockRefreshFuture.cancel(false);
+      }
+      this.scheduledExecutorService.shutdownNow();
     }
   }
 
@@ -92,6 +111,10 @@ class AmqpEnvironment implements Environment {
 
   ExecutorService executorService() {
     return this.executorService;
+  }
+
+  ScheduledExecutorService scheduledExecutorService() {
+    return this.scheduledExecutorService;
   }
 
   void addConnection(AmqpConnection connection) {

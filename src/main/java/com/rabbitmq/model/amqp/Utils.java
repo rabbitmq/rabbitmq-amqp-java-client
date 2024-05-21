@@ -38,6 +38,7 @@ abstract class Utils {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
+  private static final ThreadFactory THREAD_FACTORY;
   private static final Function<String, ExecutorService> EXECUTOR_SERVICE_FACTORY;
 
   static {
@@ -48,6 +49,14 @@ abstract class Utils {
               .filter(c -> "Builder".equals(c.getSimpleName()))
               .findFirst()
               .get();
+      // Reflection code is the same as:
+      // Thread.ofVirtual().factory();
+      try {
+        Object builder = Thread.class.getDeclaredMethod("ofVirtual").invoke(null);
+        THREAD_FACTORY = (ThreadFactory) builderClass.getDeclaredMethod("factory").invoke(builder);
+      } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      }
       EXECUTOR_SERVICE_FACTORY =
           prefix -> {
             try {
@@ -72,6 +81,7 @@ abstract class Utils {
             }
           };
     } else {
+      THREAD_FACTORY = Executors.defaultThreadFactory();
       EXECUTOR_SERVICE_FACTORY = prefix -> Executors.newCachedThreadPool(threadFactory(prefix));
     }
   }
@@ -119,61 +129,8 @@ abstract class Utils {
     }
   }
 
-  static class ConnectionParameters {
-
-    private final String username, password, host, virtualHost;
-    private final int port;
-
-    ConnectionParameters(
-        String username, String password, String host, String virtualHost, int port) {
-      this.username = username;
-      this.password = password;
-      this.host = host;
-      this.virtualHost = virtualHost;
-      this.port = port;
-    }
-
-    String username() {
-      return username;
-    }
-
-    String password() {
-      return password;
-    }
-
-    String host() {
-      return host;
-    }
-
-    String virtualHost() {
-      return virtualHost;
-    }
-
-    int port() {
-      return port;
-    }
-
-    String label() {
-      return this.host + ":" + this.port;
-    }
-
-    @Override
-    public String toString() {
-      return "ConnectionParameters{"
-          + "username='"
-          + username
-          + '\''
-          + ", password='********'"
-          + ", host='"
-          + host
-          + '\''
-          + ", virtualHost='"
-          + virtualHost
-          + '\''
-          + ", port="
-          + port
-          + '}';
-    }
+  static ThreadFactory defaultThreadFactory() {
+    return THREAD_FACTORY;
   }
 
   static String extractQueueFromSourceAddress(String address) {

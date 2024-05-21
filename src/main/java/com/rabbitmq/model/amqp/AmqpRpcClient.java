@@ -18,10 +18,14 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.*;
+import java.time.Duration;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
@@ -37,17 +41,20 @@ class AmqpRpcClient implements RpcClient {
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
 
   private final AmqpConnection connection;
+  private final Clock clock;
   private final Publisher publisher;
   private final Consumer consumer;
-  private final Map<Object, CompletableFuture<Message>> outstandingRequests =
-      new ConcurrentHashMap<>();
+  private final Map<Object, OutstandingRequest> outstandingRequests = new ConcurrentHashMap<>();
   private final Supplier<Object> correlationIdSupplier;
   private final BiFunction<Message, Object, Message> requestPostProcessor;
   private final Function<Message, Object> correlationIdExtractor;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final Duration requestTimeout;
+  private final ScheduledFuture<?> requestTimeoutFuture;
 
   AmqpRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
     this.connection = builder.connection();
+    this.clock = this.connection.clock();
 
     AmqpPublisherBuilder publisherBuilder =
         (AmqpPublisherBuilder) this.connection.publisherBuilder();
@@ -72,10 +79,10 @@ class AmqpRpcClient implements RpcClient {
             .messageHandler(
                 (ctx, msg) -> {
                   ctx.accept();
-                  CompletableFuture<Message> result =
+                  OutstandingRequest request =
                       this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
-                  if (result != null) {
-                    result.complete(msg);
+                  if (request != null) {
+                    request.future.complete(msg);
                   }
                 })
             .build();
@@ -98,6 +105,23 @@ class AmqpRpcClient implements RpcClient {
     } else {
       this.requestPostProcessor = builder.requestPostProcessor();
     }
+
+    this.requestTimeout = builder.requestTimeout();
+    Runnable requestTimeoutTask = requestTimeoutTask();
+    this.requestTimeoutFuture =
+        this.connection
+            .scheduledExecutorService()
+            .scheduleAtFixedRate(
+                () -> {
+                  try {
+                    requestTimeoutTask.run();
+                  } catch (Exception e) {
+                    LOGGER.info("Error during request timeout task: {}", e.getMessage());
+                  }
+                },
+                this.requestTimeout.toMillis(),
+                this.requestTimeout.toMillis(),
+                TimeUnit.MILLISECONDS);
   }
 
   @Override
@@ -112,18 +136,21 @@ class AmqpRpcClient implements RpcClient {
 
   @Override
   public CompletableFuture<Message> publish(Message message) {
+    checkOpen();
     Object correlationId = this.correlationIdSupplier.get();
     message = this.requestPostProcessor.apply(message, correlationId);
-    CompletableFuture<Message> result = new CompletableFuture<>();
-    this.outstandingRequests.put(correlationId, result);
+    long time = this.clock.time();
+    CompletableFuture<Message> future = new CompletableFuture<>();
+    this.outstandingRequests.put(correlationId, new OutstandingRequest(future, time));
     this.publisher.publish(message, NO_OP_CALLBACK);
-    return result;
+    return future;
   }
 
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
       this.connection.removeRpcClient(this);
+      this.requestTimeoutFuture.cancel(true);
       try {
         this.publisher.close();
       } catch (Exception e) {
@@ -134,6 +161,47 @@ class AmqpRpcClient implements RpcClient {
       } catch (Exception e) {
         LOGGER.warn("Error while closing RPC client consumer: {}", e.getMessage());
       }
+      this.outstandingRequests
+          .values()
+          .forEach(r -> r.future.completeExceptionally(new ModelException("RPC client is closed")));
+    }
+  }
+
+  Runnable requestTimeoutTask() {
+    return () -> {
+      long limit = this.clock.time() - this.requestTimeout.toNanos();
+      Iterator<OutstandingRequest> iterator = this.outstandingRequests.values().iterator();
+      while (iterator.hasNext()) {
+        if (Thread.currentThread().isInterrupted()) {
+          return;
+        }
+        OutstandingRequest request = iterator.next();
+        if (request.time < limit) {
+          try {
+            iterator.remove();
+          } catch (Exception e) {
+            LOGGER.warn("Error while pruning timed out request: {}", e.getMessage());
+          }
+          request.future.completeExceptionally(new ModelException("RPC request timed out"));
+        }
+      }
+    };
+  }
+
+  private void checkOpen() {
+    if (this.closed.get()) {
+      throw new ModelException("RPC client is closed");
+    }
+  }
+
+  private static class OutstandingRequest {
+
+    private final CompletableFuture<Message> future;
+    private final long time;
+
+    private OutstandingRequest(CompletableFuture<Message> future, long time) {
+      this.future = future;
+      this.time = time;
     }
   }
 }

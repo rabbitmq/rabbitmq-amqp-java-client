@@ -26,8 +26,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.model.*;
+import java.time.Duration;
+import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
@@ -276,6 +279,74 @@ public class RpcTest {
     } finally {
       serverConnection.management().queueDeletion().delete(requestQueue);
       serverConnection.close();
+    }
+  }
+
+  @Test
+  void poisonRequestsShouldTimeout()
+      throws ExecutionException, InterruptedException, TimeoutException {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      serverConnection
+          .rpcServerBuilder()
+          .requestQueue(requestQueue)
+          .handler(
+              (ctx, msg) -> {
+                String request = new String(msg.body(), UTF_8);
+                if (request.contains("poison")) {
+                  return null;
+                } else {
+                  return HANDLER.handle(ctx, msg);
+                }
+              })
+          .replyPostProcessor((r, corrId) -> r == null ? null : r.correlationId(corrId))
+          .build();
+
+      Duration requestTimeout = Duration.ofSeconds(1);
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestTimeout(requestTimeout)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      int requestCount = 100;
+      AtomicInteger expectedPoisonCount = new AtomicInteger();
+      AtomicInteger timedOutRequestCount = new AtomicInteger();
+      CountDownLatch latch = new CountDownLatch(requestCount);
+      Random random = new Random();
+      IntStream.range(0, requestCount)
+          .forEach(
+              ignored -> {
+                boolean poison = random.nextBoolean();
+                String request;
+                if (poison) {
+                  request = "poison";
+                  expectedPoisonCount.incrementAndGet();
+                } else {
+                  request = UUID.randomUUID().toString();
+                }
+                executorService.submit(
+                    () -> {
+                      CompletableFuture<Message> responseFuture =
+                          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                      responseFuture.handle(
+                          (msg, ex) -> {
+                            if (ex != null) {
+                              timedOutRequestCount.incrementAndGet();
+                            }
+                            latch.countDown();
+                            return null;
+                          });
+                    });
+              });
+      TestUtils.assertThat(latch).completes();
+      assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
     }
   }
 

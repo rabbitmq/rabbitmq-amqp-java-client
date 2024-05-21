@@ -500,6 +500,14 @@ class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.executorService();
   }
 
+  ScheduledExecutorService scheduledExecutorService() {
+    return this.environment.scheduledExecutorService();
+  }
+
+  Clock clock() {
+    return this.environment.clock();
+  }
+
   Publisher createPublisher(AmqpPublisherBuilder builder) {
     // TODO copy the builder properties to create the publisher
     AmqpPublisher publisher = new AmqpPublisher(builder);

@@ -15,31 +15,21 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.model;
+package com.rabbitmq.model.amqp;
 
-import java.time.Duration;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
+public class Clock {
 
-public interface RpcClientBuilder {
+  private volatile long time;
 
-  RpcClientAddressBuilder requestAddress();
+  Clock() {
+    this.time = System.nanoTime();
+  }
 
-  RpcClientBuilder replyToQueue(String replyToQueue);
+  long time() {
+    return this.time;
+  }
 
-  RpcClientBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier);
-
-  RpcClientBuilder requestPostProcessor(BiFunction<Message, Object, Message> requestPostProcessor);
-
-  RpcClientBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
-
-  RpcClientBuilder requestTimeout(Duration timeout);
-
-  RpcClient build();
-
-  interface RpcClientAddressBuilder extends AddressBuilder<RpcClientAddressBuilder> {
-
-    RpcClientBuilder rpcClient();
+  void refresh() {
+    this.time = System.nanoTime();
   }
 }
