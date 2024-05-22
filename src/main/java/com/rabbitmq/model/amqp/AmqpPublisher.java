@@ -21,6 +21,7 @@ import static com.rabbitmq.model.Resource.State.OPEN;
 
 import com.rabbitmq.model.Message;
 import com.rabbitmq.model.Publisher;
+import com.rabbitmq.model.metrics.MetricsCollector;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,6 +43,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
   private final String address;
   private final AmqpConnection connection;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final MetricsCollector metricsCollector;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
     super(builder.listeners());
@@ -50,7 +52,9 @@ class AmqpPublisher extends ResourceBase implements Publisher {
     this.address = builder.address();
     this.connection = builder.connection();
     this.sender = this.createSender(builder.connection().nativeSession(), this.address);
+    this.metricsCollector = this.connection.metricsCollector();
     this.state(OPEN);
+    this.metricsCollector.openPublisher();
   }
 
   @Override
@@ -82,10 +86,14 @@ class AmqpPublisher extends ResourceBase implements Publisher {
             } catch (InterruptedException | ExecutionException e) {
               status = Status.FAILED;
             }
-            @SuppressWarnings("rawtypes")
             DefaultContext defaultContext = new DefaultContext(message, status);
+            this.metricsCollector.publishDisposition(
+                status == Status.ACCEPTED
+                    ? MetricsCollector.PublishDisposition.ACCEPTED
+                    : MetricsCollector.PublishDisposition.FAILED);
             callback.handle(defaultContext);
           });
+      this.metricsCollector.publish();
     } catch (ClientIllegalStateException e) {
       // the link is closed
       this.close(ExceptionUtils.convert(e));
@@ -129,6 +137,7 @@ class AmqpPublisher extends ResourceBase implements Publisher {
         LOGGER.warn("Error while closing sender", e);
       }
       this.state(State.CLOSED, cause);
+      this.metricsCollector.closePublisher();
     }
   }
 

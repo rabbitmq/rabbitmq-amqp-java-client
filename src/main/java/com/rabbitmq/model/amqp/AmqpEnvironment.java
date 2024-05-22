@@ -18,6 +18,8 @@
 package com.rabbitmq.model.amqp;
 
 import com.rabbitmq.model.*;
+import com.rabbitmq.model.metrics.MetricsCollector;
+import com.rabbitmq.model.metrics.NoOpMetricsCollector;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,9 +48,12 @@ class AmqpEnvironment implements Environment {
   private final ScheduledExecutorService scheduledExecutorService;
   private volatile ScheduledFuture<?> clockRefreshFuture;
   private final AtomicBoolean clockRefreshSet = new AtomicBoolean(false);
+  private final MetricsCollector metricsCollector;
 
   AmqpEnvironment(
-      ExecutorService executorService, DefaultConnectionSettings<?> connectionSettings) {
+      ExecutorService executorService,
+      DefaultConnectionSettings<?> connectionSettings,
+      MetricsCollector metricsCollector) {
     this.id = ID_SEQUENCE.getAndIncrement();
     connectionSettings.copyTo(this.connectionSettings);
     this.connectionSettings.consolidate();
@@ -64,6 +69,8 @@ class AmqpEnvironment implements Environment {
     }
     this.scheduledExecutorService =
         Executors.newScheduledThreadPool(0, Utils.defaultThreadFactory());
+    this.metricsCollector =
+        metricsCollector == null ? NoOpMetricsCollector.INSTANCE : metricsCollector;
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -115,6 +122,10 @@ class AmqpEnvironment implements Environment {
 
   ScheduledExecutorService scheduledExecutorService() {
     return this.scheduledExecutorService;
+  }
+
+  MetricsCollector metricsCollector() {
+    return this.metricsCollector;
   }
 
   void addConnection(AmqpConnection connection) {

@@ -156,9 +156,21 @@ class AmqpManagement implements Management {
   public void close() {
     if (this.closed.compareAndSet(false, true) && this.initialized.get()) {
       this.releaseResources();
-      this.receiver.close();
-      this.sender.close();
-      this.session.close();
+      try {
+        this.receiver.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing management receiver: {}", e.getMessage());
+      }
+      try {
+        this.sender.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing management sender: {}", e.getMessage());
+      }
+      try {
+        this.session.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing management session: {}", e.getMessage());
+      }
     }
   }
 

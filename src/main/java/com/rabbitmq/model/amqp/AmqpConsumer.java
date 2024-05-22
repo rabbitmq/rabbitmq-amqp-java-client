@@ -21,6 +21,7 @@ import static com.rabbitmq.model.Resource.State.*;
 
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
+import com.rabbitmq.model.metrics.MetricsCollector;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -59,6 +60,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
   private final AmqpConnection connection;
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicReference<CountDownLatch> echoedFlowAfterPauseLatch = new AtomicReference<>();
+  private final MetricsCollector metricsCollector;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private Scheduler protonExecutor;
@@ -76,7 +78,9 @@ class AmqpConsumer extends ResourceBase implements Consumer {
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.connection = builder.connection();
     this.startReceivingLoop();
+    this.metricsCollector = this.connection.metricsCollector();
     this.state(OPEN);
+    this.metricsCollector.openConsumer();
   }
 
   @Override
@@ -107,6 +111,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
         while (!Thread.currentThread().isInterrupted()) {
           Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
           if (delivery != null) {
+            this.metricsCollector.consume();
             AmqpMessage message = new AmqpMessage(delivery.message());
             // TODO make disposition idempotent
             Consumer.Context context =
@@ -117,6 +122,8 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                     try {
                       protonExecutor.execute(() -> replenishCreditIfNeeded());
                       delivery.disposition(DeliveryState.accepted(), true);
+                      metricsCollector.consumeDisposition(
+                          MetricsCollector.ConsumeDisposition.ACCEPTED);
                     } catch (ClientIllegalStateException | ClientIOException e) {
                       LOGGER.debug("message accept failed: {}", e.getMessage());
                     } catch (ClientException e) {
@@ -129,6 +136,8 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                     try {
                       protonExecutor.execute(() -> replenishCreditIfNeeded());
                       delivery.disposition(DeliveryState.rejected("", ""), true);
+                      metricsCollector.consumeDisposition(
+                          MetricsCollector.ConsumeDisposition.DISCARDED);
                     } catch (ClientIllegalStateException | ClientIOException e) {
                       LOGGER.debug("message discard failed: {}", e.getMessage());
                     } catch (ClientException e) {
@@ -141,6 +150,8 @@ class AmqpConsumer extends ResourceBase implements Consumer {
                     try {
                       protonExecutor.execute(() -> replenishCreditIfNeeded());
                       delivery.disposition(DeliveryState.released(), true);
+                      metricsCollector.consumeDisposition(
+                          MetricsCollector.ConsumeDisposition.REQUEUED);
                     } catch (ClientIllegalStateException | ClientIOException e) {
                       LOGGER.debug("message requeue failed: {}", e.getMessage());
                     } catch (ClientException e) {
@@ -196,6 +207,7 @@ class AmqpConsumer extends ResourceBase implements Consumer {
         LOGGER.warn("Error while closing receiver", e);
       }
       this.state(CLOSED, cause);
+      this.metricsCollector.closeConsumer();
     }
   }
 

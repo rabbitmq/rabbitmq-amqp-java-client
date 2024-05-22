@@ -23,6 +23,7 @@ import static com.rabbitmq.model.amqp.Utils.throwIfInterrupted;
 import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.model.*;
+import com.rabbitmq.model.metrics.MetricsCollector;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,12 +112,8 @@ class AmqpConnection extends ResourceBase implements Connection {
     } else {
       disconnectHandler =
           (c, e) -> {
-            if (this.closed.compareAndSet(false, true)) {
-              ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
-              this.state(CLOSING, failureCause);
-              this.releaseManagementResources();
-              this.state(CLOSED, failureCause);
-            }
+            ModelException failureCause = convert(e.failureCause(), "Connection disconnected");
+            this.close(failureCause);
           };
       this.recoveryRequestQueue = null;
       this.recoveryLoop = null;
@@ -124,6 +121,7 @@ class AmqpConnection extends ResourceBase implements Connection {
     this.nativeConnection = connect(this.connectionSettings, builder.name(), disconnectHandler);
     this.management = createManagement();
     this.state(OPEN);
+    this.environment.metricsCollector().openConnection();
   }
 
   @Override
@@ -166,38 +164,7 @@ class AmqpConnection extends ResourceBase implements Connection {
 
   @Override
   public void close() {
-    if (this.closed.compareAndSet(false, true)) {
-      this.state(CLOSING);
-      if (this.recoveryLoop != null) {
-        this.recoveryLoop.cancel(true);
-      }
-      if (this.topologyListener instanceof AutoCloseable) {
-        try {
-          ((AutoCloseable) this.topologyListener).close();
-        } catch (Exception e) {
-          LOGGER.info("Error while closing topology listener", e);
-        }
-      }
-      this.closeManagement();
-      for (RpcClient rpcClient : this.rpcClients) {
-        rpcClient.close();
-      }
-      for (RpcServer rpcServer : this.rpcServers) {
-        rpcServer.close();
-      }
-      for (AmqpPublisher publisher : this.publishers) {
-        publisher.close();
-      }
-      for (AmqpConsumer consumer : this.consumers) {
-        consumer.close();
-      }
-      try {
-        this.nativeConnection.close();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing native connection", e);
-      }
-      this.state(CLOSED);
-    }
+    this.close(null);
   }
 
   // internal API
@@ -508,6 +475,10 @@ class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.clock();
   }
 
+  MetricsCollector metricsCollector() {
+    return this.environment.metricsCollector();
+  }
+
   Publisher createPublisher(AmqpPublisherBuilder builder) {
     // TODO copy the builder properties to create the publisher
     AmqpPublisher publisher = new AmqpPublisher(builder);
@@ -570,6 +541,42 @@ class AmqpConnection extends ResourceBase implements Connection {
       return "<null>";
     } else {
       return this.connectionAddress.host() + ":" + this.connectionAddress.port();
+    }
+  }
+
+  private void close(Throwable cause) {
+    if (this.closed.compareAndSet(false, true)) {
+      this.state(CLOSING, cause);
+      if (this.recoveryLoop != null) {
+        this.recoveryLoop.cancel(true);
+      }
+      if (this.topologyListener instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) this.topologyListener).close();
+        } catch (Exception e) {
+          LOGGER.info("Error while closing topology listener", e);
+        }
+      }
+      this.closeManagement();
+      for (RpcClient rpcClient : this.rpcClients) {
+        rpcClient.close();
+      }
+      for (RpcServer rpcServer : this.rpcServers) {
+        rpcServer.close();
+      }
+      for (AmqpPublisher publisher : this.publishers) {
+        publisher.close();
+      }
+      for (AmqpConsumer consumer : this.consumers) {
+        consumer.close();
+      }
+      try {
+        this.nativeConnection.close();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing native connection", e);
+      }
+      this.state(CLOSED, cause);
+      this.environment.metricsCollector().closeConnection();
     }
   }
 

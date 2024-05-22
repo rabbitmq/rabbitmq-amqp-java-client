@@ -20,6 +20,8 @@ package com.rabbitmq.model.amqp;
 import com.rabbitmq.model.ConnectionSettings;
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.EnvironmentBuilder;
+import com.rabbitmq.model.metrics.MetricsCollector;
+import com.rabbitmq.model.metrics.NoOpMetricsCollector;
 import java.util.concurrent.ExecutorService;
 
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
@@ -27,11 +29,17 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   private final DefaultEnvironmentConnectionSettings connectionSettings =
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
+  private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
 
   public AmqpEnvironmentBuilder() {}
 
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
+    return this;
+  }
+
+  public AmqpEnvironmentBuilder metricsCollector(MetricsCollector metricsCollector) {
+    this.metricsCollector = metricsCollector;
     return this;
   }
 
@@ -41,7 +49,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   @Override
   public Environment build() {
-    return new AmqpEnvironment(executorService, connectionSettings);
+    return new AmqpEnvironment(executorService, connectionSettings, metricsCollector);
   }
 
   public interface EnvironmentConnectionSettings

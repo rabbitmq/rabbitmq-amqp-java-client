@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.model.*;
 import com.rabbitmq.model.amqp.TestUtils.DisabledIfRabbitMqCtlNotSet;
+import com.rabbitmq.model.metrics.NoOpMetricsCollector;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -56,7 +57,7 @@ public class AmqpConnectionRecoveryTest {
           connectionAttemptCount.incrementAndGet();
           return addresses.get(0);
         });
-    environment = new AmqpEnvironment(null, connectionSettings);
+    environment = new AmqpEnvironment(null, connectionSettings, NoOpMetricsCollector.INSTANCE);
   }
 
   @BeforeEach
