@@ -21,6 +21,7 @@ import static com.rabbitmq.model.amqp.Cli.closeConnection;
 import static com.rabbitmq.model.amqp.TestUtils.waitAtMost;
 import static com.rabbitmq.model.metrics.MetricsCollector.ConsumeDisposition.*;
 import static com.rabbitmq.model.metrics.MetricsCollector.PublishDisposition.FAILED;
+import static java.lang.String.format;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -151,7 +152,9 @@ public class MetricsCollectorTest {
                     consumedCount.incrementAndGet();
                   })
               .build();
-      waitAtMost(() -> consumedCount.get() == 1);
+      waitAtMost(
+          () -> consumedCount.get() == 1,
+          () -> format("Expected 1 message, but got %d.", consumedCount.get()));
       // the first message is accepted
       verify(metricsCollector, times(1)).consume();
       verify(metricsCollector, times(1))
