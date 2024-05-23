@@ -320,7 +320,7 @@
                         <imagesdir>./images</imagesdir>
                         <idprefix />
                         <idseparator>-</idseparator>
-                        <source-highlighter>coderay</source-highlighter>
+                        <source-highlighter>rouge</source-highlighter>
                         <test-examples>../../test/java/com/rabbitmq/model/docs</test-examples>
                         <build-directory>${project.build.directory}</build-directory>
                     </attributes>

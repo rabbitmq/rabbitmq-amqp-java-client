@@ -19,6 +19,10 @@ package com.rabbitmq.model.docs;
 
 import com.rabbitmq.model.*;
 import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
+import com.rabbitmq.model.metrics.MetricsCollector;
+import com.rabbitmq.model.metrics.MicrometerMetricsCollector;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -300,5 +304,22 @@ class Api {
         .connectionBuilder().build();
     // end::connection-recovery-deactivate[]
   }
+
+  void metricsCollectorMicrometerPrometheus() {
+    String queue = null;
+    // tag::metrics-micrometer-prometheus[]
+    PrometheusMeterRegistry registry = new PrometheusMeterRegistry( // <1>
+        PrometheusConfig.DEFAULT
+    );
+    MetricsCollector collector = new MicrometerMetricsCollector(registry); // <2>
+
+    Environment environment = new AmqpEnvironmentBuilder()
+        .metricsCollector(collector) // <3>
+        .build();
+
+    Connection connection = environment.connectionBuilder().build(); // <4>
+    // end::metrics-micrometer-prometheus[]
+  }
+
 
 }

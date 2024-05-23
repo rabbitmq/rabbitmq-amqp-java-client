@@ -244,7 +244,7 @@ include::{test-examples}/Api.java[tag=connection-recovery-back-off]
 It is also possible to deactivate topology recovery if it is not appropriate for a given application.
 The application would usually register a connection <<lifecycle-listeners,lifecycle listener>> to know when the connection is recovered and recover its own state accordingly.
 
-.Deactivate topology recovery
+.Deactivating topology recovery
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=connection-recovery-no-topology-recovery]
@@ -254,12 +254,83 @@ include::{test-examples}/Api.java[tag=connection-recovery-no-topology-recovery]
 
 It is also possible to deactivate recovery altogether:
 
-.Deactivate recovery
+.Deactivating recovery
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=connection-recovery-deactivate]
 --------
 <1> Deactivate recovery
+
+=== Metrics Collection
+
+The library provides the {javadoc-url}/com/rabbitmq/model/metrics/MetricsCollector.html[`MetricsCollector`] abstraction to collect metrics.
+A `MetricsCollector` instance is set at the environment level and is called in several places by the library.
+The underlying implementation can then collect, compute and expose metrics.
+
+The library provides the `MicrometerMetricsCollector`, an implementation based on https://micrometer.io/[Micrometer].
+Micrometer is a façade for observability systems: the user can choose the Micrometer meter registry for their favorite system.
+
+Here is how to set up the Micrometer metrics collector and configure it for Prometheus:
+
+.Setting metrics collection with Prometheus
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=metrics-micrometer-prometheus]
+--------
+<1> Create the Micrometer meter registry for Prometheus
+<2> Create the metrics collector with the registry
+<3> Set the metrics collector in the environment builder
+<4> Create a connection, a Micrometer gauge is incremented
+
+The following metrics are recorded:
+
+* the number of open connections
+* the number of open publishers
+* the number of open consumers
+* the total number of published messages
+* the total number of accepted published messages
+* the total number of failed published messages
+* the total number of consumed messages
+* the total number of accepted consumed messages
+* the total number of requeued consumed messages
+* the total number of discarded consumed messages
+
+Here is an example of the Prometheus output:
+
+.Example of the Prometheus output
+[source,prometheus]
+------
+# HELP rabbitmq_amqp_connections
+# TYPE rabbitmq_amqp_connections gauge
+rabbitmq_amqp_connections 1.0
+# HELP rabbitmq_amqp_consumed_total
+# TYPE rabbitmq_amqp_consumed_total counter
+rabbitmq_amqp_consumed_total 3.0
+# HELP rabbitmq_amqp_consumed_accepted_total
+# TYPE rabbitmq_amqp_consumed_accepted_total counter
+rabbitmq_amqp_consumed_accepted_total 1.0
+# HELP rabbitmq_amqp_consumed_discarded_total
+# TYPE rabbitmq_amqp_consumed_discarded_total counter
+rabbitmq_amqp_consumed_discarded_total 1.0
+# HELP rabbitmq_amqp_consumed_requeued_total
+# TYPE rabbitmq_amqp_consumed_requeued_total counter
+rabbitmq_amqp_consumed_requeued_total 1.0
+# HELP rabbitmq_amqp_consumers
+# TYPE rabbitmq_amqp_consumers gauge
+rabbitmq_amqp_consumers 1.0
+# HELP rabbitmq_amqp_published_total
+# TYPE rabbitmq_amqp_published_total counter
+rabbitmq_amqp_published_total 2.0
+# HELP rabbitmq_amqp_published_accepted_total
+# TYPE rabbitmq_amqp_published_accepted_total counter
+rabbitmq_amqp_published_accepted_total 1.0
+# HELP rabbitmq_amqp_published_failed_total
+# TYPE rabbitmq_amqp_published_failed_total counter
+rabbitmq_amqp_published_failed_total 1.0
+# HELP rabbitmq_amqp_publishers
+# TYPE rabbitmq_amqp_publishers gauge
+rabbitmq_amqp_publishers 1.0
+------
 
 === Remote Procedure Call (RPC)
 

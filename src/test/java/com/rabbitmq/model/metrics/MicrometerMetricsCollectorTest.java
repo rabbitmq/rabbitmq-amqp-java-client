@@ -119,5 +119,9 @@ public class MicrometerMetricsCollectorTest {
     collector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
     collector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
     collector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
+
+    assertThat(registry.scrape())
+        .contains("# TYPE rabbitmq_amqp_connections gauge")
+        .contains("rabbitmq_amqp_connections 1.0");
   }
 }
