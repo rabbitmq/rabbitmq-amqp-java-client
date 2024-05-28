@@ -46,7 +46,7 @@
         <logback.version>1.2.13</logback.version>
         <protonj2.version>1.0.0-M21-SNAPSHOT</protonj2.version>
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
-        <assertj.version>3.25.3</assertj.version>
+        <assertj.version>3.26.0</assertj.version>
         <mockito.version>5.12.0</mockito.version>
         <amqp-client.version>5.20.0</amqp-client.version>
         <micrometer.version>1.13.0</micrometer.version>
