@@ -113,49 +113,55 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           if (delivery != null) {
             this.metricsCollector.consume();
             AmqpMessage message = new AmqpMessage(delivery.message());
-            // TODO make disposition idempotent
+            AtomicBoolean disposed = new AtomicBoolean(false);
             Consumer.Context context =
                 new Consumer.Context() {
 
                   @Override
                   public void accept() {
-                    try {
-                      protonExecutor.execute(() -> replenishCreditIfNeeded());
-                      delivery.disposition(DeliveryState.accepted(), true);
-                      metricsCollector.consumeDisposition(
-                          MetricsCollector.ConsumeDisposition.ACCEPTED);
-                    } catch (ClientIllegalStateException | ClientIOException e) {
-                      LOGGER.debug("message accept failed: {}", e.getMessage());
-                    } catch (ClientException e) {
-                      throw ExceptionUtils.convert(e);
+                    if (disposed.compareAndSet(false, true)) {
+                      try {
+                        protonExecutor.execute(() -> replenishCreditIfNeeded());
+                        delivery.disposition(DeliveryState.accepted(), true);
+                        metricsCollector.consumeDisposition(
+                            MetricsCollector.ConsumeDisposition.ACCEPTED);
+                      } catch (ClientIllegalStateException | ClientIOException e) {
+                        LOGGER.debug("message accept failed: {}", e.getMessage());
+                      } catch (ClientException e) {
+                        throw ExceptionUtils.convert(e);
+                      }
                     }
                   }
 
                   @Override
                   public void discard() {
-                    try {
-                      protonExecutor.execute(() -> replenishCreditIfNeeded());
-                      delivery.disposition(DeliveryState.rejected("", ""), true);
-                      metricsCollector.consumeDisposition(
-                          MetricsCollector.ConsumeDisposition.DISCARDED);
-                    } catch (ClientIllegalStateException | ClientIOException e) {
-                      LOGGER.debug("message discard failed: {}", e.getMessage());
-                    } catch (ClientException e) {
-                      throw ExceptionUtils.convert(e);
+                    if (disposed.compareAndSet(false, true)) {
+                      try {
+                        protonExecutor.execute(() -> replenishCreditIfNeeded());
+                        delivery.disposition(DeliveryState.rejected("", ""), true);
+                        metricsCollector.consumeDisposition(
+                            MetricsCollector.ConsumeDisposition.DISCARDED);
+                      } catch (ClientIllegalStateException | ClientIOException e) {
+                        LOGGER.debug("message discard failed: {}", e.getMessage());
+                      } catch (ClientException e) {
+                        throw ExceptionUtils.convert(e);
+                      }
                     }
                   }
 
                   @Override
                   public void requeue() {
-                    try {
-                      protonExecutor.execute(() -> replenishCreditIfNeeded());
-                      delivery.disposition(DeliveryState.released(), true);
-                      metricsCollector.consumeDisposition(
-                          MetricsCollector.ConsumeDisposition.REQUEUED);
-                    } catch (ClientIllegalStateException | ClientIOException e) {
-                      LOGGER.debug("message requeue failed: {}", e.getMessage());
-                    } catch (ClientException e) {
-                      throw ExceptionUtils.convert(e);
+                    if (disposed.compareAndSet(false, true)) {
+                      try {
+                        protonExecutor.execute(() -> replenishCreditIfNeeded());
+                        delivery.disposition(DeliveryState.released(), true);
+                        metricsCollector.consumeDisposition(
+                            MetricsCollector.ConsumeDisposition.REQUEUED);
+                      } catch (ClientIllegalStateException | ClientIOException e) {
+                        LOGGER.debug("message requeue failed: {}", e.getMessage());
+                      } catch (ClientException e) {
+                        throw ExceptionUtils.convert(e);
+                      }
                     }
                   }
                 };
