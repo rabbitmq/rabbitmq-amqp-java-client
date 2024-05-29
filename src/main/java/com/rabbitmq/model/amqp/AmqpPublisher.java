@@ -31,7 +31,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpPublisher extends ResourceBase implements Publisher {
+final class AmqpPublisher extends ResourceBase implements Publisher {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 

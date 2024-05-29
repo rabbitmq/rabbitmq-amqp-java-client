@@ -25,12 +25,13 @@ import java.util.function.BiConsumer;
 
 class AmqpExchangeSpecification implements Management.ExchangeSpecification {
 
+  private static final boolean DURABLE = true;
+  private static final boolean INTERNAL = false;
+
   private final AmqpManagement management;
 
   private String name;
   private String type = Management.ExchangeType.DIRECT.name().toLowerCase(Locale.ENGLISH);
-  private final boolean durable = true;
-  private final boolean internal = false;
   private boolean autoDelete = false;
   private final Map<String, Object> arguments = new LinkedHashMap<>();
 
@@ -77,9 +78,9 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
     // TODO check name is specified (server-named entities not allowed)
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("type", this.type);
-    body.put("durable", this.durable);
+    body.put("durable", DURABLE);
     body.put("auto_delete", this.autoDelete);
-    body.put("internal", this.internal);
+    body.put("internal", INTERNAL);
     body.put("arguments", this.arguments);
     this.management.declareExchange(this.name, body);
     this.management.recovery().exchangeDeclared(this);

@@ -22,6 +22,7 @@ import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.EnvironmentBuilder;
 import com.rabbitmq.model.metrics.MetricsCollector;
 import com.rabbitmq.model.metrics.NoOpMetricsCollector;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.concurrent.ExecutorService;
 
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
@@ -43,6 +44,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return this;
   }
 
+  @SuppressFBWarnings("EI_EXPOSE_REP")
   public EnvironmentConnectionSettings connectionSettings() {
     return this.connectionSettings;
   }

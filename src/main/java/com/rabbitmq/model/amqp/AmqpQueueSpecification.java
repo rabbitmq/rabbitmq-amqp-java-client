@@ -32,8 +32,8 @@ import org.slf4j.LoggerFactory;
 class AmqpQueueSpecification implements Management.QueueSpecification {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpQueueSpecification.class);
-
   private static final Duration TEN_YEARS = Duration.ofDays(365 * 10);
+  private static final boolean DURABLE = true;
 
   private final AmqpManagement management;
 
@@ -44,7 +44,6 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   // the user until the fix arrives)
   private boolean shortcutArguments = false;
   private String name;
-  private final boolean durable = true;
   private boolean exclusive = false;
   private boolean autoDelete = false;
   private final Map<String, Object> arguments = new LinkedHashMap<>();
@@ -189,7 +188,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     // TODO check name is specified (server-named entities not allowed)
     // generate a random name if name not specified
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("durable", this.durable);
+    body.put("durable", DURABLE);
     body.put("exclusive", this.exclusive);
     body.put("auto_delete", this.autoDelete);
     body.put("arguments", this.arguments);

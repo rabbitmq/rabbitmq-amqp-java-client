@@ -44,7 +44,7 @@ import org.apache.qpid.protonj2.engine.impl.ProtonSessionIncomingWindow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpConsumer extends ResourceBase implements Consumer {
+final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 

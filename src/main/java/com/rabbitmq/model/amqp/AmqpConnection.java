@@ -44,7 +44,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpConnection extends ResourceBase implements Connection {
+final class AmqpConnection extends ResourceBase implements Connection {
 
   private static final Predicate<Throwable> RECOVERY_PREDICATE =
       t -> {
