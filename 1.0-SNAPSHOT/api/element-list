@@ -1,3 +1,4 @@
 com.rabbitmq.model
 com.rabbitmq.model.amqp
 com.rabbitmq.model.metrics
+com.rabbitmq.model.observation.micrometer
