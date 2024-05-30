@@ -179,13 +179,13 @@ class AmqpMessage implements Message {
 
   @Override
   public Message correlationId(long correlationId) {
-    callOnDelegate(m -> m.correlationId(correlationId));
+    callOnDelegate(m -> m.correlationId(UnsignedLong.valueOf(correlationId)));
     return this;
   }
 
   @Override
   public Message correlationId(byte[] correlationId) {
-    callOnDelegate(m -> m.correlationId(correlationId));
+    callOnDelegate(m -> m.correlationId(new Binary(correlationId)));
     return this;
   }
 
@@ -352,6 +352,23 @@ class AmqpMessage implements Message {
   @Override
   public boolean hasProperties() {
     return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasProperties);
+  }
+
+  @Override
+  public Object annotation(String key) {
+    return returnFromDelegate(m -> m.annotation(key));
+  }
+
+  @Override
+  public Message annotation(String key, String value) {
+    callOnDelegate(m -> m.annotation(key, value));
+    return this;
+  }
+
+  @Override
+  public Message forEachAnnotation(BiConsumer<String, Object> action) {
+    callOnDelegate(m -> m.forEachAnnotation(action));
+    return this;
   }
 
   @Override

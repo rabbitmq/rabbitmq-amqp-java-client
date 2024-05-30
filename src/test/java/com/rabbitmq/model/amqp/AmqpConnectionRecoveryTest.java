@@ -57,7 +57,12 @@ public class AmqpConnectionRecoveryTest {
           connectionAttemptCount.incrementAndGet();
           return addresses.get(0);
         });
-    environment = new AmqpEnvironment(null, connectionSettings, NoOpMetricsCollector.INSTANCE);
+    environment =
+        new AmqpEnvironment(
+            null,
+            connectionSettings,
+            NoOpMetricsCollector.INSTANCE,
+            Utils.NO_OP_OBSERVATION_COLLECTOR);
   }
 
   @BeforeEach

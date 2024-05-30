@@ -80,4 +80,8 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   String address() {
     return this.addressBuilder.address();
   }
+
+  DefaultAddressBuilder.DestinationSpec destination() {
+    return this.addressBuilder.destination();
+  }
 }

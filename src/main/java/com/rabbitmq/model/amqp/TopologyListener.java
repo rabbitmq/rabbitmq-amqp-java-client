@@ -38,8 +38,10 @@ interface TopologyListener {
 
   void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification);
 
+  // TODO: use queue instead of address
   void consumerCreated(long id, String address);
 
+  // TODO: use queue instead of address
   void consumerDeleted(long id, String address);
 
   static TopologyListener compose(List<TopologyListener> listeners) {

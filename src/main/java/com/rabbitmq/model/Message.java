@@ -19,6 +19,7 @@ package com.rabbitmq.model;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 
 public interface Message {
 
@@ -136,6 +137,12 @@ public interface Message {
   // TODO support iteration over message application properties
 
   // TODO support message annotations
+  Object annotation(String key);
+
+  Message annotation(String key, String value);
+
+  Message forEachAnnotation(BiConsumer<String, Object> action);
+
   // TODO support message headers
 
   MessageAddressBuilder toAddress();

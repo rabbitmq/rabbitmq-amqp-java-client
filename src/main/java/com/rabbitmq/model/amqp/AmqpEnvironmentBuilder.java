@@ -20,6 +20,7 @@ package com.rabbitmq.model.amqp;
 import com.rabbitmq.model.ConnectionSettings;
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.EnvironmentBuilder;
+import com.rabbitmq.model.ObservationCollector;
 import com.rabbitmq.model.metrics.MetricsCollector;
 import com.rabbitmq.model.metrics.NoOpMetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -31,6 +32,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
+  private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
 
   public AmqpEnvironmentBuilder() {}
 
@@ -44,6 +46,11 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return this;
   }
 
+  public AmqpEnvironmentBuilder observationCollector(ObservationCollector observationCollector) {
+    this.observationCollector = observationCollector;
+    return this;
+  }
+
   @SuppressFBWarnings("EI_EXPOSE_REP")
   public EnvironmentConnectionSettings connectionSettings() {
     return this.connectionSettings;
@@ -51,7 +58,8 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   @Override
   public Environment build() {
-    return new AmqpEnvironment(executorService, connectionSettings, metricsCollector);
+    return new AmqpEnvironment(
+        executorService, connectionSettings, metricsCollector, observationCollector);
   }
 
   public interface EnvironmentConnectionSettings

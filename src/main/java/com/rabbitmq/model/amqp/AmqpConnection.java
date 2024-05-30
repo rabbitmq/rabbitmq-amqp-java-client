@@ -23,6 +23,7 @@ import static com.rabbitmq.model.amqp.Utils.throwIfInterrupted;
 import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.model.*;
+import com.rabbitmq.model.ObservationCollector;
 import com.rabbitmq.model.metrics.MetricsCollector;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -479,6 +480,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.metricsCollector();
   }
 
+  ObservationCollector observationCollector() {
+    return this.environment.observationCollector();
+  }
+
   Publisher createPublisher(AmqpPublisherBuilder builder) {
     // TODO copy the builder properties to create the publisher
     AmqpPublisher publisher = new AmqpPublisher(builder);
@@ -542,6 +547,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     } else {
       return this.connectionAddress.host() + ":" + this.connectionAddress.port();
     }
+  }
+
+  Address connectionAddress() {
+    return this.connectionAddress;
   }
 
   private void close(Throwable cause) {

@@ -20,11 +20,13 @@ package com.rabbitmq.model.amqp;
 import static com.rabbitmq.model.Resource.State.OPEN;
 
 import com.rabbitmq.model.Message;
+import com.rabbitmq.model.ObservationCollector;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.metrics.MetricsCollector;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
@@ -44,17 +46,38 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final AmqpConnection connection;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final MetricsCollector metricsCollector;
+  private final ObservationCollector observationCollector;
+  private final Function<Message, Tracker> publishCall;
+  private final DefaultAddressBuilder.DestinationSpec destinationSpec;
+  private volatile ObservationCollector.ConnectionInfo connectionInfo;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.executorService = builder.connection().executorService();
     this.address = builder.address();
+    this.destinationSpec = builder.destination();
     this.connection = builder.connection();
     this.sender = this.createSender(builder.connection().nativeSession(), this.address);
     this.metricsCollector = this.connection.metricsCollector();
+    this.observationCollector = this.connection.observationCollector();
     this.state(OPEN);
     this.metricsCollector.openPublisher();
+    this.publishCall =
+        msg -> {
+          try {
+            org.apache.qpid.protonj2.client.Message<?> nativeMessage =
+                ((AmqpMessage) msg).nativeMessage();
+            return this.sender.send(nativeMessage.durable(true));
+          } catch (ClientIllegalStateException e) {
+            // the link is closed
+            this.close(ExceptionUtils.convert(e));
+            throw ExceptionUtils.convert(e);
+          } catch (ClientException e) {
+            throw ExceptionUtils.convert(e);
+          }
+        };
+    this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
   }
 
   @Override
@@ -70,40 +93,35 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   @Override
   public void publish(Message message, Callback callback) {
     checkOpen();
-    try {
-      org.apache.qpid.protonj2.client.Message<?> nativeMessage =
-          ((AmqpMessage) message).nativeMessage();
-      Tracker tracker = this.sender.send(nativeMessage.durable(true));
-      this.executorService.submit(
-          () -> {
-            Status status;
-            try {
-              tracker.settlementFuture().get();
-              status =
-                  tracker.remoteState() == DeliveryState.accepted()
-                      ? Status.ACCEPTED
-                      : Status.FAILED;
-            } catch (InterruptedException | ExecutionException e) {
-              status = Status.FAILED;
-            }
-            DefaultContext defaultContext = new DefaultContext(message, status);
-            this.metricsCollector.publishDisposition(
-                status == Status.ACCEPTED
-                    ? MetricsCollector.PublishDisposition.ACCEPTED
-                    : MetricsCollector.PublishDisposition.FAILED);
-            callback.handle(defaultContext);
-          });
-      this.metricsCollector.publish();
-    } catch (ClientIllegalStateException e) {
-      // the link is closed
-      this.close(ExceptionUtils.convert(e));
-      throw ExceptionUtils.convert(e);
-    } catch (ClientException e) {
-      throw ExceptionUtils.convert(e);
-    }
+    Tracker tracker =
+        this.observationCollector.publish(
+            destinationSpec.exchange(),
+            destinationSpec.routingKey(),
+            message,
+            this.connectionInfo,
+            publishCall);
+    this.executorService.submit(
+        () -> {
+          Status status;
+          try {
+            tracker.settlementFuture().get();
+            status =
+                tracker.remoteState() == DeliveryState.accepted() ? Status.ACCEPTED : Status.FAILED;
+          } catch (InterruptedException | ExecutionException e) {
+            status = Status.FAILED;
+          }
+          DefaultContext defaultContext = new DefaultContext(message, status);
+          this.metricsCollector.publishDisposition(
+              status == Status.ACCEPTED
+                  ? MetricsCollector.PublishDisposition.ACCEPTED
+                  : MetricsCollector.PublishDisposition.FAILED);
+          callback.handle(defaultContext);
+        });
+    this.metricsCollector.publish();
   }
 
   void recoverAfterConnectionFailure() {
+    this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
     this.sender = this.createSender(this.connection.nativeSession(false), this.address);
   }
 

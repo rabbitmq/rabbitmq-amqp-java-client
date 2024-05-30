@@ -73,4 +73,35 @@ abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
     copy.key(this.key);
     copy.queue(this.queue);
   }
+
+  DestinationSpec destination() {
+    String ex = null, rk = null;
+    if (this.exchange != null) {
+      ex = this.exchange;
+      ex = "amq.default".equals(ex) ? "" : ex;
+      rk = this.key == null ? "" : this.key;
+    } else if (this.queue != null) {
+      ex = "";
+      rk = this.queue;
+    }
+    return new DestinationSpec(ex, rk);
+  }
+
+  static class DestinationSpec {
+
+    private final String exchange, routingKey;
+
+    DestinationSpec(String exchange, String routingKey) {
+      this.exchange = exchange;
+      this.routingKey = routingKey;
+    }
+
+    String exchange() {
+      return this.exchange;
+    }
+
+    String routingKey() {
+      return this.routingKey;
+    }
+  }
 }

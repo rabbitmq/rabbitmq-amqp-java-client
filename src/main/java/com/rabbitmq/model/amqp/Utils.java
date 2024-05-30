@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model.amqp;
 
-import com.rabbitmq.model.ModelException;
+import com.rabbitmq.model.*;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -217,5 +217,48 @@ abstract class Utils {
 
   static boolean is4_0_OrMore(String brokerVersion) {
     return versionCompare(currentVersion(brokerVersion), "4.0.0") >= 0;
+  }
+
+  static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {
+
+    private final String address;
+    private final int port;
+
+    ObservationConnectionInfo(Address address) {
+      this.address = address == null ? "" : address.host();
+      this.port = address == null ? 0 : address.port();
+    }
+
+    @Override
+    public String peerAddress() {
+      return this.address;
+    }
+
+    @Override
+    public int peerPort() {
+      return this.port;
+    }
+  }
+
+  static final ObservationCollector NO_OP_OBSERVATION_COLLECTOR = new NoOpObservationCollector();
+
+  private static final class NoOpObservationCollector implements ObservationCollector {
+
+    private NoOpObservationCollector() {}
+
+    @Override
+    public <T> T publish(
+        String exchange,
+        String routingKey,
+        Message message,
+        ConnectionInfo connectionInfo,
+        Function<Message, T> publishCall) {
+      return publishCall.apply(message);
+    }
+
+    @Override
+    public Consumer.MessageHandler subscribe(String queue, Consumer.MessageHandler handler) {
+      return handler;
+    }
   }
 }
