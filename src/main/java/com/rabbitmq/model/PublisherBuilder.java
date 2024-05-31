@@ -17,9 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.model;
 
+import java.time.Duration;
+
 public interface PublisherBuilder extends AddressBuilder<PublisherBuilder> {
 
   PublisherBuilder listeners(Resource.StateListener... listeners);
+
+  PublisherBuilder publishTimeout(Duration timeout);
 
   Publisher build();
 }

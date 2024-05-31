@@ -21,6 +21,8 @@ import com.rabbitmq.model.AddressBuilder;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.PublisherBuilder;
 import com.rabbitmq.model.Resource;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +32,7 @@ class AmqpPublisherBuilder implements PublisherBuilder {
   private final List<Resource.StateListener> listeners = new ArrayList<>();
   private final DefaultAddressBuilder<PublisherBuilder> addressBuilder =
       new DefaultAddressBuilder<>(this) {};
+  private Duration publishTimeout = Duration.ofSeconds(60);
 
   AmqpPublisherBuilder(AmqpConnection connection) {
     this.connection = connection;
@@ -60,6 +63,12 @@ class AmqpPublisherBuilder implements PublisherBuilder {
     return this;
   }
 
+
+  public AmqpPublisherBuilder publishTimeout(Duration publishTimeout) {
+    this.publishTimeout = publishTimeout;
+    return this;
+  }
+
   @Override
   public Publisher build() {
     return this.connection.createPublisher(this);
@@ -83,5 +92,9 @@ class AmqpPublisherBuilder implements PublisherBuilder {
 
   DefaultAddressBuilder.DestinationSpec destination() {
     return this.addressBuilder.destination();
+  }
+
+  Duration publishTimeout() {
+    return this.publishTimeout;
   }
 }

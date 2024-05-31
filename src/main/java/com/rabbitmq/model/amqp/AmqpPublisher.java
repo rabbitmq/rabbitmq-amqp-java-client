@@ -23,6 +23,8 @@ import com.rabbitmq.model.Message;
 import com.rabbitmq.model.ObservationCollector;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.metrics.MetricsCollector;
+
+import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -49,6 +51,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final ObservationCollector observationCollector;
   private final Function<Message, Tracker> publishCall;
   private final DefaultAddressBuilder.DestinationSpec destinationSpec;
+  private final Duration publishTimeout;
   private volatile ObservationCollector.ConnectionInfo connectionInfo;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
@@ -58,7 +61,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.address = builder.address();
     this.destinationSpec = builder.destination();
     this.connection = builder.connection();
-    this.sender = this.createSender(builder.connection().nativeSession(), this.address);
+    this.publishTimeout = builder.publishTimeout();
+    this.sender = this.createSender(builder.connection().nativeSession(), this.address,
+        this.publishTimeout);
     this.metricsCollector = this.connection.metricsCollector();
     this.observationCollector = this.connection.observationCollector();
     this.state(OPEN);
@@ -122,7 +127,8 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
   void recoverAfterConnectionFailure() {
     this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
-    this.sender = this.createSender(this.connection.nativeSession(false), this.address);
+    this.sender = this.createSender(this.connection.nativeSession(false), this.address,
+        this.publishTimeout);
   }
 
   @Override
@@ -132,8 +138,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
   // internal API
 
-  private Sender createSender(Session session, String address) {
-    SenderOptions senderOptions = new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE);
+  private Sender createSender(Session session, String address, Duration publishTimeout) {
+    SenderOptions senderOptions = new SenderOptions().deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+        .sendTimeout(publishTimeout.isNegative() ? ConnectionOptions.INFINITE :
+            publishTimeout.toMillis());
     try {
       if (address == null) {
         return session.openAnonymousSender(senderOptions);
