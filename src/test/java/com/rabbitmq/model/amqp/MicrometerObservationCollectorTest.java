@@ -25,10 +25,13 @@ import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.Management;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.observation.micrometer.MicrometerObservationCollector;
+import io.micrometer.tracing.exporter.FinishedSpan;
 import io.micrometer.tracing.test.SampleTestRunner;
+import io.micrometer.tracing.test.reporter.BuildingBlocks;
 import io.micrometer.tracing.test.simple.SpanAssert;
 import io.micrometer.tracing.test.simple.SpansAssert;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -101,7 +104,7 @@ public class MicrometerObservationCollectorTest {
 
           waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 2);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(2);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(0))
+          SpanAssert.assertThat(lastPublish(buildingBlocks))
               .hasNameEqualTo(e + " publish")
               .hasTag("messaging.rabbitmq.destination.routing_key", "foo")
               .hasTag("messaging.destination.name", e)
@@ -113,7 +116,7 @@ public class MicrometerObservationCollectorTest {
               .hasTag("net.protocol.name", "amqp")
               .hasTag("net.protocol.version", "1.0");
 
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(1))
+          SpanAssert.assertThat(lastProcess(buildingBlocks))
               .hasNameEqualTo(q + " process")
               .hasTag("messaging.rabbitmq.destination.routing_key", "foo")
               .hasTag("messaging.destination.name", e)
@@ -142,16 +145,19 @@ public class MicrometerObservationCollectorTest {
           publisher = publisherConnection.publisherBuilder().exchange(e).build();
 
           consumeLatch.set(new CountDownLatch(1));
-          publisher.publish(publisher.message(PAYLOAD), ctx -> {});
+          messageId = UUID.randomUUID();
+          publisher.publish(publisher.message(PAYLOAD).messageId(messageId), ctx -> {});
           assertThat(consumeLatch).completes();
           waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 4);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(4);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(2))
+          SpanAssert.assertThat(lastPublish(buildingBlocks))
               .hasNameEqualTo(e + " publish")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", "")
               .hasTag("messaging.destination.name", e);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(3))
+          SpanAssert.assertThat(lastProcess(buildingBlocks))
               .hasNameEqualTo(q + " process")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", "")
               .hasTag("messaging.destination.name", e)
               .hasTag("messaging.source.name", q);
@@ -160,16 +166,19 @@ public class MicrometerObservationCollectorTest {
           publisher = publisherConnection.publisherBuilder().queue(q).build();
 
           consumeLatch.set(new CountDownLatch(1));
-          publisher.publish(publisher.message(PAYLOAD), ctx -> {});
+          messageId = UUID.randomUUID();
+          publisher.publish(publisher.message(PAYLOAD).messageId(messageId), ctx -> {});
           assertThat(consumeLatch).completes();
           waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 6);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(6);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(4))
+          SpanAssert.assertThat(lastPublish(buildingBlocks))
               .hasNameEqualTo("amq.default publish")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", q)
               .hasTag("messaging.destination.name", "");
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(5))
+          SpanAssert.assertThat(lastProcess(buildingBlocks))
               .hasNameEqualTo(q + " process")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", q)
               .hasTag("messaging.destination.name", "")
               .hasTag("messaging.source.name", q);
@@ -178,22 +187,51 @@ public class MicrometerObservationCollectorTest {
           publisher = publisherConnection.publisherBuilder().build();
 
           consumeLatch.set(new CountDownLatch(1));
+          messageId = UUID.randomUUID();
           publisher.publish(
-              publisher.message(PAYLOAD).toAddress().exchange(e).key("foo").message(), ctx -> {});
+              publisher
+                  .message(PAYLOAD)
+                  .messageId(messageId)
+                  .toAddress()
+                  .exchange(e)
+                  .key("foo")
+                  .message(),
+              ctx -> {});
           assertThat(consumeLatch).completes();
           waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 8);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(8);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(6))
+          SpanAssert.assertThat(lastPublish(buildingBlocks))
               .hasNameEqualTo(e + " publish")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", "foo")
               .hasTag("messaging.destination.name", e);
-          SpanAssert.assertThat(buildingBlocks.getFinishedSpans().get(7))
+          SpanAssert.assertThat(lastProcess(buildingBlocks))
               .hasNameEqualTo(q + " process")
+              .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.rabbitmq.destination.routing_key", "foo")
               .hasTag("messaging.destination.name", e)
               .hasTag("messaging.source.name", q);
         }
       };
     }
+  }
+
+  private static FinishedSpan lastPublish(BuildingBlocks blocks) {
+    return lastWithNameEnding(blocks, "publish");
+  }
+
+  private static FinishedSpan lastProcess(BuildingBlocks blocks) {
+    return lastWithNameEnding(blocks, "process");
+  }
+
+  private static FinishedSpan lastWithNameEnding(BuildingBlocks blocks, String nameEnding) {
+    List<FinishedSpan> spans = blocks.getFinishedSpans();
+    for (int i = spans.size() - 1; i >= 0; i--) {
+      FinishedSpan span = spans.get(i);
+      if (span.getName().endsWith(nameEnding)) {
+        return span;
+      }
+    }
+    throw new IllegalStateException();
   }
 }
