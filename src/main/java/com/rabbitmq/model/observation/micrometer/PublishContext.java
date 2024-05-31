@@ -55,31 +55,31 @@ public class PublishContext extends SenderContext<Message> {
     setCarrier(message);
   }
 
-  String exchange() {
+  public String exchange() {
     return this.exchange;
   }
 
-  String routingKey() {
+  public String routingKey() {
     return this.routingKey;
   }
 
-  int payloadSizeBytes() {
+  public int payloadSizeBytes() {
     return this.payloadSizeBytes;
   }
 
-  String messageId() {
+  public String messageId() {
     return this.messageId;
   }
 
-  String correlationId() {
+  public String correlationId() {
     return this.correlationId;
   }
 
-  String peerAddress() {
+  public String peerAddress() {
     return this.peerAddress;
   }
 
-  int peerPort() {
+  public int peerPort() {
     return this.peerPort;
   }
 }

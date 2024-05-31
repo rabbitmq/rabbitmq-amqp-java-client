@@ -25,19 +25,24 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.function.Function;
 
-public class MicrometerObservationCollector implements ObservationCollector {
+class MicrometerObservationCollector implements ObservationCollector {
 
   private final ObservationRegistry registry;
   private final PublishObservationConvention customPublishConvention, defaultPublishConvention;
   private final DeliverObservationConvention customProcessConvention, defaultProcessConvention;
 
   @SuppressFBWarnings("EI_EXPOSE_REP2")
-  public MicrometerObservationCollector(ObservationRegistry registry) {
-    this.customPublishConvention = null;
-    this.defaultPublishConvention = new DefaultPublishObservationConvention();
-    this.customProcessConvention = null;
-    this.defaultProcessConvention = new DefaultProcessObservationConvention();
+  MicrometerObservationCollector(
+      ObservationRegistry registry,
+      PublishObservationConvention customPublishConvention,
+      PublishObservationConvention defaultPublishConvention,
+      DeliverObservationConvention customProcessConvention,
+      DeliverObservationConvention defaultProcessConvention) {
     this.registry = registry;
+    this.customPublishConvention = customPublishConvention;
+    this.defaultPublishConvention = defaultPublishConvention;
+    this.customProcessConvention = customProcessConvention;
+    this.defaultProcessConvention = defaultProcessConvention;
   }
 
   @Override

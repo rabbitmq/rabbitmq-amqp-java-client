@@ -24,7 +24,7 @@ import com.rabbitmq.model.Connection;
 import com.rabbitmq.model.Environment;
 import com.rabbitmq.model.Management;
 import com.rabbitmq.model.Publisher;
-import com.rabbitmq.model.observation.micrometer.MicrometerObservationCollector;
+import com.rabbitmq.model.observation.micrometer.MicrometerObservationCollectorBuilder;
 import io.micrometer.tracing.exporter.FinishedSpan;
 import io.micrometer.tracing.test.SampleTestRunner;
 import io.micrometer.tracing.test.reporter.BuildingBlocks;
@@ -57,7 +57,10 @@ public class MicrometerObservationCollectorTest {
       return (buildingBlocks, meterRegistry) -> {
         try (Environment env =
             new AmqpEnvironmentBuilder()
-                .observationCollector(new MicrometerObservationCollector(getObservationRegistry()))
+                .observationCollector(
+                    new MicrometerObservationCollectorBuilder()
+                        .registry(getObservationRegistry())
+                        .build())
                 .build()) {
           Connection publisherConnection = env.connectionBuilder().build();
           Connection consumerConnection = env.connectionBuilder().build();

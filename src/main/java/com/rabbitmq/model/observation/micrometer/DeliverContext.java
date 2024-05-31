@@ -29,7 +29,7 @@ public class DeliverContext extends ReceiverContext<Message> {
   private final String messageId;
   private final String correlationId;
 
-  public DeliverContext(String exchange, String routingKey, String queue, Message message) {
+  DeliverContext(String exchange, String routingKey, String queue, Message message) {
     super(
         (carrier, key) -> {
           Object result = carrier.annotation(key);
@@ -55,27 +55,27 @@ public class DeliverContext extends ReceiverContext<Message> {
     setCarrier(message);
   }
 
-  String exchange() {
+  public String exchange() {
     return this.exchange;
   }
 
-  String routingKey() {
+  public String routingKey() {
     return this.routingKey;
   }
 
-  String queue() {
+  public String queue() {
     return this.queue;
   }
 
-  int payloadSizeBytes() {
+  public int payloadSizeBytes() {
     return this.payloadSizeBytes;
   }
 
-  String messageId() {
+  public String messageId() {
     return this.messageId;
   }
 
-  String correlationId() {
+  public String correlationId() {
     return this.correlationId;
   }
 }
