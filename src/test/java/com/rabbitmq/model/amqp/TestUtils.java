@@ -49,12 +49,8 @@ import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class TestUtils {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(TestUtils.class);
 
   private static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
 
@@ -138,6 +134,34 @@ public abstract class TestUtils {
 
   static QueueInfoAssert assertThat(Management.QueueInfo queueInfo) {
     return new QueueInfoAssert(queueInfo);
+  }
+
+  static SyncAssert assertThat(Sync sync) {
+    return new SyncAssert(sync);
+  }
+
+  static class SyncAssert extends AbstractObjectAssert<SyncAssert, Sync> {
+
+    private SyncAssert(Sync sync) {
+      super(sync, SyncAssert.class);
+    }
+
+    SyncAssert completes() {
+      return this.completes(DEFAULT_CONDITION_TIMEOUT);
+    }
+
+    SyncAssert completes(Duration timeout) {
+      try {
+        boolean completed = actual.await(timeout);
+        if (!completed) {
+          fail("Sync timed out after %d ms", timeout.toMillis());
+        }
+      } catch (InterruptedException e) {
+        Thread.interrupted();
+        throw new RuntimeException(e);
+      }
+      return this;
+    }
   }
 
   static CountDownLatchAssert assertThat(AtomicReference<CountDownLatch> reference) {
@@ -510,6 +534,14 @@ public abstract class TestUtils {
     }
   }
 
+  static Sync sync() {
+    return sync(1);
+  }
+
+  static Sync sync(int count) {
+    return new Sync(count);
+  }
+
   private static class CloseableResourceWrapper<T>
       implements ExtensionContext.Store.CloseableResource {
 
@@ -528,6 +560,27 @@ public abstract class TestUtils {
     @Override
     public void close() {
       this.closing.accept(this.resource);
+    }
+  }
+
+  static class Sync {
+
+    private final AtomicReference<CountDownLatch> latch = new AtomicReference<>();
+
+    private Sync(int count) {
+      this.latch.set(new CountDownLatch(count));
+    }
+
+    void down() {
+      this.latch.get().countDown();
+    }
+
+    private boolean await(Duration timeout) throws InterruptedException {
+      return this.latch.get().await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    void reset(int count) {
+      this.latch.set(new CountDownLatch(count));
     }
   }
 }

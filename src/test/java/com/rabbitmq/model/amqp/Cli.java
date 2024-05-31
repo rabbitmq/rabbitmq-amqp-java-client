@@ -24,6 +24,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -199,6 +200,54 @@ abstract class Cli {
     return listQueues().stream().filter(info -> q.equals(info.name())).findFirst().get();
   }
 
+  public static AutoCloseable diskAlarm() throws Exception {
+    return new CallableAutoCloseable(
+        () -> {
+          setDiskAlarm();
+          return null;
+        },
+        () -> {
+          clearDiskAlarm();
+          return null;
+        });
+  }
+
+  public static AutoCloseable memoryAlarm() throws Exception {
+    return new CallableAutoCloseable(
+        () -> {
+          setMemoryAlarm();
+          return null;
+        },
+        () -> {
+          clearMemoryAlarm();
+          return null;
+        });
+  }
+
+  private static void setDiskAlarm() {
+    setResourceAlarm("disk");
+  }
+
+  private static void clearDiskAlarm() {
+    clearResourceAlarm("disk");
+  }
+
+  private static void setMemoryAlarm() {
+    setResourceAlarm("memory");
+  }
+
+  static void clearMemoryAlarm() {
+    clearResourceAlarm("memory");
+  }
+
+  private static void setResourceAlarm(String source) {
+    rabbitmqctl("eval 'rabbit_alarm:set_alarm({{resource_limit, " + source + ", node()}, []}).'");
+  }
+
+  private static void clearResourceAlarm(String source) {
+    rabbitmqctl("eval 'rabbit_alarm:clear_alarm({resource_limit, " + source + ", node()}).'");
+  }
+
   private static class ConnectionInfo {
     private final String pid;
     private final int peerPort;
@@ -324,5 +373,20 @@ abstract class Cli {
 
   static String hostname() {
     return executeCommand("hostname").output();
+  }
+
+  private static final class CallableAutoCloseable implements AutoCloseable {
+
+    private final Callable<Void> end;
+
+    private CallableAutoCloseable(Callable<Void> start, Callable<Void> end) throws Exception {
+      this.end = end;
+      start.call();
+    }
+
+    @Override
+    public void close() throws Exception {
+      this.end.call();
+    }
   }
 }
