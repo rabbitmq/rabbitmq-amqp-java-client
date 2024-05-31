@@ -21,6 +21,8 @@ import com.rabbitmq.model.*;
 import com.rabbitmq.model.amqp.AmqpEnvironmentBuilder;
 import com.rabbitmq.model.metrics.MetricsCollector;
 import com.rabbitmq.model.metrics.MicrometerMetricsCollector;
+import com.rabbitmq.model.observation.micrometer.MicrometerObservationCollectorBuilder;
+import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
@@ -321,5 +323,14 @@ class Api {
     // end::metrics-micrometer-prometheus[]
   }
 
+  void micrometerObservation() {
+    ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+    // tag::micrometer-observation[]
+    Environment environment = new AmqpEnvironmentBuilder()
+        .observationCollector(new MicrometerObservationCollectorBuilder()  // <1>
+            .registry(observationRegistry).build())  // <2>
+        .build();
+    // end::micrometer-observation[]
+  }
 
 }

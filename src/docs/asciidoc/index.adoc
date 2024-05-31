@@ -12,3 +12,5 @@ ifndef::sourcedir[:sourcedir: ../../main/java]
 The library is open source, developed https://github.com/rabbitmq-pro/rabbitmq-java-model/[on GitHub], and is licensed under the https://www.apache.org/licenses/LICENSE-2.0.html[Apache Public License 2.0]
 
 include::usage.adoc[]
+
+include::appendixes.adoc[]

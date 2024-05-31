@@ -23,6 +23,7 @@ import io.micrometer.observation.ObservationConvention;
 import io.micrometer.observation.docs.ObservationDocumentation;
 
 public enum AmqpObservationDocumentation implements ObservationDocumentation {
+  /** Observation for publishing a message. */
   PUBLISH_OBSERVATION {
 
     @Override
@@ -36,6 +37,8 @@ public enum AmqpObservationDocumentation implements ObservationDocumentation {
       return LowCardinalityTags.values();
     }
   },
+
+  /** Observation for processing a message. */
   PROCESS_OBSERVATION {
 
     @Override
