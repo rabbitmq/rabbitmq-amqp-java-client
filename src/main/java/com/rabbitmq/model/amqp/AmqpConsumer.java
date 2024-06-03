@@ -22,22 +22,16 @@ import static com.rabbitmq.model.Resource.State.*;
 import com.rabbitmq.model.Consumer;
 import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.metrics.MetricsCollector;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.*;
-import org.apache.qpid.protonj2.client.impl.ClientLinkType;
-import org.apache.qpid.protonj2.client.impl.ClientReceiverLinkType;
+import org.apache.qpid.protonj2.client.impl.ClientReceiver;
 import org.apache.qpid.protonj2.client.util.DeliveryQueue;
 import org.apache.qpid.protonj2.engine.EventHandler;
 import org.apache.qpid.protonj2.engine.Scheduler;
-import org.apache.qpid.protonj2.engine.impl.ProtonLink;
 import org.apache.qpid.protonj2.engine.impl.ProtonLinkCreditState;
 import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.engine.impl.ProtonSessionIncomingWindow;
@@ -50,7 +44,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
-  private volatile Receiver nativeReceiver;
+  private volatile ClientReceiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Future<?> receiveLoop;
   private final int initialCredits;
@@ -94,15 +88,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // internal API
 
-  private Receiver createNativeReceiver(Session nativeSession, String address) {
+  private ClientReceiver createNativeReceiver(Session nativeSession, String address) {
     try {
-      return nativeSession.openReceiver(
-          address,
-          new ReceiverOptions()
-              .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-              .autoAccept(false)
-              .autoSettle(false)
-              .creditWindow(0));
+      return (ClientReceiver)
+          nativeSession.openReceiver(
+              address,
+              new ReceiverOptions()
+                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                  .autoAccept(false)
+                  .autoSettle(false)
+                  .creditWindow(0));
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }
@@ -229,46 +224,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     return this.address;
   }
 
-  static <T> T field(String name, Object obj) {
-    return field(obj.getClass(), name, obj);
-  }
-
-  @SuppressWarnings("unchecked")
-  static <T> T field(Class<?> lookupClass, String name, Object obj) {
+  private void initStateFromNativeReceiver(ClientReceiver receiver) {
     try {
-      Field field = lookupClass.getDeclaredField(name);
-      field.setAccessible(true);
-      return (T) field.get(obj);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new ModelException("Error during Java reflection operation", e);
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  static <T> T invoke(Class<?> lookupClass, String name, Object obj, Object... args) {
-    try {
-      Class<?>[] argTypes = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
-      Method method = lookupClass.getDeclaredMethod(name, argTypes);
-      method.setAccessible(true);
-      return (T) method.invoke(obj, args);
-    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-      throw new ModelException("Error during Java reflection operation", e);
-    }
-  }
-
-  private void initStateFromNativeReceiver(Receiver receiver) {
-    try {
-      Scheduler protonExecutor = field(ClientLinkType.class, "executor", receiver);
+      Scheduler protonExecutor = receiver.executor();
       CountDownLatch fieldsSetLatch = new CountDownLatch(1);
       protonExecutor.execute(
           () -> {
-            this.protonReceiver = field(ClientReceiverLinkType.class, "protonReceiver", receiver);
-            this.creditState = invoke(ProtonLink.class, "getCreditState", this.protonReceiver);
-            this.sessionWindow = field("sessionWindow", this.protonReceiver);
-            this.protonDeliveryQueue = field("deliveryQueue", receiver);
+            this.protonReceiver = (ProtonReceiver) receiver.protonReceiver();
+            this.creditState = this.protonReceiver.getCreditState();
+            this.sessionWindow = this.protonReceiver.sessionWindow();
+            this.protonDeliveryQueue = receiver.deliveryQueue();
 
             EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
-                field("linkCreditUpdatedHandler", this.protonReceiver);
+                this.protonReceiver.linkCreditUpdatedHandler();
             EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
                 target -> {
                   eventHandler.handle(target);
@@ -326,7 +294,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private void doPause() {
     this.creditState.updateCredit(0);
     this.creditState.updateEcho(true);
-    invoke(this.sessionWindow.getClass(), "writeFlow", this.sessionWindow, this.protonReceiver);
+    this.sessionWindow.writeFlow(this.protonReceiver);
   }
 
   void unpause() {

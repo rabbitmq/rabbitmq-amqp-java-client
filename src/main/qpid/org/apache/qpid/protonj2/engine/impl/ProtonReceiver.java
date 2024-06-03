@@ -467,4 +467,12 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
                                                currentDeliveryId + " and " + transfer.getDeliveryId()));
         }
     }
+
+    public ProtonSessionIncomingWindow sessionWindow() {
+        return this.sessionWindow;
+    }
+
+    public EventHandler<Receiver> linkCreditUpdatedHandler() {
+        return this.linkCreditUpdatedHandler;
+    }
 }

@@ -723,7 +723,7 @@ public abstract class ProtonLink<L extends Link<L>> extends ProtonEndpoint<L> im
 
     //----- Internal methods
 
-    ProtonLinkCreditState getCreditState() {
+    public ProtonLinkCreditState getCreditState() {
         return creditState;
     }
 

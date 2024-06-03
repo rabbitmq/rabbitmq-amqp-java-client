@@ -27,8 +27,11 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.apache.qpid.protonj2.client.exceptions.ClientOperationTimedOutException;
 import org.apache.qpid.protonj2.client.futures.ClientFuture;
+import org.apache.qpid.protonj2.client.util.DeliveryQueue;
 import org.apache.qpid.protonj2.client.util.FifoDeliveryQueue;
 import org.apache.qpid.protonj2.engine.IncomingDelivery;
+import org.apache.qpid.protonj2.engine.Scheduler;
+import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.types.messaging.Accepted;
 import org.apache.qpid.protonj2.types.messaging.Released;
 import org.slf4j.Logger;
@@ -240,4 +243,17 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
         protonReceiver.setLinkedResource(this);
         protonReceiver.addCredit(previousCredit);
     }
+
+    public Scheduler executor() {
+        return this.executor;
+    }
+
+    public org.apache.qpid.protonj2.engine.Receiver protonReceiver() {
+        return this.protonReceiver;
+    }
+
+    public DeliveryQueue deliveryQueue() {
+        return this.deliveryQueue;
+    }
+
 }
