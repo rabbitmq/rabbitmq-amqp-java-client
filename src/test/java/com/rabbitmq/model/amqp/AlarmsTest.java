@@ -22,7 +22,10 @@ import static java.util.stream.IntStream.range;
 
 import com.rabbitmq.model.Connection;
 import com.rabbitmq.model.Environment;
+import com.rabbitmq.model.ModelException;
 import com.rabbitmq.model.Publisher;
+import java.time.Duration;
+import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -56,16 +59,27 @@ public class AlarmsTest {
   @ValueSource(strings = {"disk", "memory"})
   void alarmShouldBlockPublisher(String alarmType) throws Exception {
     String q = connection.management().queue().exclusive(true).declare().name();
-    Publisher publisher = connection.publisherBuilder().queue(q).build();
+    Publisher publisher =
+        connection.publisherBuilder().queue(q).publishTimeout(Duration.ofMillis(100)).build();
     int messageCount = 100;
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
     assertThat(publishSync).completes();
-    publishSync.reset(messageCount + 1);
     Sync consumeSync = sync(messageCount);
     try (AutoCloseable ignored = alarm(alarmType)) {
-      new Thread(() -> publisher.publish(publisher.message(), ctx -> publishSync.down())).start();
+      Sync publishTimeoutSync = sync();
+      new Thread(
+              () -> {
+                try {
+                  publisher.publish(publisher.message(), ctx -> {});
+                } catch (ModelException e) {
+                  if (e.getCause() instanceof ClientSendTimedOutException)
+                    publishTimeoutSync.down();
+                }
+              })
+          .start();
+      assertThat(publishTimeoutSync).completes();
       connection
           .consumerBuilder()
           .queue(q)
@@ -76,7 +90,8 @@ public class AlarmsTest {
               })
           .build();
       assertThat(consumeSync).completes();
-      consumeSync.reset(messageCount + 1);
+      publishSync.reset(messageCount);
+      consumeSync.reset(messageCount);
     }
 
     range(0, messageCount)

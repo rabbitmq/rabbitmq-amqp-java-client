@@ -43,9 +43,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spotless.check.skip>true</spotless.check.skip>
         <slf4j.version>1.7.36</slf4j.version>
-        <logback.version>1.2.13</logback.version>
-        <protonj2.version>1.0.0-M21-SNAPSHOT</protonj2.version>
+        <netty4.version>4.1.110.Final</netty4.version>
+        <netty4.iouring.version>0.0.25.Final</netty4.iouring.version>
+        <netty5.version>5.0.0.Alpha5</netty5.version>
         <micrometer.version>1.13.0</micrometer.version>
+        <logback.version>1.2.13</logback.version>
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
         <assertj.version>3.26.0</assertj.version>
         <mockito.version>5.12.0</mockito.version>
@@ -80,25 +82,102 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.qpid</groupId>
-            <artifactId>protonj2-client</artifactId>
-            <version>${protonj2.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.qpid</groupId>
-            <artifactId>protonj2</artifactId>
-            <version>${protonj2.version}</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/protonj2-1.0.0-M21-SNAPSHOT.jar</systemPath>
-        </dependency>
-
-        <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
             <version>${micrometer.version}</version>
             <optional>true</optional>
         </dependency>
+
+        <!-- QPid dependencies -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+            <version>${netty4.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-common</artifactId>
+            <version>${netty4.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+            <version>${netty4.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+            <version>${netty4.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec-http</artifactId>
+            <version>${netty4.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-epoll</artifactId>
+            <version>${netty4.version}</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-kqueue</artifactId>
+            <version>${netty4.version}</version>
+            <classifier>osx-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>io.netty.incubator</groupId>
+            <artifactId>netty-incubator-transport-native-io_uring</artifactId>
+            <version>${netty4.iouring.version}</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-buffer</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-common</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-handler</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-transport</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-codec-http</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-transport-native-epoll</artifactId>
+            <version>${netty5.version}</version>
+            <optional>true</optional>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty5-transport-native-kqueue</artifactId>
+            <version>${netty5.version}</version>
+            <classifier>osx-x86_64</classifier>
+            <optional>true</optional>
+        </dependency>
+        <!-- End of QPid dependencies -->
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -417,6 +496,36 @@
             </plugin>
 
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>com.rabbitmq.amqp:amqp-client</include>
+                                </includes>
+                            </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.apache.qpid.protonj2</pattern>
+                                    <shadedPattern>com.rabbitmq.qpid.protonj2</shadedPattern>
+                                    <includes>
+                                        <include>org.apache.qpid.protonj2.**</include>
+                                    </includes>
+                                </relocation>
+                            </relocations>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>${spotbugs-maven-plugin.version}</version>
@@ -427,6 +536,9 @@
                         <version>${spotbugs.version}</version>
                     </dependency>
                 </dependencies>
+                <configuration>
+                    <onlyAnalyze>com.rabbitmq.-</onlyAnalyze>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -435,6 +547,27 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/qpid/</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
 
         </plugins>
 

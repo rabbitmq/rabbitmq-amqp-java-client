@@ -21,7 +21,6 @@ import com.rabbitmq.model.AddressBuilder;
 import com.rabbitmq.model.Publisher;
 import com.rabbitmq.model.PublisherBuilder;
 import com.rabbitmq.model.Resource;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +61,6 @@ class AmqpPublisherBuilder implements PublisherBuilder {
     }
     return this;
   }
-
 
   public AmqpPublisherBuilder publishTimeout(Duration publishTimeout) {
     this.publishTimeout = publishTimeout;
