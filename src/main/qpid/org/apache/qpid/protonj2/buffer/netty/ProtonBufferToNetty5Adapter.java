@@ -968,12 +968,12 @@ public class ProtonBufferToNetty5Adapter implements Buffer {
 
         @SuppressWarnings("unchecked")
         @Override
-        public T next() {
+        public <N extends Next & BufferComponent> N next() {
             if (current != null) {
                 current = accessor.next();
             }
 
-            return current != null ? (T) this : null;
+            return current != null ? (N) this : null;
         }
 
         @Override
@@ -1067,6 +1067,8 @@ public class ProtonBufferToNetty5Adapter implements Buffer {
             current.advanceWriteOffset(byteCount);
             return this;
         }
+
+
     }
 
     private final static class ProtonByteCursorAdapter implements ByteCursor {
