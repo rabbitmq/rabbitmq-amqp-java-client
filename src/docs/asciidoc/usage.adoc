@@ -442,7 +442,7 @@ Use your favorite build management tool to add the client dependencies to your p
 <dependencies>
 
   <dependency>
-    <groupId>com.rabbitmq.amqp</groupId>
+    <groupId>{project-group-id}</groupId>
     <artifactId>{project-artifact-id}</artifactId>
     <version>{project-version}</version>
   </dependency>
