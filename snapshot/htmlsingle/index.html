@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 1.0-SNAPSHOT</span>
-<br><span id="revremark">(075aedc)</span>
+<br><span id="revremark">(90edd97)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -1155,12 +1155,12 @@ It is accessible from the <code>Environment</code>.</p>
 </div>
 <div class="paragraph">
 <p>The listener API is the same for connection, publishers, and consumers.
-They all implement the <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp1/Resource.html"><code>Resource</code></a> marker interface.
-The <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp1/Resource.StateListener.html"><code>StateListener</code></a> interface has only one method that takes a <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp1/Resource.Context.html"><code>Context</code></a> argument.
+They all implement the <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp/client/Resource.html"><code>Resource</code></a> marker interface.
+The <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp/client/Resource.StateListener.html"><code>StateListener</code></a> interface has only one method that takes a <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp/client/Resource.Context.html"><code>Context</code></a> argument.
 See the snippet above for the information available in the <code>Context</code>.</p>
 </div>
 <div class="paragraph">
-<p>A resource <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp1/Resource.State.html"><code>State</code></a> can have the following values: <code>OPENING</code>, <code>OPEN</code>, <code>RECOVERING</code>, <code>CLOSING</code>, <code>CLOSED</code>.</p>
+<p>A resource <a href="https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp/client/Resource.State.html"><code>State</code></a> can have the following values: <code>OPENING</code>, <code>OPEN</code>, <code>RECOVERING</code>, <code>CLOSING</code>, <code>CLOSED</code>.</p>
 </div>
 </div>
 <div class="sect2">
@@ -1732,19 +1732,19 @@ They are automatically generated from the source code with the <a href="https://
 <td class="tableblock halign-left valign-top"><p class="tableblock">Applicable ObservationContext Class Name</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp1.observation.micrometer.DefaultProcessObservationConvention</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp.client.observation.micrometer.DefaultProcessObservationConvention</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>DeliverContext</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp1.observation.micrometer.DeliverObservationConvention</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp.client.observation.micrometer.DeliverObservationConvention</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>DeliverContext</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp1.observation.micrometer.DefaultPublishObservationConvention</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp.client.observation.micrometer.DefaultPublishObservationConvention</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>PublishContext</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp1.observation.micrometer.PublishObservationConvention</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.rabbitmq.amqp.client.observation.micrometer.PublishObservationConvention</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>PublishContext</code></p></td>
 </tr>
 </tbody>
@@ -1765,10 +1765,10 @@ They are automatically generated from the source code with the <a href="https://
 </blockquote>
 </div>
 <div class="paragraph">
-<p><strong>Span name</strong> <code>rabbitmq.amqp.process</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultProcessObservationConvention</code>).</p>
+<p><strong>Span name</strong> <code>rabbitmq.amqp.process</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultProcessObservationConvention</code>).</p>
 </div>
 <div class="paragraph">
-<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp1.observation.micrometer.AmqpObservationDocumentation</code>.</p>
+<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp.client.observation.micrometer.AmqpObservationDocumentation</code>.</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 2. Tag Keys</caption>
@@ -1810,10 +1810,10 @@ They are automatically generated from the source code with the <a href="https://
 </blockquote>
 </div>
 <div class="paragraph">
-<p><strong>Span name</strong> <code>rabbitmq.amqp.publish</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultPublishObservationConvention</code>).</p>
+<p><strong>Span name</strong> <code>rabbitmq.amqp.publish</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultPublishObservationConvention</code>).</p>
 </div>
 <div class="paragraph">
-<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp1.observation.micrometer.AmqpObservationDocumentation</code>.</p>
+<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp.client.observation.micrometer.AmqpObservationDocumentation</code>.</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 3. Tag Keys</caption>
@@ -1861,10 +1861,10 @@ They are automatically generated from the source code with the <a href="https://
 </blockquote>
 </div>
 <div class="paragraph">
-<p><strong>Metric name</strong> <code>rabbitmq.amqp.process</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultProcessObservationConvention</code>). <strong>Type</strong> <code>timer</code>.</p>
+<p><strong>Metric name</strong> <code>rabbitmq.amqp.process</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultProcessObservationConvention</code>). <strong>Type</strong> <code>timer</code>.</p>
 </div>
 <div class="paragraph">
-<p><strong>Metric name</strong> <code>rabbitmq.amqp.process.active</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultProcessObservationConvention</code>). <strong>Type</strong> <code>long task timer</code>.</p>
+<p><strong>Metric name</strong> <code>rabbitmq.amqp.process.active</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultProcessObservationConvention</code>). <strong>Type</strong> <code>long task timer</code>.</p>
 </div>
 <div class="admonitionblock important">
 <table>
@@ -1891,7 +1891,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 </table>
 </div>
 <div class="paragraph">
-<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp1.observation.micrometer.AmqpObservationDocumentation</code>.</p>
+<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp.client.observation.micrometer.AmqpObservationDocumentation</code>.</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 4. Low cardinality Keys</caption>
@@ -1953,10 +1953,10 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 </blockquote>
 </div>
 <div class="paragraph">
-<p><strong>Metric name</strong> <code>rabbitmq.amqp.publish</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultPublishObservationConvention</code>). <strong>Type</strong> <code>timer</code>.</p>
+<p><strong>Metric name</strong> <code>rabbitmq.amqp.publish</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultPublishObservationConvention</code>). <strong>Type</strong> <code>timer</code>.</p>
 </div>
 <div class="paragraph">
-<p><strong>Metric name</strong> <code>rabbitmq.amqp.publish.active</code> (defined by convention class <code>com.rabbitmq.amqp1.observation.micrometer.DefaultPublishObservationConvention</code>). <strong>Type</strong> <code>long task timer</code>.</p>
+<p><strong>Metric name</strong> <code>rabbitmq.amqp.publish.active</code> (defined by convention class <code>com.rabbitmq.amqp.client.observation.micrometer.DefaultPublishObservationConvention</code>). <strong>Type</strong> <code>long task timer</code>.</p>
 </div>
 <div class="admonitionblock important">
 <table>
@@ -1983,7 +1983,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 </table>
 </div>
 <div class="paragraph">
-<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp1.observation.micrometer.AmqpObservationDocumentation</code>.</p>
+<p>Fully qualified name of the enclosing class <code>com.rabbitmq.amqp.client.observation.micrometer.AmqpObservationDocumentation</code>.</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 5. Low cardinality Keys</caption>
@@ -2042,7 +2042,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 1.0-SNAPSHOT<br>
-Last updated 2024-06-04 08:42:36 UTC
+Last updated 2024-06-04 09:56:22 UTC
 </div>
 </div>
 </body>
