@@ -1,1 +1,1 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"com.rabbitmq.amqp.client"},{"l":"com.rabbitmq.amqp.client.impl"},{"l":"com.rabbitmq.amqp.client.metrics"},{"l":"com.rabbitmq.amqp.client.observation.micrometer"}];updateSearchResults();
+packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"com.rabbitmq.client.amqp"},{"l":"com.rabbitmq.client.amqp.impl"},{"l":"com.rabbitmq.client.amqp.metrics"},{"l":"com.rabbitmq.client.amqp.observation.micrometer"}];updateSearchResults();
