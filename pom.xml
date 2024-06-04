@@ -417,7 +417,7 @@
                         <idprefix />
                         <idseparator>-</idseparator>
                         <source-highlighter>rouge</source-highlighter>
-                        <test-examples>../../test/java/com/rabbitmq/model/docs</test-examples>
+                        <test-examples>../../test/java/com/rabbitmq/amqp1/docs</test-examples>
                         <build-directory>${project.build.directory}</build-directory>
                     </attributes>
 
@@ -450,7 +450,7 @@
                 <configuration>
                     <java>
                         <excludes>
-                            <exclude>src/test/java/com/rabbitmq/model/docs/*.java</exclude>
+                            <exclude>src/test/java/com/rabbitmq/amqp1/docs/*.java</exclude>
                         </excludes>
                         <googleJavaFormat>
                             <version>${google-java-format.version}</version>
@@ -488,7 +488,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Automatic-Module-Name>com.rabbitmq.model</Automatic-Module-Name>
+                            <Automatic-Module-Name>com.rabbitmq.amqp1</Automatic-Module-Name>
                             <Implementation-Version>${project.version}</Implementation-Version>
                         </manifestEntries>
                     </archive>

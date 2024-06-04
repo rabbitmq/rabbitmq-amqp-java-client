@@ -3,7 +3,7 @@
 == Documentation
 
 * https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference]
-* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/model/package-summary.html[API]
+* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/amqp1/package-summary.html[API]
 
 == License
 
