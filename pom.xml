@@ -349,8 +349,11 @@
                 <version>${maven-javadoc-plugin.version}</version>
                 <configuration>
                     <quiet>true</quiet>
-                    <source>8</source>
+                    <source>11</source>
                     <additionalOptions>-Xdoclint:none</additionalOptions>
+                    <sourceFileIncludes>
+                        <sourceFileInclude>com\/rabbitmq\/**\/\*.java</sourceFileInclude>
+                    </sourceFileIncludes>
                 </configuration>
                 <executions>
                     <execution>
