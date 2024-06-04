@@ -5,9 +5,9 @@
         </encoder>
     </appender>
 
-    <logger name="com.rabbitmq.amqp1" level="warn" />
-    <logger name="com.rabbitmq.amqp1.impl.EntityRecovery" level="warn" />
-    <logger name="com.rabbitmq.amqp1.impl.AmqpConnection" level="warn" />
+    <logger name="com.rabbitmq.amqp.client" level="warn" />
+    <logger name="com.rabbitmq.amqp.client.EntityRecovery" level="warn" />
+    <logger name="com.rabbitmq.amqp.client.AmqpConnection" level="warn" />
     <logger name="org.apache.qpid" level="warn" />
 
     <root level="warn">
