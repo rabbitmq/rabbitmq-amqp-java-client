@@ -1,7 +1,7 @@
-com.rabbitmq.model
-com.rabbitmq.model.observation.micrometer
-com.rabbitmq.model.amqp
-com.rabbitmq.model.metrics
+com.rabbitmq.amqp1
+com.rabbitmq.amqp1.impl
+com.rabbitmq.amqp1.observation.micrometer
+com.rabbitmq.amqp1.metrics
 org.apache.qpid.protonj2.types.transport
 org.apache.qpid.protonj2.types
 org.apache.qpid.protonj2.types.messaging
