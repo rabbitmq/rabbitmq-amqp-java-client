@@ -1,5 +1,5 @@
 ifndef::build-directory[:build-directory: ../../../target]
-:test-examples: ../../test/java/com/rabbitmq/amqp/client/docs
+:test-examples: ../../test/java/com/rabbitmq/client/amqp/docs
 
 [appendix]
 == Micrometer Observation

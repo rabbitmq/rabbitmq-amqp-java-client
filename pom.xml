@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.rabbitmq.amqp</groupId>
+    <groupId>com.rabbitmq.client</groupId>
     <artifactId>amqp-client</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>RabbitMQ AMQP 1.0 Java client</name>
@@ -421,7 +421,7 @@
                         <idprefix />
                         <idseparator>-</idseparator>
                         <source-highlighter>rouge</source-highlighter>
-                        <test-examples>../../test/java/com/rabbitmq/amqp/client/docs</test-examples>
+                        <test-examples>../../test/java/com/rabbitmq/client/amqp/docs</test-examples>
                         <build-directory>${project.build.directory}</build-directory>
                     </attributes>
 
@@ -454,7 +454,7 @@
                 <configuration>
                     <java>
                         <excludes>
-                            <exclude>src/test/java/com/rabbitmq/amqp/client/docs/*.java</exclude>
+                            <exclude>src/test/java/com/rabbitmq/client/amqp/docs/*.java</exclude>
                         </excludes>
                         <googleJavaFormat>
                             <version>${google-java-format.version}</version>
@@ -492,7 +492,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Automatic-Module-Name>com.rabbitmq.amqp.client</Automatic-Module-Name>
+                            <Automatic-Module-Name>com.rabbitmq.client.amqp</Automatic-Module-Name>
                             <Implementation-Version>${project.version}</Implementation-Version>
                         </manifestEntries>
                     </archive>
@@ -512,7 +512,7 @@
                         <configuration>
                             <artifactSet>
                                 <includes>
-                                    <include>com.rabbitmq.amqp:amqp-client</include>
+                                    <include>com.rabbitmq.client:amqp-client</include>
                                 </includes>
                             </artifactSet>
                             <relocations>

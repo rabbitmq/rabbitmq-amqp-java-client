@@ -5,7 +5,7 @@
 ./mvnw clean test-compile exec:java \
   -Dexec.mainClass=io.micrometer.docs.DocsGeneratorCommand \
   -Dexec.classpathScope="test" \
-  -Dexec.args='src/main/java/com/rabbitmq/amqp/client/observation/micrometer .* target/micrometer-observation-docs'
+  -Dexec.args='src/main/java/com/rabbitmq/client/amqp/observation/micrometer .* target/micrometer-observation-docs'
 
 MESSAGE=$(git log -1 --pretty=%B)
 ./mvnw buildnumber:create pre-site --no-transfer-progress

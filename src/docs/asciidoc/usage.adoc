@@ -1,4 +1,4 @@
-:test-examples: ../../test/java/com/rabbitmq/amqp/client/docs
+:test-examples: ../../test/java/com/rabbitmq/client/amqp/docs
 
 [[api-overview]]
 == API Overview
@@ -218,11 +218,11 @@ include::{test-examples}/Api.java[tag=listener-consumer]
 <1> Setting a listener
 
 The listener API is the same for connection, publishers, and consumers.
-They all implement the {javadoc-url}/com/rabbitmq/amqp/client/Resource.html[`Resource`] marker interface.
-The {javadoc-url}/com/rabbitmq/amqp/client/Resource.StateListener.html[`StateListener`] interface has only one method that takes a {javadoc-url}/com/rabbitmq/amqp/client/Resource.Context.html[`Context`] argument.
+They all implement the {javadoc-url}/com/rabbitmq/client/amqp/Resource.html[`Resource`] marker interface.
+The {javadoc-url}/com/rabbitmq/client/amqp/Resource.StateListener.html[`StateListener`] interface has only one method that takes a {javadoc-url}/com/rabbitmq/client/amqp/Resource.Context.html[`Context`] argument.
 See the snippet above for the information available in the `Context`.
 
-A resource {javadoc-url}/com/rabbitmq/amqp/client/Resource.State.html[`State`] can have the following values: `OPENING`, `OPEN`, `RECOVERING`, `CLOSING`, `CLOSED`.
+A resource {javadoc-url}/com/rabbitmq/client/amqp/Resource.State.html[`State`] can have the following values: `OPENING`, `OPEN`, `RECOVERING`, `CLOSING`, `CLOSED`.
 
 === Recovery
 
@@ -231,7 +231,7 @@ Automatic topology recovery is also activated as soon as connection recovery is:
 Developers have less to worry about network stability and node restart, as the client will take care of it.
 
 The client tries to reconnect every 5 seconds until it succeeds.
-It is possible to change this behavior by providing a custom {javadoc-url}/com/rabbitmq/amqp1/BackOffDelayPolicy.html[`BackOffDelayPolicy`]:
+It is possible to change this behavior by providing a custom {javadoc-url}/com/rabbitmq/client/amqp/BackOffDelayPolicy.html[`BackOffDelayPolicy`]:
 
 .Setting a back-off policy for connection recovery
 [source,java,indent=0]
@@ -263,7 +263,7 @@ include::{test-examples}/Api.java[tag=connection-recovery-deactivate]
 
 === Metrics Collection
 
-The library provides the {javadoc-url}/com/rabbitmq/amqp1/metrics/MetricsCollector.html[`MetricsCollector`] abstraction to collect metrics.
+The library provides the {javadoc-url}/com/rabbitmq/client/amqp/metrics/MetricsCollector.html[`MetricsCollector`] abstraction to collect metrics.
 A `MetricsCollector` instance is set at the environment level and is called in several places by the library.
 The underlying implementation can then collect, compute and expose metrics.
 
@@ -458,7 +458,7 @@ Snapshots require to declare the <<snapshots,appropriate repository>>.
 [source,groovy,subs="attributes,specialcharacters"]
 ----
 dependencies {
-  compile "com.rabbitmq.amqp:{project-artifact-id}:{project-version}"
+  compile "{project-group-id}:{project-artifact-id}:{project-version}"
 }
 ----
 
