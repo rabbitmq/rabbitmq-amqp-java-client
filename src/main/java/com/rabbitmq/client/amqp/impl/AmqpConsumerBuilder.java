@@ -28,7 +28,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private final AmqpConnection connection;
   private String queue;
   private Consumer.MessageHandler messageHandler;
-  private int initialCredits = 10;
+  private int initialCredits = 100;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
 
   AmqpConsumerBuilder(AmqpConnection connection) {
