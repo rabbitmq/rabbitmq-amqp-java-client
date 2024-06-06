@@ -19,8 +19,6 @@ package com.rabbitmq.client.amqp.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.metrics.MetricsCollector;
-import com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;

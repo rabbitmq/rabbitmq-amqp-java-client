@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ModelException;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Date;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -46,24 +47,7 @@ class AmqpMessage implements Message {
     this.delegate = delegate;
   }
 
-  @Override
-  public Message body(byte[] body) {
-    try {
-      this.delegate.body(body);
-    } catch (ClientException e) {
-      throw convert(e);
-    }
-    return this;
-  }
-
-  @Override
-  public byte[] body() {
-    try {
-      return this.delegate.body();
-    } catch (ClientException e) {
-      throw convert(e);
-    }
-  }
+  // properties
 
   @Override
   public Object messageId() {
@@ -220,6 +204,85 @@ class AmqpMessage implements Message {
   }
 
   @Override
+  public Message contentType(String contentType) {
+    callOnDelegate(m -> m.contentType(contentType));
+    return this;
+  }
+
+  @Override
+  public Message contentEncoding(String contentEncoding) {
+    callOnDelegate(m -> m.contentEncoding(contentEncoding));
+    return this;
+  }
+
+  @Override
+  public Message absoluteExpiryTime(long absoluteExpiryTime) {
+    callOnDelegate(m -> m.absoluteExpiryTime(absoluteExpiryTime));
+    return this;
+  }
+
+  @Override
+  public Message creationTime(long creationTime) {
+    callOnDelegate(m -> m.creationTime(creationTime));
+    return this;
+  }
+
+  @Override
+  public Message groupId(String groupID) {
+    callOnDelegate(m -> m.groupId(groupID));
+    return this;
+  }
+
+  @Override
+  public Message groupSequence(int groupSequence) {
+    callOnDelegate(m -> m.groupSequence(groupSequence));
+    return this;
+  }
+
+  @Override
+  public Message replyToGroupId(String groupId) {
+    callOnDelegate(m -> replyToGroupId(groupId));
+    return this;
+  }
+
+  @Override
+  public String contentType() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::contentType);
+  }
+
+  @Override
+  public String contentEncoding() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::contentEncoding);
+  }
+
+  @Override
+  public long absoluteExpiryTime() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::absoluteExpiryTime);
+  }
+
+  @Override
+  public long creationTime() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::creationTime);
+  }
+
+  @Override
+  public String groupId() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::groupId);
+  }
+
+  @Override
+  public int groupSequence() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::groupSequence);
+  }
+
+  @Override
+  public String replyToGroupId() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::replyToGroupId);
+  }
+
+  // application properties
+
+  @Override
   public Object property(String key) {
     return returnFromDelegate(m -> m.property(key));
   }
@@ -355,25 +418,105 @@ class AmqpMessage implements Message {
   }
 
   @Override
+  public Object removeProperty(String key) {
+    return returnFromDelegate(m -> m.removeProperty(key));
+  }
+
+  @Override
+  public Message forEachProperty(BiConsumer<String, Object> action) {
+    callOnDelegate(m -> m.forEachProperty(action));
+    return this;
+  }
+
+  // application data
+
+  @Override
+  public Message body(byte[] body) {
+    try {
+      this.delegate.body(body);
+    } catch (ClientException e) {
+      throw convert(e);
+    }
+    return this;
+  }
+
+  @Override
+  public byte[] body() {
+    try {
+      return this.delegate.body();
+    } catch (ClientException e) {
+      throw convert(e);
+    }
+  }
+
+  // header section
+  @Override
+  public boolean durable() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::durable);
+  }
+
+  @Override
+  public Message priority(byte priority) {
+    callOnDelegate(m -> m.priority(priority));
+    return this;
+  }
+
+  @Override
+  public byte priority() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::priority);
+  }
+
+  @Override
+  public Message ttl(Duration ttl) {
+    if (ttl == null) {
+      throw new IllegalArgumentException("TTL cannot be null");
+    }
+    callOnDelegate(m -> m.timeToLive(ttl.toMillis()));
+    return this;
+  }
+
+  @Override
+  public Duration ttl() {
+    return returnFromDelegate(m -> Duration.ofMillis(m.timeToLive()));
+  }
+
+  @Override
+  public boolean firstAcquirer() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::firstAcquirer);
+  }
+
+  // message annotations
+
+  @Override
   public Object annotation(String key) {
     return returnFromDelegate(m -> m.annotation(key));
   }
 
   @Override
-  public Message annotation(String key, String value) {
+  public Message annotation(String key, Object value) {
     callOnDelegate(m -> m.annotation(key, value));
     return this;
+  }
+
+  @Override
+  public boolean hasAnnotation(String key) {
+    return returnFromDelegate(m -> m.hasAnnotation(key));
+  }
+
+  @Override
+  public boolean hasAnnotations() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasAnnotations);
+  }
+
+  @Override
+  public Object removeAnnotation(String key) {
+    return returnFromDelegate(m -> m.removeAnnotation(key));
   }
 
   @Override
   public Message forEachAnnotation(BiConsumer<String, Object> action) {
     callOnDelegate(m -> m.forEachAnnotation(action));
     return this;
-  }
-
-  @Override
-  public Object removeProperty(String key) {
-    return returnFromDelegate(m -> m.removeProperty(key));
   }
 
   @Override

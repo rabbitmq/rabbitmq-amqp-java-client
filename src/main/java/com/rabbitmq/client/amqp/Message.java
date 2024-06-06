@@ -18,14 +18,11 @@
 package com.rabbitmq.client.amqp;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 
 public interface Message {
-
-  Message body(byte[] body);
-
-  byte[] body();
 
   // properties
   Object messageId();
@@ -84,8 +81,35 @@ public interface Message {
 
   Message replyTo(String replyTo);
 
-  // TODO handle remaining properties
+  Message contentType(String contentType);
 
+  Message contentEncoding(String contentEncoding);
+
+  Message absoluteExpiryTime(long absoluteExpiryTime);
+
+  Message creationTime(long creationTime);
+
+  Message groupId(String groupID);
+
+  Message groupSequence(int groupSequence);
+
+  Message replyToGroupId(String groupId);
+
+  String contentType();
+
+  String contentEncoding();
+
+  long absoluteExpiryTime();
+
+  long creationTime();
+
+  String groupId();
+
+  int groupSequence();
+
+  String replyToGroupId();
+
+  // application properties
   Object property(String key);
 
   Message property(String key, boolean value);
@@ -134,16 +158,38 @@ public interface Message {
 
   Object removeProperty(String key);
 
-  // TODO support iteration over message application properties
+  Message forEachProperty(BiConsumer<String, Object> action);
 
-  // TODO support message annotations
+  // application data
+  Message body(byte[] body);
+
+  byte[] body();
+
+  // header section
+  boolean durable();
+
+  Message priority(byte priority);
+
+  byte priority();
+
+  Message ttl(Duration ttl);
+
+  Duration ttl();
+
+  boolean firstAcquirer();
+
+  // message annotations
   Object annotation(String key);
 
-  Message annotation(String key, String value);
+  Message annotation(String key, Object value);
+
+  boolean hasAnnotation(String key);
+
+  boolean hasAnnotations();
+
+  Object removeAnnotation(String key);
 
   Message forEachAnnotation(BiConsumer<String, Object> action);
-
-  // TODO support message headers
 
   MessageAddressBuilder toAddress();
 

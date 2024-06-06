@@ -29,9 +29,9 @@ import static java.util.Arrays.stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
-import com.rabbitmq.client.amqp.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;

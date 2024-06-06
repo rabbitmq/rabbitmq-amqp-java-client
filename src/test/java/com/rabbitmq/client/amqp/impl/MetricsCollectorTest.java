@@ -23,8 +23,8 @@ import static java.lang.String.format;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
