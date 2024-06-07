@@ -582,5 +582,9 @@ public abstract class TestUtils {
     void reset(int count) {
       this.latch.set(new CountDownLatch(count));
     }
+
+    void reset() {
+      this.reset(1);
+    }
   }
 }

@@ -22,10 +22,7 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.Management;
-import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.*;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.*;
 
@@ -211,6 +208,51 @@ public class AddressFormatTest {
     } finally {
       management.queueDeletion().delete(q);
       management.exchangeDeletion().delete(e);
+    }
+  }
+
+  @Test
+  void noToFieldDoesNotCloseAllConnectionPublishers() throws InterruptedException {
+    Management management = connection.management();
+    String q = management.queue().exclusive(true).declare().name();
+    TestUtils.Sync sync = TestUtils.sync();
+    Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(q)
+            .messageHandler(
+                (ctx, msg) -> {
+                  ctx.accept();
+                  sync.down();
+                })
+            .build();
+    try {
+      TestUtils.Sync pubClosed = TestUtils.sync(1);
+      Publisher p1 =
+          connection
+              .publisherBuilder()
+              .listeners(
+                  ctx -> {
+                    if (ctx.currentState() == Resource.State.CLOSED) {
+                      pubClosed.down();
+                    }
+                  })
+              .build();
+      p1.publish(p1.message().toAddress().queue(q).message(), ctx -> {});
+      assertThat(sync).completes();
+
+      sync.reset();
+      Publisher p2 = connection.publisherBuilder().queue(q).build();
+      p2.publish(p2.message(), ctx -> {});
+      assertThat(sync).completes();
+
+      p1.publish(p1.message(), ctx -> {});
+
+      sync.reset();
+      p2.publish(p2.message(), ctx -> {});
+      assertThat(sync).completes();
+    } finally {
+      consumer.close();
     }
   }
 }
