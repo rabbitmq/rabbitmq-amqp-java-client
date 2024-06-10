@@ -20,36 +20,16 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 
 import com.rabbitmq.client.amqp.*;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class AddressFormatTest {
 
-  static Environment environment;
   Connection connection;
-
-  @BeforeAll
-  static void initAll() {
-    environment = environmentBuilder().build();
-  }
-
-  @BeforeEach
-  void init() {
-    this.connection = environment.connectionBuilder().build();
-  }
-
-  @AfterEach
-  void tearDown() {
-    this.connection.close();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
-  }
 
   @Test
   void exchangeKeyInAddress(TestInfo info) {

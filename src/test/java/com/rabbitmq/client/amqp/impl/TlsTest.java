@@ -31,21 +31,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 import javax.net.ssl.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 @DisabledIfTlsNotEnabled
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class TlsTest {
 
   static Environment environment;
-
-  @BeforeAll
-  static void initAll() {
-    environment = environmentBuilder().build();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
-  }
 
   @Test
   void publishWithVerifiedConnectionConsumeWithUnverifiedConnection(TestInfo info)
@@ -82,7 +74,7 @@ public class TlsTest {
       TestUtils.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
-      publishingConnection
+      consumingConnection
           .consumerBuilder()
           .queue(q)
           .messageHandler(

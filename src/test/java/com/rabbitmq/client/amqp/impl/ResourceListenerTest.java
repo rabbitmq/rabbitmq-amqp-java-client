@@ -30,33 +30,14 @@ import java.util.function.Consumer;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class ResourceListenerTest {
 
-  static Environment environment;
   Connection connection;
-
-  @BeforeAll
-  static void initAll() {
-    environment = TestUtils.environmentBuilder().build();
-  }
-
-  @BeforeEach
-  void init() {
-    this.connection = environment.connectionBuilder().build();
-  }
-
-  @AfterEach
-  void tearDown() {
-    this.connection.close();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
-  }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})

@@ -34,8 +34,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class TopologyRecoveryTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
@@ -45,22 +47,12 @@ public class TopologyRecoveryTest {
   AtomicReference<CountDownLatch> recoveredLatch;
   AtomicInteger connectionAttemptCount;
 
-  @BeforeAll
-  static void initAll() {
-    environment = TestUtils.environmentBuilder().build();
-  }
-
   @BeforeEach
   void init(TestInfo info) {
     this.testInfo = info;
     this.recoveredLatch = new AtomicReference<>(new CountDownLatch(1));
     this.connectionName = connectionName();
     this.connectionAttemptCount = new AtomicInteger();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
   }
 
   @Test

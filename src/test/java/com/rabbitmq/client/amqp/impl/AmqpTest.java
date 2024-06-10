@@ -22,7 +22,6 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
@@ -31,7 +30,6 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
 import java.util.ArrayList;
@@ -44,33 +42,14 @@ import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class AmqpTest {
 
-  static Environment environment;
   Connection connection;
-
-  @BeforeAll
-  static void initAll() {
-    environment = environmentBuilder().build();
-  }
-
-  @BeforeEach
-  void init() {
-    this.connection = environment.connectionBuilder().build();
-  }
-
-  @AfterEach
-  void tearDown() {
-    this.connection.close();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
-  }
 
   @Test
   void queueInfoTest(TestInfo info) {

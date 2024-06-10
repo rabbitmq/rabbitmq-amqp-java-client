@@ -17,42 +17,25 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class ManagementTest {
 
-  static Environment environment;
   AmqpConnection connection;
   AmqpManagement management;
-
-  @BeforeAll
-  static void initAll() {
-    environment = environmentBuilder().build();
-  }
-
-  @BeforeEach
-  void init() {
-    this.connection = (AmqpConnection) environment.connectionBuilder().build();
-  }
 
   @AfterEach
   void tearDown() {
     if (this.management != null) {
       this.management.close();
     }
-    this.connection.close();
-  }
-
-  @AfterAll
-  static void tearDownAll() {
-    environment.close();
   }
 
   @Test

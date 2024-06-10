@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
@@ -33,7 +32,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(AmqpTestInfrastructureExtension.class)
 public class RpcTest {
 
   private static final RpcServer.Handler HANDLER =
@@ -44,28 +45,15 @@ public class RpcTest {
 
   static Environment environment;
   static ExecutorService executorService;
-  Connection connection;
 
   @BeforeAll
   static void initAll() {
-    environment = environmentBuilder().build();
     executorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
   }
 
   @AfterAll
   static void tearDownAll() {
     executorService.shutdownNow();
-    environment.close();
-  }
-
-  @BeforeEach
-  void init() {
-    this.connection = environment.connectionBuilder().build();
-  }
-
-  @AfterEach
-  void tearDown() {
-    this.connection.close();
   }
 
   @Test
