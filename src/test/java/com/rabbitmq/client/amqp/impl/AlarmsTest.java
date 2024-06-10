@@ -20,10 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.util.stream.IntStream.range;
 
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.ModelException;
-import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.*;
 import java.time.Duration;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
 import org.junit.jupiter.api.*;
@@ -69,16 +66,14 @@ public class AlarmsTest {
     Sync consumeSync = sync(messageCount);
     try (AutoCloseable ignored = alarm(alarmType)) {
       Sync publishTimeoutSync = sync();
-      new Thread(
-              () -> {
-                try {
-                  publisher.publish(publisher.message(), ctx -> {});
-                } catch (ModelException e) {
-                  if (e.getCause() instanceof ClientSendTimedOutException)
-                    publishTimeoutSync.down();
-                }
-              })
-          .start();
+      TestUtils.submitTask(
+          () -> {
+            try {
+              publisher.publish(publisher.message(), ctx -> {});
+            } catch (ModelException e) {
+              if (e.getCause() instanceof ClientSendTimedOutException) publishTimeoutSync.down();
+            }
+          });
       assertThat(publishTimeoutSync).completes();
       connection
           .consumerBuilder()
@@ -92,6 +87,12 @@ public class AlarmsTest {
       assertThat(consumeSync).completes();
       publishSync.reset(messageCount);
       consumeSync.reset(messageCount);
+
+      // still possible to create publishers and consumers
+      connection.publisherBuilder().queue(q).build();
+      Consumer dummyConsumer =
+          connection.consumerBuilder().queue(q).messageHandler((ctx, msg) -> {}).build();
+      dummyConsumer.close();
     }
 
     range(0, messageCount)

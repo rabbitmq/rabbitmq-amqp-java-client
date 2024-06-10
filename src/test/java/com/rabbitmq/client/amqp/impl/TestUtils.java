@@ -56,6 +56,10 @@ public abstract class TestUtils {
 
   private TestUtils() {}
 
+  static void submitTask(Runnable task) {
+    Utils.defaultThreadFactory().newThread(task).start();
+  }
+
   @FunctionalInterface
   public interface CallableBooleanSupplier {
     boolean getAsBoolean() throws Exception;
