@@ -66,7 +66,7 @@ public class AlarmsTest {
     Sync consumeSync = sync(messageCount);
     try (AutoCloseable ignored = alarm(alarmType)) {
       Sync publishTimeoutSync = sync();
-      TestUtils.submitTask(
+      submitTask(
           () -> {
             try {
               publisher.publish(publisher.message(), ctx -> {});

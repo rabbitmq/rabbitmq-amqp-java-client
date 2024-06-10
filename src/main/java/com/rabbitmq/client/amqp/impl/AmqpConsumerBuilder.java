@@ -88,6 +88,9 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     if (this.queue == null || this.queue.isBlank()) {
       throw new IllegalArgumentException("A queue must be specified");
     }
+    if (this.messageHandler == null) {
+      throw new IllegalArgumentException("Message handler cannot be null");
+    }
     return this.connection.createConsumer(this);
   }
 }
