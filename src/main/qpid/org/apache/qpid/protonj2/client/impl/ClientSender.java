@@ -100,9 +100,7 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
         if (!blocked.isEmpty()) {
             while (sender.isSendable() && !blocked.isEmpty()) {
                 ClientOutgoingEnvelope held = blocked.peek();
-                if (held.request.isDone()) {
-                    blocked.poll();
-                } else if (held.delivery() == protonSender.current()) {
+                if (held.delivery() == protonSender.current()) {
                     LOG.trace("Dispatching previously held send");
                     try {
                         // We don't currently allow a sender to define any outcome so we pass null for
@@ -133,23 +131,23 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
     }
 
     private void addToTailOfBlockedQueue(ClientOutgoingEnvelope send) {
+        blocked.addLast(send);
         if (options.sendTimeout() > 0 && send.sendTimeout() == null) {
             send.sendTimeout(executor.schedule(() -> {
+                blocked.remove(send);
                 send.failed(send.createSendTimedOutException());
             }, options.sendTimeout(), TimeUnit.MILLISECONDS));
         }
-
-        blocked.addLast(send);
     }
 
     private void addToHeadOfBlockedQueue(ClientOutgoingEnvelope send) {
+        blocked.addFirst(send);
         if (options.sendTimeout() > 0 && send.sendTimeout() == null) {
             send.sendTimeout(executor.schedule(() -> {
+                blocked.remove(send);
                 send.failed(send.createSendTimedOutException());
             }, options.sendTimeout(), TimeUnit.MILLISECONDS));
         }
-
-        blocked.addFirst(send);
     }
 
     private Tracker sendMessage(AdvancedMessage<?> message, Map<String, Object> deliveryAnnotations, boolean waitForCredit) throws ClientException {
@@ -311,6 +309,14 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
         public ClientOutgoingEnvelope failed(ClientException exception) {
             if (sendTimeout != null) {
                 sendTimeout.cancel(true);
+            }
+
+            if (delivery != null) {
+                try {
+                    delivery.abort();
+                } catch (Exception ex) {
+                    // Attempted abort could fail if offline so we ignore it.
+                }
             }
 
             payload.close();
