@@ -66,11 +66,14 @@
         <spotbugs-maven-plugin.version>4.8.5.0</spotbugs-maven-plugin.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <buildnumber.plugin.version>3.2.0</buildnumber.plugin.version>
+        <maven.gpg.plugin.version>3.2.4</maven.gpg.plugin.version>
         <asciidoctor.maven.plugin.version>3.0.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>2.5.13</asciidoctorj.version>
         <asciidoctorj.diagram.version>2.3.0</asciidoctorj.diagram.version>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <gpg.skip>true</gpg.skip>
+        <gpg.keyname>6026DFCA</gpg.keyname>
+        <spotbugs.skip>false</spotbugs.skip>
     </properties>
 
     <dependencies>
@@ -302,6 +305,26 @@
         <plugins>
 
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/qpid/</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven.compiler.plugin.version}</version>
                 <configuration>
@@ -354,6 +377,8 @@
                     <sourceFileIncludes>
                         <sourceFileInclude>com\/rabbitmq\/**\/\*.java</sourceFileInclude>
                     </sourceFileIncludes>
+                    <!-- required for javadoc:jar -->
+                    <sourcepath>src/main/java:src/main/qpid</sourcepath>
                 </configuration>
                 <executions>
                     <execution>
@@ -368,6 +393,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>${maven-source-plugin.version}</version>
+                <configuration>
+                    <includes>
+                        <include>com/rabbitmq/**/*.java</include>
+                    </includes>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -542,6 +572,7 @@
                 </dependencies>
                 <configuration>
                     <onlyAnalyze>com.rabbitmq.-</onlyAnalyze>
+                    <skip>${spotbugs.skip}</skip>
                 </configuration>
                 <executions>
                     <execution>
@@ -552,26 +583,24 @@
                 </executions>
             </plugin>
 
+            <!-- must stay at the end to execute last -->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.6.0</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>${maven.gpg.plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>add-source</id>
-                        <phase>generate-sources</phase>
+                        <id>sign-artifacts</id>
+                        <phase>package</phase>
                         <goals>
-                            <goal>add-source</goal>
+                            <goal>sign</goal>
                         </goals>
                         <configuration>
-                            <sources>
-                                <source>src/main/qpid/</source>
-                            </sources>
+                            <keyname>${gpg.keyname}</keyname>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-
 
         </plugins>
 
@@ -599,19 +628,21 @@
             </properties>
         </profile>
 
+        <profile>
+            <id>snapshots</id>
+            <properties>
+                <maven.javadoc.skip>false</maven.javadoc.skip>
+                <gpg.skip>false</gpg.skip>
+                <spotbugs.skip>true</spotbugs.skip>
+            </properties>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>ossrh</id>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
 
     </profiles>
-
-    <repositories>
-
-       <repository>
-           <id>apache-snapshots</id>
-           <url>https://repository.apache.org/snapshots/</url>
-           <snapshots><enabled>true</enabled></snapshots>
-           <releases><enabled>false</enabled></releases>
-       </repository>
-
-    </repositories>
-
 
 </project>
