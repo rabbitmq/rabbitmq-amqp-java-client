@@ -4,12 +4,12 @@
 ifndef::imagesdir[:imagesdir: images]
 ifndef::sourcedir[:sourcedir: ../../main/java]
 :source-highlighter: prettify
-:javadoc-url: https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api
+:javadoc-url: https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api
 
 [[license]]
 == License
 
-The library is open source, developed https://github.com/rabbitmq-pro/rabbitmq-java-model/[on GitHub], and is licensed under the https://www.apache.org/licenses/LICENSE-2.0.html[Apache Public License 2.0]
+The library is open source, developed https://github.com/rabbitmq/rabbitmq-amqp-java-client/[on GitHub], and is licensed under the https://www.apache.org/licenses/LICENSE-2.0.html[Apache Public License 2.0]
 
 include::usage.adoc[]
 

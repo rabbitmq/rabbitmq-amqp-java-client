@@ -5,8 +5,8 @@ It is meant to be used with RabbitMQ 4.0.
 
 == Documentation
 
-* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference]
-* https://rabbitmq-pro.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/package-summary.html[API]
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference]
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/package-summary.html[API]
 
 == License
 
