@@ -23,7 +23,6 @@ import static java.util.stream.IntStream.range;
 import com.rabbitmq.client.amqp.*;
 import java.time.Duration;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
-import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -52,7 +51,7 @@ public class AlarmsTest {
           () -> {
             try {
               publisher.publish(publisher.message(), ctx -> {});
-            } catch (ModelException e) {
+            } catch (AmqpException e) {
               if (e.getCause() instanceof ClientSendTimedOutException) publishTimeoutSync.down();
             }
           });

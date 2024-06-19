@@ -247,7 +247,7 @@ public class RpcTest {
       try {
         rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
         fail("Client connection is recovering, the call should have failed");
-      } catch (ModelException e) {
+      } catch (AmqpException e) {
         // OK
       }
       TestUtils.assertThat(clientConnectionLatch).completes();

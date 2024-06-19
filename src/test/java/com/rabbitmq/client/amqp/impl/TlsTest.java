@@ -112,7 +112,7 @@ public class TlsTest {
                               TlsTestUtils.trustManagerFactory(TlsTestUtils.clientCertificate())))
                       .connection()
                       .build())
-          .isInstanceOf(ModelException.class)
+          .isInstanceOf(AmqpException.class)
           .hasCauseInstanceOf(SSLHandshakeException.class);
     }
   }
@@ -148,7 +148,7 @@ public class TlsTest {
         TlsTestUtils.sslContext(TlsTestUtils.trustManagerFactory(TlsTestUtils.clientCertificate()));
     assertThatThrownBy(
             () -> environment.connectionBuilder().tls().sslContext(sslContext).connection().build())
-        .isInstanceOf(ModelException.class)
+        .isInstanceOf(AmqpException.class)
         .hasCauseInstanceOf(SSLHandshakeException.class);
   }
 

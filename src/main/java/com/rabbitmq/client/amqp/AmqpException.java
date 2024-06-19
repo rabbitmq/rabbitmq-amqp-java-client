@@ -17,17 +17,24 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
-public class ModelException extends RuntimeException {
+public class AmqpException extends RuntimeException {
 
-  public ModelException(Throwable cause) {
+  public AmqpException(Throwable cause) {
     super(cause);
   }
 
-  public ModelException(String format, Object... args) {
+  public AmqpException(String format, Object... args) {
     super(String.format(format, args));
   }
 
-  public ModelException(String message, Throwable cause) {
+  public AmqpException(String message, Throwable cause) {
     super(message, cause);
+  }
+
+  public static class AmqpSecurityException extends AmqpException {
+
+    public AmqpSecurityException(Throwable cause) {
+      super(cause);
+    }
   }
 }

@@ -17,6 +17,9 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static java.lang.String.format;
+import static java.util.Arrays.asList;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -127,6 +130,37 @@ abstract class Cli {
 
   public static void stopBroker() {
     rabbitmqctl("stop_app");
+  }
+
+  public static void addVhost(String vhost) {
+    rabbitmqctl("add_vhost " + vhost);
+  }
+
+  public static void addUser(String username, String password) throws IOException {
+    rabbitmqctl(format("add_user %s %s", username, password));
+  }
+
+  public static void setPermissions(String username, String vhost, String permission)
+      throws IOException {
+    setPermissions(username, vhost, asList(permission, permission, permission));
+  }
+
+  public static void setPermissions(String username, String vhost, List<String> permissions) {
+    if (permissions.size() != 3) {
+      throw new IllegalArgumentException();
+    }
+    rabbitmqctl(
+        format(
+            "set_permissions --vhost %s %s '%s' '%s' '%s'",
+            vhost, username, permissions.get(0), permissions.get(1), permissions.get(2)));
+  }
+
+  public static void deleteUser(String username) {
+    rabbitmqctl(format("delete_user %s", username));
+  }
+
+  public static void deleteVhost(String vhost) {
+    rabbitmqctl("delete_vhost " + vhost);
   }
 
   public static void closeConnection(String clientProvidedName) {

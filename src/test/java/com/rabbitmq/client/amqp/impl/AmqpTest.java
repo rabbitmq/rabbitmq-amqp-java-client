@@ -30,6 +30,7 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class AmqpTest {
 
   Connection connection;
+  Environment environment;
 
   @Test
   void queueInfoTest(TestInfo info) {

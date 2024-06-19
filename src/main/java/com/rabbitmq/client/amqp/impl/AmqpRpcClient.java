@@ -163,7 +163,7 @@ class AmqpRpcClient implements RpcClient {
       }
       this.outstandingRequests
           .values()
-          .forEach(r -> r.future.completeExceptionally(new ModelException("RPC client is closed")));
+          .forEach(r -> r.future.completeExceptionally(new AmqpException("RPC client is closed")));
     }
   }
 
@@ -182,7 +182,7 @@ class AmqpRpcClient implements RpcClient {
           } catch (Exception e) {
             LOGGER.warn("Error while pruning timed out request: {}", e.getMessage());
           }
-          request.future.completeExceptionally(new ModelException("RPC request timed out"));
+          request.future.completeExceptionally(new AmqpException("RPC request timed out"));
         }
       }
     };
@@ -190,7 +190,7 @@ class AmqpRpcClient implements RpcClient {
 
   private void checkOpen() {
     if (this.closed.get()) {
-      throw new ModelException("RPC client is closed");
+      throw new AmqpException("RPC client is closed");
     }
   }
 

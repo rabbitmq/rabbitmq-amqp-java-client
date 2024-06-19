@@ -19,8 +19,8 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
-import com.rabbitmq.client.amqp.ModelException;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -251,7 +251,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             fieldsSetLatch.countDown();
           });
       if (!fieldsSetLatch.await(10, TimeUnit.SECONDS)) {
-        throw new ModelException("Could not initialize consumer internal state");
+        throw new AmqpException("Could not initialize consumer internal state");
       }
     } catch (InterruptedException e) {
       throw new RuntimeException(e);

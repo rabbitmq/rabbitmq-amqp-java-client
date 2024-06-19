@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.ModelException;
+import com.rabbitmq.client.amqp.AmqpException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -65,7 +65,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new ModelException("Error while creating recording topology listener", e);
+      throw new AmqpException("Error while creating recording topology listener", e);
     }
   }
 
@@ -173,17 +173,17 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
                   TIMEOUT.toMillis(),
                   TimeUnit.MILLISECONDS);
           if (!added) {
-            throw new ModelException("Enqueueing of topology task timed out");
+            throw new AmqpException("Enqueueing of topology task timed out");
           }
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new ModelException("Topology task enqueueing has been interrupted", e);
+          throw new AmqpException("Topology task enqueueing has been interrupted", e);
         }
         try {
           latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new ModelException("Topology task processing has been interrupted", e);
+          throw new AmqpException("Topology task processing has been interrupted", e);
         }
       }
     }

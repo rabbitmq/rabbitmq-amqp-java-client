@@ -19,8 +19,8 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.ModelException;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Date;
@@ -569,7 +569,7 @@ class AmqpMessage implements Message {
     try {
       return call.call(this.delegate);
     } catch (ClientException e) {
-      throw new ModelException(e);
+      throw new AmqpException(e);
     }
   }
 

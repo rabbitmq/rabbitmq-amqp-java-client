@@ -20,7 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.OPENING;
 
-import com.rabbitmq.client.amqp.ModelException;
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Resource;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -37,9 +37,12 @@ abstract class ResourceBase implements Resource {
 
   protected void checkOpen() {
     if (this.state.get() != OPEN) {
-      throw new ModelException(
-          "Resource is not open, current state is %s", this.state.get().name());
+      throw new AmqpException("Resource is not open, current state is %s", this.state.get().name());
     }
+  }
+
+  protected State state() {
+    return this.state.get();
   }
 
   protected void state(Resource.State state) {

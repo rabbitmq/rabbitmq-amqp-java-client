@@ -17,9 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.ModelException;
+import com.rabbitmq.client.amqp.AmqpException;
 import java.util.concurrent.ExecutionException;
 import javax.net.ssl.SSLException;
+import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientConnectionSecurityException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 
@@ -27,27 +29,32 @@ abstract class ExceptionUtils {
 
   private ExceptionUtils() {}
 
-  static ModelException convert(ClientException e) {
+  static AmqpException convert(ClientException e) {
     // TODO convert Proton exception into exception of lib hierarchy
-    if (e.getCause() != null && e.getCause() instanceof SSLException) {
-      return new ModelException(e.getCause());
+    if (e instanceof ClientConnectionSecurityException) {
+      throw new AmqpException.AmqpSecurityException(e);
+    } else if (e instanceof ClientConnectionRemotelyClosedException) {
+      System.out.println(e.getMessage());
+      System.out.println(((ClientConnectionRemotelyClosedException) e).getErrorCondition());
+      return new AmqpException(e);
+    } else if (e.getCause() instanceof SSLException) {
+      return new AmqpException(e.getCause());
     } else {
-      return new ModelException(e);
+      return new AmqpException(e);
     }
   }
 
-  static ModelException convert(ExecutionException e) {
-    // TODO convert Proton exception into exception of lib hierarchy
-    if (e.getCause() != null && e.getCause() instanceof ClientException) {
+  static AmqpException convert(ExecutionException e) {
+    if (e.getCause() instanceof ClientException) {
       return convert((ClientException) e.getCause());
     } else {
-      return new ModelException(e);
+      return new AmqpException(e.getCause() == null ? e : e.getCause());
     }
   }
 
-  static ModelException convert(ClientException e, String format, Object... args) {
+  static AmqpException convert(ClientException e, String format, Object... args) {
     // TODO convert Proton exception into exception of lib hierarchy
-    return new ModelException(String.format(format, args), e);
+    return new AmqpException(String.format(format, args), e);
   }
 
   static boolean resourceDeleted(ClientResourceRemotelyClosedException e) {

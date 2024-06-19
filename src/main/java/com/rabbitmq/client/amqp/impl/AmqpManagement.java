@@ -19,8 +19,8 @@ package com.rabbitmq.client.amqp.impl;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
-import com.rabbitmq.client.amqp.ModelException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,7 +101,7 @@ class AmqpManagement implements Management {
       Map<String, Object> queueInfo = get(queueLocation(name)).responseBodyAsMap();
       return new DefaultQueueInfo(queueInfo);
     } catch (ClientException e) {
-      throw new ModelException("Error while fetching queue '%s' information", name);
+      throw new AmqpException("Error while fetching queue '%s' information", name);
     }
   }
 
@@ -112,7 +112,7 @@ class AmqpManagement implements Management {
       this.topologyListener.queueDeleted(name);
       Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
       if (!responseBody.containsKey("message_count")) {
-        throw new ModelException("Response body should contain message_count");
+        throw new AmqpException("Response body should contain message_count");
       }
     };
   }
@@ -227,7 +227,7 @@ class AmqpManagement implements Management {
             };
         this.receiveLoop = this.connection.executorService().submit(receiveTask);
       } catch (Exception e) {
-        throw new ModelException(e);
+        throw new AmqpException(e);
       }
     }
   }
@@ -280,7 +280,7 @@ class AmqpManagement implements Management {
       checkResponse(outstandingRequest, requestId, expectedResponseCodes);
       return outstandingRequest.mapResponse();
     } catch (ClientException e) {
-      throw new ModelException("Error on PUT operation: " + target, e);
+      throw new AmqpException("Error on PUT operation: " + target, e);
     }
   }
 
@@ -307,7 +307,7 @@ class AmqpManagement implements Management {
       checkResponse(outstandingRequest, requestId, expectedResponseCode);
       return outstandingRequest.responseBodyAsMap();
     } catch (ClientException e) {
-      throw new ModelException("Error on DELETE operation: " + target, e);
+      throw new AmqpException("Error on DELETE operation: " + target, e);
     }
   }
 
@@ -328,11 +328,11 @@ class AmqpManagement implements Management {
       throws ClientException {
     Message<?> response = request.responseMessage();
     if (!requestId.equals(response.correlationId())) {
-      throw new ModelException("Unexpected correlation ID");
+      throw new AmqpException("Unexpected correlation ID");
     }
     int responseCode = request.mapResponse().code();
     if (IntStream.of(expectedResponseCodes).noneMatch(c -> c == responseCode)) {
-      throw new ModelException(
+      throw new AmqpException(
           "Unexpected response code: %d instead of %s",
           responseCode,
           IntStream.of(expectedResponseCodes)
@@ -370,7 +370,7 @@ class AmqpManagement implements Management {
       try {
         bindings = get(target).responseBodyAsList();
       } catch (ClientException e) {
-        throw new ModelException("Error on GET operation: " + target, e);
+        throw new AmqpException("Error on GET operation: " + target, e);
       }
       matchBinding(bindings, key, arguments).ifPresent(location -> delete(location, CODE_204));
     }
@@ -448,10 +448,10 @@ class AmqpManagement implements Management {
         completed = this.latch.await(timeout.toMillis(), MILLISECONDS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new ModelException("Interrupted while waiting for management response");
+        throw new AmqpException("Interrupted while waiting for management response");
       }
       if (!completed) {
-        throw new ModelException("Could not get management response in %d ms", timeout.toMillis());
+        throw new AmqpException("Could not get management response in %d ms", timeout.toMillis());
       }
     }
 
@@ -598,9 +598,9 @@ class AmqpManagement implements Management {
 
   private void checkAvailable() {
     if (this.closed.get()) {
-      throw new ModelException("Management is closed");
+      throw new AmqpException("Management is closed");
     } else if (!this.initialized.get()) {
-      throw new ModelException("Management is not available");
+      throw new AmqpException("Management is not available");
     }
   }
 

@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
@@ -166,7 +167,7 @@ abstract class Utils {
       try {
         md = MessageDigest.getInstance("MD5");
       } catch (NoSuchAlgorithmException e) {
-        throw new ModelException(e);
+        throw new AmqpException(e);
       }
       byte[] digest = md.digest(uuid.getBytes(StandardCharsets.UTF_8));
       return prefix
@@ -259,6 +260,17 @@ abstract class Utils {
     @Override
     public Consumer.MessageHandler subscribe(String queue, Consumer.MessageHandler handler) {
       return handler;
+    }
+  }
+
+  static class StopWatch {
+
+    private final long start = System.nanoTime();
+    private Duration duration;
+
+    Duration stop() {
+      this.duration = Duration.ofNanos(System.nanoTime() - start);
+      return this.duration;
     }
   }
 }

@@ -422,7 +422,7 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
       assertThatThrownBy(() -> connection.management().queueInfo(q))
-          .isInstanceOf(ModelException.class)
+          .isInstanceOf(AmqpException.class)
           .hasMessageContaining("404");
     }
   }

@@ -362,7 +362,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       try {
         context.init(null, new TrustManager[] {TlsUtils.TRUST_EVERYTHING_TRUST_MANAGER}, null);
       } catch (KeyManagementException e) {
-        throw new ModelException(e);
+        throw new AmqpException(e);
       }
       this.sslContext = context;
       return this;

@@ -87,7 +87,7 @@ public class ResourceListenerTest {
         Thread.sleep(100);
       }
       fail("The publisher should have been closed after entity deletion");
-    } catch (ModelException ex) {
+    } catch (AmqpException ex) {
       // expected
     }
     TestUtils.assertThat(closedLatch).completes();
@@ -97,7 +97,7 @@ public class ResourceListenerTest {
                 new Condition<>(s -> outboundMessageStatus.isEmpty(), "no status"),
                 new Condition<>(s -> outboundMessageStatus.contains(FAILED), "only failed")));
     //    Assertions.assertThat(outboundMessageStatus).containsOnly(Publisher.Status.FAILED);
-    Assertions.assertThat(closedCause.get()).isNotNull().isInstanceOf(ModelException.class);
+    Assertions.assertThat(closedCause.get()).isNotNull().isInstanceOf(AmqpException.class);
   }
 
   @Test
@@ -129,6 +129,6 @@ public class ResourceListenerTest {
       connection.management().queueDeletion().delete(q);
     }
     TestUtils.assertThat(closedLatch).completes();
-    Assertions.assertThat(closeCause.get()).isNotNull().isInstanceOf(ModelException.class);
+    Assertions.assertThat(closeCause.get()).isNotNull().isInstanceOf(AmqpException.class);
   }
 }

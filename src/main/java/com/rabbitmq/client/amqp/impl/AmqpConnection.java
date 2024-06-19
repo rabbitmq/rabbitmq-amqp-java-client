@@ -22,6 +22,7 @@ import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.ObservationCollector;
+import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -111,7 +112,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     } else {
       disconnectHandler =
           (c, e) -> {
-            ModelException failureCause =
+            AmqpException failureCause =
                 ExceptionUtils.convert(e.failureCause(), "Connection disconnected");
             this.close(failureCause);
           };
@@ -198,22 +199,39 @@ final class AmqpConnection extends ResourceBase implements Connection {
       sslOptions.sslContextOverride(tlsSettings.sslContext());
       sslOptions.verifyHost(tlsSettings.isHostnameVerification());
     }
+    this.connectionAddress = connectionSettings.selectAddress();
+    StopWatch stopWatch = new StopWatch();
     try {
-      this.connectionAddress = connectionSettings.selectAddress();
+      LOGGER.debug("Connecting...");
       org.apache.qpid.protonj2.client.Connection connection =
           this.environment
               .client()
               .connect(
                   this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
-      connection.openFuture().get();
+      try {
+        connection.openFuture().get();
+      } catch (ExecutionException e) {
+        if (e.getCause() instanceof ClientException) {
+          throw (ClientException) e.getCause();
+        } else {
+          throw e;
+        }
+      }
+      LOGGER.debug("Connected in {}", stopWatch.stop());
       checkBrokerVersion(connection);
       return connection;
+    } catch (ClientConnectionRemotelyClosedException e) {
+      // the user does not have access to the virtual host
+      throw new AmqpException.AmqpSecurityException(e);
     } catch (ClientException e) {
+      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       throw ExceptionUtils.convert(e);
     } catch (InterruptedException e) {
+      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       Thread.currentThread().interrupt();
-      throw new ModelException(e);
+      throw new AmqpException(e);
     } catch (ExecutionException e) {
+      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       throw ExceptionUtils.convert(e);
     }
   }
@@ -222,10 +240,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
       throws ClientException {
     String version = (String) connection.properties().get("version");
     if (version == null) {
-      throw new ModelException("No broker version set in connection properties");
+      throw new AmqpException("No broker version set in connection properties");
     }
     if (!Utils.is4_0_OrMore(version)) {
-      throw new ModelException("The AMQP client library requires RabbitMQ 4.0 or more");
+      throw new AmqpException("The AMQP client library requires RabbitMQ 4.0 or more");
     }
   }
 
@@ -250,7 +268,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
-          if (RECOVERY_PREDICATE.test(event.failureCause())) {
+          if (RECOVERY_PREDICATE.test(event.failureCause()) && this.state() != OPENING) {
             if (event.failureCause() instanceof ClientConnectionRemotelyClosedException
                 && this.recoveringConnection.get()) {
               LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
@@ -277,7 +295,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       ClientIOException nativeFailureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
-    ModelException failureCause =
+    AmqpException failureCause =
         ExceptionUtils.convert(nativeFailureCause, "Connection disconnected");
     LOGGER.info("Connection to {} failed, trying to recover", this.currentConnectionLabel());
     this.state(RECOVERING, failureCause);
@@ -332,7 +350,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     while (true) {
       Duration delay = recoveryConfiguration.backOffDelayPolicy().delay(attempt);
       if (BackOffDelayPolicy.TIMEOUT.equals(delay)) {
-        throw new ModelException("Recovery retry timed out");
+        throw new AmqpException("Recovery retry timed out");
       } else {
         try {
           Thread.sleep(delay.toMillis());
@@ -426,7 +444,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   }
 
   private void releaseManagementResources() {
-    this.management.releaseResources();
+    if (this.management != null) {
+      this.management.releaseResources();
+    }
   }
 
   Session nativeSession() {

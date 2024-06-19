@@ -205,7 +205,7 @@ public class AmqpConnectionRecoveryTest {
             .forEach(
                 op ->
                     assertThatThrownBy(op)
-                        .isInstanceOf(ModelException.class)
+                        .isInstanceOf(AmqpException.class)
                         .hasMessageContaining(RECOVERING.name()));
       } finally {
         Cli.startBroker();
