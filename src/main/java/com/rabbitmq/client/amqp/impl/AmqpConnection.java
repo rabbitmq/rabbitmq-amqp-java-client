@@ -217,22 +217,22 @@ final class AmqpConnection extends ResourceBase implements Connection {
           throw e;
         }
       }
-      LOGGER.debug("Connected in {}", stopWatch.stop());
+      LOGGER.debug("Connection attempt succeeded");
       checkBrokerVersion(connection);
       return connection;
     } catch (ClientConnectionRemotelyClosedException e) {
-      // the user does not have access to the virtual host
-      throw new AmqpException.AmqpSecurityException(e);
+      // the user does not have access to the virtual host or TLS error
+      throw new AmqpException.AmqpSecurityException(
+          e.getCause() instanceof SSLException ? e.getCause() : e);
     } catch (ClientException e) {
-      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       throw ExceptionUtils.convert(e);
     } catch (InterruptedException e) {
-      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       Thread.currentThread().interrupt();
       throw new AmqpException(e);
     } catch (ExecutionException e) {
-      LOGGER.debug("Connection attempt failed in {}", stopWatch.stop());
       throw ExceptionUtils.convert(e);
+    } finally {
+      LOGGER.debug("Connection attempt took {}", stopWatch.stop());
     }
   }
 

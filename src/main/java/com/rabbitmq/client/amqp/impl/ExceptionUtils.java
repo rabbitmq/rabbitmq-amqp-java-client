@@ -31,14 +31,12 @@ abstract class ExceptionUtils {
 
   static AmqpException convert(ClientException e) {
     // TODO convert Proton exception into exception of lib hierarchy
-    if (e instanceof ClientConnectionSecurityException) {
+    if (e.getCause() instanceof SSLException) {
+      return new AmqpException.AmqpSecurityException(e.getCause());
+    } else if (e instanceof ClientConnectionSecurityException) {
       throw new AmqpException.AmqpSecurityException(e);
     } else if (e instanceof ClientConnectionRemotelyClosedException) {
-      System.out.println(e.getMessage());
-      System.out.println(((ClientConnectionRemotelyClosedException) e).getErrorCondition());
       return new AmqpException(e);
-    } else if (e.getCause() instanceof SSLException) {
-      return new AmqpException(e.getCause());
     } else {
       return new AmqpException(e);
     }
