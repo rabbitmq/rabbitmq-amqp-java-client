@@ -1,0 +1,4 @@
+com.rabbitmq.client.amqp
+com.rabbitmq.client.amqp.impl
+com.rabbitmq.client.amqp.metrics
+com.rabbitmq.client.amqp.observation.micrometer
