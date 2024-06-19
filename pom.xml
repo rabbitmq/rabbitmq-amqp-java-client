@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.rabbitmq.client</groupId>
     <artifactId>amqp-client</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
     <name>RabbitMQ AMQP 1.0 Java client</name>
     <description>The RabbitMQ AMQP 1.0 Java client library defines an API to access RabbitMQ
         with the AMQP 1.0 protocol.
