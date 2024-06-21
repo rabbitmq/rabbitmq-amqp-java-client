@@ -146,13 +146,13 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
                     ? ConnectionOptions.INFINITE
                     : publishTimeout.toMillis());
     try {
-      if (address == null) {
-        return session.openAnonymousSender(senderOptions);
-      } else {
-        return session.openSender(address, senderOptions);
-      }
+      Sender s =
+          address == null
+              ? session.openAnonymousSender()
+              : session.openSender(address, senderOptions);
+      return ExceptionUtils.wrapGet(s.openFuture());
     } catch (ClientException e) {
-      throw ExceptionUtils.convert(e, "Error while creating publisher to {}", address);
+      throw ExceptionUtils.convert(e, "Error while creating publisher to %s", address);
     }
   }
 

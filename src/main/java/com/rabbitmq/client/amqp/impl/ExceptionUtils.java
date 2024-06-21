@@ -30,36 +30,23 @@ abstract class ExceptionUtils {
 
   private ExceptionUtils() {}
 
-  static <T> T wrapGet(Future<T> future)
-      throws ExecutionException, InterruptedException, ClientException {
+  static <T> T wrapGet(Future<T> future) throws ClientException {
     try {
       return future.get();
     } catch (ExecutionException e) {
       if (e.getCause() instanceof ClientException) {
         throw (ClientException) e.getCause();
       } else {
-        throw e;
+        throw convert(e);
       }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AmqpException(e);
     }
   }
 
   static AmqpException convert(ClientException e) {
-    // TODO convert Proton exception into exception of lib hierarchy
-    if (e.getCause() instanceof SSLException) {
-      return new AmqpException.AmqpSecurityException(e.getCause());
-    } else if (e instanceof ClientConnectionSecurityException) {
-      throw new AmqpException.AmqpSecurityException(e);
-    } else if (e instanceof ClientConnectionRemotelyClosedException) {
-      return new AmqpException(e);
-    } else if (e instanceof ClientSessionRemotelyClosedException) {
-      if (isUnauthorizedAccess(((ClientSessionRemotelyClosedException) e).getErrorCondition())) {
-        return new AmqpException.AmqpSecurityException(e.getMessage(), e);
-      } else {
-        return new AmqpException(e);
-      }
-    } else {
-      return new AmqpException(e);
-    }
+    return convert(e, null);
   }
 
   static AmqpException convertOnConnection(ClientException e) {
@@ -81,8 +68,22 @@ abstract class ExceptionUtils {
   }
 
   static AmqpException convert(ClientException e, String format, Object... args) {
-    // TODO convert Proton exception into exception of lib hierarchy
-    return new AmqpException(String.format(format, args), e);
+    String message = format != null ? String.format(format, args) : null;
+    if (e.getCause() instanceof SSLException) {
+      return new AmqpException.AmqpSecurityException(message, e.getCause());
+    } else if (e instanceof ClientConnectionSecurityException) {
+      throw new AmqpException.AmqpSecurityException(message, e);
+    } else if (e instanceof ClientConnectionRemotelyClosedException) {
+      return new AmqpException(message, e);
+    } else if (e instanceof ClientSessionRemotelyClosedException) {
+      if (isUnauthorizedAccess(((ClientSessionRemotelyClosedException) e).getErrorCondition())) {
+        return new AmqpException.AmqpSecurityException(e.getMessage(), e);
+      } else {
+        return new AmqpException(e);
+      }
+    } else {
+      return new AmqpException(e);
+    }
   }
 
   static boolean resourceDeleted(ClientResourceRemotelyClosedException e) {

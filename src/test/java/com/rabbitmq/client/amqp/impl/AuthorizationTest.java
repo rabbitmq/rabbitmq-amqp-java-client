@@ -25,10 +25,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(AmqpTestInfrastructureExtension.class)
@@ -39,17 +36,23 @@ public class AuthorizationTest {
   private static final String PASSWORD = "amqp";
 
   Environment environment;
+  String name;
 
   @BeforeAll
-  static void init() throws Exception {
+  static void initAll() throws Exception {
     addVhost(VH);
     addUser(USERNAME, PASSWORD);
     setPermissions(USERNAME, VH, "^amqp.*$");
     setPermissions("guest", VH, ".*");
   }
 
+  @BeforeEach
+  void init(TestInfo info) {
+    this.name = TestUtils.name(info);
+  }
+
   @AfterAll
-  static void tearDown() {
+  static void tearDownAll() {
     deleteUser(USERNAME);
     deleteVhost(VH);
   }
@@ -69,16 +72,8 @@ public class AuthorizationTest {
   }
 
   @Test
-  void entityCreationAttemptWithoutAuthorizationShouldThrowException(TestInfo info)
-      throws Exception {
-    try (Connection c =
-        environment
-            .connectionBuilder()
-            .virtualHost(VH)
-            .username(USERNAME)
-            .password(PASSWORD)
-            .build()) {
-      String name = TestUtils.name(info);
+  void entityCreationAttemptWithoutAuthorizationShouldThrowException() throws Exception {
+    try (Connection c = userConnection()) {
       String authorizedName = "amqp" + name;
       c.management().queue(authorizedName).exclusive(true).declare();
       assertThatThrownBy(() -> c.management().queue(name).exclusive(true).declare())
@@ -97,5 +92,34 @@ public class AuthorizationTest {
             }
           });
     }
+  }
+
+  @Test
+  void publishingToUnauthorizedExchangeShouldFail() {
+    try (Connection uc = userConnection();
+        Connection gc = guestConnection()) {
+      try {
+        gc.management().exchange(this.name).declare();
+        assertThatThrownBy(() -> uc.publisherBuilder().exchange(this.name).build())
+            .isInstanceOf(AmqpException.AmqpSecurityException.class)
+            .hasMessageContaining("access")
+            .hasMessageContaining(this.name);
+      } finally {
+        gc.management().exchangeDeletion().delete(this.name);
+      }
+    }
+  }
+
+  Connection userConnection() {
+    return this.environment
+        .connectionBuilder()
+        .virtualHost(VH)
+        .username(USERNAME)
+        .password(PASSWORD)
+        .build();
+  }
+
+  Connection guestConnection() {
+    return this.environment.connectionBuilder().virtualHost(VH).build();
   }
 }

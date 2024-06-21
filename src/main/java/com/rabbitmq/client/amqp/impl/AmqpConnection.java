@@ -215,11 +215,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
       return connection;
     } catch (ClientException e) {
       throw ExceptionUtils.convertOnConnection(e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new AmqpException(e);
-    } catch (ExecutionException e) {
-      throw ExceptionUtils.convert(e);
     } finally {
       LOGGER.debug("Connection attempt took {}", stopWatch.stop());
     }
