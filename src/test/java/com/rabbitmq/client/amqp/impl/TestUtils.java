@@ -333,6 +333,7 @@ public abstract class TestUtils {
   static boolean addressV1Permitted() {
     return Cli.rabbitmqctl("eval 'rabbit_deprecated_features:is_permitted(amqp_address_v1).'")
         .output()
+        .trim()
         .endsWith("true");
   }
 
