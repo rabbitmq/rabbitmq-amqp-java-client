@@ -91,13 +91,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private ClientReceiver createNativeReceiver(Session nativeSession, String address) {
     try {
       return (ClientReceiver)
-          nativeSession.openReceiver(
-              address,
-              new ReceiverOptions()
-                  .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-                  .autoAccept(false)
-                  .autoSettle(false)
-                  .creditWindow(0));
+          ExceptionUtils.wrapGet(
+              nativeSession
+                  .openReceiver(
+                      address,
+                      new ReceiverOptions()
+                          .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+                          .autoAccept(false)
+                          .autoSettle(false)
+                          .creditWindow(0))
+                  .openFuture());
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }
