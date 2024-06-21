@@ -30,6 +30,10 @@ abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
 
   @Override
   public T exchange(String exchange) {
+    if ("".equals(exchange)) {
+      throw new IllegalArgumentException(
+          "The default exchange is not allowed, use the queue format instead");
+    }
     this.exchange = exchange;
     this.queue = null;
     return result();

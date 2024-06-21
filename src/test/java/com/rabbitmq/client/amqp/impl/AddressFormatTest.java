@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
 import java.util.concurrent.CountDownLatch;
@@ -234,5 +235,11 @@ public class AddressFormatTest {
     } finally {
       consumer.close();
     }
+  }
+
+  @Test
+  void defaultExchangeIsNotAllowed() {
+    assertThatThrownBy(() -> connection.publisherBuilder().exchange("").build())
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }
