@@ -18,13 +18,17 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Cli.*;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
+import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(AmqpTestInfrastructureExtension.class)
@@ -58,9 +62,40 @@ public class AuthorizationTest {
   }
 
   @Test
-  void connectionWithInvalidPermissionShouldThrowException() {
+  void connectionWithNoVirtualHostAccessShouldThrowException() {
     assertThatThrownBy(
             () -> environment.connectionBuilder().username(USERNAME).password(PASSWORD).build())
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
+  }
+
+  @Test
+  void entityCreationAttemptWithoutAuthorizationShouldThrowException(TestInfo info)
+      throws Exception {
+    try (Connection c =
+        environment
+            .connectionBuilder()
+            .virtualHost(VH)
+            .username(USERNAME)
+            .password(PASSWORD)
+            .build()) {
+      String name = TestUtils.name(info);
+      String authorizedName = "amqp" + name;
+      c.management().queue(authorizedName).exclusive(true).declare();
+      assertThatThrownBy(() -> c.management().queue(name).exclusive(true).declare())
+          .isInstanceOf(AmqpException.AmqpSecurityException.class)
+          .hasMessageContaining("access")
+          .hasMessageContaining(name)
+          .hasCauseInstanceOf(ClientSessionRemotelyClosedException.class);
+      // management should recover
+      waitAtMost(
+          () -> {
+            try {
+              c.management().queueDeletion().delete(authorizedName);
+              return true;
+            } catch (AmqpException e) {
+              return false;
+            }
+          });
+    }
   }
 }

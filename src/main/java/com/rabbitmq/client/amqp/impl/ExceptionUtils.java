@@ -19,15 +19,29 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import javax.net.ssl.SSLException;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionSecurityException;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
+import org.apache.qpid.protonj2.client.ErrorCondition;
+import org.apache.qpid.protonj2.client.exceptions.*;
 
 abstract class ExceptionUtils {
 
+  static final String ERROR_UNAUTHORIZED_ACCESS = "amqp:unauthorized-access";
+
   private ExceptionUtils() {}
+
+  static <T> T wrapGet(Future<T> future)
+      throws ExecutionException, InterruptedException, ClientException {
+    try {
+      return future.get();
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof ClientException) {
+        throw (ClientException) e.getCause();
+      } else {
+        throw e;
+      }
+    }
+  }
 
   static AmqpException convert(ClientException e) {
     // TODO convert Proton exception into exception of lib hierarchy
@@ -37,8 +51,24 @@ abstract class ExceptionUtils {
       throw new AmqpException.AmqpSecurityException(e);
     } else if (e instanceof ClientConnectionRemotelyClosedException) {
       return new AmqpException(e);
+    } else if (e instanceof ClientSessionRemotelyClosedException) {
+      if (isUnauthorizedAccess(((ClientSessionRemotelyClosedException) e).getErrorCondition())) {
+        return new AmqpException.AmqpSecurityException(e.getMessage(), e);
+      } else {
+        return new AmqpException(e);
+      }
     } else {
       return new AmqpException(e);
+    }
+  }
+
+  static AmqpException convertOnConnection(ClientException e) {
+    if (e instanceof ClientConnectionRemotelyClosedException) {
+      // the user does not have access to the virtual host or TLS error
+      return new AmqpException.AmqpSecurityException(
+          e.getCause() instanceof SSLException ? e.getCause() : e);
+    } else {
+      return convert(e);
     }
   }
 
@@ -63,5 +93,13 @@ abstract class ExceptionUtils {
   static boolean notFound(ClientResourceRemotelyClosedException e) {
     return e.getErrorCondition() != null
         && "amqp:not-found".equals(e.getErrorCondition().condition());
+  }
+
+  private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {
+    return errorConditionEquals(errorCondition, ERROR_UNAUTHORIZED_ACCESS);
+  }
+
+  private static boolean errorConditionEquals(ErrorCondition errorCondition, String expected) {
+    return errorCondition != null && expected.equals(errorCondition.condition());
   }
 }

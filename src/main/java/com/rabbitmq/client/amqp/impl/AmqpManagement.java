@@ -37,6 +37,7 @@ import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -219,6 +220,14 @@ class AmqpManagement implements Management {
               } catch (ClientConnectionRemotelyClosedException
                   | ClientLinkRemotelyClosedException e) {
                 // receiver is closed
+              } catch (ClientSessionRemotelyClosedException e) {
+                LOGGER.info("Management session closed: {}", e.getMessage());
+                AmqpException exception = ExceptionUtils.convert(e);
+                this.failRequests(exception);
+                this.releaseResources();
+                if (exception instanceof AmqpException.AmqpSecurityException) {
+                  this.init();
+                }
               } catch (ClientException e) {
                 java.util.function.Consumer<String> log =
                     this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
@@ -229,6 +238,16 @@ class AmqpManagement implements Management {
       } catch (Exception e) {
         throw new AmqpException(e);
       }
+    }
+  }
+
+  private void failRequests(AmqpException exception) {
+    Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
+        this.outstandingRequests.entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<UUID, OutstandingRequest> request = iterator.next();
+      LOGGER.info("Failing management request {}", request.getKey());
+      request.getValue().fail(exception);
     }
   }
 
@@ -436,6 +455,7 @@ class AmqpManagement implements Management {
     private final CountDownLatch latch = new CountDownLatch(1);
     private final AtomicReference<Message<?>> responseMessage = new AtomicReference<>();
     private final AtomicReference<Response<?>> response = new AtomicReference<>();
+    private final AtomicReference<AmqpException> exception = new AtomicReference<>();
     private final Duration timeout;
 
     private OutstandingRequest(Duration timeout) {
@@ -450,6 +470,9 @@ class AmqpManagement implements Management {
         Thread.currentThread().interrupt();
         throw new AmqpException("Interrupted while waiting for management response");
       }
+      if (this.exception.get() != null) {
+        throw this.exception.get();
+      }
       if (!completed) {
         throw new AmqpException("Could not get management response in %d ms", timeout.toMillis());
       }
@@ -458,6 +481,11 @@ class AmqpManagement implements Management {
     void complete(Message<?> response) throws ClientException {
       this.responseMessage.set(response);
       this.response.set(new Response<>(Integer.parseInt(response.subject()), response.body()));
+      this.latch.countDown();
+    }
+
+    void fail(AmqpException e) {
+      this.exception.set(e);
       this.latch.countDown();
     }
 

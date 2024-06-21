@@ -208,24 +208,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
               .client()
               .connect(
                   this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
-      try {
-        connection.openFuture().get();
-      } catch (ExecutionException e) {
-        if (e.getCause() instanceof ClientException) {
-          throw (ClientException) e.getCause();
-        } else {
-          throw e;
-        }
-      }
+
+      ExceptionUtils.wrapGet(connection.openFuture());
       LOGGER.debug("Connection attempt succeeded");
       checkBrokerVersion(connection);
       return connection;
-    } catch (ClientConnectionRemotelyClosedException e) {
-      // the user does not have access to the virtual host or TLS error
-      throw new AmqpException.AmqpSecurityException(
-          e.getCause() instanceof SSLException ? e.getCause() : e);
     } catch (ClientException e) {
-      throw ExceptionUtils.convert(e);
+      throw ExceptionUtils.convertOnConnection(e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new AmqpException(e);
