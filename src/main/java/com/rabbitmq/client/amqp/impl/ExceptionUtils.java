@@ -27,6 +27,7 @@ import org.apache.qpid.protonj2.client.exceptions.*;
 abstract class ExceptionUtils {
 
   static final String ERROR_UNAUTHORIZED_ACCESS = "amqp:unauthorized-access";
+  static final String ERROR_NOT_FOUND = "amqp:not-found";
 
   private ExceptionUtils() {}
 
@@ -76,10 +77,21 @@ abstract class ExceptionUtils {
     } else if (e instanceof ClientConnectionRemotelyClosedException) {
       return new AmqpException(message, e);
     } else if (e instanceof ClientSessionRemotelyClosedException) {
-      if (isUnauthorizedAccess(((ClientSessionRemotelyClosedException) e).getErrorCondition())) {
+      ErrorCondition errorCondition =
+          ((ClientSessionRemotelyClosedException) e).getErrorCondition();
+      if (isUnauthorizedAccess(errorCondition)) {
         return new AmqpException.AmqpSecurityException(e.getMessage(), e);
+      } else if (isNotFound(errorCondition)) {
+        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
       } else {
-        return new AmqpException(e);
+        return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
+      }
+    } else if (e instanceof ClientLinkRemotelyClosedException) {
+      ErrorCondition errorCondition = ((ClientLinkRemotelyClosedException) e).getErrorCondition();
+      if (isNotFound(errorCondition)) {
+        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
+      } else {
+        return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }
     } else {
       return new AmqpException(e);
@@ -98,6 +110,10 @@ abstract class ExceptionUtils {
 
   private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {
     return errorConditionEquals(errorCondition, ERROR_UNAUTHORIZED_ACCESS);
+  }
+
+  private static boolean isNotFound(ErrorCondition errorCondition) {
+    return errorConditionEquals(errorCondition, ERROR_NOT_FOUND);
   }
 
   private static boolean errorConditionEquals(ErrorCondition errorCondition, String expected) {

@@ -23,6 +23,8 @@ echo "loopback_users = none
 
 listeners.ssl.default = 5671
 
+deprecated_features.permit.amqp_address_v1 = false
+
 ssl_options.cacertfile = /etc/rabbitmq/tls/ca_certificate.pem
 ssl_options.certfile   = /etc/rabbitmq/tls/server_$(hostname)_certificate.pem
 ssl_options.keyfile    = /etc/rabbitmq/tls/server_$(hostname)_key.pem

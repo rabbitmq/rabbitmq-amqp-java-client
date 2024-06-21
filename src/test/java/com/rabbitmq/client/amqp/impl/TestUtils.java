@@ -330,6 +330,12 @@ public abstract class TestUtils {
     return Cli.rabbitmqctl("status").output().contains("amqp/ssl");
   }
 
+  static boolean addressV1Permitted() {
+    return Cli.rabbitmqctl("eval 'rabbit_deprecated_features:is_permitted(amqp_address_v1).'")
+        .output()
+        .endsWith("true");
+  }
+
   static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
 
     @Override
@@ -338,6 +344,25 @@ public abstract class TestUtils {
         return ConditionEvaluationResult.enabled("TLS is enabled");
       } else {
         return ConditionEvaluationResult.disabled("TLS is disabled");
+      }
+    }
+  }
+
+  static class DisabledIfAddressV1PermittedCondition implements ExecutionCondition {
+
+    private static final String KEY = "addressV1Permitted";
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      boolean addressV1Permitted =
+          context
+              .getRoot()
+              .getStore(ExtensionContext.Namespace.GLOBAL)
+              .getOrComputeIfAbsent(KEY, k -> addressV1Permitted(), Boolean.class);
+      if (addressV1Permitted) {
+        return ConditionEvaluationResult.disabled("AMQP address format v1 is permitted");
+      } else {
+        return ConditionEvaluationResult.enabled("AMQP address format v1 is not permitted");
       }
     }
   }
@@ -425,6 +450,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfTlsNotEnabledCondition.class)
   public @interface DisabledIfTlsNotEnabled {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfAddressV1PermittedCondition.class)
+  public @interface DisabledIfAddressV1Permitted {}
 
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)

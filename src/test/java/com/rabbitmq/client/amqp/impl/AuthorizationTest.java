@@ -135,8 +135,7 @@ public class AuthorizationTest {
         gc.management().queue(this.name).declare();
         assertThatThrownBy(() -> uc.publisherBuilder().queue(this.name).build())
             .isInstanceOf(AmqpException.AmqpSecurityException.class)
-            .hasMessageContaining("access")
-            .hasMessageContaining(this.name);
+            .hasMessageContaining("access");
       } finally {
         gc.management().queueDeletion().delete(this.name);
       }

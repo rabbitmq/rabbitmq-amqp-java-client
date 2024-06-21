@@ -41,4 +41,18 @@ public class AmqpException extends RuntimeException {
       super(cause);
     }
   }
+
+  public static class AmqpEntityNotFoundException extends AmqpException {
+
+    public AmqpEntityNotFoundException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
+  public static class AmqpResourceClosedException extends AmqpException {
+
+    public AmqpResourceClosedException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
 }

@@ -28,17 +28,17 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.Management;
-import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
@@ -51,7 +51,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class AmqpTest {
 
   Connection connection;
-  Environment environment;
 
   @Test
   void queueInfoTest(TestInfo info) {
@@ -273,5 +272,56 @@ public class AmqpTest {
     waitAtMost(() -> messageContexts.size() == initialCredits);
     ((AmqpConsumer) consumer).unpause();
     waitAtMost(() -> messageContexts.size() == initialCredits * 2);
+  }
+
+  @Test
+  void publishingToNonExistingExchangeShouldThrow() {
+    String name = uuid();
+    assertThatThrownBy(() -> connection.publisherBuilder().exchange(name).build())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(name);
+  }
+
+  @Test
+  @DisabledIfAddressV1Permitted
+  void publishingToNonExistingQueueShouldThrow() {
+    String name = uuid();
+    assertThatThrownBy(() -> connection.publisherBuilder().queue(name).build())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(name);
+  }
+
+  @Test
+  void publishingToNonExistingExchangeWithToPropertyShouldThrow() throws Exception {
+    String name = uuid();
+    Publisher publisher = connection.publisherBuilder().build();
+    AtomicReference<Exception> exception = new AtomicReference<>();
+    waitAtMost(
+        () -> {
+          try {
+            publisher.publish(publisher.message().toAddress().exchange(name).message(), ctx -> {});
+            return false;
+          } catch (AmqpException.AmqpEntityNotFoundException e) {
+            exception.set(e);
+            return true;
+          }
+        });
+    assertThat(exception.get())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(name);
+  }
+
+  @Test
+  @DisabledIfAddressV1Permitted
+  void consumingFromNonExistingQueueShouldThrow() {
+    String name = uuid();
+    assertThatThrownBy(
+            () -> connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).build())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(name);
+  }
+
+  private static String uuid() {
+    return UUID.randomUUID().toString();
   }
 }
