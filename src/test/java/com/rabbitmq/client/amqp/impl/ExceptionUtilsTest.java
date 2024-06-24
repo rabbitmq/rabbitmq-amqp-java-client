@@ -25,6 +25,7 @@ import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.Test;
 
@@ -54,6 +55,15 @@ public class ExceptionUtilsTest {
                 new ClientSessionRemotelyClosedException(
                     "", errorCondition(ERROR_UNAUTHORIZED_ACCESS))))
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
+    assertThat(
+            convert(new ClientSessionRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class);
+    assertThat(convert(new ClientSessionRemotelyClosedException("")))
+        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+    assertThat(convert(new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class);
+    assertThat(convert(new ClientLinkRemotelyClosedException("")))
+        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
   }
 
   ErrorCondition errorCondition(String condition) {
