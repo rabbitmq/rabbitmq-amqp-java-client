@@ -21,7 +21,9 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
@@ -32,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
+import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
@@ -51,17 +54,22 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class AmqpTest {
 
   Connection connection;
+  String name;
+
+  @BeforeEach
+  void init(TestInfo info) {
+    this.name = TestUtils.name(info);
+  }
 
   @Test
-  void queueInfoTest(TestInfo info) {
-    String q = TestUtils.name(info);
+  void queueInfoTest() {
     Management management = connection.management();
     try {
-      management.queue(q).quorum().queue().declare();
+      management.queue(name).quorum().queue().declare();
 
-      Management.QueueInfo queueInfo = management.queueInfo(q);
+      Management.QueueInfo queueInfo = management.queueInfo(name);
       assertThat(queueInfo)
-          .hasName(q)
+          .hasName(name)
           .is(QUORUM)
           .isDurable()
           .isNotAutoDelete()
@@ -71,16 +79,15 @@ public class AmqpTest {
           .hasArgument("x-queue-type", "quorum");
 
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDeletion().delete(name);
     }
   }
 
   @Test
-  void queueDeclareDeletePublishConsume(TestInfo info) {
-    String q = TestUtils.name(info);
+  void queueDeclareDeletePublishConsume() {
     try {
-      connection.management().queue().name(q).quorum().queue().declare();
-      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      connection.management().queue().name(name).quorum().queue().declare();
+      Publisher publisher = connection.publisherBuilder().queue(name).build();
 
       int messageCount = 100;
       CountDownLatch confirmLatch = new CountDownLatch(messageCount);
@@ -99,14 +106,14 @@ public class AmqpTest {
 
       Assertions.assertThat(confirmLatch).is(completed());
 
-      Management.QueueInfo queueInfo = connection.management().queueInfo(q);
-      assertThat(queueInfo).hasName(q).hasNoConsumers().hasMessageCount(messageCount);
+      Management.QueueInfo queueInfo = connection.management().queueInfo(name);
+      assertThat(queueInfo).hasName(name).hasNoConsumers().hasMessageCount(messageCount);
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       com.rabbitmq.client.amqp.Consumer consumer =
           connection
               .consumerBuilder()
-              .queue(q)
+              .queue(name)
               .messageHandler(
                   (context, message) -> {
                     context.accept();
@@ -115,13 +122,13 @@ public class AmqpTest {
               .build();
       Assertions.assertThat(consumeLatch).is(completed());
 
-      queueInfo = connection.management().queueInfo(q);
+      queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasConsumerCount(1).isEmpty();
 
       consumer.close();
       publisher.close();
     } finally {
-      connection.management().queueDeletion().delete(q);
+      connection.management().queueDeletion().delete(name);
     }
   }
 
@@ -276,30 +283,36 @@ public class AmqpTest {
 
   @Test
   void publishingToNonExistingExchangeShouldThrow() {
-    String name = uuid();
-    assertThatThrownBy(() -> connection.publisherBuilder().exchange(name).build())
+    String doesNotExist = uuid();
+    assertThatThrownBy(() -> connection.publisherBuilder().exchange(doesNotExist).build())
         .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
-        .hasMessageContaining(name);
+        .hasMessageContaining(doesNotExist);
   }
 
   @Test
-  @DisabledIfAddressV1Permitted
-  void publishingToNonExistingQueueShouldThrow() {
-    String name = uuid();
-    assertThatThrownBy(() -> connection.publisherBuilder().queue(name).build())
-        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
-        .hasMessageContaining(name);
-  }
-
-  @Test
-  void publishingToNonExistingExchangeWithToPropertyShouldThrow() throws Exception {
-    String name = uuid();
-    Publisher publisher = connection.publisherBuilder().build();
+  void deletingExchangeShouldTriggerExceptionOnSender() throws Exception {
+    connection.management().exchange(name).type(FANOUT).declare();
+    Publisher publisher = connection.publisherBuilder().exchange(name).build();
+    try {
+      String q = connection.management().queue().exclusive(true).declare().name();
+      connection.management().binding().sourceExchange(name).destinationQueue(q).bind();
+      Sync sync = sync();
+      publisher.publish(
+          publisher.message(),
+          ctx -> {
+            if (ctx.status() == Publisher.Status.ACCEPTED) {
+              sync.down();
+            }
+          });
+      assertThat(sync).completes();
+    } finally {
+      connection.management().exchangeDeletion().delete(name);
+    }
     AtomicReference<Exception> exception = new AtomicReference<>();
     waitAtMost(
         () -> {
           try {
-            publisher.publish(publisher.message().toAddress().exchange(name).message(), ctx -> {});
+            publisher.publish(publisher.message(), ctx -> {});
             return false;
           } catch (AmqpException.AmqpEntityNotFoundException e) {
             exception.set(e);
@@ -308,17 +321,86 @@ public class AmqpTest {
         });
     assertThat(exception.get())
         .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
-        .hasMessageContaining(name);
+        .hasMessageContaining(name)
+        .hasMessageContaining(ExceptionUtils.ERROR_NOT_FOUND);
+  }
+
+  @Test
+  @DisabledIfAddressV1Permitted
+  void publishingToNonExistingQueueShouldThrow() {
+    String doesNotExist = uuid();
+    assertThatThrownBy(() -> connection.publisherBuilder().queue(doesNotExist).build())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(doesNotExist);
+  }
+
+  @Test
+  void deletingQueueShouldTriggerExceptionOnSender() throws Exception {
+    connection.management().queue(name).declare();
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    try {
+      Sync sync = sync();
+      publisher.publish(
+          publisher.message(),
+          ctx -> {
+            if (ctx.status() == Publisher.Status.ACCEPTED) {
+              sync.down();
+            }
+          });
+      assertThat(sync).completes();
+    } finally {
+      connection.management().queueDeletion().delete(name);
+    }
+    AtomicReference<Exception> exception = new AtomicReference<>();
+    waitAtMost(
+        () -> {
+          try {
+            publisher.publish(publisher.message(), ctx -> {});
+            return false;
+          } catch (AmqpException.AmqpEntityNotFoundException e) {
+            exception.set(e);
+            return true;
+          }
+        });
+    assertThat(exception.get())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
+  }
+
+  @Test
+  void publishingToNonExistingExchangeWithToPropertyShouldThrow() throws Exception {
+    String doesNotExist = uuid();
+    Publisher publisher = connection.publisherBuilder().build();
+    AtomicReference<Exception> exception = new AtomicReference<>();
+    waitAtMost(
+        () -> {
+          try {
+            publisher.publish(
+                publisher.message().toAddress().exchange(doesNotExist).message(), ctx -> {});
+            return false;
+          } catch (AmqpException.AmqpEntityNotFoundException e) {
+            exception.set(e);
+            return true;
+          }
+        });
+    assertThat(exception.get())
+        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
+        .hasMessageContaining(doesNotExist);
   }
 
   @Test
   @DisabledIfAddressV1Permitted
   void consumingFromNonExistingQueueShouldThrow() {
-    String name = uuid();
+    String doesNotExist = uuid();
     assertThatThrownBy(
-            () -> connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).build())
+            () ->
+                connection
+                    .consumerBuilder()
+                    .queue(doesNotExist)
+                    .messageHandler((ctx, msg) -> {})
+                    .build())
         .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class)
-        .hasMessageContaining(name);
+        .hasMessageContaining(doesNotExist);
   }
 
   private static String uuid() {

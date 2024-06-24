@@ -28,6 +28,7 @@ abstract class ExceptionUtils {
 
   static final String ERROR_UNAUTHORIZED_ACCESS = "amqp:unauthorized-access";
   static final String ERROR_NOT_FOUND = "amqp:not-found";
+  static final String ERROR_RESOURCE_DELETED = "amqp:resource-deleted";
 
   private ExceptionUtils() {}
 
@@ -90,6 +91,8 @@ abstract class ExceptionUtils {
       ErrorCondition errorCondition = ((ClientLinkRemotelyClosedException) e).getErrorCondition();
       if (isNotFound(errorCondition)) {
         return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
+      } else if (isResourceDeleted(errorCondition)) {
+        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
       } else {
         return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }
@@ -114,6 +117,10 @@ abstract class ExceptionUtils {
 
   private static boolean isNotFound(ErrorCondition errorCondition) {
     return errorConditionEquals(errorCondition, ERROR_NOT_FOUND);
+  }
+
+  private static boolean isResourceDeleted(ErrorCondition errorCondition) {
+    return errorConditionEquals(errorCondition, ERROR_RESOURCE_DELETED);
   }
 
   private static boolean errorConditionEquals(ErrorCondition errorCondition, String expected) {
