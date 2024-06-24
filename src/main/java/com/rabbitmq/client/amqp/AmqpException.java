@@ -49,7 +49,22 @@ public class AmqpException extends RuntimeException {
     }
   }
 
-  public static class AmqpResourceClosedException extends AmqpException {
+  public static class AmqpResourceInvalidStateException extends AmqpException {
+
+    public AmqpResourceInvalidStateException(String format, Object... args) {
+      super(format, args);
+    }
+
+    public AmqpResourceInvalidStateException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
+  public static class AmqpResourceClosedException extends AmqpResourceInvalidStateException {
+
+    public AmqpResourceClosedException(String message) {
+      super(message);
+    }
 
     public AmqpResourceClosedException(String message, Throwable cause) {
       super(message, cause);

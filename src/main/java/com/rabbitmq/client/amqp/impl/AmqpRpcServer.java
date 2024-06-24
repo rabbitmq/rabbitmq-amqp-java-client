@@ -17,13 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.Consumer;
-import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.Publisher;
-import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.*;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +32,18 @@ class AmqpRpcServer implements RpcServer {
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcServer.class);
 
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
+
+  private static final Predicate<Exception> RESPONSE_SENDING_EXCEPTION_PREDICATE =
+      ex ->
+          ex instanceof AmqpException.AmqpResourceInvalidStateException
+              && !(ex instanceof AmqpException.AmqpResourceClosedException);
+
+  private static final List<Duration> RESPONSE_SENDING_RETRY_WAIT_TIMES =
+      List.of(
+          Duration.ofSeconds(1),
+          Duration.ofSeconds(3),
+          Duration.ofSeconds(5),
+          Duration.ofSeconds(10));
 
   private final AmqpConnection connection;
   private final Publisher publisher;
@@ -82,7 +94,7 @@ class AmqpRpcServer implements RpcServer {
                   Object correlationId = correlationIdExtractor.apply(msg);
                   reply = replyPostProcessor.apply(reply, correlationId);
                   if (reply != null) {
-                    this.publisher.publish(reply, NO_OP_CALLBACK);
+                    sendReply(reply);
                   }
                 })
             .build();
@@ -102,6 +114,21 @@ class AmqpRpcServer implements RpcServer {
       } catch (Exception e) {
         LOGGER.warn("Error while closing RPC server publisher: {}", e.getMessage());
       }
+    }
+  }
+
+  private void sendReply(Message reply) {
+    try {
+      RetryUtils.callAndMaybeRetry(
+          () -> {
+            this.publisher.publish(reply, NO_OP_CALLBACK);
+            return null;
+          },
+          RESPONSE_SENDING_EXCEPTION_PREDICATE,
+          RESPONSE_SENDING_RETRY_WAIT_TIMES,
+          "RPC Server Response");
+    } catch (Exception e) {
+      LOGGER.info("Error while processing RPC request: {}", e.getMessage());
     }
   }
 }
