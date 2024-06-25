@@ -57,15 +57,15 @@ public class ExceptionUtilsTest {
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
     assertThat(
             convert(new ClientSessionRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
-        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class);
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(convert(new ClientSessionRemotelyClosedException("")))
         .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
     assertThat(convert(new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
-        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class);
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(
             convert(
                 new ClientLinkRemotelyClosedException("", errorCondition(ERROR_RESOURCE_DELETED))))
-        .isInstanceOf(AmqpException.AmqpEntityNotFoundException.class);
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(convert(new ClientLinkRemotelyClosedException("")))
         .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
   }

@@ -83,16 +83,16 @@ abstract class ExceptionUtils {
       if (isUnauthorizedAccess(errorCondition)) {
         return new AmqpException.AmqpSecurityException(e.getMessage(), e);
       } else if (isNotFound(errorCondition)) {
-        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
+        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else {
         return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }
     } else if (e instanceof ClientLinkRemotelyClosedException) {
       ErrorCondition errorCondition = ((ClientLinkRemotelyClosedException) e).getErrorCondition();
       if (isNotFound(errorCondition)) {
-        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
+        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else if (isResourceDeleted(errorCondition)) {
-        return new AmqpException.AmqpEntityNotFoundException(e.getMessage(), e);
+        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else {
         return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }

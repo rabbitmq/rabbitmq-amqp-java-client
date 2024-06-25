@@ -42,9 +42,9 @@ public class AmqpException extends RuntimeException {
     }
   }
 
-  public static class AmqpEntityNotFoundException extends AmqpException {
+  public static class AmqpEntityDoesNotExistException extends AmqpException {
 
-    public AmqpEntityNotFoundException(String message, Throwable cause) {
+    public AmqpEntityDoesNotExistException(String message, Throwable cause) {
       super(message, cause);
     }
   }
