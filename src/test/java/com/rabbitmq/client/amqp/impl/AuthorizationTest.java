@@ -71,7 +71,7 @@ public class AuthorizationTest {
   void connectionWithNoVirtualHostAccessShouldThrow() {
     assertThatThrownBy(
             () -> environment.connectionBuilder().username(USERNAME).password(PASSWORD).build())
-        .isInstanceOf(AmqpException.AmqpSecurityException.class);
+        .isInstanceOf(AmqpException.AmqpConnectionException.class);
   }
 
   @Test

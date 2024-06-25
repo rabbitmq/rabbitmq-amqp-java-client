@@ -31,6 +31,13 @@ public class AmqpException extends RuntimeException {
     super(message, cause);
   }
 
+  public static class AmqpConnectionException extends AmqpException {
+
+    public AmqpConnectionException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
   public static class AmqpSecurityException extends AmqpException {
 
     public AmqpSecurityException(String message, Throwable cause) {

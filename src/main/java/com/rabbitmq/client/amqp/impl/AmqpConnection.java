@@ -33,12 +33,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
-import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.SslOptions;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIOException;
 import org.slf4j.Logger;
@@ -47,14 +45,7 @@ import org.slf4j.LoggerFactory;
 final class AmqpConnection extends ResourceBase implements Connection {
 
   private static final Predicate<Throwable> RECOVERY_PREDICATE =
-      t -> {
-        if (t instanceof SSLException
-            || (t.getCause() != null && t.getCause() instanceof SSLException)) {
-          return false;
-        } else {
-          return true;
-        }
-      };
+      t -> t instanceof AmqpException.AmqpConnectionException;
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
@@ -252,17 +243,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
-          if (RECOVERY_PREDICATE.test(event.failureCause()) && this.state() != OPENING) {
-            if (event.failureCause() instanceof ClientConnectionRemotelyClosedException
-                && this.recoveringConnection.get()) {
-              LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
-            } else {
-              LOGGER.debug("Queueing recovery task");
-              this.recoveryRequestQueue.add(
-                  () ->
-                      recoverAfterConnectionFailure(
-                          recoveryConfiguration, name, event.failureCause(), resultReference));
-            }
+          ClientIOException ioex = event.failureCause();
+          LOGGER.debug("Disconnect handler, error is the following:", ioex);
+          if (this.state() == OPENING) {
+            LOGGER.debug("Connection is still opening, disconnect handler skipped");
+            // the broker is not available when opening the connection
+            // nothing to do in this listener
+            return;
+          }
+          if (this.recoveringConnection.get()) {
+            LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
+            return;
+          }
+          AmqpException exception = ExceptionUtils.convert(event.failureCause());
+
+          if (RECOVERY_PREDICATE.test(exception) && this.state() != OPENING) {
+            LOGGER.debug("Queueing recovery task, error is {}", exception.getMessage());
+            this.recoveryRequestQueue.add(
+                () ->
+                    recoverAfterConnectionFailure(
+                        recoveryConfiguration, name, exception, resultReference));
           } else {
             LOGGER.debug(
                 "Not recovering connection for error {}", event.failureCause().getMessage());
@@ -276,11 +276,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private void recoverAfterConnectionFailure(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
-      ClientIOException nativeFailureCause,
+      AmqpException failureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
-    AmqpException failureCause =
-        ExceptionUtils.convert(nativeFailureCause, "Connection disconnected");
     LOGGER.info("Connection to {} failed, trying to recover", this.currentConnectionLabel());
     this.state(RECOVERING, failureCause);
     this.changeStateOfPublishers(RECOVERING, failureCause);
@@ -357,7 +355,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
         throw ex;
       } catch (Exception ex) {
         LOGGER.info("Error while trying to recover connection", ex);
-        // TODO determine whether we should recover after the exception
+        if (!RECOVERY_PREDICATE.test(ex)) {
+          LOGGER.info(
+              "Stopping connection recovery, exception is not recoverable: {}", ex.getMessage());
+          throw new AmqpException("Could not recover connection after fatal exception", ex);
+        }
       }
     }
   }

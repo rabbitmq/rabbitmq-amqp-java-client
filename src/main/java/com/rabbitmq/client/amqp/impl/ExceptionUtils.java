@@ -53,9 +53,13 @@ abstract class ExceptionUtils {
 
   static AmqpException convertOnConnection(ClientException e) {
     if (e instanceof ClientConnectionRemotelyClosedException) {
-      // the user does not have access to the virtual host or TLS error
-      return new AmqpException.AmqpSecurityException(
-          e.getCause() instanceof SSLException ? e.getCause() : e);
+      if (isNetworkError(e)) {
+        throw new AmqpException.AmqpConnectionException(e.getMessage(), e);
+      } else {
+        // likely a TLS error
+        return new AmqpException.AmqpSecurityException(
+            e.getCause() instanceof SSLException ? e.getCause() : e);
+      }
     } else {
       return convert(e);
     }
@@ -75,8 +79,8 @@ abstract class ExceptionUtils {
       return new AmqpException.AmqpSecurityException(message, e.getCause());
     } else if (e instanceof ClientConnectionSecurityException) {
       throw new AmqpException.AmqpSecurityException(message, e);
-    } else if (e instanceof ClientConnectionRemotelyClosedException) {
-      return new AmqpException(message, e);
+    } else if (isNetworkError(e)) {
+      return new AmqpException.AmqpConnectionException(e.getMessage(), e);
     } else if (e instanceof ClientSessionRemotelyClosedException) {
       ErrorCondition errorCondition =
           ((ClientSessionRemotelyClosedException) e).getErrorCondition();
@@ -95,6 +99,13 @@ abstract class ExceptionUtils {
         return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else {
         return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
+      }
+    } else if (e instanceof ClientConnectionRemotelyClosedException) {
+      if (!isUnauthorizedAccess(
+          ((ClientConnectionRemotelyClosedException) e).getErrorCondition())) {
+        return new AmqpException.AmqpConnectionException(e.getMessage(), e);
+      } else {
+        return new AmqpException(e.getMessage(), e);
       }
     } else {
       return new AmqpException(e);
@@ -125,5 +136,16 @@ abstract class ExceptionUtils {
 
   private static boolean errorConditionEquals(ErrorCondition errorCondition, String expected) {
     return errorCondition != null && expected.equals(errorCondition.condition());
+  }
+
+  private static boolean isNetworkError(ClientException e) {
+    if (e instanceof ClientConnectionRemotelyClosedException) {
+      String message = e.getMessage();
+      if (message != null) {
+        message = message.toLowerCase();
+        return message.contains("connection reset") || message.contains("connection refused");
+      }
+    }
+    return false;
   }
 }
