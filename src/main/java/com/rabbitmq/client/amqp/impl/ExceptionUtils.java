@@ -91,8 +91,6 @@ abstract class ExceptionUtils {
           ((ClientConnectionRemotelyClosedException) e).getErrorCondition();
       if (isNetworkError(e) || !isUnauthorizedAccess(errorCondition)) {
         return new AmqpException.AmqpConnectionException(e.getMessage(), e);
-      } else if (e.getCause() instanceof SSLException) {
-        return new AmqpException.AmqpSecurityException(e.getCause());
       } else {
         return new AmqpException(e.getMessage(), e);
       }
