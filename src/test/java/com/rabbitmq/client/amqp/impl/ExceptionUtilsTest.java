@@ -21,32 +21,12 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.AmqpException;
-import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.Test;
 
 public class ExceptionUtilsTest {
-
-  @Test
-  void convertOnConnectionTest() {
-    assertThat(
-            convertOnConnection(
-                new ClientConnectionRemotelyClosedException("", new RuntimeException())))
-        .isInstanceOf(AmqpException.AmqpSecurityException.class)
-        .hasCauseInstanceOf(ClientConnectionRemotelyClosedException.class);
-    assertThat(
-            convertOnConnection(
-                new ClientConnectionRemotelyClosedException("", new SSLException(""))))
-        .isInstanceOf(AmqpException.AmqpSecurityException.class)
-        .hasCauseInstanceOf(SSLException.class);
-    assertThat(convertOnConnection(new ClientException("")))
-        .isInstanceOf(AmqpException.class)
-        .hasCauseInstanceOf(ClientException.class);
-  }
 
   @Test
   void convertTest() {

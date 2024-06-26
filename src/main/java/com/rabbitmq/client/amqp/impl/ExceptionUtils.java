@@ -51,20 +51,6 @@ abstract class ExceptionUtils {
     return convert(e, null);
   }
 
-  static AmqpException convertOnConnection(ClientException e) {
-    if (e instanceof ClientConnectionRemotelyClosedException) {
-      if (isNetworkError(e)) {
-        throw new AmqpException.AmqpConnectionException(e.getMessage(), e);
-      } else {
-        // likely a TLS error
-        return new AmqpException.AmqpSecurityException(
-            e.getCause() instanceof SSLException ? e.getCause() : e);
-      }
-    } else {
-      return convert(e);
-    }
-  }
-
   static AmqpException convert(ExecutionException e) {
     if (e.getCause() instanceof ClientException) {
       return convert((ClientException) e.getCause());
@@ -78,7 +64,7 @@ abstract class ExceptionUtils {
     if (e.getCause() instanceof SSLException) {
       return new AmqpException.AmqpSecurityException(message, e.getCause());
     } else if (e instanceof ClientConnectionSecurityException) {
-      throw new AmqpException.AmqpSecurityException(message, e);
+      return new AmqpException.AmqpSecurityException(message, e);
     } else if (isNetworkError(e)) {
       return new AmqpException.AmqpConnectionException(e.getMessage(), e);
     } else if (e instanceof ClientSessionRemotelyClosedException) {
@@ -101,14 +87,17 @@ abstract class ExceptionUtils {
         return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }
     } else if (e instanceof ClientConnectionRemotelyClosedException) {
-      if (!isUnauthorizedAccess(
-          ((ClientConnectionRemotelyClosedException) e).getErrorCondition())) {
+      ErrorCondition errorCondition =
+          ((ClientConnectionRemotelyClosedException) e).getErrorCondition();
+      if (isNetworkError(e) || !isUnauthorizedAccess(errorCondition)) {
         return new AmqpException.AmqpConnectionException(e.getMessage(), e);
+      } else if (e.getCause() instanceof SSLException) {
+        return new AmqpException.AmqpSecurityException(e.getCause());
       } else {
         return new AmqpException(e.getMessage(), e);
       }
     } else {
-      return new AmqpException(e);
+      return new AmqpException(message, e);
     }
   }
 

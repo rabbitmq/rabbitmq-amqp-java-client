@@ -205,7 +205,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       checkBrokerVersion(connection);
       return connection;
     } catch (ClientException e) {
-      throw ExceptionUtils.convertOnConnection(e);
+      throw ExceptionUtils.convert(e);
     } finally {
       LOGGER.debug("Connection attempt took {}", stopWatch.stop());
     }
@@ -256,6 +256,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
             return;
           }
           AmqpException exception = ExceptionUtils.convert(event.failureCause());
+          LOGGER.debug("Converted native exception to {}", exception.getClass().getSimpleName());
 
           if (RECOVERY_PREDICATE.test(exception) && this.state() != OPENING) {
             LOGGER.debug("Queueing recovery task, error is {}", exception.getMessage());
