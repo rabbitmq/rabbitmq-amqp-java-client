@@ -93,24 +93,26 @@ public abstract class TestUtils {
   public static Duration waitAtMost(
       Duration timeout, CallableBooleanSupplier condition, Supplier<String> message)
       throws Exception {
+    long start = System.nanoTime();
     if (condition.getAsBoolean()) {
       return Duration.ZERO;
     }
-    int waitTime = 100;
-    int waitedTime = 0;
-    int timeoutInMs = (int) timeout.toMillis();
+    Duration waitTime = Duration.ofMillis(100);
+    Duration waitedTime = Duration.ofNanos(System.nanoTime() - start);
     Exception exception = null;
-    while (waitedTime <= timeoutInMs) {
-      Thread.sleep(waitTime);
-      waitedTime += waitTime;
+    while (waitedTime.compareTo(timeout) <= 0) {
+      Thread.sleep(waitTime.toMillis());
+      waitedTime = waitedTime.plus(waitTime);
+      start = System.nanoTime();
       try {
         if (condition.getAsBoolean()) {
-          return Duration.ofMillis(waitedTime);
+          return waitedTime;
         }
         exception = null;
       } catch (Exception e) {
         exception = e;
       }
+      waitedTime = waitedTime.plus(Duration.ofNanos(System.nanoTime() - start));
     }
     String msg;
     if (message == null) {
@@ -123,7 +125,7 @@ public abstract class TestUtils {
     } else {
       fail(msg, exception);
     }
-    return Duration.ofMillis(waitedTime);
+    return waitedTime;
   }
 
   public static class CountDownLatchReferenceConditions {

@@ -62,7 +62,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.destinationSpec = builder.destination();
     this.connection = builder.connection();
     this.publishTimeout = builder.publishTimeout();
-    this.sessionHandler = new SessionHandler.ConnectionNativeSessionSessionHandler(this.connection);
+    this.sessionHandler = this.connection.createSessionHandler();
     this.sender = this.createSender(sessionHandler.session(), this.address, this.publishTimeout);
     this.metricsCollector = this.connection.metricsCollector();
     this.observationCollector = this.connection.observationCollector();

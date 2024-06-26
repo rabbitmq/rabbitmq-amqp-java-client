@@ -74,7 +74,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .subscribe(builder.queue(), builder.messageHandler());
     this.address = "/queue/" + builder.queue();
     this.connection = builder.connection();
-    this.sessionHandler = new SessionHandler.ConnectionNativeSessionSessionHandler(this.connection);
+    this.sessionHandler = this.connection.createSessionHandler();
     this.nativeReceiver = this.createNativeReceiver(this.sessionHandler.session(), this.address);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();

@@ -35,6 +35,8 @@ import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
 @ExtendWith(AmqpTestInfrastructureExtension.class)
@@ -55,8 +57,9 @@ public class TopologyRecoveryTest {
     this.connectionAttemptCount = new AtomicInteger();
   }
 
-  @Test
-  void topologyCallbacksShouldBeCalledWhenUpdatingTopology(TestInfo info) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void topologyCallbacksShouldBeCalledWhenUpdatingTopology(boolean isolateResources) {
     Set<String> events = ConcurrentHashMap.newKeySet();
     AtomicInteger eventCount = new AtomicInteger();
     TopologyListener topologyListener =
@@ -113,14 +116,15 @@ public class TopologyRecoveryTest {
     try (AmqpConnection connection =
         new AmqpConnection(
             new AmqpConnectionBuilder((AmqpEnvironment) environment)
+                .isolateResources(isolateResources)
                 .topologyListener(topologyListener))) {
       Management management = connection.management();
-      String e = TestUtils.name(info);
+      String e = TestUtils.name(testInfo);
       management.exchange().name(e).declare();
       assertThat(events).contains("exchangeDeclared");
       assertThat(eventCount).hasValue(1);
 
-      String q = TestUtils.name(info);
+      String q = TestUtils.name(testInfo);
       management.queue().name(q).declare();
       assertThat(events).contains("queueDeclared");
       assertThat(eventCount).hasValue(2);
@@ -157,7 +161,8 @@ public class TopologyRecoveryTest {
   @Test
   void queueShouldNotBeRecoveredWhenNoTopologyRecovery() {
     try (Connection connection =
-        connection(this.connectionName, this.recoveredLatch, b -> b.recovery().topology(false))) {
+        connection(
+            this.connectionName, false, this.recoveredLatch, b -> b.recovery().topology(false))) {
       assertThat(connectionAttemptCount).hasValue(1);
       String q = queue();
       connection.management().queue(q).autoDelete(false).exclusive(true).declare();
@@ -167,12 +172,14 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void resourceListenersShouldBeCalled() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void resourceListenersShouldBeCalled(boolean isolateResources) throws Exception {
     List<String> events = new CopyOnWriteArrayList<>();
     try (Connection connection =
         connection(
             this.connectionName,
+            isolateResources,
             this.recoveredLatch,
             b ->
                 b.listeners(
@@ -222,9 +229,10 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void autoDeleteExchangeAndExclusiveQueueShouldBeRedeclared() {
-    try (Connection connection = connection()) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void autoDeleteExchangeAndExclusiveQueueShouldBeRedeclared(boolean isolateResources) {
+    try (Connection connection = connection(isolateResources)) {
       assertThat(connectionAttemptCount).hasValue(1);
       String e = exchange();
       String q = queue();
@@ -254,9 +262,11 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void autoDeleteExchangeAndExclusiveQueueWithE2eBindingShouldBeRedeclared() {
-    try (Connection connection = connection()) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void autoDeleteExchangeAndExclusiveQueueWithE2eBindingShouldBeRedeclared(
+      boolean isolateResources) {
+    try (Connection connection = connection(isolateResources)) {
       assertThat(connectionAttemptCount).hasValue(1);
       String e1 = exchange();
       String e2 = exchange();
@@ -289,11 +299,12 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void deletedQueueBindingIsNotRecovered() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void deletedQueueBindingIsNotRecovered(boolean isolateResources) {
     String e = exchange();
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
@@ -341,12 +352,13 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void deletedEchangeBindingIsNotRecovered() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void deletedEchangeBindingIsNotRecovered(boolean isolateResources) {
     String e1 = exchange();
     String e2 = exchange();
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e1).type(FANOUT).declare();
@@ -427,10 +439,11 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void closedConsumerIsNotRecovered() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void closedConsumerIsNotRecovered(boolean isolateResources) throws Exception {
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().queue(q).declare();
@@ -447,11 +460,12 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void recoverConsumers() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void recoverConsumers(boolean isolateResources) {
     String e = exchange();
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
@@ -486,11 +500,12 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void recoverPublisherConsumerSeveralTimes() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void recoverPublisherConsumerSeveralTimes(boolean isolateResources) {
     String e = exchange();
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().exchange(e).type(FANOUT).declare();
@@ -527,10 +542,11 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void disposeStaleMessageShouldBeSilent() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void disposeStaleMessageShouldBeSilent(boolean isolateResources) throws Exception {
     String q = queue();
-    Connection connection = connection();
+    Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
     try {
       connection.management().queue(q).declare();
@@ -577,9 +593,10 @@ public class TopologyRecoveryTest {
     }
   }
 
-  @Test
-  void autoDeleteClientNamedQueueShouldBeRecovered() throws Exception {
-    try (Connection connection = connection()) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void autoDeleteClientNamedQueueShouldBeRecovered(boolean isolateResources) throws Exception {
+    try (Connection connection = connection(isolateResources)) {
       Management.QueueInfo queueInfo = connection.management().queue().exclusive(true).declare();
 
       String queueName = queueInfo.name();
@@ -619,17 +636,23 @@ public class TopologyRecoveryTest {
     return "c-" + TestUtils.name(this.testInfo);
   }
 
+  Connection connection(boolean isolateResources) {
+    return this.connection(this.connectionName, isolateResources, this.recoveredLatch, b -> {});
+  }
+
   Connection connection() {
-    return this.connection(this.connectionName, this.recoveredLatch, b -> {});
+    return this.connection(this.connectionName, false, this.recoveredLatch, b -> {});
   }
 
   Connection connection(
       String name,
+      boolean isolateResources,
       AtomicReference<CountDownLatch> recoveredLatch,
       java.util.function.Consumer<AmqpConnectionBuilder> builderCallback) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
     builder
         .name(name)
+        .isolateResources(isolateResources)
         .addressSelector(
             addresses -> {
               connectionAttemptCount.incrementAndGet();

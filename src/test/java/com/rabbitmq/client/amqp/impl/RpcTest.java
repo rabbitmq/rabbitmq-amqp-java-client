@@ -33,6 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @ExtendWith(AmqpTestInfrastructureExtension.class)
 public class RpcTest {
@@ -201,8 +203,9 @@ public class RpcTest {
     }
   }
 
-  @Test
-  void rpcShouldRecoverAfterConnectionIsClosed()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void rpcShouldRecoverAfterConnectionIsClosed(boolean isolateResources)
       throws ExecutionException, InterruptedException, TimeoutException {
     String clientConnectionName = UUID.randomUUID().toString();
     CountDownLatch clientConnectionLatch = new CountDownLatch(1);
@@ -213,6 +216,7 @@ public class RpcTest {
     Connection serverConnection =
         connectionBuilder()
             .name(serverConnectionName)
+            .isolateResources(isolateResources)
             .listeners(recoveredListener(serverConnectionLatch))
             .recovery()
             .backOffDelayPolicy(backOffDelayPolicy)
@@ -222,6 +226,7 @@ public class RpcTest {
     try (Connection clientConnection =
         connectionBuilder()
             .name(clientConnectionName)
+            .isolateResources(isolateResources)
             .listeners(recoveredListener(clientConnectionLatch))
             .recovery()
             .backOffDelayPolicy(backOffDelayPolicy)

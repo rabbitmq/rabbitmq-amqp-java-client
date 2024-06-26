@@ -17,7 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.Session;
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 interface SessionHandler extends AutoCloseable {
 
@@ -47,5 +53,51 @@ interface SessionHandler extends AutoCloseable {
 
     @Override
     public void close() {}
+  }
+
+  class SingleSessionSessionHandler implements SessionHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SingleSessionSessionHandler.class);
+
+    private final Supplier<Connection> connection;
+    private final AtomicReference<Session> session = new AtomicReference<>();
+
+    public SingleSessionSessionHandler(AmqpConnection connection) {
+      this.connection = connection::nativeConnection;
+    }
+
+    @Override
+    public Session session() {
+      closeCurrentSession();
+      try {
+        Session session = this.connection.get().openSession();
+        this.session.set(ExceptionUtils.wrapGet(session.openFuture()));
+        return this.session.get();
+      } catch (ClientException e) {
+        this.session.set(null);
+        throw ExceptionUtils.convert(e);
+      }
+    }
+
+    @Override
+    public Session sessionNoCheck() {
+      return this.session();
+    }
+
+    @Override
+    public void close() {
+      closeCurrentSession();
+    }
+
+    private void closeCurrentSession() {
+      Session previousSession = session.getAndSet(null);
+      if (previousSession != null) {
+        try {
+          previousSession.close();
+        } catch (RuntimeException e) {
+          LOGGER.debug("Error while closing session: {}", e.getMessage());
+        }
+      }
+    }
   }
 }

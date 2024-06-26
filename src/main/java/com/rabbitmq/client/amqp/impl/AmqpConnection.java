@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
@@ -68,6 +69,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
   private final DefaultConnectionSettings<?> connectionSettings =
       DefaultConnectionSettings.instance();
+  private Supplier<SessionHandler> sessionHandlerSupplier;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -75,7 +77,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.environment = builder.environment();
     builder.connectionSettings().copyTo(this.connectionSettings);
     this.connectionSettings.consolidate();
-
+    this.sessionHandlerSupplier =
+        builder.isolateResources()
+            ? () -> new SessionHandler.SingleSessionSessionHandler(this)
+            : () -> new SessionHandler.ConnectionNativeSessionSessionHandler(this);
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
     AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
         builder.recoveryConfiguration();
@@ -489,6 +494,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   ObservationCollector observationCollector() {
     return this.environment.observationCollector();
+  }
+
+  SessionHandler createSessionHandler() {
+    return this.sessionHandlerSupplier.get();
   }
 
   Publisher createPublisher(AmqpPublisherBuilder builder) {

@@ -39,6 +39,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisabledIfRabbitMqCtlNotSet
 public class AmqpConnectionRecoveryTest {
@@ -73,8 +75,10 @@ public class AmqpConnectionRecoveryTest {
     environment.close();
   }
 
-  @Test
-  void connectionShouldRecoverAfterClosingIt(TestInfo info) throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void connectionShouldRecoverAfterClosingIt(boolean isolateResources, TestInfo info)
+      throws Exception {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
     Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();
@@ -84,6 +88,7 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
+                .isolateResources(isolateResources)
                 .listeners(
                     context -> {
                       if (stateLatches.containsKey(context.currentState())) {
@@ -170,8 +175,9 @@ public class AmqpConnectionRecoveryTest {
     }
   }
 
-  @Test
-  void connectionShouldRecoverAfterBrokerStopStart(TestInfo info) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void connectionShouldRecoverAfterBrokerStopStart(boolean isolateResources, TestInfo info) {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
     Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();
@@ -181,6 +187,7 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
+                .isolateResources(isolateResources)
                 .listeners(
                     context -> {
                       if (stateLatches.containsKey(context.currentState())) {

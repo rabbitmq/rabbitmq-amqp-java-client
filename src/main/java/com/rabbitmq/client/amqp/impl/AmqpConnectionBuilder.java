@@ -33,6 +33,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   private final List<Resource.StateListener> listeners = new ArrayList<>();
   private String name;
   private TopologyListener topologyListener;
+  private boolean isolateResources = false;
 
   AmqpConnectionBuilder(AmqpEnvironment environment) {
     this.environment = environment;
@@ -113,6 +114,15 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   public RecoveryConfiguration recovery() {
     this.recoveryConfiguration.activated(true);
     return this.recoveryConfiguration;
+  }
+
+  AmqpConnectionBuilder isolateResources(boolean isolateResources) {
+    this.isolateResources = isolateResources;
+    return this;
+  }
+
+  boolean isolateResources() {
+    return isolateResources;
   }
 
   @Override
