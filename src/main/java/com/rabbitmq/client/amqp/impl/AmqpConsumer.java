@@ -55,6 +55,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicReference<CountDownLatch> echoedFlowAfterPauseLatch = new AtomicReference<>();
   private final MetricsCollector metricsCollector;
+  private final SessionHandler sessionHandler;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private Scheduler protonExecutor;
@@ -72,9 +73,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .observationCollector()
             .subscribe(builder.queue(), builder.messageHandler());
     this.address = "/queue/" + builder.queue();
-    this.nativeReceiver = createNativeReceiver(builder.connection().nativeSession(), this.address);
-    this.initStateFromNativeReceiver(this.nativeReceiver);
     this.connection = builder.connection();
+    this.sessionHandler = new SessionHandler.ConnectionNativeSessionSessionHandler(this.connection);
+    this.nativeReceiver = this.createNativeReceiver(this.sessionHandler.session(), this.address);
+    this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
     this.startReceivingLoop();
     this.state(OPEN);
@@ -192,7 +194,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void recoverAfterConnectionFailure() {
-    this.nativeReceiver = createNativeReceiver(this.connection.nativeSession(false), this.address);
+    this.nativeReceiver = createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.paused.set(false);
     startReceivingLoop();
@@ -211,6 +213,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       }
       try {
         this.nativeReceiver.close();
+        this.sessionHandler.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing receiver", e);
       }

@@ -51,6 +51,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final Function<Message, Tracker> publishCall;
   private final DefaultAddressBuilder.DestinationSpec destinationSpec;
   private final Duration publishTimeout;
+  private final SessionHandler sessionHandler;
   private volatile ObservationCollector.ConnectionInfo connectionInfo;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
@@ -61,8 +62,8 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.destinationSpec = builder.destination();
     this.connection = builder.connection();
     this.publishTimeout = builder.publishTimeout();
-    this.sender =
-        this.createSender(builder.connection().nativeSession(), this.address, this.publishTimeout);
+    this.sessionHandler = new SessionHandler.ConnectionNativeSessionSessionHandler(this.connection);
+    this.sender = this.createSender(sessionHandler.session(), this.address, this.publishTimeout);
     this.metricsCollector = this.connection.metricsCollector();
     this.observationCollector = this.connection.observationCollector();
     this.state(OPEN);
@@ -127,7 +128,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   void recoverAfterConnectionFailure() {
     this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
     this.sender =
-        this.createSender(this.connection.nativeSession(false), this.address, this.publishTimeout);
+        this.createSender(this.sessionHandler.sessionNoCheck(), this.address, this.publishTimeout);
   }
 
   @Override
@@ -162,6 +163,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
       this.connection.removePublisher(this);
       try {
         this.sender.close();
+        this.sessionHandler.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing sender", e);
       }
