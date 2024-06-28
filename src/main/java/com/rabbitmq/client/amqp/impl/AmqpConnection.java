@@ -204,7 +204,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
               .client()
               .connect(
                   this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
-
       ExceptionUtils.wrapGet(connection.openFuture());
       LOGGER.debug("Connection attempt succeeded");
       checkBrokerVersion(connection);

@@ -65,67 +65,68 @@ public abstract class TestUtils {
     boolean getAsBoolean() throws Exception;
   }
 
-  public static Duration waitAtMost(CallableBooleanSupplier condition) throws Exception {
+  public static Duration waitAtMost(CallableBooleanSupplier condition) {
     return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, null);
   }
 
-  public static Duration waitAtMost(CallableBooleanSupplier condition, Supplier<String> message)
-      throws Exception {
+  public static Duration waitAtMost(CallableBooleanSupplier condition, Supplier<String> message) {
     return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, message);
   }
 
-  public static Duration waitAtMost(Duration timeout, CallableBooleanSupplier condition)
-      throws Exception {
+  public static Duration waitAtMost(Duration timeout, CallableBooleanSupplier condition) {
     return waitAtMost(timeout, condition, null);
   }
 
-  public static Duration waitAtMost(int timeoutInSeconds, CallableBooleanSupplier condition)
-      throws Exception {
+  public static Duration waitAtMost(int timeoutInSeconds, CallableBooleanSupplier condition) {
     return waitAtMost(timeoutInSeconds, condition, null);
   }
 
   public static Duration waitAtMost(
-      int timeoutInSeconds, CallableBooleanSupplier condition, Supplier<String> message)
-      throws Exception {
+      int timeoutInSeconds, CallableBooleanSupplier condition, Supplier<String> message) {
     return waitAtMost(Duration.ofSeconds(timeoutInSeconds), condition, message);
   }
 
   public static Duration waitAtMost(
-      Duration timeout, CallableBooleanSupplier condition, Supplier<String> message)
-      throws Exception {
+      Duration timeout, CallableBooleanSupplier condition, Supplier<String> message) {
     long start = System.nanoTime();
-    if (condition.getAsBoolean()) {
-      return Duration.ZERO;
-    }
-    Duration waitTime = Duration.ofMillis(100);
-    Duration waitedTime = Duration.ofNanos(System.nanoTime() - start);
-    Exception exception = null;
-    while (waitedTime.compareTo(timeout) <= 0) {
-      Thread.sleep(waitTime.toMillis());
-      waitedTime = waitedTime.plus(waitTime);
-      start = System.nanoTime();
-      try {
-        if (condition.getAsBoolean()) {
-          return waitedTime;
-        }
-        exception = null;
-      } catch (Exception e) {
-        exception = e;
+    try {
+      if (condition.getAsBoolean()) {
+        return Duration.ZERO;
       }
-      waitedTime = waitedTime.plus(Duration.ofNanos(System.nanoTime() - start));
+      Duration waitTime = Duration.ofMillis(100);
+      Duration waitedTime = Duration.ofNanos(System.nanoTime() - start);
+      Exception exception = null;
+      while (waitedTime.compareTo(timeout) <= 0) {
+        Thread.sleep(waitTime.toMillis());
+        waitedTime = waitedTime.plus(waitTime);
+        start = System.nanoTime();
+        try {
+          if (condition.getAsBoolean()) {
+            return waitedTime;
+          }
+          exception = null;
+        } catch (Exception e) {
+          exception = e;
+        }
+        waitedTime = waitedTime.plus(Duration.ofNanos(System.nanoTime() - start));
+      }
+      String msg;
+      if (message == null) {
+        msg = "Waited " + timeout.getSeconds() + " second(s), condition never got true";
+      } else {
+        msg = "Waited " + timeout.getSeconds() + " second(s), " + message.get();
+      }
+      if (exception == null) {
+        fail(msg);
+      } else {
+        fail(msg, exception);
+      }
+      return waitedTime;
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-    String msg;
-    if (message == null) {
-      msg = "Waited " + timeout.getSeconds() + " second(s), condition never got true";
-    } else {
-      msg = "Waited " + timeout.getSeconds() + " second(s), " + message.get();
-    }
-    if (exception == null) {
-      fail(msg);
-    } else {
-      fail(msg, exception);
-    }
-    return waitedTime;
   }
 
   public static class CountDownLatchReferenceConditions {

@@ -20,10 +20,9 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
+import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
 import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -35,15 +34,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.IntStream;
+import java.util.function.Supplier;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -233,26 +234,26 @@ public class AmqpTest {
   }
 
   @Test
-  void pauseShouldStopMessageArrivalUnpauseShouldResumeIt() throws Exception {
+  void pauseShouldStopMessageArrivalUnpauseShouldResumeIt() {
     String q = connection.management().queue().exclusive(true).declare().name();
     Publisher publisher = connection.publisherBuilder().queue(q).build();
     int messageCount = 100;
     CountDownLatch publishLatch = new CountDownLatch(messageCount);
     Publisher.Callback callback = ctx -> publishLatch.countDown();
-    IntStream.range(0, messageCount)
-        .forEach(ignored -> publisher.publish(publisher.message(), callback));
+    range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), callback));
 
     assertThat(publishLatch).completes();
 
     int initialCredits = 10;
     Set<com.rabbitmq.client.amqp.Consumer.Context> messageContexts = ConcurrentHashMap.newKeySet();
-    com.rabbitmq.client.amqp.Consumer consumer =
-        connection
-            .consumerBuilder()
-            .queue(q)
-            .initialCredits(initialCredits)
-            .messageHandler((ctx, msg) -> messageContexts.add(ctx))
-            .build();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            connection
+                .consumerBuilder()
+                .queue(q)
+                .initialCredits(initialCredits)
+                .messageHandler((ctx, msg) -> messageContexts.add(ctx))
+                .build();
 
     waitAtMost(() -> messageContexts.size() == initialCredits);
 
@@ -260,13 +261,15 @@ public class AmqpTest {
 
     assertThat(Cli.queueInfo(q).unackedMessageCount()).isEqualTo(initialCredits);
 
-    ((AmqpConsumer) consumer).pause();
+    consumer.pause();
     new ArrayList<>(messageContexts).forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
 
     waitAtMost(() -> Cli.queueInfo(q).unackedMessageCount() == 0);
     waitAtMost(() -> messageContexts.size() == initialCredits);
-    ((AmqpConsumer) consumer).unpause();
+    consumer.unpause();
     waitAtMost(() -> messageContexts.size() == initialCredits * 2);
+    consumer.pause();
+    messageContexts.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
   }
 
   @Test
@@ -366,8 +369,7 @@ public class AmqpTest {
   }
 
   @Test
-  void publisherSendingShouldThrowWhenPublishingToNonExistingExchangeWithToProperty()
-      throws Exception {
+  void publisherSendingShouldThrowWhenPublishingToNonExistingExchangeWithToProperty() {
     String doesNotExist = uuid();
     Sync closedSync = sync();
     AtomicReference<Throwable> closedException = new AtomicReference<>();
@@ -442,6 +444,77 @@ public class AmqpTest {
     assertThat(exception.get())
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
+  }
+
+  @Test
+  void consumerShouldNotCloseUntilAllMessagesAreSettled() throws Exception {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    int messageToConsumeCount = messageCount / 2;
+    int initialCredits = messageCount / 10;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    AtomicInteger receivedCount = new AtomicInteger(0);
+    Set<com.rabbitmq.client.amqp.Consumer.Context> unsettledMessages =
+        ConcurrentHashMap.newKeySet();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            connection
+                .consumerBuilder()
+                .queue(name)
+                .initialCredits(messageCount / 10)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      if (receivedCount.incrementAndGet() <= initialCredits) {
+                        ctx.accept();
+                      } else {
+                        unsettledMessages.add(ctx);
+                      }
+                    })
+                .build();
+
+    int unsettledCount = waitUntilStable(unsettledMessages::size);
+    assertThat(unsettledCount).isNotZero();
+    int receivedCountBeforeClosing = receivedCount.get();
+
+    Sync consumerClosedSync = sync();
+    submitTask(
+        () -> {
+          consumer.close();
+          consumerClosedSync.down();
+        });
+    waitAtMost(consumer::paused);
+    submitTask(() -> unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept));
+    assertThat(consumerClosedSync).completes();
+    assertThat(receivedCount).hasValue(receivedCountBeforeClosing);
+    assertThat(connection.management().queueInfo(name))
+        .hasMessageCount(messageCount - receivedCount.get());
+  }
+
+  static <T> T waitUntilStable(Supplier<T> call) {
+    Duration timeout = Duration.ofSeconds(10);
+    Duration waitTime = Duration.ofMillis(200);
+    Duration waitedTime = Duration.ZERO;
+    T newValue = null;
+    while (waitedTime.compareTo(timeout) <= 0) {
+      T previousValue = call.get();
+      try {
+        Thread.sleep(waitTime.toMillis());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+      newValue = call.get();
+      if (newValue.equals(previousValue)) {
+        return newValue;
+      }
+    }
+    Assertions.fail("Value did not stabilize in %s, last value was %s", timeout, newValue);
+    return null;
   }
 
   private static String uuid() {

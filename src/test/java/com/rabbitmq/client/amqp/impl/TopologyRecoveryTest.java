@@ -245,7 +245,11 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler((context, message) -> consumeLatch.get().countDown())
+          .messageHandler(
+              (context, message) -> {
+                context.accept();
+                consumeLatch.get().countDown();
+              })
           .build();
 
       publisher.publish(publisher.message(), context -> {});
@@ -282,7 +286,11 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler((context, message) -> consumeLatch.get().countDown())
+          .messageHandler(
+              (context, message) -> {
+                context.accept();
+                consumeLatch.get().countDown();
+              })
           .build();
 
       publisher.publish(publisher.message(), context -> {});

@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.Resource.State.*;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -52,10 +53,12 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final Long id;
   private final String address;
   private final AmqpConnection connection;
-  private final AtomicBoolean paused = new AtomicBoolean(false);
+  private final AtomicReference<PauseStatus> pauseStatus =
+      new AtomicReference<>(PauseStatus.UNPAUSED);
   private final AtomicReference<CountDownLatch> echoedFlowAfterPauseLatch = new AtomicReference<>();
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
+  private final AtomicLong unsettledCount = new AtomicLong(0);
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private Scheduler protonExecutor;
@@ -115,6 +118,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         while (!Thread.currentThread().isInterrupted()) {
           Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
           if (delivery != null) {
+            this.unsettledCount.incrementAndGet();
             this.metricsCollector.consume();
             AmqpMessage message = new AmqpMessage(delivery.message());
             AtomicBoolean disposed = new AtomicBoolean(false);
@@ -127,6 +131,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                       try {
                         protonExecutor.execute(() -> replenishCreditIfNeeded());
                         delivery.disposition(DeliveryState.accepted(), true);
+                        unsettledCount.decrementAndGet();
                         metricsCollector.consumeDisposition(
                             MetricsCollector.ConsumeDisposition.ACCEPTED);
                       } catch (ClientIllegalStateException | ClientIOException e) {
@@ -143,6 +148,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                       try {
                         protonExecutor.execute(() -> replenishCreditIfNeeded());
                         delivery.disposition(DeliveryState.rejected("", ""), true);
+                        unsettledCount.decrementAndGet();
                         metricsCollector.consumeDisposition(
                             MetricsCollector.ConsumeDisposition.DISCARDED);
                       } catch (ClientIllegalStateException | ClientIOException e) {
@@ -159,6 +165,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                       try {
                         protonExecutor.execute(() -> replenishCreditIfNeeded());
                         delivery.disposition(DeliveryState.released(), true);
+                        unsettledCount.decrementAndGet();
                         metricsCollector.consumeDisposition(
                             MetricsCollector.ConsumeDisposition.REQUEUED);
                       } catch (ClientIllegalStateException | ClientIOException e) {
@@ -196,7 +203,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   void recoverAfterConnectionFailure() {
     this.nativeReceiver = createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address);
     this.initStateFromNativeReceiver(this.nativeReceiver);
-    this.paused.set(false);
+    this.pauseStatus.set(PauseStatus.UNPAUSED);
     startReceivingLoop();
   }
 
@@ -204,8 +211,15 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       if (cause == null) {
+        LOGGER.debug("Pausing receiver link before detaching it");
         // normal closing, pausing message dispatching
         this.pause();
+        LOGGER.debug("Receiver link paused. Unsettled message(s): {}", this.unsettledCount.get());
+        LOGGER.debug("Waiting for unsettled messages to get settled if necessary");
+        waitForUnsettledMessagesToSettle();
+        if (this.unsettledCount.get() > 0) {
+          LOGGER.debug("Closing receiver link with {} unsettled message(s)", this.unsettledCount);
+        }
       }
       this.connection.removeConsumer(this);
       if (this.receiveLoop != null) {
@@ -219,6 +233,21 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       }
       this.state(CLOSED, cause);
       this.metricsCollector.closeConsumer();
+    }
+  }
+
+  private void waitForUnsettledMessagesToSettle() {
+    Duration timeout = Duration.ofSeconds(10);
+    Duration waitTime = Duration.ofMillis(10);
+    Duration waitedTime = Duration.ZERO;
+    while (this.unsettledCount.get() > 0 && waitedTime.compareTo(timeout) <= 0) {
+      try {
+        Thread.sleep(waitTime.toMillis());
+        waitedTime = waitedTime.plus(waitTime);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
     }
   }
 
@@ -265,7 +294,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private void replenishCreditIfNeeded() {
-    if (!this.paused()) {
+    if (!this.pausedOrPausing()) {
       int creditWindow = this.initialCredits;
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
@@ -283,16 +312,24 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void pause() {
-    if (this.paused.compareAndSet(false, true)) {
-      CountDownLatch latch = new CountDownLatch(1);
-      this.echoedFlowAfterPauseLatch.set(latch);
-      this.protonExecutor.execute(this::doPause);
+    if (this.pauseStatus.compareAndSet(PauseStatus.UNPAUSED, PauseStatus.PAUSING)) {
       try {
-        if (!latch.await(10, TimeUnit.SECONDS)) {
-          LOGGER.warn("Did not receive echoed flow to pause receiver");
+        CountDownLatch latch = new CountDownLatch(1);
+        this.echoedFlowAfterPauseLatch.set(latch);
+        this.protonExecutor.execute(this::doPause);
+        try {
+          boolean echoed = latch.await(10, TimeUnit.SECONDS);
+          if (echoed) {
+            this.pauseStatus.set(PauseStatus.PAUSED);
+          } else {
+            LOGGER.warn("Did not receive echoed flow to pause receiver");
+            this.pauseStatus.set(PauseStatus.UNPAUSED);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
         }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+      } catch (Exception e) {
+        this.pauseStatus.set(PauseStatus.UNPAUSED);
       }
     }
   }
@@ -305,7 +342,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   void unpause() {
     checkOpen();
-    if (this.paused.compareAndSet(true, false)) {
+    if (this.pauseStatus.compareAndSet(PauseStatus.PAUSED, PauseStatus.UNPAUSED)) {
       try {
         this.nativeReceiver.addCredit(this.initialCredits);
       } catch (ClientException e) {
@@ -314,7 +351,17 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private boolean paused() {
-    return this.paused.get();
+  boolean pausedOrPausing() {
+    return this.pauseStatus.get() != PauseStatus.UNPAUSED;
+  }
+
+  boolean paused() {
+    return this.pauseStatus.get() == PauseStatus.PAUSED;
+  }
+
+  enum PauseStatus {
+    UNPAUSED,
+    PAUSING,
+    PAUSED
   }
 }
