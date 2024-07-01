@@ -246,14 +246,13 @@ public class AmqpTest {
 
     int initialCredits = 10;
     Set<com.rabbitmq.client.amqp.Consumer.Context> messageContexts = ConcurrentHashMap.newKeySet();
-    AmqpConsumer consumer =
-        (AmqpConsumer)
-            connection
-                .consumerBuilder()
-                .queue(q)
-                .initialCredits(initialCredits)
-                .messageHandler((ctx, msg) -> messageContexts.add(ctx))
-                .build();
+    com.rabbitmq.client.amqp.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(q)
+            .initialCredits(initialCredits)
+            .messageHandler((ctx, msg) -> messageContexts.add(ctx))
+            .build();
 
     waitAtMost(() -> messageContexts.size() == initialCredits);
 
@@ -447,10 +446,9 @@ public class AmqpTest {
   }
 
   @Test
-  void consumerShouldNotCloseUntilAllMessagesAreSettled() throws Exception {
+  void consumerShouldNotCloseUntilAllMessagesAreSettled() {
     connection.management().queue(name).exclusive(true).declare();
     int messageCount = 100;
-    int messageToConsumeCount = messageCount / 2;
     int initialCredits = messageCount / 10;
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     Sync publishSync = sync(messageCount);
@@ -461,36 +459,28 @@ public class AmqpTest {
     AtomicInteger receivedCount = new AtomicInteger(0);
     Set<com.rabbitmq.client.amqp.Consumer.Context> unsettledMessages =
         ConcurrentHashMap.newKeySet();
-    AmqpConsumer consumer =
-        (AmqpConsumer)
-            connection
-                .consumerBuilder()
-                .queue(name)
-                .initialCredits(messageCount / 10)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      if (receivedCount.incrementAndGet() <= initialCredits) {
-                        ctx.accept();
-                      } else {
-                        unsettledMessages.add(ctx);
-                      }
-                    })
-                .build();
+    com.rabbitmq.client.amqp.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .initialCredits(messageCount / 10)
+            .messageHandler(
+                (ctx, msg) -> {
+                  if (receivedCount.incrementAndGet() <= initialCredits) {
+                    ctx.accept();
+                  } else {
+                    unsettledMessages.add(ctx);
+                  }
+                })
+            .build();
 
     int unsettledCount = waitUntilStable(unsettledMessages::size);
     assertThat(unsettledCount).isNotZero();
-    int receivedCountBeforeClosing = receivedCount.get();
-
-    Sync consumerClosedSync = sync();
-    submitTask(
-        () -> {
-          consumer.close();
-          consumerClosedSync.down();
-        });
-    waitAtMost(consumer::paused);
-    submitTask(() -> unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept));
-    assertThat(consumerClosedSync).completes();
-    assertThat(receivedCount).hasValue(receivedCountBeforeClosing);
+    consumer.pause();
+    int receivedCountBeforePausing = receivedCount.get();
+    unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
+    consumer.close();
+    assertThat(receivedCount).hasValue(receivedCountBeforePausing);
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());
   }

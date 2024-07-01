@@ -19,6 +19,10 @@ package com.rabbitmq.client.amqp;
 
 public interface Consumer extends AutoCloseable {
 
+  void pause();
+
+  void unpause();
+
   @Override
   void close();
 

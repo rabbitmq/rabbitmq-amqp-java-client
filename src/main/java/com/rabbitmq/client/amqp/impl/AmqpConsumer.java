@@ -22,7 +22,6 @@ import static com.rabbitmq.client.amqp.Resource.State.*;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
-import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -59,9 +58,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledCount = new AtomicLong(0);
+  private final Runnable replenishCreditOperation = () -> replenishCreditIfNeeded();
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
-  private Scheduler protonExecutor;
+  private volatile Scheduler protonExecutor;
   private DeliveryQueue protonDeliveryQueue;
   private ProtonSessionIncomingWindow sessionWindow;
   private ProtonLinkCreditState creditState;
@@ -84,6 +84,42 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.startReceivingLoop();
     this.state(OPEN);
     this.metricsCollector.openConsumer();
+  }
+
+  @Override
+  public void pause() {
+    if (this.pauseStatus.compareAndSet(PauseStatus.UNPAUSED, PauseStatus.PAUSING)) {
+      try {
+        CountDownLatch latch = new CountDownLatch(1);
+        this.echoedFlowAfterPauseLatch.set(latch);
+        this.protonExecutor.execute(this::doPause);
+        try {
+          boolean echoed = latch.await(10, TimeUnit.SECONDS);
+          if (echoed) {
+            this.pauseStatus.set(PauseStatus.PAUSED);
+          } else {
+            LOGGER.warn("Did not receive echoed flow to pause receiver");
+            this.pauseStatus.set(PauseStatus.UNPAUSED);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      } catch (Exception e) {
+        this.pauseStatus.set(PauseStatus.UNPAUSED);
+      }
+    }
+  }
+
+  @Override
+  public void unpause() {
+    checkOpen();
+    if (this.pauseStatus.compareAndSet(PauseStatus.PAUSED, PauseStatus.UNPAUSED)) {
+      try {
+        this.nativeReceiver.addCredit(this.initialCredits);
+      } catch (ClientException e) {
+        throw ExceptionUtils.convert(e);
+      }
+    }
   }
 
   @Override
@@ -121,61 +157,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.unsettledCount.incrementAndGet();
             this.metricsCollector.consume();
             AmqpMessage message = new AmqpMessage(delivery.message());
-            AtomicBoolean disposed = new AtomicBoolean(false);
             Consumer.Context context =
-                new Consumer.Context() {
-
-                  @Override
-                  public void accept() {
-                    if (disposed.compareAndSet(false, true)) {
-                      try {
-                        protonExecutor.execute(() -> replenishCreditIfNeeded());
-                        delivery.disposition(DeliveryState.accepted(), true);
-                        unsettledCount.decrementAndGet();
-                        metricsCollector.consumeDisposition(
-                            MetricsCollector.ConsumeDisposition.ACCEPTED);
-                      } catch (ClientIllegalStateException | ClientIOException e) {
-                        LOGGER.debug("message accept failed: {}", e.getMessage());
-                      } catch (ClientException e) {
-                        throw ExceptionUtils.convert(e);
-                      }
-                    }
-                  }
-
-                  @Override
-                  public void discard() {
-                    if (disposed.compareAndSet(false, true)) {
-                      try {
-                        protonExecutor.execute(() -> replenishCreditIfNeeded());
-                        delivery.disposition(DeliveryState.rejected("", ""), true);
-                        unsettledCount.decrementAndGet();
-                        metricsCollector.consumeDisposition(
-                            MetricsCollector.ConsumeDisposition.DISCARDED);
-                      } catch (ClientIllegalStateException | ClientIOException e) {
-                        LOGGER.debug("message discard failed: {}", e.getMessage());
-                      } catch (ClientException e) {
-                        throw ExceptionUtils.convert(e);
-                      }
-                    }
-                  }
-
-                  @Override
-                  public void requeue() {
-                    if (disposed.compareAndSet(false, true)) {
-                      try {
-                        protonExecutor.execute(() -> replenishCreditIfNeeded());
-                        delivery.disposition(DeliveryState.released(), true);
-                        unsettledCount.decrementAndGet();
-                        metricsCollector.consumeDisposition(
-                            MetricsCollector.ConsumeDisposition.REQUEUED);
-                      } catch (ClientIllegalStateException | ClientIOException e) {
-                        LOGGER.debug("message requeue failed: {}", e.getMessage());
-                      } catch (ClientException e) {
-                        throw ExceptionUtils.convert(e);
-                      }
-                    }
-                  }
-                };
+                new DeliveryContext(
+                    delivery,
+                    this.protonExecutor,
+                    this.metricsCollector,
+                    this.unsettledCount,
+                    this.replenishCreditOperation);
             messageHandler.handle(context, message);
           }
         }
@@ -204,23 +192,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.nativeReceiver = createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
+    this.unsettledCount.set(0);
     startReceivingLoop();
   }
 
   private void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
-      if (cause == null) {
-        LOGGER.debug("Pausing receiver link before detaching it");
-        // normal closing, pausing message dispatching
-        this.pause();
-        LOGGER.debug("Receiver link paused. Unsettled message(s): {}", this.unsettledCount.get());
-        LOGGER.debug("Waiting for unsettled messages to get settled if necessary");
-        waitForUnsettledMessagesToSettle();
-        if (this.unsettledCount.get() > 0) {
-          LOGGER.debug("Closing receiver link with {} unsettled message(s)", this.unsettledCount);
-        }
-      }
       this.connection.removeConsumer(this);
       if (this.receiveLoop != null) {
         this.receiveLoop.cancel(true);
@@ -233,21 +211,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       }
       this.state(CLOSED, cause);
       this.metricsCollector.closeConsumer();
-    }
-  }
-
-  private void waitForUnsettledMessagesToSettle() {
-    Duration timeout = Duration.ofSeconds(10);
-    Duration waitTime = Duration.ofMillis(10);
-    Duration waitedTime = Duration.ZERO;
-    while (this.unsettledCount.get() > 0 && waitedTime.compareTo(timeout) <= 0) {
-      try {
-        Thread.sleep(waitTime.toMillis());
-        waitedTime = waitedTime.plus(waitTime);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        return;
-      }
     }
   }
 
@@ -294,7 +257,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private void replenishCreditIfNeeded() {
-    if (!this.pausedOrPausing()) {
+    if (!this.pausedOrPausing() && this.state() == OPEN) {
       int creditWindow = this.initialCredits;
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
@@ -311,57 +274,90 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  void pause() {
-    if (this.pauseStatus.compareAndSet(PauseStatus.UNPAUSED, PauseStatus.PAUSING)) {
-      try {
-        CountDownLatch latch = new CountDownLatch(1);
-        this.echoedFlowAfterPauseLatch.set(latch);
-        this.protonExecutor.execute(this::doPause);
-        try {
-          boolean echoed = latch.await(10, TimeUnit.SECONDS);
-          if (echoed) {
-            this.pauseStatus.set(PauseStatus.PAUSED);
-          } else {
-            LOGGER.warn("Did not receive echoed flow to pause receiver");
-            this.pauseStatus.set(PauseStatus.UNPAUSED);
-          }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
-      } catch (Exception e) {
-        this.pauseStatus.set(PauseStatus.UNPAUSED);
-      }
-    }
-  }
-
   private void doPause() {
     this.creditState.updateCredit(0);
     this.creditState.updateEcho(true);
     this.sessionWindow.writeFlow(this.protonReceiver);
   }
 
-  void unpause() {
-    checkOpen();
-    if (this.pauseStatus.compareAndSet(PauseStatus.PAUSED, PauseStatus.UNPAUSED)) {
-      try {
-        this.nativeReceiver.addCredit(this.initialCredits);
-      } catch (ClientException e) {
-        throw ExceptionUtils.convert(e);
-      }
-    }
-  }
-
   boolean pausedOrPausing() {
     return this.pauseStatus.get() != PauseStatus.UNPAUSED;
-  }
-
-  boolean paused() {
-    return this.pauseStatus.get() == PauseStatus.PAUSED;
   }
 
   enum PauseStatus {
     UNPAUSED,
     PAUSING,
     PAUSED
+  }
+
+  private static class DeliveryContext implements Consumer.Context {
+
+    private final AtomicBoolean settled = new AtomicBoolean(false);
+    private final Delivery delivery;
+    private final Scheduler protonExecutor;
+    private final MetricsCollector metricsCollector;
+    private final AtomicLong unsettledCount;
+    private final Runnable replenishCreditOperation;
+
+    private DeliveryContext(
+        Delivery delivery,
+        Scheduler protonExecutor,
+        MetricsCollector metricsCollector,
+        AtomicLong unsettledCount,
+        Runnable replenishCreditOperation) {
+      this.delivery = delivery;
+      this.protonExecutor = protonExecutor;
+      this.metricsCollector = metricsCollector;
+      this.unsettledCount = unsettledCount;
+      this.replenishCreditOperation = replenishCreditOperation;
+    }
+
+    @Override
+    public void accept() {
+      if (settled.compareAndSet(false, true)) {
+        try {
+          protonExecutor.execute(replenishCreditOperation);
+          delivery.disposition(DeliveryState.accepted(), true);
+          unsettledCount.decrementAndGet();
+          metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
+        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
+          LOGGER.debug("message accept failed: {}", e.getMessage());
+        } catch (ClientException e) {
+          throw ExceptionUtils.convert(e);
+        }
+      }
+    }
+
+    @Override
+    public void discard() {
+      if (settled.compareAndSet(false, true)) {
+        try {
+          protonExecutor.execute(replenishCreditOperation);
+          delivery.disposition(DeliveryState.rejected("", ""), true);
+          unsettledCount.decrementAndGet();
+          metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
+        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
+          LOGGER.debug("message discard failed: {}", e.getMessage());
+        } catch (ClientException e) {
+          throw ExceptionUtils.convert(e);
+        }
+      }
+    }
+
+    @Override
+    public void requeue() {
+      if (settled.compareAndSet(false, true)) {
+        try {
+          protonExecutor.execute(replenishCreditOperation);
+          delivery.disposition(DeliveryState.released(), true);
+          unsettledCount.decrementAndGet();
+          metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
+        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
+          LOGGER.debug("message requeue failed: {}", e.getMessage());
+        } catch (ClientException e) {
+          throw ExceptionUtils.convert(e);
+        }
+      }
+    }
   }
 }

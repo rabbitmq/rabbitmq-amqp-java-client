@@ -41,7 +41,7 @@ public class MetricsCollectorTest {
   @Mock MetricsCollector metricsCollector;
 
   @Test
-  void metricsShouldBeCollected() throws Exception {
+  void metricsShouldBeCollected() {
     try (Environment environment =
         TestUtils.environmentBuilder().metricsCollector(metricsCollector).build()) {
       verify(metricsCollector, never()).openConnection();
