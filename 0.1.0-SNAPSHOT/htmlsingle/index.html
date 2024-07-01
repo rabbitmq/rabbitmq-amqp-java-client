@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.1.0-SNAPSHOT</span>
-<br><span id="revremark">(29db8b0)</span>
+<br><span id="revremark">(7500592)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -902,9 +902,9 @@ It is possible to override the environment connection settings for a given conne
 <div class="sect2">
 <h3 id="consuming"><a class="anchor" href="#consuming"></a>Consuming</h3>
 <div class="listingblock">
-<div class="title">Consuming from a queue (generic body)</div>
+<div class="title">Consuming from a queue</div>
 <div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
     <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-queue"</span><span class="o">)</span>
     <span class="o">.</span><span class="na">messageHandler</span><span class="o">((</span><span class="n">context</span><span class="o">,</span> <span class="n">message</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
       <span class="kt">byte</span><span class="o">[]</span> <span class="n">body</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="na">body</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
@@ -927,6 +927,80 @@ It is possible to override the environment connection settings for a given conne
 <tr>
 <td><i class="conum" data-value="3"></i><b>3</b></td>
 <td>Accept (acknowledge) the message</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>A consumer can accept, discard, or requeue a message.
+We say the consumer <em>settles</em> a message.</p>
+</div>
+<div class="paragraph">
+<p>Unsettled messages are requeued when a consumer get closed.
+This can lead to duplicate processing of messages.
+Here is an example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A consumer executes a database operation for a given message.</p>
+</li>
+<li>
+<p>The consumer gets closed before it accepts (settles) the message.</p>
+</li>
+<li>
+<p>The message is requeued.</p>
+</li>
+<li>
+<p>Another consumer gets the message and executes the database operation again.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>It is difficult to completely avoid duplicate messages, this is why processing should be idempotent.
+The consumer API allows nevertheless to <em>pause</em> the delivery of messages, get the number of unsettled messages to make sure it reaches 0 at some point, and then <em>close</em> the consumer.
+This ensures the consumer has finally quiesced and all the received messages have been processed.</p>
+</div>
+<div class="paragraph">
+<p>Here is an example of a consumer graceful shutdown:</p>
+</div>
+<div class="listingblock">
+<div class="title">Closing a consumer gracefully</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="n">consumer</span><span class="o">.</span><span class="na">pause</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
+<span class="kt">long</span> <span class="n">unsettledCount</span> <span class="o">=</span> <span class="n">consumer</span><span class="o">.</span><span class="na">unsettledCount</span><span class="o">();</span> <i class="conum" data-value="2"></i><b>(2)</b>
+<span class="n">consumer</span><span class="o">.</span><span class="na">close</span><span class="o">();</span> <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Pause the delivery of messages</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Ensure the number of unsettled messages reaches 0</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Close the consumer</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>It is also possible to simplify the consumer shutdown by just closing it, but this is likely to requeue unsettled messages.</p>
+</div>
+<div class="listingblock">
+<div class="title">Closing a consumer abruptly (can lead to duplicate messages)</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="n">consumer</span><span class="o">.</span><span class="na">close</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Close the consumer with potential unsettled messages</td>
 </tr>
 </table>
 </div>
@@ -2042,7 +2116,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.1.0-SNAPSHOT<br>
-Last updated 2024-07-01 10:44:33 UTC
+Last updated 2024-07-01 15:52:50 UTC
 </div>
 </div>
 </body>
