@@ -35,10 +35,7 @@ import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -446,7 +443,7 @@ public class AmqpTest {
   }
 
   @Test
-  void consumerShouldNotCloseUntilAllMessagesAreSettled() {
+  void consumerPauseThenClose() {
     connection.management().queue(name).exclusive(true).declare();
     int messageCount = 100;
     int initialCredits = messageCount / 10;
@@ -477,12 +474,80 @@ public class AmqpTest {
     int unsettledCount = waitUntilStable(unsettledMessages::size);
     assertThat(unsettledCount).isNotZero();
     consumer.pause();
-    int receivedCountBeforePausing = receivedCount.get();
+    int receivedCountAfterPausing = receivedCount.get();
     unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
     consumer.close();
-    assertThat(receivedCount).hasValue(receivedCountBeforePausing);
+    assertThat(receivedCount).hasValue(receivedCountAfterPausing);
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());
+  }
+
+  @Test
+  void consumerGracefulShutdownExample() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    int initialCredits = messageCount / 10;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    AtomicInteger receivedCount = new AtomicInteger(0);
+    Random random = new Random();
+    com.rabbitmq.client.amqp.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .initialCredits(initialCredits)
+            .messageHandler(
+                (ctx, msg) -> {
+                  receivedCount.incrementAndGet();
+                  int processTime = random.nextInt(10) + 1;
+                  TestUtils.simulateActivity(processTime);
+                  ctx.accept();
+                })
+            .build();
+
+    waitAtMost(() -> receivedCount.get() > initialCredits * 2);
+    consumer.pause();
+    waitAtMost(() -> consumer.unsettledCount() == 0);
+    consumer.close();
+    assertThat(connection.management().queueInfo(name))
+        .hasMessageCount(messageCount - receivedCount.get());
+  }
+
+  @Test
+  void consumerUnsettledMessagesGoBackToQueueAfterClosing() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    int initialCredits = messageCount / 10;
+    int settledCount = initialCredits * 2;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    AtomicInteger receivedCount = new AtomicInteger(0);
+    com.rabbitmq.client.amqp.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .initialCredits(initialCredits)
+            .messageHandler(
+                (ctx, msg) -> {
+                  receivedCount.incrementAndGet();
+                  if (receivedCount.get() <= settledCount) {
+                    ctx.accept();
+                  }
+                })
+            .build();
+
+    waitAtMost(() -> receivedCount.get() > settledCount);
+    consumer.close();
+    assertThat(connection.management().queueInfo(name))
+        .hasMessageCount(messageCount - settledCount);
   }
 
   static <T> T waitUntilStable(Supplier<T> call) {

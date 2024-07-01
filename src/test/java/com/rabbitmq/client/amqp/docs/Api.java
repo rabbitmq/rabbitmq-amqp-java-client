@@ -139,7 +139,7 @@ class Api {
   void consuming() {
     Connection connection = null;
     // tag::consumer-consume[]
-    connection.consumerBuilder()
+    Consumer consumer = connection.consumerBuilder()
         .queue("some-queue")
         .messageHandler((context, message) -> {
           byte[] body = message.body(); // <1>
@@ -148,6 +148,16 @@ class Api {
         })
         .build();
     // end::consumer-consume[]
+
+    // tag::consumer-graceful-shutdown[]
+    consumer.pause(); // <1>
+    long unsettledCount = consumer.unsettledCount(); // <2>
+    consumer.close(); // <3>
+    // end::consumer-graceful-shutdown[]
+
+    // tag::consumer-abrupt-shutdown[]
+    consumer.close(); // <1>
+    // end::consumer-abrupt-shutdown[]
   }
 
   void management() {

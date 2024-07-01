@@ -129,6 +129,14 @@ public abstract class TestUtils {
     }
   }
 
+  static void simulateActivity(long timeInMs) {
+    try {
+      Thread.sleep(timeInMs);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   public static class CountDownLatchReferenceConditions {
 
     public static Condition<AtomicReference<CountDownLatch>> completed() {

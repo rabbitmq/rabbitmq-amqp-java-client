@@ -123,6 +123,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   @Override
+  public long unsettledCount() {
+    return unsettledCount.get();
+  }
+
+  @Override
   public void close() {
     this.close(null);
   }

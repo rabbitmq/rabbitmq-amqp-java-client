@@ -93,7 +93,7 @@ include::{test-examples}/Api.java[tag=target-address-null]
 
 === Consuming
 
-.Consuming from a queue (generic body)
+.Consuming from a queue
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=consumer-consume]
@@ -101,6 +101,42 @@ include::{test-examples}/Api.java[tag=consumer-consume]
 <1> Get message body
 <2> Process the message
 <3> Accept (acknowledge) the message
+
+A consumer can accept, discard, or requeue a message.
+We say the consumer _settles_ a message.
+
+Unsettled messages are requeued when a consumer get closed.
+This can lead to duplicate processing of messages.
+Here is an example:
+
+* A consumer executes a database operation for a given message.
+* The consumer gets closed before it accepts (settles) the message.
+* The message is requeued.
+* Another consumer gets the message and executes the database operation again.
+
+It is difficult to completely avoid duplicate messages, this is why processing should be idempotent.
+The consumer API allows nevertheless to _pause_ the delivery of messages, get the number of unsettled messages to make sure it reaches 0 at some point, and then _close_ the consumer.
+This ensures the consumer has finally quiesced and all the received messages have been processed.
+
+Here is an example of a consumer graceful shutdown:
+
+.Closing a consumer gracefully
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer-graceful-shutdown]
+--------
+<1> Pause the delivery of messages
+<2> Ensure the number of unsettled messages reaches 0
+<3> Close the consumer
+
+It is also possible to simplify the consumer shutdown by just closing it, but this is likely to requeue unsettled messages.
+
+.Closing a consumer abruptly (can lead to duplicate messages)
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer-abrupt-shutdown]
+--------
+<1> Close the consumer with potential unsettled messages
 
 === Resource Management
 

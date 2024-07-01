@@ -21,6 +21,8 @@ public interface Consumer extends AutoCloseable {
 
   void pause();
 
+  long unsettledCount();
+
   void unpause();
 
   @Override
