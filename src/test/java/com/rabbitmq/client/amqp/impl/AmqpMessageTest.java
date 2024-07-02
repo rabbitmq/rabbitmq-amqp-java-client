@@ -17,17 +17,21 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.UriUtils.encodePathSegment;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.api.Test;
 
-public class UriUtilsTest {
+public class AmqpMessageTest {
 
-  @ParameterizedTest
-  @CsvSource({"test,test", "foo bar,foo%20bar", "foo%bar,foo%25bar", "/,%2F"})
-  void encodePathSegmentTest(String segment, String expected) {
-    assertThat(encodePathSegment(segment)).isEqualTo(expected);
+  @Test
+  void toShouldBePathEncoded() {
+    assertThat(new AmqpMessage().toAddress().exchange("foo bar").message().to())
+        .isEqualTo("/exchange/foo%20bar");
+  }
+
+  @Test
+  void replyToShouldBePathEncoded() {
+    assertThat(new AmqpMessage().replyToAddress().exchange("foo bar").message().replyTo())
+        .isEqualTo("/exchange/foo%20bar");
   }
 }

@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.UriUtils.encodePathSegment;
+
 import com.rabbitmq.client.amqp.AddressBuilder;
 
 abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
@@ -57,12 +59,15 @@ abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
   String address() {
     if (this.exchange != null) {
       if (this.key != null && !this.key.isEmpty()) {
-        return "/exchange/" + this.exchange + "/key/" + this.key;
+        return "/exchange/"
+            + encodePathSegment(this.exchange)
+            + "/key/"
+            + encodePathSegment(this.key);
       } else {
-        return "/exchange/" + this.exchange;
+        return "/exchange/" + encodePathSegment(this.exchange);
       }
     } else if (this.queue != null) {
-      return "/queue/" + this.queue;
+      return "/queue/" + encodePathSegment(this.queue);
     } else {
       return null;
     }
