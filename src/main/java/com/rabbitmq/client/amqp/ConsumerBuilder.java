@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.time.Instant;
+
 public interface ConsumerBuilder {
 
   ConsumerBuilder queue(String queue);
@@ -27,5 +29,30 @@ public interface ConsumerBuilder {
 
   ConsumerBuilder listeners(Resource.StateListener... listeners);
 
+  StreamOptions stream();
+
   Consumer build();
+
+  interface StreamOptions {
+
+    StreamOptions offset(long offset);
+
+    StreamOptions offset(Instant timestamp);
+
+    StreamOptions offset(StreamOffsetSpecification specification);
+
+    StreamOptions offset(String interval);
+
+    StreamOptions filterValues(String... values);
+
+    StreamOptions filterMatchUnfiltered(boolean matchUnfiltered);
+
+    ConsumerBuilder builder();
+  }
+
+  enum StreamOffsetSpecification {
+    FIRST,
+    LAST,
+    NEXT
+  }
 }

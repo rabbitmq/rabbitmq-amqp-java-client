@@ -17,11 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.Assert.notNull;
+
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.Resource;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
+import java.util.*;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
 
@@ -30,6 +32,8 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 100;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
+  private final Map<String, Object> filters = new HashMap<>();
+  private final StreamOptions streamOptions = new DefaultStreamOptions(this, this.filters);
 
   AmqpConsumerBuilder(AmqpConnection connection) {
     this.connection = connection;
@@ -63,6 +67,11 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     return this;
   }
 
+  @Override
+  public StreamOptions stream() {
+    return this.streamOptions;
+  }
+
   AmqpConnection connection() {
     return connection;
   }
@@ -83,6 +92,10 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     return listeners;
   }
 
+  Map<String, Object> filters() {
+    return this.filters;
+  }
+
   @Override
   public Consumer build() {
     if (this.queue == null || this.queue.isBlank()) {
@@ -91,6 +104,68 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     if (this.messageHandler == null) {
       throw new IllegalArgumentException("Message handler cannot be null");
     }
+
+    // TODO validate stream (filtering) configuration
+
     return this.connection.createConsumer(this);
+  }
+
+  private static class DefaultStreamOptions implements StreamOptions {
+
+    private final Map<String, Object> filters;
+    private final ConsumerBuilder builder;
+
+    private DefaultStreamOptions(ConsumerBuilder builder, Map<String, Object> filters) {
+      this.builder = builder;
+      this.filters = filters;
+    }
+
+    @Override
+    public StreamOptions offset(long offset) {
+      this.filters.put("rabbitmq:stream-offset-spec", offset);
+      return this;
+    }
+
+    @Override
+    public StreamOptions offset(Instant timestamp) {
+      notNull(timestamp, "Timestamp offset cannot be null");
+      this.offsetSpecification(Date.from(timestamp));
+      return this;
+    }
+
+    @Override
+    public StreamOptions offset(StreamOffsetSpecification specification) {
+      notNull(specification, "Offset specification cannot be null");
+      this.offsetSpecification(specification.name().toLowerCase(Locale.ENGLISH));
+      return this;
+    }
+
+    @Override
+    public StreamOptions offset(String interval) {
+      notNull(interval, "Interval offset cannot be null");
+      this.offsetSpecification(interval);
+      return this;
+    }
+
+    @Override
+    public StreamOptions filterValues(String... values) {
+      this.filters.put("rabbitmq:stream-filter", values);
+      return this;
+    }
+
+    @Override
+    public StreamOptions filterMatchUnfiltered(boolean matchUnfiltered) {
+      this.filters.put("rabbitmq:stream-match-unfiltered", matchUnfiltered);
+      return this;
+    }
+
+    @Override
+    public ConsumerBuilder builder() {
+      return this.builder;
+    }
+
+    private void offsetSpecification(Object value) {
+      this.filters.put("rabbitmq:stream-offset-spec", value);
+    }
   }
 }

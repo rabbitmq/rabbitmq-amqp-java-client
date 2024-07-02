@@ -22,6 +22,8 @@ import static com.rabbitmq.client.amqp.Resource.State.*;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -51,6 +53,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MessageHandler messageHandler;
   private final Long id;
   private final String address;
+  private final Map<String, Object> filters;
   private final AmqpConnection connection;
   private final AtomicReference<PauseStatus> pauseStatus =
       new AtomicReference<>(PauseStatus.UNPAUSED);
@@ -76,9 +79,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .observationCollector()
             .subscribe(builder.queue(), builder.messageHandler());
     this.address = "/queue/" + builder.queue();
+    this.filters = Collections.unmodifiableMap(builder.filters());
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
-    this.nativeReceiver = this.createNativeReceiver(this.sessionHandler.session(), this.address);
+    this.nativeReceiver =
+        this.createNativeReceiver(this.sessionHandler.session(), this.address, this.filters);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
     this.startReceivingLoop();
@@ -134,19 +139,20 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // internal API
 
-  private ClientReceiver createNativeReceiver(Session nativeSession, String address) {
+  private ClientReceiver createNativeReceiver(
+      Session nativeSession, String address, Map<String, Object> filters) {
     try {
+      ReceiverOptions receiverOptions =
+          new ReceiverOptions()
+              .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+              .autoAccept(false)
+              .autoSettle(false)
+              .creditWindow(0);
+      if (!filters.isEmpty()) {
+        receiverOptions.sourceOptions().filters(filters);
+      }
       return (ClientReceiver)
-          ExceptionUtils.wrapGet(
-              nativeSession
-                  .openReceiver(
-                      address,
-                      new ReceiverOptions()
-                          .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-                          .autoAccept(false)
-                          .autoSettle(false)
-                          .creditWindow(0))
-                  .openFuture());
+          ExceptionUtils.wrapGet(nativeSession.openReceiver(address, receiverOptions).openFuture());
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }
@@ -194,7 +200,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void recoverAfterConnectionFailure() {
-    this.nativeReceiver = createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address);
+    this.nativeReceiver =
+        createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address, this.filters);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
     this.unsettledCount.set(0);
