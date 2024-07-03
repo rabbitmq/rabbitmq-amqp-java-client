@@ -60,7 +60,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final AtomicReference<CountDownLatch> echoedFlowAfterPauseLatch = new AtomicReference<>();
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
-  private final AtomicLong unsettledCount = new AtomicLong(0);
+  private final AtomicLong unsettledMessageCount = new AtomicLong(0);
   private final Runnable replenishCreditOperation = () -> replenishCreditIfNeeded();
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
@@ -128,8 +128,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   @Override
-  public long unsettledCount() {
-    return unsettledCount.get();
+  public long unsettledMessageCount() {
+    return unsettledMessageCount.get();
   }
 
   @Override
@@ -165,7 +165,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         while (!Thread.currentThread().isInterrupted()) {
           Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
           if (delivery != null) {
-            this.unsettledCount.incrementAndGet();
+            this.unsettledMessageCount.incrementAndGet();
             this.metricsCollector.consume();
             AmqpMessage message = new AmqpMessage(delivery.message());
             Consumer.Context context =
@@ -173,7 +173,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     delivery,
                     this.protonExecutor,
                     this.metricsCollector,
-                    this.unsettledCount,
+                    this.unsettledMessageCount,
                     this.replenishCreditOperation);
             messageHandler.handle(context, message);
           }
@@ -204,7 +204,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address, this.filters);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
-    this.unsettledCount.set(0);
+    this.unsettledMessageCount.set(0);
     startReceivingLoop();
   }
 
@@ -308,19 +308,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final Delivery delivery;
     private final Scheduler protonExecutor;
     private final MetricsCollector metricsCollector;
-    private final AtomicLong unsettledCount;
+    private final AtomicLong unsettledMessageCount;
     private final Runnable replenishCreditOperation;
 
     private DeliveryContext(
         Delivery delivery,
         Scheduler protonExecutor,
         MetricsCollector metricsCollector,
-        AtomicLong unsettledCount,
+        AtomicLong unsettledMessageCount,
         Runnable replenishCreditOperation) {
       this.delivery = delivery;
       this.protonExecutor = protonExecutor;
       this.metricsCollector = metricsCollector;
-      this.unsettledCount = unsettledCount;
+      this.unsettledMessageCount = unsettledMessageCount;
       this.replenishCreditOperation = replenishCreditOperation;
     }
 
@@ -330,7 +330,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         try {
           protonExecutor.execute(replenishCreditOperation);
           delivery.disposition(DeliveryState.accepted(), true);
-          unsettledCount.decrementAndGet();
+          unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
         } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
           LOGGER.debug("message accept failed: {}", e.getMessage());
@@ -346,7 +346,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         try {
           protonExecutor.execute(replenishCreditOperation);
           delivery.disposition(DeliveryState.rejected("", ""), true);
-          unsettledCount.decrementAndGet();
+          unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
         } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
           LOGGER.debug("message discard failed: {}", e.getMessage());
@@ -362,7 +362,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         try {
           protonExecutor.execute(replenishCreditOperation);
           delivery.disposition(DeliveryState.released(), true);
-          unsettledCount.decrementAndGet();
+          unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
         } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
           LOGGER.debug("message requeue failed: {}", e.getMessage());

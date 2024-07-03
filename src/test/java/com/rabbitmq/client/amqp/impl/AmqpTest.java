@@ -469,8 +469,8 @@ public class AmqpTest {
                 })
             .build();
 
-    int unsettledCount = waitUntilStable(unsettledMessages::size);
-    assertThat(unsettledCount).isNotZero();
+    int unsettledMessageCount = waitUntilStable(unsettledMessages::size);
+    assertThat(unsettledMessageCount).isNotZero();
     consumer.pause();
     int receivedCountAfterPausing = receivedCount.get();
     unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
@@ -509,7 +509,7 @@ public class AmqpTest {
 
     waitAtMost(() -> receivedCount.get() > initialCredits * 2);
     consumer.pause();
-    waitAtMost(() -> consumer.unsettledCount() == 0);
+    waitAtMost(() -> consumer.unsettledMessageCount() == 0);
     consumer.close();
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());

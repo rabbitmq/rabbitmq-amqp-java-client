@@ -21,7 +21,7 @@ public interface Consumer extends AutoCloseable {
 
   void pause();
 
-  long unsettledCount();
+  long unsettledMessageCount();
 
   void unpause();
 

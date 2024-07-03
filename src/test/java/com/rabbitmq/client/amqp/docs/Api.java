@@ -151,7 +151,7 @@ class Api {
 
     // tag::consumer-graceful-shutdown[]
     consumer.pause(); // <1>
-    long unsettledCount = consumer.unsettledCount(); // <2>
+    long unsettledMessageCount = consumer.unsettledMessageCount(); // <2>
     consumer.close(); // <3>
     // end::consumer-graceful-shutdown[]
 
