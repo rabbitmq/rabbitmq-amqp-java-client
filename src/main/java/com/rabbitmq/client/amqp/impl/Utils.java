@@ -30,6 +30,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -261,6 +262,12 @@ abstract class Utils {
     public Consumer.MessageHandler subscribe(String queue, Consumer.MessageHandler handler) {
       return handler;
     }
+  }
+
+  private static final Pattern MAX_AGE_PATTERN = Pattern.compile("^[0-9]+[YMDhms]$");
+
+  static boolean validateMaxAge(String input) {
+    return MAX_AGE_PATTERN.matcher(input).find();
   }
 
   static class StopWatch {

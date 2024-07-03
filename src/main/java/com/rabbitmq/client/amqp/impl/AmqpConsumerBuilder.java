@@ -143,13 +143,20 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     @Override
     public StreamOptions offset(String interval) {
       notNull(interval, "Interval offset cannot be null");
+      if (!Utils.validateMaxAge(interval)) {
+        throw new IllegalArgumentException(
+            "Invalid value for interval: "
+                + interval
+                + ". "
+                + "Valid examples are: 1Y, 7D, 10m. See https://www.rabbitmq.com/docs/streams#retention.");
+      }
       this.offsetSpecification(interval);
       return this;
     }
 
     @Override
     public StreamOptions filterValues(String... values) {
-      this.filters.put("rabbitmq:stream-filter", values);
+      this.filters.put("rabbitmq:stream-filter", Arrays.asList(values));
       return this;
     }
 

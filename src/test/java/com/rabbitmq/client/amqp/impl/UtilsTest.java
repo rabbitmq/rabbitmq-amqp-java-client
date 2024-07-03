@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class UtilsTest {
 
@@ -37,5 +38,17 @@ public class UtilsTest {
         .hasSizeGreaterThan(20)
         .isNotEqualTo(Utils.NAME_SUPPLIER.get())
         .isNotEqualTo(Utils.NAME_SUPPLIER.get());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"1Y", "7D", "20m"})
+  void validateMaxAgeOK(String input) {
+    assertThat(Utils.validateMaxAge(input)).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"foo", "1", "10", "", "7DD", "1y", "6g"})
+  void validateMaxAgeKO(String input) {
+    assertThat(Utils.validateMaxAge(input)).isFalse();
   }
 }

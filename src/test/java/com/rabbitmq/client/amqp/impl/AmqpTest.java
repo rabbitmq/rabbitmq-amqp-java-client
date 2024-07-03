@@ -34,14 +34,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -548,28 +546,6 @@ public class AmqpTest {
     consumer.close();
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - settledCount);
-  }
-
-  static <T> T waitUntilStable(Supplier<T> call) {
-    Duration timeout = Duration.ofSeconds(10);
-    Duration waitTime = Duration.ofMillis(200);
-    Duration waitedTime = Duration.ZERO;
-    T newValue = null;
-    while (waitedTime.compareTo(timeout) <= 0) {
-      T previousValue = call.get();
-      try {
-        Thread.sleep(waitTime.toMillis());
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new RuntimeException(e);
-      }
-      newValue = call.get();
-      if (newValue.equals(previousValue)) {
-        return newValue;
-      }
-    }
-    Assertions.fail("Value did not stabilize in %s, last value was %s", timeout, newValue);
-    return null;
   }
 
   private static String uuid() {

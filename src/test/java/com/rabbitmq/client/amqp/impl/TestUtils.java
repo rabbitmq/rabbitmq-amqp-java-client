@@ -60,6 +60,28 @@ public abstract class TestUtils {
     Utils.defaultThreadFactory().newThread(task).start();
   }
 
+  static <T> T waitUntilStable(Supplier<T> call) {
+    Duration timeout = Duration.ofSeconds(10);
+    Duration waitTime = Duration.ofMillis(200);
+    Duration waitedTime = Duration.ZERO;
+    T newValue = null;
+    while (waitedTime.compareTo(timeout) <= 0) {
+      T previousValue = call.get();
+      try {
+        Thread.sleep(waitTime.toMillis());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+      newValue = call.get();
+      if (newValue.equals(previousValue)) {
+        return newValue;
+      }
+    }
+    fail("Value did not stabilize in %s, last value was %s", timeout, newValue);
+    return null;
+  }
+
   @FunctionalInterface
   public interface CallableBooleanSupplier {
     boolean getAsBoolean() throws Exception;
