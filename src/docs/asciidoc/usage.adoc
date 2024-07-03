@@ -102,6 +102,8 @@ include::{test-examples}/Api.java[tag=consumer-consume]
 <2> Process the message
 <3> Accept (acknowledge) the message
 
+==== Graceful Shutdown
+
 A consumer can accept, discard, or requeue a message.
 We say the consumer _settles_ a message.
 
@@ -137,6 +139,35 @@ It is also possible to simplify the consumer shutdown by just closing it, but th
 include::{test-examples}/Api.java[tag=consumer-abrupt-shutdown]
 --------
 <1> Close the consumer with potential unsettled messages
+
+==== Support for Streams
+
+There is out-of-the-box support for https://www.rabbitmq.com/docs/streams[streams] in consumer configuration.
+
+It is possible to set where to attach to when https://www.rabbitmq.com/docs/streams#consuming[consuming] from a stream:
+
+.Attaching to the beginning of a stream
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer-consume-stream]
+--------
+<1> Access to stream-specific configuration helper
+<2> Attach to the first offset in the stream
+<3> Go back to main consumer configuration
+
+There is also support for https://www.rabbitmq.com/docs/streams#filtering[stream filtering] configuration:
+
+.Configuring stream filtering
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=consumer-consume-stream-filtering]
+--------
+<1> Access to stream-specific configuration helper
+<2> Set one or several filter values
+<3> Get "unfiltered" messages as well
+<4> Go back to main consumer configuration
+
+Consider also using the https://www.rabbitmq.com/docs/stream[native stream protocol] with the RabbitMQ https://github.com/rabbitmq/rabbitmq-stream-java-client[stream Java client] when working with streams.
 
 === Resource Management
 

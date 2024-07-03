@@ -160,6 +160,37 @@ class Api {
     // end::consumer-abrupt-shutdown[]
   }
 
+  void consumingStream() {
+    Connection connection = null;
+    // tag::consumer-consume-stream[]
+    Consumer consumer = connection.consumerBuilder()
+        .queue("some-stream")
+        .stream() // <1>
+          .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST) // <2>
+        .builder() // <3>
+        .messageHandler((context, message) -> {
+          // message processing
+        })
+        .build();
+    // end::consumer-consume-stream[]
+  }
+
+  void consumingStreamFiltering() {
+    Connection connection = null;
+    // tag::consumer-consume-stream-filtering[]
+    Consumer consumer = connection.consumerBuilder()
+        .queue("some-stream")
+        .stream() // <1>
+          .filterValues("invoices", "orders") // <2>
+          .filterMatchUnfiltered(true) // <3>
+        .builder() // <4>
+        .messageHandler((context, message) -> {
+          // message processing
+        })
+        .build();
+    // end::consumer-consume-stream-filtering[]
+  }
+
   void management() {
     Connection connection = null;
     // tag::management[]
