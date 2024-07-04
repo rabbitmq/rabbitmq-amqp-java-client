@@ -193,7 +193,7 @@ public class AddressFormatTest {
   }
 
   @Test
-  void noToFieldDoesNotCloseAllConnectionPublishers() throws InterruptedException {
+  void noToFieldDoesNotCloseAllConnectionPublishers() {
     Management management = connection.management();
     String q = management.queue().exclusive(true).declare().name();
     TestUtils.Sync sync = TestUtils.sync();

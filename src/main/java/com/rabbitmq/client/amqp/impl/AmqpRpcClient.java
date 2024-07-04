@@ -97,7 +97,7 @@ class AmqpRpcClient implements RpcClient {
     }
 
     if (builder.requestPostProcessor() == null) {
-      DefaultAddressBuilder<?> addressBuilder = new DefaultAddressBuilder<>(null) {};
+      DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
       addressBuilder.queue(replyTo);
       String replyToAddress = addressBuilder.address();
       this.requestPostProcessor =

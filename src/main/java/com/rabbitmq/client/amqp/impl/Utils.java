@@ -153,6 +153,10 @@ abstract class Utils {
     }
   }
 
+  static DefaultAddressBuilder<?> addressBuilder() {
+    return new DefaultAddressBuilder<>(null) {};
+  }
+
   private static class NameSupplier implements Supplier<String> {
 
     private final String prefix;

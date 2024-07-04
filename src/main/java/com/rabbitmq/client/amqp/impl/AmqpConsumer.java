@@ -61,7 +61,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
-  private final Runnable replenishCreditOperation = () -> replenishCreditIfNeeded();
+  private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private volatile Scheduler protonExecutor;
@@ -78,7 +78,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .connection()
             .observationCollector()
             .subscribe(builder.queue(), builder.messageHandler());
-    this.address = "/queue/" + builder.queue();
+    DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
+    addressBuilder.queue(builder.queue());
+    this.address = addressBuilder.address();
     this.filters = Collections.unmodifiableMap(builder.filters());
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
