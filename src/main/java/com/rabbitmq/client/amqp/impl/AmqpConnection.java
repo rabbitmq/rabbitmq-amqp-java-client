@@ -385,15 +385,15 @@ final class AmqpConnection extends ResourceBase implements Connection {
       for (AmqpConsumer consumer : this.consumers) {
         Utils.throwIfInterrupted();
         try {
-          LOGGER.debug("Recovering consumer {} (address '{}')", consumer.id(), consumer.address());
+          LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
           consumer.recoverAfterConnectionFailure();
           consumer.state(OPEN);
-          LOGGER.debug("Recovered consumer {} (address '{}')", consumer.id(), consumer.address());
+          LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
         } catch (Exception ex) {
           LOGGER.warn(
-              "Error while trying to recover consumer {} (address '{}')",
+              "Error while trying to recover consumer {} (queue '{}')",
               consumer.id(),
-              consumer.address(),
+              consumer.queue(),
               ex);
           failedConsumers.add(consumer);
         }
@@ -514,13 +514,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
     // TODO copy the builder properties to create the consumer
     AmqpConsumer consumer = new AmqpConsumer(builder);
     this.consumers.add(consumer);
-    this.topologyListener.consumerCreated(consumer.id(), consumer.address());
+    this.topologyListener.consumerCreated(consumer.id(), builder.queue());
     return consumer;
   }
 
   void removeConsumer(AmqpConsumer consumer) {
     this.consumers.remove(consumer);
-    this.topologyListener.consumerDeleted(consumer.id(), consumer.address());
+    this.topologyListener.consumerDeleted(consumer.id(), consumer.queue());
   }
 
   RpcClient createRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {

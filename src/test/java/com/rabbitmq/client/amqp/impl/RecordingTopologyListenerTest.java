@@ -97,20 +97,20 @@ public class RecordingTopologyListenerTest {
     recovery.queueDeclared(queue("q2"));
     recovery.queueDeclared(autoDeleteQueue("ad-q"));
 
-    recovery.consumerCreated(1, "/q/q1");
-    recovery.consumerCreated(2, "/q/q2");
-    recovery.consumerCreated(3, "/q/ad-q");
-    recovery.consumerCreated(4, "/q/ad-q");
+    recovery.consumerCreated(1, "q1");
+    recovery.consumerCreated(2, "q2");
+    recovery.consumerCreated(3, "ad-q");
+    recovery.consumerCreated(4, "ad-q");
 
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(1, "/q/q1");
+    recovery.consumerDeleted(1, "q1");
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(3, "/q/ad-q");
+    recovery.consumerDeleted(3, "ad-q");
     assertThat(recovery).hasQueueCount(3).hasQueues("q1", "q2", "ad-q");
 
-    recovery.consumerDeleted(4, "/q/ad-q");
+    recovery.consumerDeleted(4, "ad-q");
     assertThat(recovery).hasQueueCount(2).hasQueues("q1", "q2");
   }
 

@@ -27,7 +27,15 @@ public class UtilsTest {
 
   @ParameterizedTest
   @CsvSource(
-      value = {"/e/foo/bar,foo,bar", "/e/foo,foo,NULL", "/q/bar,'',bar", "not a address,NULL,NULL"},
+      value = {
+        "/e/foo/bar,foo,bar",
+        "/e/foo,foo,NULL",
+        "/e/foo%20bar,foo bar,NULL",
+        "/e/foo%20bar/bar%25foo,foo bar,bar%foo",
+        "/q/bar,'',bar",
+        "/q/foo%20bar,'',foo bar",
+        "not a address,NULL,NULL"
+      },
       nullValues = "NULL")
   void testExchangeRoutingKeyFromTo(String to, String ex, String rk) {
     assertThat(exchangeRoutingKeyFromTo(to)).containsExactly(ex, rk);

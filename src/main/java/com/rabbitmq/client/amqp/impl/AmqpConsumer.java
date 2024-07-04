@@ -53,6 +53,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MessageHandler messageHandler;
   private final Long id;
   private final String address;
+  private final String queue;
   private final Map<String, Object> filters;
   private final AmqpConnection connection;
   private final AtomicReference<PauseStatus> pauseStatus =
@@ -81,6 +82,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
     addressBuilder.queue(builder.queue());
     this.address = addressBuilder.address();
+    this.queue = builder.queue();
     this.filters = Collections.unmodifiableMap(builder.filters());
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
@@ -232,8 +234,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     return this.id;
   }
 
-  String address() {
-    return this.address;
+  String queue() {
+    return this.queue;
   }
 
   private void initStateFromNativeReceiver(ClientReceiver receiver) {

@@ -38,11 +38,9 @@ interface TopologyListener {
 
   void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification);
 
-  // TODO: use queue instead of address
-  void consumerCreated(long id, String address);
+  void consumerCreated(long id, String queue);
 
-  // TODO: use queue instead of address
-  void consumerDeleted(long id, String address);
+  void consumerDeleted(long id, String queue);
 
   static TopologyListener compose(List<TopologyListener> listeners) {
     return new CompositeTopologyListener(listeners);
@@ -69,10 +67,10 @@ interface TopologyListener {
     public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {}
 
     @Override
-    public void consumerCreated(long id, String address) {}
+    public void consumerCreated(long id, String queue) {}
 
     @Override
-    public void consumerDeleted(long id, String address) {}
+    public void consumerDeleted(long id, String queue) {}
   }
 
   class CompositeTopologyListener implements TopologyListener, AutoCloseable {
@@ -116,13 +114,13 @@ interface TopologyListener {
     }
 
     @Override
-    public void consumerCreated(long id, String address) {
-      listeners.forEach(mr -> mr.consumerCreated(id, address));
+    public void consumerCreated(long id, String queue) {
+      listeners.forEach(mr -> mr.consumerCreated(id, queue));
     }
 
     @Override
-    public void consumerDeleted(long id, String address) {
-      listeners.forEach(mr -> mr.consumerDeleted(id, address));
+    public void consumerDeleted(long id, String queue) {
+      listeners.forEach(mr -> mr.consumerDeleted(id, queue));
     }
 
     @Override

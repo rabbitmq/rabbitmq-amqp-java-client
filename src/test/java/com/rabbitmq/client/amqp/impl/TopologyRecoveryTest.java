@@ -102,13 +102,13 @@ public class TopologyRecoveryTest {
           }
 
           @Override
-          public void consumerCreated(long id, String address) {
+          public void consumerCreated(long id, String queue) {
             events.add("consumerCreated");
             eventCount.incrementAndGet();
           }
 
           @Override
-          public void consumerDeleted(long id, String address) {
+          public void consumerDeleted(long id, String queue) {
             events.add("consumerDeleted");
             eventCount.incrementAndGet();
           }

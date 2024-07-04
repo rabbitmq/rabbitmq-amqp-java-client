@@ -135,18 +135,6 @@ abstract class Utils {
     return THREAD_FACTORY;
   }
 
-  static String extractQueueFromSourceAddress(String address) {
-    if (address == null) {
-      return null;
-    } else if (address.startsWith("/q/")) {
-      return address.replace("/q/", "");
-    } else if (address.startsWith("/e/")) {
-      return null;
-    } else {
-      return null;
-    }
-  }
-
   static void throwIfInterrupted() throws InterruptedException {
     if (Thread.currentThread().isInterrupted()) {
       throw new InterruptedException();

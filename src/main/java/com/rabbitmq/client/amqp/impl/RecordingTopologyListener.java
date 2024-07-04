@@ -115,31 +115,22 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
   }
 
   @Override
-  public void consumerCreated(long id, String address) {
-    this.submit(
-        () -> {
-          String queue = Utils.extractQueueFromSourceAddress(address);
-          if (queue != null) {
-            this.consumers.put(id, new ConsumerSpec(id, queue));
-          }
-        });
+  public void consumerCreated(long id, String queue) {
+    this.submit(() -> this.consumers.put(id, new ConsumerSpec(id, queue)));
   }
 
   @Override
-  public void consumerDeleted(long id, String address) {
+  public void consumerDeleted(long id, String queue) {
     this.submit(
         () -> {
-          String queue = Utils.extractQueueFromSourceAddress(address);
-          if (queue != null) {
-            this.consumers.remove(id);
-            // if there's no consumer anymore on the queue, delete it if it's auto-delete
-            boolean atLeastOneConsumerOnQueue =
-                this.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
-            if (!atLeastOneConsumerOnQueue) {
-              QueueSpec queueSpec = this.queues.get(queue);
-              if (queueSpec != null && queueSpec.autoDelete) {
-                this.queueDeleted(queue);
-              }
+          this.consumers.remove(id);
+          // if there's no consumer anymore on the queue, delete it if it's auto-delete
+          boolean atLeastOneConsumerOnQueue =
+              this.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
+          if (!atLeastOneConsumerOnQueue) {
+            QueueSpec queueSpec = this.queues.get(queue);
+            if (queueSpec != null && queueSpec.autoDelete) {
+              this.queueDeleted(queue);
             }
           }
         });
