@@ -26,12 +26,12 @@ public class AmqpMessageTest {
   @Test
   void toShouldBePathEncoded() {
     assertThat(new AmqpMessage().toAddress().exchange("foo bar").message().to())
-        .isEqualTo("/e/foo%20bar");
+        .isEqualTo("/exchanges/foo%20bar");
   }
 
   @Test
   void replyToShouldBePathEncoded() {
     assertThat(new AmqpMessage().replyToAddress().exchange("foo bar").message().replyTo())
-        .isEqualTo("/e/foo%20bar");
+        .isEqualTo("/exchanges/foo%20bar");
   }
 }

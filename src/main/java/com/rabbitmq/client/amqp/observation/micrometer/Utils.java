@@ -25,9 +25,9 @@ abstract class Utils {
 
   private Utils() {}
 
-  private static final String EXCHANGE_DELIMITER = "/e/";
+  private static final String EXCHANGE_DELIMITER = "/exchanges/";
   private static final String KEY_DELIMITER = "/";
-  private static final String QUEUE_DELIMITER = "/q/";
+  private static final String QUEUE_DELIMITER = "/queues/";
   private static final int EXCHANGE_DELIMITER_LENGTH = EXCHANGE_DELIMITER.length();
   private static final int KEY_DELIMITER_LENGTH = KEY_DELIMITER.length();
   private static final int QUEUE_DELIMITER_LENGTH = QUEUE_DELIMITER.length();

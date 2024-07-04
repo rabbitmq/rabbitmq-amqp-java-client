@@ -59,12 +59,12 @@ abstract class DefaultAddressBuilder<T> implements AddressBuilder<T> {
   String address() {
     if (this.exchange != null) {
       if (this.key != null && !this.key.isEmpty()) {
-        return "/e/" + encodePathSegment(this.exchange) + "/" + encodePathSegment(this.key);
+        return "/exchanges/" + encodePathSegment(this.exchange) + "/" + encodePathSegment(this.key);
       } else {
-        return "/e/" + encodePathSegment(this.exchange);
+        return "/exchanges/" + encodePathSegment(this.exchange);
       }
     } else if (this.queue != null) {
-      return "/q/" + encodePathSegment(this.queue);
+      return "/queues/" + encodePathSegment(this.queue);
     } else {
       return null;
     }

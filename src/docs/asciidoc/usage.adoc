@@ -65,21 +65,21 @@ include::{test-examples}/Api.java[tag=message-publishing]
 --------
 include::{test-examples}/Api.java[tag=target-address-exchange-key]
 --------
-<1> Translates to `/e/foo/bar`
+<1> Translates to `/exchanges/foo/bar`
 
 .Target address format: exchange
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=target-address-exchange]
 --------
-<1> Translates to `/e/foo`
+<1> Translates to `/exchanges/foo`
 
 .Target address format: queue
 [source,java,indent=0]
 --------
 include::{test-examples}/Api.java[tag=target-address-queue]
 --------
-<1> Translates to `/q/some-queue`
+<1> Translates to `/queues/some-queue`
 
 .Target address format: address in `to` field
 [source,java,indent=0]

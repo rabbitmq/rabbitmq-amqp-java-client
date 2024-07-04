@@ -91,7 +91,7 @@ public class ClientTest {
                       publisher.message("".getBytes(UTF_8)), context -> publishLatch.countDown()));
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
-      Receiver receiver = protonConnection.openReceiver("/q/" + q, new ReceiverOptions());
+      Receiver receiver = protonConnection.openReceiver("/queues/" + q, new ReceiverOptions());
       int receivedMessages = 0;
       while (receiver.receive(100, TimeUnit.MILLISECONDS) != null) {
         receivedMessages++;
@@ -108,7 +108,7 @@ public class ClientTest {
           connection(client, o -> o.traceFrames(false).maxFrameSize(maxFrameSize));
 
       Sender sender =
-          connection.openSender("/q/" + q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
+          connection.openSender("/queues/" + q, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
       Tracker tracker = sender.send(Message.create(body));
@@ -116,7 +116,7 @@ public class ClientTest {
 
       Receiver receiver =
           connection.openReceiver(
-              "/q/" + q,
+              "/queues/" + q,
               new ReceiverOptions()
                   .deliveryMode(AT_LEAST_ONCE)
                   .autoSettle(false)
@@ -138,7 +138,7 @@ public class ClientTest {
 
       StreamSender sender =
           connection.openStreamSender(
-              "/q/" + q, new StreamSenderOptions().deliveryMode(AT_LEAST_ONCE));
+              "/queues/" + q, new StreamSenderOptions().deliveryMode(AT_LEAST_ONCE));
       StreamSenderMessage message = sender.beginMessage();
       byte[] body = new byte[maxFrameSize * 4];
       Arrays.fill(body, (byte) 'A');
@@ -155,7 +155,7 @@ public class ClientTest {
 
       StreamReceiver receiver =
           connection.openStreamReceiver(
-              "/q/" + q,
+              "/queues/" + q,
               new StreamReceiverOptions()
                   .deliveryMode(AT_LEAST_ONCE)
                   .autoAccept(false)
@@ -269,7 +269,7 @@ public class ClientTest {
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
       Session session = protonConnection.openSession();
-      Receiver receiver = session.openReceiver("/q/" + queue);
+      Receiver receiver = session.openReceiver("/queues/" + queue);
       receiver.openFuture().get();
       Delivery delivery = receiver.tryReceive();
       assertThat(delivery).isNull();
@@ -295,7 +295,8 @@ public class ClientTest {
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
       Session session = protonConnection.openSession();
       Sender sender =
-          session.openSender("/e/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
+          session.openSender(
+              "/exchanges/" + exchange, new SenderOptions().deliveryMode(AT_LEAST_ONCE));
       Tracker tracker = sender.send(Message.create(body));
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(released());

@@ -28,12 +28,12 @@ public class UtilsTest {
   @ParameterizedTest
   @CsvSource(
       value = {
-        "/e/foo/bar,foo,bar",
-        "/e/foo,foo,NULL",
-        "/e/foo%20bar,foo bar,NULL",
-        "/e/foo%20bar/bar%25foo,foo bar,bar%foo",
-        "/q/bar,'',bar",
-        "/q/foo%20bar,'',foo bar",
+        "/exchanges/foo/bar,foo,bar",
+        "/exchanges/foo,foo,NULL",
+        "/exchanges/foo%20bar,foo bar,NULL",
+        "/exchanges/foo%20bar/bar%25foo,foo bar,bar%foo",
+        "/queues/bar,'',bar",
+        "/queues/foo%20bar,'',foo bar",
         "not a address,NULL,NULL"
       },
       nullValues = "NULL")
