@@ -21,9 +21,9 @@ abstract class Utils {
 
   private Utils() {}
 
-  private static final String EXCHANGE_DELIMITER = "/exchange/";
-  private static final String KEY_DELIMITER = "/key/";
-  private static final String QUEUE_DELIMITER = "/queue/";
+  private static final String EXCHANGE_DELIMITER = "/e/";
+  private static final String KEY_DELIMITER = "/";
+  private static final String QUEUE_DELIMITER = "/q/";
   private static final int EXCHANGE_DELIMITER_LENGTH = EXCHANGE_DELIMITER.length();
   private static final int KEY_DELIMITER_LENGTH = KEY_DELIMITER.length();
   private static final int QUEUE_DELIMITER_LENGTH = QUEUE_DELIMITER.length();
@@ -36,7 +36,7 @@ abstract class Utils {
         exRk[0] = EMPTY_STRING;
         exRk[1] = to.substring(QUEUE_DELIMITER_LENGTH);
       } else if (to.startsWith(EXCHANGE_DELIMITER)) {
-        int keyDelimiterIndex = to.indexOf(KEY_DELIMITER);
+        int keyDelimiterIndex = to.indexOf(KEY_DELIMITER, EXCHANGE_DELIMITER_LENGTH);
         exRk[0] =
             to.substring(
                 EXCHANGE_DELIMITER_LENGTH,

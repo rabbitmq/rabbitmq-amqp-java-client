@@ -25,12 +25,12 @@ public class DefaultAddressBuilderTest {
 
   @Test
   void pathSegmentsShouldBePercentEncoded() {
-    assertThat(b().exchange("foo").address()).isEqualTo("/exchange/foo");
-    assertThat(b().exchange("foo").key("bar").address()).isEqualTo("/exchange/foo/key/bar");
-    assertThat(b().exchange("foo bar").address()).isEqualTo("/exchange/foo%20bar");
-    assertThat(b().exchange("foo").key("b ar").address()).isEqualTo("/exchange/foo/key/b%20ar");
-    assertThat(b().queue("foo").address()).isEqualTo("/queue/foo");
-    assertThat(b().queue("foo bar").address()).isEqualTo("/queue/foo%20bar");
+    assertThat(b().exchange("foo").address()).isEqualTo("/e/foo");
+    assertThat(b().exchange("foo").key("bar").address()).isEqualTo("/e/foo/bar");
+    assertThat(b().exchange("foo bar").address()).isEqualTo("/e/foo%20bar");
+    assertThat(b().exchange("foo").key("b ar").address()).isEqualTo("/e/foo/b%20ar");
+    assertThat(b().queue("foo").address()).isEqualTo("/q/foo");
+    assertThat(b().queue("foo bar").address()).isEqualTo("/q/foo%20bar");
   }
 
   TestAddressBuilder b() {

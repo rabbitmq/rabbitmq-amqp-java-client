@@ -138,9 +138,9 @@ abstract class Utils {
   static String extractQueueFromSourceAddress(String address) {
     if (address == null) {
       return null;
-    } else if (address.startsWith("/queue/")) {
-      return address.replace("/queue/", "");
-    } else if (address.startsWith("/exchange/") || address.startsWith("/topic/")) {
+    } else if (address.startsWith("/q/")) {
+      return address.replace("/q/", "");
+    } else if (address.startsWith("/e/")) {
       return null;
     } else {
       return null;
