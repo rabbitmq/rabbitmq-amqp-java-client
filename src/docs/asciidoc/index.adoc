@@ -11,6 +11,10 @@ ifndef::sourcedir[:sourcedir: ../../main/java]
 
 The library is open source, developed https://github.com/rabbitmq/rabbitmq-amqp-java-client/[on GitHub], and is licensed under the https://www.apache.org/licenses/LICENSE-2.0.html[Apache Public License 2.0]
 
+== Pre-requisites
+
+This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
+
 include::usage.adoc[]
 
 include::appendixes.adoc[]
