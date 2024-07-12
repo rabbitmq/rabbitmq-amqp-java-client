@@ -44,6 +44,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @ExtendWith(AmqpTestInfrastructureExtension.class)
@@ -79,8 +80,9 @@ public class AmqpTest {
     }
   }
 
-  @Test
-  void queueDeclareDeletePublishConsume() {
+  @ParameterizedTest
+  @ValueSource(strings = {"foobar", "фообар"})
+  void queueDeclareDeletePublishConsume(String subject) {
     try {
       connection.management().queue().name(name).quorum().queue().declare();
       Publisher publisher = connection.publisherBuilder().queue(name).build();
@@ -92,7 +94,10 @@ public class AmqpTest {
               ignored -> {
                 UUID messageId = UUID.randomUUID();
                 publisher.publish(
-                    publisher.message("hello".getBytes(UTF_8)).messageId(messageId),
+                    publisher
+                        .message("hello".getBytes(UTF_8))
+                        .messageId(messageId)
+                        .subject(subject),
                     acceptedCallback(confirmSync));
               });
 
@@ -101,6 +106,7 @@ public class AmqpTest {
       Management.QueueInfo queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasName(name).hasNoConsumers().hasMessageCount(messageCount);
 
+      AtomicReference<String> receivedSubject = new AtomicReference<>();
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       com.rabbitmq.client.amqp.Consumer consumer =
           connection
@@ -108,11 +114,13 @@ public class AmqpTest {
               .queue(name)
               .messageHandler(
                   (context, message) -> {
+                    receivedSubject.set(message.subject());
                     context.accept();
                     consumeLatch.countDown();
                   })
               .build();
       Assertions.assertThat(consumeLatch).is(completed());
+      assertThat(receivedSubject).doesNotHaveNullValue().hasValue(subject);
 
       queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasConsumerCount(1).isEmpty();
@@ -125,12 +133,17 @@ public class AmqpTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void binding(boolean addBindingArguments, TestInfo info) {
-    String e1 = TestUtils.name(info);
-    String e2 = TestUtils.name(info);
-    String q = TestUtils.name(info);
-    String rk = "foo";
+  @CsvSource({
+    "foo,false",
+    "foo,true",
+    "фообар,true",
+    "фообар,false",
+  })
+  void binding(String prefix, boolean addBindingArguments, TestInfo info) {
+    String e1 = prefix + "-" + TestUtils.name(info);
+    String e2 = prefix + "-" + TestUtils.name(info);
+    String q = prefix + "-" + TestUtils.name(info);
+    String rk = prefix + "-" + "foo";
     Map<String, Object> bindingArguments =
         addBindingArguments ? singletonMap("foo", "bar") : emptyMap();
     Management management = connection.management();
