@@ -374,13 +374,13 @@ class AmqpManagement implements Management {
       String target =
           "/bindings/"
               + "src="
-              + UriUtils.encodePathSegment(source)
+              + UriUtils.encodeNonUnreserved(source)
               + ";"
               + destinationField
               + "="
-              + UriUtils.encodePathSegment(destination)
+              + UriUtils.encodeNonUnreserved(destination)
               + ";key="
-              + UriUtils.encodePathSegment(key)
+              + UriUtils.encodeNonUnreserved(key)
               + ";args=";
       delete(target, CODE_204);
     } else {

@@ -73,6 +73,10 @@ abstract class UriUtils {
     QUERY_PARAM.clear('&');
   }
 
+  static String encodeNonUnreserved(String value) {
+    return encode(value, UNRESERVED);
+  }
+
   static String encodePathSegment(String segment) {
     return encode(segment, PCHAR);
   }
@@ -81,12 +85,12 @@ abstract class UriUtils {
     return encode(value, QUERY_PARAM);
   }
 
-  private static String encode(String segment, BitSet safeCharacters) {
-    if (segment == null) {
+  private static String encode(String value, BitSet safeCharacters) {
+    if (value == null) {
       return null;
     }
     StringBuilder buf = new StringBuilder();
-    final CharBuffer cb = CharBuffer.wrap(segment);
+    final CharBuffer cb = CharBuffer.wrap(value);
     final ByteBuffer bb = StandardCharsets.UTF_8.encode(cb);
     while (bb.hasRemaining()) {
       final int b = bb.get() & 0xff;

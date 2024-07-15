@@ -138,6 +138,8 @@ public class AmqpTest {
     "foo,true",
     "фообар,true",
     "фообар,false",
+    "фоо!бар,false",
+    "фоо!бар,true",
   })
   void binding(String prefix, boolean addBindingArguments, TestInfo info) {
     String e1 = prefix + "-" + TestUtils.name(info);
@@ -145,7 +147,7 @@ public class AmqpTest {
     String q = prefix + "-" + TestUtils.name(info);
     String rk = prefix + "-" + "foo";
     Map<String, Object> bindingArguments =
-        addBindingArguments ? singletonMap("foo", "bar") : emptyMap();
+        addBindingArguments ? singletonMap("foo", prefix + "-bar") : emptyMap();
     Management management = connection.management();
     try {
       management.exchange().name(e1).type(DIRECT).declare();

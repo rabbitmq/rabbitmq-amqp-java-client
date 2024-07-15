@@ -17,8 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.UriUtils.encodeParameter;
-import static com.rabbitmq.client.amqp.impl.UriUtils.encodePathSegment;
+import static com.rabbitmq.client.amqp.impl.UriUtils.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -43,5 +42,17 @@ public class UriUtilsTest {
   @CsvSource({"test,test", "foobar,foobar", "foo bar,foo%20bar", "foo&bar,foo%26bar"})
   void encodeParamTest(String param, String expected) {
     assertThat(encodeParameter(param)).isEqualTo(expected);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "test,test",
+    "foobar,foobar",
+    "foo bar,foo%20bar",
+    "foo&bar,foo%26bar",
+    "foo*bar,foo%2Abar"
+  })
+  void encodeNonUnreservedTest(String param, String expected) {
+    assertThat(encodeNonUnreserved(param)).isEqualTo(expected);
   }
 }
