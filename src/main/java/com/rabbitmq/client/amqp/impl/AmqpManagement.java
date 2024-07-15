@@ -441,13 +441,13 @@ class AmqpManagement implements Management {
   private String bindingsTarget(
       String destinationField, String source, String destination, String key) {
     return "/bindings?src="
-        + UriUtils.encodeHttpParameter(source)
+        + UriUtils.encodeParameter(source)
         + "&"
         + destinationField
         + "="
-        + UriUtils.encodeHttpParameter(destination)
+        + UriUtils.encodeParameter(destination)
         + "&key="
-        + UriUtils.encodeHttpParameter(key);
+        + UriUtils.encodeParameter(key);
   }
 
   private static class OutstandingRequest {

@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
@@ -25,12 +24,29 @@ import java.util.BitSet;
 
 abstract class UriUtils {
 
+  // based Apache HttpComponents PercentCodec
+
   private UriUtils() {}
 
+  static final BitSet SUB_DELIMS = new BitSet(256);
   static final BitSet UNRESERVED = new BitSet(256);
+  static final BitSet PCHAR = new BitSet(256);
+  static final BitSet QUERY_PARAM = new BitSet(256);
   private static final int RADIX = 16;
 
   static {
+    SUB_DELIMS.set('!');
+    SUB_DELIMS.set('$');
+    SUB_DELIMS.set('&');
+    SUB_DELIMS.set('\'');
+    SUB_DELIMS.set('(');
+    SUB_DELIMS.set(')');
+    SUB_DELIMS.set('*');
+    SUB_DELIMS.set('+');
+    SUB_DELIMS.set(',');
+    SUB_DELIMS.set(';');
+    SUB_DELIMS.set('=');
+
     for (int i = 'a'; i <= 'z'; i++) {
       UNRESERVED.set(i);
     }
@@ -45,10 +61,27 @@ abstract class UriUtils {
     UNRESERVED.set('.');
     UNRESERVED.set('_');
     UNRESERVED.set('~');
+    PCHAR.or(UNRESERVED);
+    PCHAR.or(SUB_DELIMS);
+    PCHAR.set(':');
+    PCHAR.set('@');
+
+    QUERY_PARAM.or(PCHAR);
+    QUERY_PARAM.set('/');
+    QUERY_PARAM.set('?');
+    QUERY_PARAM.clear('=');
+    QUERY_PARAM.clear('&');
   }
 
-  // from Apache HttpComponents PercentCodec
   static String encodePathSegment(String segment) {
+    return encode(segment, PCHAR);
+  }
+
+  static String encodeParameter(String value) {
+    return encode(value, QUERY_PARAM);
+  }
+
+  private static String encode(String segment, BitSet safeCharacters) {
     if (segment == null) {
       return null;
     }
@@ -57,7 +90,7 @@ abstract class UriUtils {
     final ByteBuffer bb = StandardCharsets.UTF_8.encode(cb);
     while (bb.hasRemaining()) {
       final int b = bb.get() & 0xff;
-      if (UNRESERVED.get(b)) {
+      if (safeCharacters.get(b)) {
         buf.append((char) b);
       } else {
         buf.append("%");
@@ -68,9 +101,5 @@ abstract class UriUtils {
       }
     }
     return buf.toString();
-  }
-
-  static String encodeHttpParameter(String value) {
-    return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 }
