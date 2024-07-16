@@ -115,9 +115,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     if (this.messageHandler == null) {
       throw new IllegalArgumentException("Message handler cannot be null");
     }
-
-    // TODO validate stream (filtering) configuration
-
     return this.connection.createConsumer(this);
   }
 
@@ -167,6 +164,9 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
     @Override
     public StreamOptions filterValues(String... values) {
+      if (values == null || values.length == 0) {
+        throw new IllegalArgumentException("At least one stream filter value must specified");
+      }
       this.filters.put("rabbitmq:stream-filter", Arrays.asList(values));
       return this;
     }
