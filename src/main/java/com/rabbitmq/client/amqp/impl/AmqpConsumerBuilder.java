@@ -60,11 +60,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   @Override
   public ConsumerBuilder priority(int priority) {
-    if (priority < 0 || priority > 255) {
-      throw new IllegalArgumentException(
-          "The consumer priority must be between 0 and 255. "
-              + "Recommended values are between 0 and 5.");
-    }
     this.properties.put("rabbitmq:priority", priority);
     return this;
   }
