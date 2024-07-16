@@ -174,11 +174,14 @@ class AmqpManagement implements Management {
   }
 
   void init() {
+    LOGGER.debug("Trying to initialize management.");
     if (!this.initialized.get()) {
       try {
+        LOGGER.debug("Creating management session.");
         this.session = this.connection.nativeConnection().openSession();
         String linkPairName = "management-link-pair";
         Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
+        LOGGER.debug("Creating management sender.");
         this.sender =
             session.openSender(
                 MANAGEMENT_NODE_ADDRESS,
@@ -187,6 +190,7 @@ class AmqpManagement implements Management {
                     .linkName(linkPairName)
                     .properties(properties));
 
+        LOGGER.debug("Creating management receiver.");
         this.receiver =
             session.openReceiver(
                 MANAGEMENT_NODE_ADDRESS,
@@ -197,7 +201,9 @@ class AmqpManagement implements Management {
                     .creditWindow(100));
 
         this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+        LOGGER.debug("Management sender created.");
         this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+        LOGGER.debug("Management receiver created.");
         Runnable receiveTask =
             () -> {
               try {
@@ -236,7 +242,9 @@ class AmqpManagement implements Management {
                 log.accept("Error while polling AMQP receiver");
               }
             };
+        LOGGER.debug("Starting management receive loop.");
         this.receiveLoop = this.connection.executorService().submit(receiveTask);
+        LOGGER.debug("Management initialized.");
         this.initialized.set(true);
       } catch (Exception e) {
         throw new AmqpException(e);
@@ -297,7 +305,7 @@ class AmqpManagement implements Management {
       Message<?> request =
           Message.create(body).messageId(requestId).to(target).subject(operation).replyTo(REPLY_TO);
 
-      OutstandingRequest outstandingRequest = this.request(request);
+      OutstandingRequest outstandingRequest = this.request(request, requestId);
       outstandingRequest.block();
 
       checkResponse(outstandingRequest, requestId, expectedResponseCodes);
@@ -307,9 +315,11 @@ class AmqpManagement implements Management {
     }
   }
 
-  OutstandingRequest request(Message<?> request) throws ClientException {
+  OutstandingRequest request(Message<?> request, UUID requestId) throws ClientException {
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
-    this.outstandingRequests.put((UUID) request.messageId(), outstandingRequest);
+    LOGGER.debug("Enqueueing request {}", requestId);
+    this.outstandingRequests.put(requestId, outstandingRequest);
+    LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
     return outstandingRequest;
   }
@@ -325,7 +335,7 @@ class AmqpManagement implements Management {
               .subject(DELETE)
               .replyTo(REPLY_TO);
 
-      OutstandingRequest outstandingRequest = request(request);
+      OutstandingRequest outstandingRequest = request(request, requestId);
       outstandingRequest.block();
       checkResponse(outstandingRequest, requestId, expectedResponseCode);
       return outstandingRequest.responseBodyAsMap();
@@ -436,7 +446,7 @@ class AmqpManagement implements Management {
             .subject(GET)
             .replyTo(REPLY_TO);
 
-    OutstandingRequest outstandingRequest = request(request);
+    OutstandingRequest outstandingRequest = request(request, requestId);
     outstandingRequest.block();
     checkResponse(outstandingRequest, requestId, CODE_200);
     return outstandingRequest;
