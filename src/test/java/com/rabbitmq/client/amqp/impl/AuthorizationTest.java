@@ -75,7 +75,7 @@ public class AuthorizationTest {
   }
 
   @Test
-  void entityCreationAttemptWithoutAuthorizationShouldThrow() throws Exception {
+  void entityCreationAttemptWithoutAuthorizationShouldThrow() {
     try (Connection c = userConnection()) {
       String authorizedName = "amqp" + name;
       c.management().queue(authorizedName).exclusive(true).declare();

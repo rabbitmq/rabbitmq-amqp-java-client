@@ -110,6 +110,7 @@ class AmqpManagement implements Management {
   public QueueDeletion queueDeletion() {
     checkAvailable();
     return name -> {
+      // FIXME queue deletion should be recorded after deletion operation
       this.topologyListener.queueDeleted(name);
       Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
       if (!responseBody.containsKey("message_count")) {
@@ -174,7 +175,7 @@ class AmqpManagement implements Management {
   }
 
   void init() {
-    if (this.initialized.compareAndSet(false, true)) {
+    if (!this.initialized.get()) {
       try {
         this.session = this.connection.nativeConnection().openSession();
         String linkPairName = "management-link-pair";
@@ -221,11 +222,13 @@ class AmqpManagement implements Management {
                   | ClientLinkRemotelyClosedException e) {
                 // receiver is closed
               } catch (ClientSessionRemotelyClosedException e) {
-                LOGGER.info("Management session closed: {}", e.getMessage());
+                LOGGER.info("Management session closed in receive loop: {}", e.getMessage());
                 AmqpException exception = ExceptionUtils.convert(e);
-                this.failRequests(exception);
                 this.releaseResources();
+                this.failRequests(exception);
                 if (exception instanceof AmqpException.AmqpSecurityException) {
+                  LOGGER.debug(
+                      "Recovering AMQP management because the failure was a security exception");
                   this.init();
                 }
               } catch (ClientException e) {
@@ -235,6 +238,7 @@ class AmqpManagement implements Management {
               }
             };
         this.receiveLoop = this.connection.executorService().submit(receiveTask);
+        this.initialized.set(true);
       } catch (Exception e) {
         throw new AmqpException(e);
       }
@@ -248,14 +252,15 @@ class AmqpManagement implements Management {
       Map.Entry<UUID, OutstandingRequest> request = iterator.next();
       LOGGER.info("Failing management request {}", request.getKey());
       request.getValue().fail(exception);
+      iterator.remove();
     }
   }
 
   void releaseResources() {
+    this.initialized.set(false);
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
     }
-    this.initialized.set(false);
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {
