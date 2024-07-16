@@ -17,8 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -43,15 +41,15 @@ public class ByteCapacity implements Comparable<ByteCapacity> {
   private static final String UNIT_TB = "tb";
 
   private static final Map<String, BiFunction<Long, String, ByteCapacity>> CONSTRUCTORS =
-      Collections.unmodifiableMap(
-          new HashMap<String, BiFunction<Long, String, ByteCapacity>>() {
-            {
-              put(UNIT_KB, (size, input) -> ByteCapacity.kB(size, input));
-              put(UNIT_MB, (size, input) -> ByteCapacity.MB(size, input));
-              put(UNIT_GB, (size, input) -> ByteCapacity.GB(size, input));
-              put(UNIT_TB, (size, input) -> ByteCapacity.TB(size, input));
-            }
-          });
+      Map.of(
+          UNIT_KB,
+          ByteCapacity::kB,
+          UNIT_MB,
+          ByteCapacity::MB,
+          UNIT_GB,
+          ByteCapacity::GB,
+          UNIT_TB,
+          ByteCapacity::TB);
 
   private final long bytes;
   private final String input;

@@ -537,7 +537,7 @@ class AmqpManagement implements Management {
       this.autoDelete = (Boolean) response.get("auto_delete");
       this.exclusive = (Boolean) response.get("exclusive");
       this.type = QueueType.valueOf(((String) response.get("type")).toUpperCase(Locale.ENGLISH));
-      this.arguments = Collections.unmodifiableMap((Map<String, Object>) response.get("arguments"));
+      this.arguments = Map.copyOf((Map<String, Object>) response.get("arguments"));
       this.leader = (String) response.get("leader");
       String[] replicas = (String[]) response.get("replicas");
       if (replicas == null || replicas.length == 0) {
