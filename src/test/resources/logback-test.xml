@@ -5,6 +5,7 @@
         </encoder>
     </appender>
 
+    <logger name="com.rabbitmq.client.amqp.AmqpClientTestExtension" level="info" />
     <logger name="com.rabbitmq.client.amqp" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.EntityRecovery" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="warn" />
