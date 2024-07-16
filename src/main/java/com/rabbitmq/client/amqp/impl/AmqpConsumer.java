@@ -22,7 +22,6 @@ import static com.rabbitmq.client.amqp.Resource.State.*;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,6 +54,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final String address;
   private final String queue;
   private final Map<String, Object> filters;
+  private final Map<String, Object> linkProperties;
   private final AmqpConnection connection;
   private final AtomicReference<PauseStatus> pauseStatus =
       new AtomicReference<>(PauseStatus.UNPAUSED);
@@ -83,11 +83,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     addressBuilder.queue(builder.queue());
     this.address = addressBuilder.address();
     this.queue = builder.queue();
-    this.filters = Collections.unmodifiableMap(builder.filters());
+    this.filters = Map.copyOf(builder.filters());
+    this.linkProperties = Map.copyOf(builder.properties());
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
     this.nativeReceiver =
-        this.createNativeReceiver(this.sessionHandler.session(), this.address, this.filters);
+        this.createNativeReceiver(
+            this.sessionHandler.session(), this.address, this.linkProperties, this.filters);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
     this.startReceivingLoop();
@@ -144,14 +146,18 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   // internal API
 
   private ClientReceiver createNativeReceiver(
-      Session nativeSession, String address, Map<String, Object> filters) {
+      Session nativeSession,
+      String address,
+      Map<String, Object> properties,
+      Map<String, Object> filters) {
     try {
       ReceiverOptions receiverOptions =
           new ReceiverOptions()
               .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
               .autoAccept(false)
               .autoSettle(false)
-              .creditWindow(0);
+              .creditWindow(0)
+              .properties(properties);
       if (!filters.isEmpty()) {
         receiverOptions.sourceOptions().filters(filters);
       }
@@ -205,7 +211,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   void recoverAfterConnectionFailure() {
     this.nativeReceiver =
-        createNativeReceiver(this.sessionHandler.sessionNoCheck(), this.address, this.filters);
+        createNativeReceiver(
+            this.sessionHandler.sessionNoCheck(), this.address, this.linkProperties, this.filters);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
     this.unsettledMessageCount.set(0);

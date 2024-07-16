@@ -40,6 +40,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -561,6 +562,62 @@ public class AmqpTest {
     consumer.close();
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - settledCount);
+  }
+
+  @Test
+  void consumerWithHigherPriorityShouldGetMessagesFirst() {
+    int messageCount = 100;
+    connection.management().queue(name).exclusive(true).declare();
+    AtomicInteger lowCount = new AtomicInteger(0);
+    AtomicInteger highCount = new AtomicInteger(0);
+    Sync consumeSync = sync(messageCount);
+    com.rabbitmq.client.amqp.Consumer lowPriorityConsumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .priority(1)
+            .messageHandler(
+                (ctx, msg) -> {
+                  ctx.accept();
+                  lowCount.incrementAndGet();
+                  consumeSync.down();
+                })
+            .build();
+
+    com.rabbitmq.client.amqp.Consumer highPriorityConsumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .priority(5)
+            .messageHandler(
+                (ctx, msg) -> {
+                  ctx.accept();
+                  highCount.incrementAndGet();
+                  consumeSync.down();
+                })
+            .build();
+
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Runnable publish =
+        () ->
+            IntStream.range(0, messageCount)
+                .forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+
+    publish.run();
+
+    assertThat(consumeSync).completes();
+    assertThat(lowCount).hasValue(0);
+    assertThat(highCount).hasValue(messageCount);
+
+    highPriorityConsumer.close();
+
+    consumeSync.reset(messageCount);
+    publish.run();
+    assertThat(consumeSync).completes();
+    assertThat(lowCount).hasValue(messageCount);
+    assertThat(highCount).hasValue(messageCount);
+
+    lowPriorityConsumer.close();
   }
 
   private static String uuid() {

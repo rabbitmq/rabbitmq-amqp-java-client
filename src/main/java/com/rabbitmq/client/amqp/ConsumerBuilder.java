@@ -27,6 +27,8 @@ public interface ConsumerBuilder {
 
   ConsumerBuilder initialCredits(int initialCredits);
 
+  ConsumerBuilder priority(int priority);
+
   ConsumerBuilder listeners(Resource.StateListener... listeners);
 
   StreamOptions stream();

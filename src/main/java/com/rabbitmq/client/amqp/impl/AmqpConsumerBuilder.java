@@ -32,7 +32,8 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 100;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
-  private final Map<String, Object> filters = new HashMap<>();
+  private final Map<String, Object> filters = new LinkedHashMap<>();
+  private final Map<String, Object> properties = new LinkedHashMap<>();
   private final StreamOptions streamOptions = new DefaultStreamOptions(this, this.filters);
 
   AmqpConsumerBuilder(AmqpConnection connection) {
@@ -54,6 +55,17 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   @Override
   public ConsumerBuilder initialCredits(int initialCredits) {
     this.initialCredits = initialCredits;
+    return this;
+  }
+
+  @Override
+  public ConsumerBuilder priority(int priority) {
+    if (priority < 0 || priority > 255) {
+      throw new IllegalArgumentException(
+          "The consumer priority must be between 0 and 255. "
+              + "Recommended values are between 0 and 5.");
+    }
+    this.properties.put("rabbitmq:priority", priority);
     return this;
   }
 
@@ -85,7 +97,11 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   }
 
   int initialCredits() {
-    return initialCredits;
+    return this.initialCredits;
+  }
+
+  Map<String, Object> properties() {
+    return this.properties;
   }
 
   List<Resource.StateListener> listeners() {
