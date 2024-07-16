@@ -110,9 +110,8 @@ class AmqpManagement implements Management {
   public QueueDeletion queueDeletion() {
     checkAvailable();
     return name -> {
-      // FIXME queue deletion should be recorded after deletion operation
-      this.topologyListener.queueDeleted(name);
       Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
+      this.topologyListener.queueDeleted(name);
       if (!responseBody.containsKey("message_count")) {
         throw new AmqpException("Response body should contain message_count");
       }
@@ -135,8 +134,8 @@ class AmqpManagement implements Management {
   public ExchangeDeletion exchangeDeletion() {
     checkAvailable();
     return name -> {
-      this.topologyListener.exchangeDeleted(name);
       this.delete(exchangeLocation(name), CODE_204);
+      this.topologyListener.exchangeDeleted(name);
     };
   }
 

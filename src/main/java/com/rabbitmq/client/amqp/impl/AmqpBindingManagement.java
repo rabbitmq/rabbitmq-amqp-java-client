@@ -176,7 +176,6 @@ abstract class AmqpBindingManagement {
 
     @Override
     public void unbind() {
-      this.state.managememt.recovery().bindingDeleted(this);
       String destinationCharacter = this.state.toQueue ? "dstq" : "dste";
       this.state.managememt.unbind(
           destinationCharacter,
@@ -184,6 +183,7 @@ abstract class AmqpBindingManagement {
           this.state.destination,
           this.state.key == null ? "" : this.state.key,
           this.state.arguments);
+      this.state.managememt.recovery().bindingDeleted(this);
     }
 
     BindingState state() {
