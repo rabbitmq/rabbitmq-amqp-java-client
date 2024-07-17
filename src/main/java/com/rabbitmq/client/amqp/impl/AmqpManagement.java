@@ -174,14 +174,14 @@ class AmqpManagement implements Management {
   }
 
   void init() {
-    LOGGER.debug("Trying to initialize management.");
     if (!this.initialized.get()) {
+      LOGGER.debug("Initializing management ({}).", this);
       try {
-        LOGGER.debug("Creating management session.");
+        LOGGER.debug("Creating management session ({}).", this);
         this.session = this.connection.nativeConnection().openSession();
         String linkPairName = "management-link-pair";
         Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
-        LOGGER.debug("Creating management sender.");
+        LOGGER.debug("Creating management sender ({}).", this);
         this.sender =
             session.openSender(
                 MANAGEMENT_NODE_ADDRESS,
@@ -190,7 +190,7 @@ class AmqpManagement implements Management {
                     .linkName(linkPairName)
                     .properties(properties));
 
-        LOGGER.debug("Creating management receiver.");
+        LOGGER.debug("Creating management receiver ({}).", this);
         this.receiver =
             session.openReceiver(
                 MANAGEMENT_NODE_ADDRESS,
@@ -201,9 +201,9 @@ class AmqpManagement implements Management {
                     .creditWindow(100));
 
         this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-        LOGGER.debug("Management sender created.");
+        LOGGER.debug("Management sender created ({}).", this);
         this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-        LOGGER.debug("Management receiver created.");
+        LOGGER.debug("Management receiver created ({}).", this);
         Runnable receiveTask =
             () -> {
               try {
@@ -219,7 +219,7 @@ class AmqpManagement implements Management {
                         LOGGER.info("Could not find outstanding request {}", correlationId);
                       }
                     } else {
-                      LOGGER.info("Could not correlate inbound message with managemement request");
+                      LOGGER.info("Could not correlate inbound message with management request");
                     }
                   }
                 }
@@ -227,13 +227,15 @@ class AmqpManagement implements Management {
                   | ClientLinkRemotelyClosedException e) {
                 // receiver is closed
               } catch (ClientSessionRemotelyClosedException e) {
-                LOGGER.info("Management session closed in receive loop: {}", e.getMessage());
+                LOGGER.info(
+                    "Management session closed in receive loop: {} ({})", e.getMessage(), this);
                 AmqpException exception = ExceptionUtils.convert(e);
                 this.releaseResources();
                 this.failRequests(exception);
                 if (exception instanceof AmqpException.AmqpSecurityException) {
                   LOGGER.debug(
-                      "Recovering AMQP management because the failure was a security exception");
+                      "Recovering AMQP management because the failure was a security exception ({}).",
+                      this);
                   this.init();
                 }
               } catch (ClientException e) {
@@ -242,9 +244,9 @@ class AmqpManagement implements Management {
                 log.accept("Error while polling AMQP receiver");
               }
             };
-        LOGGER.debug("Starting management receive loop.");
+        LOGGER.debug("Starting management receive loop ({}).", this);
         this.receiveLoop = this.connection.executorService().submit(receiveTask);
-        LOGGER.debug("Management initialized.");
+        LOGGER.debug("Management initialized ({}).", this);
         this.initialized.set(true);
       } catch (Exception e) {
         throw new AmqpException(e);

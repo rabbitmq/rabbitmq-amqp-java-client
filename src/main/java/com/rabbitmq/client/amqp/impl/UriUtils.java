@@ -24,7 +24,7 @@ import java.util.BitSet;
 
 abstract class UriUtils {
 
-  // based Apache HttpComponents PercentCodec
+  // based on Apache HttpComponents PercentCodec
 
   private UriUtils() {}
 
