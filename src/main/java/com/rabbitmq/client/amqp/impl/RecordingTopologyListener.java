@@ -17,56 +17,22 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.AmqpException;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 final class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
-  private static final Duration TIMEOUT = Duration.ofSeconds(60);
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(RecordingTopologyListener.class);
-
+  private final EventLoop eventLoop;
   private final Map<String, ExchangeSpec> exchanges = new LinkedHashMap<>();
   private final Map<String, QueueSpec> queues = new LinkedHashMap<>();
   private final Set<BindingSpec> bindings = new LinkedHashSet<>();
   private final Map<Long, ConsumerSpec> consumers = new LinkedHashMap<>();
-  private final BlockingQueue<Runnable> taskQueue = new ArrayBlockingQueue<>(100);
-  private final Future<?> loop;
-  private final AtomicReference<Thread> loopThread = new AtomicReference<>();
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   RecordingTopologyListener(ExecutorService executorService) {
-    CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
-    this.loop =
-        executorService.submit(
-            () -> {
-              loopThread.set(Thread.currentThread());
-              loopThreadSetLatch.countDown();
-              while (!Thread.currentThread().isInterrupted()) {
-                try {
-                  Runnable task = this.taskQueue.take();
-                  task.run();
-                } catch (InterruptedException e) {
-                  return;
-                } catch (Exception e) {
-                  LOGGER.warn("Error during processing of topology recording task", e);
-                }
-              }
-            });
-    try {
-      if (!loopThreadSetLatch.await(10, TimeUnit.SECONDS)) {
-        throw new IllegalStateException("Recording topology loop could not start");
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new AmqpException("Error while creating recording topology listener", e);
-    }
+    this.eventLoop = new EventLoop("topology", executorService);
   }
 
   @Override
@@ -139,44 +105,13 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      this.loop.cancel(true);
+      this.eventLoop.close();
     }
   }
 
   private void submit(Runnable task) {
     if (!this.closed.get()) {
-      if (Thread.currentThread().equals(this.loopThread.get())) {
-        task.run();
-      } else {
-        CountDownLatch latch = new CountDownLatch(1);
-        try {
-          boolean added =
-              this.taskQueue.offer(
-                  () -> {
-                    try {
-                      task.run();
-                    } catch (Exception e) {
-                      LOGGER.info("Error during topology recording task", e);
-                    } finally {
-                      latch.countDown();
-                    }
-                  },
-                  TIMEOUT.toMillis(),
-                  TimeUnit.MILLISECONDS);
-          if (!added) {
-            throw new AmqpException("Enqueueing of topology task timed out");
-          }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new AmqpException("Topology task enqueueing has been interrupted", e);
-        }
-        try {
-          latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new AmqpException("Topology task processing has been interrupted", e);
-        }
-      }
+      this.eventLoop.submit(task);
     }
   }
 
