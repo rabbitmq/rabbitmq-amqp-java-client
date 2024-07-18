@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.*;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.client.amqp.AmqpException;
@@ -64,7 +65,6 @@ class AmqpManagement implements Management {
   private volatile Session session;
   private volatile Sender sender;
   private volatile Receiver receiver;
-  private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Duration rpcTimeout = Duration.ofSeconds(10);
   private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
@@ -72,6 +72,8 @@ class AmqpManagement implements Management {
   private volatile Future<?> receiveLoop;
   private final TopologyListener topologyListener;
   private final Supplier<String> nameSupplier;
+  private final AtomicReference<State> state = new AtomicReference<>(CREATED);
+  private final AtomicBoolean initializing = new AtomicBoolean(false);
 
   AmqpManagement(AmqpManagementParameters parameters) {
     this.id = ID_SEQUENCE.getAndIncrement();
@@ -153,103 +155,118 @@ class AmqpManagement implements Management {
 
   @Override
   public void close() {
-    if (this.closed.compareAndSet(false, true) && this.initialized.get()) {
+    if (this.initializing.get()) {
+      throw new AmqpException.AmqpResourceInvalidStateException(
+          "Management is initializing, retry closing later.");
+    }
+    if (this.closed.compareAndSet(false, true)) {
+      this.state(CLOSED);
       this.releaseResources();
-      try {
-        this.receiver.close();
-      } catch (Exception e) {
-        LOGGER.debug("Error while closing management receiver: {}", e.getMessage());
+      if (this.receiver != null) {
+        try {
+          this.receiver.close();
+        } catch (Exception e) {
+          LOGGER.debug("Error while closing management receiver: {}", e.getMessage());
+        }
       }
-      try {
-        this.sender.close();
-      } catch (Exception e) {
-        LOGGER.debug("Error while closing management sender: {}", e.getMessage());
+      if (this.sender != null) {
+        try {
+          this.sender.close();
+        } catch (Exception e) {
+          LOGGER.debug("Error while closing management sender: {}", e.getMessage());
+        }
       }
-      try {
-        this.session.close();
-      } catch (Exception e) {
-        LOGGER.debug("Error while closing management session: {}", e.getMessage());
+      if (this.session != null) {
+        try {
+          this.session.close();
+        } catch (Exception e) {
+          LOGGER.debug("Error while closing management session: {}", e.getMessage());
+        }
       }
     }
   }
 
   void init() {
-    if (!this.initialized.get()) {
-      LOGGER.debug("Initializing management ({}).", this);
-      try {
-        LOGGER.debug("Creating management session ({}).", this);
-        this.session = this.connection.nativeConnection().openSession();
-        String linkPairName = "management-link-pair";
-        Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
-        LOGGER.debug("Creating management sender ({}).", this);
-        this.sender =
-            session.openSender(
-                MANAGEMENT_NODE_ADDRESS,
-                new SenderOptions()
-                    .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                    .linkName(linkPairName)
-                    .properties(properties));
+    if (this.state() != OPEN) {
+      if (this.initializing.compareAndSet(false, true)) {
+        LOGGER.debug("Initializing management ({}).", this);
+        this.state(UNAVAILABLE);
+        try {
+          LOGGER.debug("Creating management session ({}).", this);
+          this.session = this.connection.nativeConnection().openSession();
+          String linkPairName = "management-link-pair";
+          Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
+          LOGGER.debug("Creating management sender ({}).", this);
+          this.sender =
+              session.openSender(
+                  MANAGEMENT_NODE_ADDRESS,
+                  new SenderOptions()
+                      .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                      .linkName(linkPairName)
+                      .properties(properties));
 
-        LOGGER.debug("Creating management receiver ({}).", this);
-        this.receiver =
-            session.openReceiver(
-                MANAGEMENT_NODE_ADDRESS,
-                new ReceiverOptions()
-                    .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                    .linkName(linkPairName)
-                    .properties(properties)
-                    .creditWindow(100));
+          LOGGER.debug("Creating management receiver ({}).", this);
+          this.receiver =
+              session.openReceiver(
+                  MANAGEMENT_NODE_ADDRESS,
+                  new ReceiverOptions()
+                      .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                      .linkName(linkPairName)
+                      .properties(properties)
+                      .creditWindow(100));
 
-        this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-        LOGGER.debug("Management sender created ({}).", this);
-        this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-        LOGGER.debug("Management receiver created ({}).", this);
-        Runnable receiveTask =
-            () -> {
-              try {
-                while (!Thread.currentThread().isInterrupted()) {
-                  Delivery delivery = receiver.receive(100, MILLISECONDS);
-                  if (delivery != null) {
-                    Object correlationId = delivery.message().correlationId();
-                    if (correlationId instanceof UUID) {
-                      OutstandingRequest request = outstandingRequests.remove(correlationId);
-                      if (request != null) {
-                        request.complete(delivery.message());
+          this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+          LOGGER.debug("Management sender created ({}).", this);
+          this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+          LOGGER.debug("Management receiver created ({}).", this);
+          Runnable receiveTask =
+              () -> {
+                try {
+                  while (!Thread.currentThread().isInterrupted()) {
+                    Delivery delivery = receiver.receive(100, MILLISECONDS);
+                    if (delivery != null) {
+                      Object correlationId = delivery.message().correlationId();
+                      if (correlationId instanceof UUID) {
+                        OutstandingRequest request = outstandingRequests.remove(correlationId);
+                        if (request != null) {
+                          request.complete(delivery.message());
+                        } else {
+                          LOGGER.info("Could not find outstanding request {}", correlationId);
+                        }
                       } else {
-                        LOGGER.info("Could not find outstanding request {}", correlationId);
+                        LOGGER.info("Could not correlate inbound message with management request");
                       }
-                    } else {
-                      LOGGER.info("Could not correlate inbound message with management request");
                     }
                   }
+                } catch (ClientConnectionRemotelyClosedException
+                    | ClientLinkRemotelyClosedException e) {
+                  // receiver is closed
+                } catch (ClientSessionRemotelyClosedException e) {
+                  this.state(UNAVAILABLE);
+                  LOGGER.info(
+                      "Management session closed in receive loop: {} ({})", e.getMessage(), this);
+                  AmqpException exception = ExceptionUtils.convert(e);
+                  this.failRequests(exception);
+                  if (exception instanceof AmqpException.AmqpSecurityException) {
+                    LOGGER.debug(
+                        "Recovering AMQP management because the failure was a security exception ({}).",
+                        this);
+                    this.init();
+                  }
+                } catch (ClientException e) {
+                  java.util.function.Consumer<String> log =
+                      this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
+                  log.accept("Error while polling AMQP receiver");
                 }
-              } catch (ClientConnectionRemotelyClosedException
-                  | ClientLinkRemotelyClosedException e) {
-                // receiver is closed
-              } catch (ClientSessionRemotelyClosedException e) {
-                LOGGER.info(
-                    "Management session closed in receive loop: {} ({})", e.getMessage(), this);
-                AmqpException exception = ExceptionUtils.convert(e);
-                this.releaseResources();
-                this.failRequests(exception);
-                if (exception instanceof AmqpException.AmqpSecurityException) {
-                  LOGGER.debug(
-                      "Recovering AMQP management because the failure was a security exception ({}).",
-                      this);
-                  this.init();
-                }
-              } catch (ClientException e) {
-                java.util.function.Consumer<String> log =
-                    this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
-                log.accept("Error while polling AMQP receiver");
-              }
-            };
-        LOGGER.debug("Starting management receive loop ({}).", this);
-        this.receiveLoop = this.connection.executorService().submit(receiveTask);
-        LOGGER.debug("Management initialized ({}).", this);
-        this.initialized.set(true);
-      } catch (Exception e) {
-        throw new AmqpException(e);
+              };
+          LOGGER.debug("Starting management receive loop ({}).", this);
+          this.receiveLoop = this.connection.executorService().submit(receiveTask);
+          LOGGER.debug("Management initialized ({}).", this);
+          this.state(OPEN);
+          this.initializing.set(false);
+        } catch (Exception e) {
+          throw new AmqpException(e);
+        }
       }
     }
   }
@@ -266,7 +283,7 @@ class AmqpManagement implements Management {
   }
 
   void releaseResources() {
-    this.initialized.set(false);
+    this.markUnavailable();
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
     }
@@ -641,10 +658,11 @@ class AmqpManagement implements Management {
   }
 
   private void checkAvailable() {
-    if (this.closed.get()) {
-      throw new AmqpException("Management is closed");
-    } else if (!this.initialized.get()) {
-      throw new AmqpException("Management is not available");
+    if (this.state() == CLOSED) {
+      throw new AmqpException.AmqpResourceClosedException("Management is closed");
+    } else if (this.state() != OPEN) {
+      throw new AmqpException.AmqpResourceInvalidStateException(
+          "Management is not open, current state is %s", this.state().name());
     }
   }
 
@@ -670,5 +688,24 @@ class AmqpManagement implements Management {
     T body() {
       return this.body;
     }
+  }
+
+  private State state() {
+    return this.state.get();
+  }
+
+  private void state(State state) {
+    this.state.set(state);
+  }
+
+  void markUnavailable() {
+    this.state(UNAVAILABLE);
+  }
+
+  enum State {
+    CREATED,
+    OPEN,
+    UNAVAILABLE,
+    CLOSED
   }
 }

@@ -341,7 +341,7 @@ public class AmqpTest {
   }
 
   @Test
-  void publisherSendingShouldThrowWhenQueueHasBeenDeleted() throws Exception {
+  void publisherSendingShouldThrowWhenQueueHasBeenDeleted() {
     connection.management().queue(name).declare();
     Sync closedSync = sync();
     AtomicReference<Throwable> closedException = new AtomicReference<>();
