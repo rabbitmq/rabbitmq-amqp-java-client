@@ -21,80 +21,86 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 final class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
-  private final EventLoop eventLoop;
-  private final Map<String, ExchangeSpec> exchanges = new LinkedHashMap<>();
-  private final Map<String, QueueSpec> queues = new LinkedHashMap<>();
-  private final Set<BindingSpec> bindings = new LinkedHashSet<>();
-  private final Map<Long, ConsumerSpec> consumers = new LinkedHashMap<>();
+  private final EventLoop<State> eventLoop;
+
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   RecordingTopologyListener(ExecutorService executorService) {
-    this.eventLoop = new EventLoop("topology", executorService);
+    this.eventLoop = new EventLoop<>(State::new, "topology", executorService);
+  }
+
+  private static class State {
+
+    private final Map<String, ExchangeSpec> exchanges = new LinkedHashMap<>();
+    private final Map<String, QueueSpec> queues = new LinkedHashMap<>();
+    private final Set<BindingSpec> bindings = new LinkedHashSet<>();
+    private final Map<Long, ConsumerSpec> consumers = new LinkedHashMap<>();
   }
 
   @Override
   public void exchangeDeclared(AmqpExchangeSpecification specification) {
-    this.submit(() -> this.exchanges.put(specification.name(), new ExchangeSpec(specification)));
+    this.submit(s -> s.exchanges.put(specification.name(), new ExchangeSpec(specification)));
   }
 
   @Override
   public void exchangeDeleted(String name) {
     this.submit(
-        () -> {
-          this.exchanges.remove(name);
-          Set<BindingSpec> deletedBindings = this.deleteBindings(name, true);
-          this.deleteAutoDeleteExchanges(deletedBindings);
+        s -> {
+          s.exchanges.remove(name);
+          Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, true);
+          this.deleteAutoDeleteExchanges(s, deletedBindings);
         });
   }
 
   @Override
   public void queueDeclared(AmqpQueueSpecification specification) {
-    this.submit(() -> this.queues.put(specification.name(), new QueueSpec(specification)));
+    this.submit(s -> s.queues.put(specification.name(), new QueueSpec(specification)));
   }
 
   @Override
   public void queueDeleted(String name) {
     this.submit(
-        () -> {
-          this.queues.remove(name);
-          Set<BindingSpec> deletedBindings = this.deleteBindings(name, false);
-          this.deleteAutoDeleteExchanges(deletedBindings);
+        s -> {
+          s.queues.remove(name);
+          Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, false);
+          this.deleteAutoDeleteExchanges(s, deletedBindings);
         });
   }
 
   @Override
   public void bindingDeclared(AmqpBindingManagement.AmqpBindingSpecification specification) {
-    this.submit(() -> this.bindings.add(new BindingSpec(specification.state())));
+    this.submit(s -> s.bindings.add(new BindingSpec(specification.state())));
   }
 
   @Override
   public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
     this.submit(
-        () -> {
+        s -> {
           BindingSpec spec = new BindingSpec(specification.state());
-          this.bindings.remove(spec);
-          this.deleteAutoDeleteExchanges(Collections.singleton(spec));
+          s.bindings.remove(spec);
+          this.deleteAutoDeleteExchanges(s, Collections.singleton(spec));
         });
   }
 
   @Override
   public void consumerCreated(long id, String queue) {
-    this.submit(() -> this.consumers.put(id, new ConsumerSpec(id, queue)));
+    this.submit(s -> s.consumers.put(id, new ConsumerSpec(id, queue)));
   }
 
   @Override
   public void consumerDeleted(long id, String queue) {
     this.submit(
-        () -> {
-          this.consumers.remove(id);
+        s -> {
+          s.consumers.remove(id);
           // if there's no consumer anymore on the queue, delete it if it's auto-delete
           boolean atLeastOneConsumerOnQueue =
-              this.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
+              s.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
           if (!atLeastOneConsumerOnQueue) {
-            QueueSpec queueSpec = this.queues.get(queue);
+            QueueSpec queueSpec = s.queues.get(queue);
             if (queueSpec != null && queueSpec.autoDelete) {
               this.queueDeleted(queue);
             }
@@ -109,16 +115,16 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     }
   }
 
-  private void submit(Runnable task) {
+  private void submit(Consumer<State> task) {
     if (!this.closed.get()) {
       this.eventLoop.submit(task);
     }
   }
 
-  private Set<BindingSpec> deleteBindings(String name, boolean exchange) {
+  private Set<BindingSpec> deleteBindings(State s, String name, boolean exchange) {
     Set<BindingSpec> deletedBindings = new LinkedHashSet<>();
     // delete bindings that depend on this exchange or queue
-    Iterator<BindingSpec> iterator = this.bindings.iterator();
+    Iterator<BindingSpec> iterator = s.bindings.iterator();
     while (iterator.hasNext()) {
       BindingSpec spec = iterator.next();
       if (spec.isInvolved(name, exchange)) {
@@ -129,15 +135,15 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     return deletedBindings;
   }
 
-  private void deleteAutoDeleteExchanges(Set<BindingSpec> deletedBindings) {
+  private void deleteAutoDeleteExchanges(State s, Set<BindingSpec> deletedBindings) {
     // delete auto-delete exchanges which are no longer sources in any bindings
     for (BindingSpec binding : deletedBindings) {
       String source = binding.source;
       boolean exchangeStillSource;
-      exchangeStillSource = this.bindings.stream().anyMatch(b -> b.source.equals(source));
+      exchangeStillSource = s.bindings.stream().anyMatch(b -> b.source.equals(source));
 
       if (!exchangeStillSource) {
-        ExchangeSpec exchange = this.exchanges.get(source);
+        ExchangeSpec exchange = s.exchanges.get(source);
         if (exchange != null && exchange.autoDelete) {
           exchangeDeleted(exchange.name);
         }
@@ -145,39 +151,19 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     }
   }
 
-  Map<String, ExchangeSpec> exchanges() {
-    return new LinkedHashMap<>(this.exchanges);
-  }
-
-  Map<String, QueueSpec> queues() {
-    return new LinkedHashMap<>(this.queues);
-  }
-
   void accept(Visitor visitor) {
     AtomicReference<List<ExchangeSpec>> exchangeCopy = new AtomicReference<>();
     AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>();
     AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>();
     submit(
-        () -> {
-          exchangeCopy.set(new ArrayList<>(this.exchanges.values()));
-          queueCopy.set(new ArrayList<>(this.queues.values()));
-          bindingCopy.set(new LinkedHashSet<>(this.bindings));
+        s -> {
+          exchangeCopy.set(new ArrayList<>(s.exchanges.values()));
+          queueCopy.set(new ArrayList<>(s.queues.values()));
+          bindingCopy.set(new LinkedHashSet<>(s.bindings));
         });
     visitor.visitExchanges(exchangeCopy.get());
     visitor.visitQueues(queueCopy.get());
     visitor.visitBindings(bindingCopy.get());
-  }
-
-  int bindingCount() {
-    return this.bindings.size();
-  }
-
-  int exchangeCount() {
-    return this.exchanges.size();
-  }
-
-  int queueCount() {
-    return this.queues.size();
   }
 
   static class ExchangeSpec {
@@ -339,5 +325,31 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     void visitQueues(List<QueueSpec> queues);
 
     void visitBindings(Collection<BindingSpec> bindings);
+  }
+
+  // for test assertions
+
+  private State state() {
+    return this.eventLoop.state();
+  }
+
+  Map<String, ExchangeSpec> exchanges() {
+    return new LinkedHashMap<>(state().exchanges);
+  }
+
+  Map<String, QueueSpec> queues() {
+    return new LinkedHashMap<>(state().queues);
+  }
+
+  int bindingCount() {
+    return state().bindings.size();
+  }
+
+  int exchangeCount() {
+    return state().exchanges.size();
+  }
+
+  int queueCount() {
+    return state().queues.size();
   }
 }

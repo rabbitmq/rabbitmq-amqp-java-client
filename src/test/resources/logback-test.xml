@@ -10,7 +10,7 @@
     <logger name="com.rabbitmq.client.amqp.impl.EntityRecovery" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.AmqpConsumer" level="warn" />
-    <logger name="com.rabbitmq.client.amqp.impl.AmqpManagement" level="debug" />
+    <logger name="com.rabbitmq.client.amqp.impl.AmqpManagement" level="warn" />
     <logger name="org.apache.qpid" level="warn" />
 
     <root level="warn">

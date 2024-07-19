@@ -20,33 +20,39 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.AmqpException;
 import java.time.Duration;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class EventLoop implements AutoCloseable {
+final class EventLoop<S> implements AutoCloseable {
 
   private static final Duration TIMEOUT = Duration.ofSeconds(60);
   private static final Logger LOGGER = LoggerFactory.getLogger(EventLoop.class);
 
+  private final AtomicBoolean closed = new AtomicBoolean(false);
   private final String label;
   private final Future<?> loop;
   private final AtomicReference<Thread> loopThread = new AtomicReference<>();
-  private final BlockingQueue<Runnable> taskQueue = new ArrayBlockingQueue<>(100);
+  private final AtomicReference<S> stateReference = new AtomicReference<>();
+  private final BlockingQueue<Consumer<S>> taskQueue = new ArrayBlockingQueue<>(100);
 
-  EventLoop(String label, ExecutorService executorService) {
+  EventLoop(Supplier<S> stateSupplier, String label, ExecutorService executorService) {
     this.label = label;
     CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
-
     this.loop =
         executorService.submit(
             () -> {
+              S state = stateSupplier.get();
               loopThread.set(Thread.currentThread());
+              stateReference.set(state);
               loopThreadSetLatch.countDown();
               while (!Thread.currentThread().isInterrupted()) {
                 try {
-                  Runnable task = this.taskQueue.take();
-                  task.run();
+                  Consumer<S> task = this.taskQueue.take();
+                  task.accept(state);
                 } catch (InterruptedException e) {
                   return;
                 } catch (Exception e) {
@@ -64,43 +70,56 @@ final class EventLoop implements AutoCloseable {
     }
   }
 
-  void submit(Runnable task) {
-    if (Thread.currentThread().equals(this.loopThread.get())) {
-      task.run();
+  void submit(Consumer<S> task) {
+    if (this.closed.get()) {
+      throw new IllegalStateException("Event loop is closed");
     } else {
-      CountDownLatch latch = new CountDownLatch(1);
-      try {
-        boolean added =
-            this.taskQueue.offer(
-                () -> {
-                  try {
-                    task.run();
-                  } catch (Exception e) {
-                    LOGGER.info("Error during {} task", this.label, e);
-                  } finally {
-                    latch.countDown();
-                  }
-                },
-                TIMEOUT.toMillis(),
-                TimeUnit.MILLISECONDS);
-        if (!added) {
-          throw new AmqpException("Enqueueing of %s task timed out", this.label);
+      if (Thread.currentThread().equals(this.loopThread.get())) {
+        task.accept(this.stateReference.get());
+      } else {
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+          boolean added =
+              this.taskQueue.offer(
+                  state -> {
+                    try {
+                      task.accept(state);
+                    } catch (Exception e) {
+                      LOGGER.info("Error during {} task", this.label, e);
+                    } finally {
+                      latch.countDown();
+                    }
+                  },
+                  TIMEOUT.toMillis(),
+                  TimeUnit.MILLISECONDS);
+          if (!added) {
+            throw new AmqpException("Enqueueing of %s task timed out", this.label);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new AmqpException(this.label + " task enqueueing has been interrupted", e);
         }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new AmqpException(this.label + " task enqueueing has been interrupted", e);
-      }
-      try {
-        latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new AmqpException(this.label + " Topology task processing has been interrupted", e);
+        try {
+          boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+          if (!completed) {
+            LOGGER.warn("Event loop task did not complete in {} second(s)", TIMEOUT.toSeconds());
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new AmqpException(this.label + " Topology task processing has been interrupted", e);
+        }
       }
     }
   }
 
+  S state() {
+    return this.stateReference.get();
+  }
+
   @Override
   public void close() {
-    this.loop.cancel(true);
+    if (this.closed.compareAndSet(false, true)) {
+      this.loop.cancel(true);
+    }
   }
 }
