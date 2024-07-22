@@ -267,7 +267,7 @@ public abstract class TestUtils {
     return name(info.getTestClass().get(), info.getTestMethod().get());
   }
 
-  private static String name(ExtensionContext context) {
+  static String name(ExtensionContext context) {
     return name(context.getTestInstance().get().getClass(), context.getTestMethod().get());
   }
 

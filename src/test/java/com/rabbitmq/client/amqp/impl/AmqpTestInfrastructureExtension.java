@@ -61,7 +61,8 @@ class AmqpTestInfrastructureExtension
     Field connectionField = field(context.getTestClass().get(), "connection");
     if (connectionField != null) {
       connectionField.setAccessible(true);
-      Connection connection = env.connectionBuilder().build();
+      Connection connection =
+          ((AmqpConnectionBuilder) env.connectionBuilder()).name(TestUtils.name(context)).build();
       connectionField.set(context.getTestInstance().get(), connection);
       store(context).put("connection", connection);
     }

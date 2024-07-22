@@ -18,7 +18,6 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
-import static java.util.Collections.singletonMap;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.ObservationCollector;
@@ -26,7 +25,9 @@ import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -184,8 +185,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
     connectionOptions.idleTimeout(
         connectionSettings.idleTimeout().toMillis(), TimeUnit.MILLISECONDS);
     connectionOptions.disconnectedHandler(disconnectHandler);
-    if (name != null) {
-      connectionOptions.properties(singletonMap("connection_name", name));
+    if (name == null) {
+      connectionOptions.properties(ClientProperties.DEFAULT_CLIENT_PROPERTIES);
+    } else {
+      Map<String, Object> props = new LinkedHashMap<>(ClientProperties.DEFAULT_CLIENT_PROPERTIES);
+      props.put("connection_name", name);
+      connectionOptions.properties(Map.copyOf(props));
     }
     if (connectionSettings.tlsEnabled()) {
       DefaultConnectionSettings.DefaultTlsSettings<?> tlsSettings =
