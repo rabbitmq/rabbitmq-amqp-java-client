@@ -356,7 +356,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
-    public Management.QueueSpecification specification() {
+    public Management.QueueSpecification queue() {
       return this.parent;
     }
   }
