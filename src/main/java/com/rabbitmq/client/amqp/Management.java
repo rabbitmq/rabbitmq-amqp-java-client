@@ -126,7 +126,7 @@ public interface Management extends AutoCloseable {
 
     StreamSpecification initialClusterSize(int initialClusterSize);
 
-    QueueSpecification specification();
+    QueueSpecification queue();
   }
 
   enum QuorumQueueDeadLetterStrategy {
