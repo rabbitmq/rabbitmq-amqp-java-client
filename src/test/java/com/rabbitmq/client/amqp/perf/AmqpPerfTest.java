@@ -18,7 +18,7 @@
 package com.rabbitmq.client.amqp.perf;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
-import static com.rabbitmq.client.amqp.Management.QueueType.*;
+import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 
 import com.rabbitmq.client.amqp.*;
@@ -28,17 +28,13 @@ import com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import org.jboss.forge.roaster._shade.org.apache.felix.resolver.util.ArrayMap;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class AmqpPerfTest {
 
@@ -60,18 +56,9 @@ public class AmqpPerfTest {
         String q = TestUtils.name(AmqpPerfTest.class, "main");
         String rk = "foo";
         Environment environment = environmentBuilder().metricsCollector(collector).build();
-        Connection connection = environment.
-                connectionBuilder().
-                listeners(context -> {
-                    context.previousState();
-                    context.currentState();
-                    context.failureCause();
-                    context.resource();
-                }).
-                recovery().
-                activated(true).connectionBuilder().build();
-
+        Connection connection = environment.connectionBuilder().build();
         Management management = connection.management();
+
         int monitoringPort = 8080;
         HttpServer monitoringServer = startMonitoringServer(monitoringPort, registry);
 
@@ -92,88 +79,11 @@ public class AmqpPerfTest {
                 };
 
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownSequence::run));
-//        management.queue().name("stream").type(STREAM).deadLetterExchange("aaaa").declare();
         try {
-//            management.queueDeletion().delete("my-first-queue-j");
-//            management.queue().name("my-first-queue-j").type(QUORUM).declare();
-//
-//            Publisher publisher1 = connection.publisherBuilder().queue("my-first-queue-j").build();
-//
-//            long startTime = System.currentTimeMillis();
-//            AtomicInteger confirmed = new AtomicInteger(0);
-//            int total = 5_000_000;
-//            for (int i = 0; i < total ; i++) {
-//
-//                byte[] payload1 = new byte[10];
-//                Message message1 = publisher1.message(payload1);
-//                publisher1.publish(message1, context -> {
-//                    if (confirmed.incrementAndGet() % 200_000 == 0) {
-//                        long stopTime = System.currentTimeMillis();
-//                        long elapsedTime = (stopTime - startTime)/ 1000;
-//                        System.out.println("confirmed time:" + elapsedTime + " confirmed: " + confirmed.get() + " total: " + total);
-//                    }
-//                });
-//            }
-
-//            long stopTime = System.currentTimeMillis();
-//            long elapsedTime = (stopTime - startTime)/ 1000;
-//            System.out.println("sent time: " + elapsedTime);
-
-//        management.queueDeletion().delete("alone");
-//        publisher1.close();
-//            Thread.sleep(300000000);
-
-//            try {
-
-//            try {
-//                management.queue().name("e1").type(QUORUM).declare();
-//                management.queue().name("e1").type(STREAM).declare();
-//            } catch (Exception e1) {
-//                e1.printStackTrace();
-//            }
-
-
-            try {
-
-                management.queue().name("stream").type(STREAM).deadLetterExchange("aaaa").declare();
-            } catch (Exception e1) {
-                e1.printStackTrace();
-            }
-
-            management.queue().name("stream-1").type(STREAM).declare();
-
-
-            management.queue().name("aaaaa").type(QUORUM).declare();
-            List list = new ArrayList<>();
-            list.add(1);
-            list.add(2);
-            list.add("aaaa");
-            list.add(0.33);
-
-            Map s = new LinkedHashMap();
-            s.put("v_8", "p_8");
-            s.put("v_1", 1);
-            s.put("list", list);
-
-            management.exchange().name("e").type(DIRECT).declare();
-            management.binding().sourceExchange("e").destinationQueue("q").
-                    key("k").arguments(s).bind();
-
-
-            management.unbind().sourceExchange("e")
-                    .destinationQueue("q").key("k").arguments(s).unbind();
-
-            try {
-                management.queue().name("q_是英国数学家").type(CLASSIC).declare();
-            } catch (Exception e1) {
-                e1.printStackTrace();
-            }
-
-
-            management.exchange().name("是英国数学家").type(DIRECT).declare();
+            management.exchange().name(e).type(DIRECT).declare();
             management.queue().name(q).type(QUORUM).declare();
             management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
-            /// { $"v_8", $"p_8" }, { $"v_1", 1 }, { $"v_r", 1000L },
+
             connection
                     .consumerBuilder()
                     .queue(q)
