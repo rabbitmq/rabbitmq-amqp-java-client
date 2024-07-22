@@ -38,136 +38,136 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AmqpPerfTest {
 
-    /*
-    ./mvnw -q clean test-compile exec:java \
-      -Dexec.mainClass=com.rabbitmq.client.amqp.perf.AmqpPerfTest \
-      -Dexec.classpathScope="test"
-       */
-    public static void main(String[] args) throws IOException {
-        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        MetricsCollector collector = new MicrometerMetricsCollector(registry);
+  /*
+  ./mvnw -q clean test-compile exec:java \
+    -Dexec.mainClass=com.rabbitmq.client.amqp.perf.AmqpPerfTest \
+    -Dexec.classpathScope="test"
+     */
+  public static void main(String[] args) throws IOException {
+    PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+    MetricsCollector collector = new MicrometerMetricsCollector(registry);
 
-        ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
+    ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
 
-        PrintWriter out = new PrintWriter(System.out, true);
-        PerformanceMetrics metrics = new PerformanceMetrics(registry, executorService, out);
+    PrintWriter out = new PrintWriter(System.out, true);
+    PerformanceMetrics metrics = new PerformanceMetrics(registry, executorService, out);
 
-        String e = TestUtils.name(AmqpPerfTest.class, "main");
-        String q = TestUtils.name(AmqpPerfTest.class, "main");
-        String rk = "foo";
-        Environment environment = environmentBuilder().metricsCollector(collector).build();
-        Connection connection = environment.connectionBuilder().build();
-        Management management = connection.management();
+    String e = TestUtils.name(AmqpPerfTest.class, "main");
+    String q = TestUtils.name(AmqpPerfTest.class, "main");
+    String rk = "foo";
+    Environment environment = environmentBuilder().metricsCollector(collector).build();
+    Connection connection = environment.connectionBuilder().build();
+    Management management = connection.management();
 
-        int monitoringPort = 8080;
-        HttpServer monitoringServer = startMonitoringServer(monitoringPort, registry);
+    int monitoringPort = 8080;
+    HttpServer monitoringServer = startMonitoringServer(monitoringPort, registry);
 
-        CountDownLatch shutdownLatch = new CountDownLatch(1);
+    CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        AtomicBoolean hasShutDown = new AtomicBoolean(false);
-        Runnable shutdownSequence =
-                () -> {
-                    if (hasShutDown.compareAndSet(false, true)) {
-                        monitoringServer.stop(0);
-                        metrics.close();
-                        executorService.shutdownNow();
-                        shutdownLatch.countDown();
-                        management.queueDeletion().delete(q);
-                        management.exchangeDeletion().delete(e);
-                        management.close();
-                    }
+    AtomicBoolean hasShutDown = new AtomicBoolean(false);
+    Runnable shutdownSequence =
+        () -> {
+          if (hasShutDown.compareAndSet(false, true)) {
+            monitoringServer.stop(0);
+            metrics.close();
+            executorService.shutdownNow();
+            shutdownLatch.countDown();
+            management.queueDeletion().delete(q);
+            management.exchangeDeletion().delete(e);
+            management.close();
+          }
+        };
+
+    Runtime.getRuntime().addShutdownHook(new Thread(shutdownSequence::run));
+    try {
+      management.exchange().name(e).type(DIRECT).declare();
+      management.queue().name(q).type(QUORUM).declare();
+      management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
+
+      connection
+          .consumerBuilder()
+          .queue(q)
+          .initialCredits(1000)
+          .messageHandler(
+              (context, message) -> {
+                context.accept();
+                try {
+                  long time = readLong(message.body());
+                  metrics.latency(System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
+                } catch (Exception ex) {
+                  // not able to read the body, maybe not a message from the
+                  // tool
+                }
+              })
+          .build();
+
+      executorService.submit(
+          () -> {
+            Publisher publisher = connection.publisherBuilder().exchange(e).key(rk).build();
+            Publisher.Callback callback =
+                context -> {
+                  try {
+                    long time = readLong(context.message().body());
+                    metrics.publishedAcceptedlatency(
+                        System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
+                  } catch (Exception ex) {
+                    // not able to read the body, should not happen
+                  }
                 };
-
-        Runtime.getRuntime().addShutdownHook(new Thread(shutdownSequence::run));
-        try {
-            management.exchange().name(e).type(DIRECT).declare();
-            management.queue().name(q).type(QUORUM).declare();
-            management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
-
-            connection
-                    .consumerBuilder()
-                    .queue(q)
-                    .initialCredits(1000)
-                    .messageHandler(
-                            (context, message) -> {
-                                context.accept();
-                                try {
-                                    long time = readLong(message.body());
-                                    metrics.latency(System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
-                                } catch (Exception ex) {
-                                    // not able to read the body, maybe not a message from the
-                                    // tool
-                                }
-                            })
-                    .build();
-
-            executorService.submit(
-                    () -> {
-                        Publisher publisher = connection.publisherBuilder().exchange(e).key(rk).build();
-                        Publisher.Callback callback =
-                                context -> {
-                                    try {
-                                        long time = readLong(context.message().body());
-                                        metrics.publishedAcceptedlatency(
-                                                System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
-                                    } catch (Exception ex) {
-                                        // not able to read the body, should not happen
-                                    }
-                                };
-                        int msgSize = 10;
-                        while (!Thread.currentThread().isInterrupted()) {
-                            long creationTime = System.currentTimeMillis();
-                            byte[] payload = new byte[msgSize];
-                            writeLong(payload, creationTime);
-                            Message message = publisher.message(payload);
-                            publisher.publish(message, callback);
-                        }
-                    });
-            out.println("Prometheus endpoint started on http://localhost:" + monitoringPort + "/metrics");
-            metrics.start();
-            shutdownLatch.await();
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        } finally {
-            shutdownSequence.run();
-        }
+            int msgSize = 10;
+            while (!Thread.currentThread().isInterrupted()) {
+              long creationTime = System.currentTimeMillis();
+              byte[] payload = new byte[msgSize];
+              writeLong(payload, creationTime);
+              Message message = publisher.message(payload);
+              publisher.publish(message, callback);
+            }
+          });
+      out.println("Prometheus endpoint started on http://localhost:" + monitoringPort + "/metrics");
+      metrics.start();
+      shutdownLatch.await();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+    } finally {
+      shutdownSequence.run();
     }
+  }
 
-    static void writeLong(byte[] array, long value) {
-        // from Guava Longs
-        for (int i = 7; i >= 0; i--) {
-            array[i] = (byte) (value & 0xffL);
-            value >>= 8;
-        }
+  static void writeLong(byte[] array, long value) {
+    // from Guava Longs
+    for (int i = 7; i >= 0; i--) {
+      array[i] = (byte) (value & 0xffL);
+      value >>= 8;
     }
+  }
 
-    static long readLong(byte[] array) {
-        // from Guava Longs
-        return (array[0] & 0xFFL) << 56
-                | (array[1] & 0xFFL) << 48
-                | (array[2] & 0xFFL) << 40
-                | (array[3] & 0xFFL) << 32
-                | (array[4] & 0xFFL) << 24
-                | (array[5] & 0xFFL) << 16
-                | (array[6] & 0xFFL) << 8
-                | (array[7] & 0xFFL);
-    }
+  static long readLong(byte[] array) {
+    // from Guava Longs
+    return (array[0] & 0xFFL) << 56
+        | (array[1] & 0xFFL) << 48
+        | (array[2] & 0xFFL) << 40
+        | (array[3] & 0xFFL) << 32
+        | (array[4] & 0xFFL) << 24
+        | (array[5] & 0xFFL) << 16
+        | (array[6] & 0xFFL) << 8
+        | (array[7] & 0xFFL);
+  }
 
-    private static HttpServer startMonitoringServer(
-            int monitoringPort, PrometheusMeterRegistry registry) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(monitoringPort), 0);
+  private static HttpServer startMonitoringServer(
+      int monitoringPort, PrometheusMeterRegistry registry) throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress(monitoringPort), 0);
 
-        server.createContext(
-                "/metrics",
-                exchange -> {
-                    exchange.getResponseHeaders().set("Content-Type", "text/plain");
-                    byte[] content = registry.scrape().getBytes(StandardCharsets.UTF_8);
-                    exchange.sendResponseHeaders(200, content.length);
-                    try (OutputStream out = exchange.getResponseBody()) {
-                        out.write(content);
-                    }
-                });
-        server.start();
-        return server;
-    }
+    server.createContext(
+        "/metrics",
+        exchange -> {
+          exchange.getResponseHeaders().set("Content-Type", "text/plain");
+          byte[] content = registry.scrape().getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, content.length);
+          try (OutputStream out = exchange.getResponseBody()) {
+            out.write(content);
+          }
+        });
+    server.start();
+    return server;
+  }
 }
