@@ -19,17 +19,16 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
+import static com.rabbitmq.client.amqp.Management.QueueType.*;
+import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.of;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
@@ -618,6 +617,54 @@ public class AmqpTest {
     assertThat(highCount).hasValue(messageCount);
 
     lowPriorityConsumer.close();
+  }
+
+  @Test
+  void redeclareQueueWithDifferentArguments() {
+    Management management = connection.management();
+    management.queue(name).type(CLASSIC).declare();
+    try {
+      management.queue(name).type(QUORUM).declare();
+      fail("Declaring an existing queue with different arguments should trigger an exception");
+    } catch (AmqpException e) {
+      // OK
+    } finally {
+      management.queueDeletion().delete(name);
+    }
+  }
+
+  @Test
+  void redeclareExchangesWithDifferentArguments() {
+    Management management = connection.management();
+    management.exchange(name).type(DIRECT).declare();
+    try {
+      management.exchange(name).type(FANOUT).declare();
+      fail("Declaring an existing exchange with different arguments should trigger an exception");
+    } catch (AmqpException e) {
+      assertThat(e).hasMessageContaining("409");
+      // OK
+    } finally {
+      management.exchangeDeletion().delete(name);
+    }
+  }
+
+  @Test
+  void declareQueueWithUnsupportedArgument() {
+    Management management = connection.management();
+    List<Consumer<Management>> operations =
+        List.of(
+            m -> m.queue(name).type(CLASSIC).argument("x-max-age", "1000s").declare(),
+            m -> m.queue(name).type(QUORUM).argument("x-max-age", "1000s").declare(),
+            m -> m.queue(name).type(STREAM).deadLetterRoutingKey("not-supported").declare());
+    operations.forEach(
+        operation -> {
+          try {
+            operation.accept(management);
+            fail("Creating a queue with unsupported arguments should trigger an exception");
+          } catch (AmqpException e) {
+            assertThat(e).hasMessageContaining("409");
+          }
+        });
   }
 
   private static String uuid() {
