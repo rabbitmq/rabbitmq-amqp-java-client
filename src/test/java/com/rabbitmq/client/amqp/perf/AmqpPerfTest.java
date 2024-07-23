@@ -35,8 +35,12 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AmqpPerfTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpPerfTest.class);
 
   /*
   ./mvnw -q clean test-compile exec:java \
@@ -86,6 +90,12 @@ public class AmqpPerfTest {
 
       connection
           .consumerBuilder()
+          .listeners(
+              context -> {
+                if (context.currentState() == Resource.State.RECOVERING) {
+                  LOGGER.info("Consumer is recovering...");
+                }
+              })
           .queue(q)
           .initialCredits(1000)
           .messageHandler(
@@ -103,7 +113,24 @@ public class AmqpPerfTest {
 
       executorService.submit(
           () -> {
-            Publisher publisher = connection.publisherBuilder().exchange(e).key(rk).build();
+            AtomicBoolean shouldPublish = new AtomicBoolean(false);
+            Publisher publisher =
+                connection
+                    .publisherBuilder()
+                    .exchange(e)
+                    .key(rk)
+                    .listeners(
+                        context -> {
+                          if (context.currentState() == Resource.State.OPEN) {
+                            shouldPublish.set(true);
+                          } else {
+                            if (context.currentState() == Resource.State.RECOVERING) {
+                              LOGGER.info("Publisher is recovering...");
+                            }
+                            shouldPublish.set(false);
+                          }
+                        })
+                    .build();
             Publisher.Callback callback =
                 context -> {
                   try {
@@ -116,11 +143,23 @@ public class AmqpPerfTest {
                 };
             int msgSize = 10;
             while (!Thread.currentThread().isInterrupted()) {
-              long creationTime = System.currentTimeMillis();
-              byte[] payload = new byte[msgSize];
-              writeLong(payload, creationTime);
-              Message message = publisher.message(payload);
-              publisher.publish(message, callback);
+              if (shouldPublish.get()) {
+                long creationTime = System.currentTimeMillis();
+                byte[] payload = new byte[msgSize];
+                writeLong(payload, creationTime);
+                try {
+                  Message message = publisher.message(payload);
+                  publisher.publish(message, callback);
+                } catch (Exception ex) {
+                  LOGGER.info("Error while trying to publish: {}", ex.getMessage());
+                }
+              } else {
+                try {
+                  Thread.sleep(1000L);
+                } catch (InterruptedException ex) {
+                  Thread.interrupted();
+                }
+              }
             }
           });
       out.println("Prometheus endpoint started on http://localhost:" + monitoringPort + "/metrics");
