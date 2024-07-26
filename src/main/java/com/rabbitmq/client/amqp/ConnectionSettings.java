@@ -18,8 +18,6 @@
 package com.rabbitmq.client.amqp;
 
 import java.time.Duration;
-import java.util.List;
-import java.util.function.Function;
 import javax.net.ssl.SSLContext;
 
 public interface ConnectionSettings<T> {
@@ -45,7 +43,7 @@ public interface ConnectionSettings<T> {
 
   T idleTimeout(Duration idleTimeout);
 
-  T addressSelector(Function<List<Address>, Address> selector);
+  T addressSelector(AddressSelector selector);
 
   T saslMechanism(String mechanism);
 

@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Function;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
@@ -58,7 +57,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private List<URI> uris = Collections.emptyList();
   private Duration idleTimeout = Duration.ofMillis(ConnectionOptions.DEFAULT_IDLE_TIMEOUT);
   private static final Random RANDOM = new Random();
-  private Function<List<Address>, Address> addressSelector =
+  private AddressSelector addressSelector =
       addresses -> {
         if (addresses.isEmpty()) {
           throw new IllegalStateException("There should at least one node to connect to");
@@ -150,7 +149,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   }
 
   @Override
-  public T addressSelector(Function<List<Address>, Address> selector) {
+  public T addressSelector(AddressSelector selector) {
     this.addressSelector = selector;
     return this.toReturn();
   }
@@ -180,7 +179,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   }
 
   Address selectAddress() {
-    return this.addressSelector.apply(this.addresses);
+    return this.addressSelector.select(this.addresses);
   }
 
   String saslMechanism() {

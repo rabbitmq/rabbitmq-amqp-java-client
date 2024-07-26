@@ -21,7 +21,6 @@ import com.rabbitmq.client.amqp.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 
 class AmqpConnectionBuilder implements ConnectionBuilder {
 
@@ -86,7 +85,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
-  public ConnectionBuilder addressSelector(Function<List<Address>, Address> selector) {
+  public ConnectionBuilder addressSelector(AddressSelector selector) {
     return this.connectionSettings.addressSelector(selector);
   }
 
