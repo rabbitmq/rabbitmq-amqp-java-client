@@ -24,17 +24,16 @@ import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
@@ -57,6 +56,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final AmqpManagement management;
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
   private volatile Address connectionAddress;
+  private volatile String connectionNodename;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile Session nativeSession;
   private final List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
@@ -68,16 +68,15 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Future<?> recoveryLoop;
   private final BlockingQueue<Runnable> recoveryRequestQueue;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
-  private final DefaultConnectionSettings<?> connectionSettings =
-      DefaultConnectionSettings.instance();
-  private Supplier<SessionHandler> sessionHandlerSupplier;
+  private final DefaultConnectionSettings<?> connectionSettings;
+  private final Supplier<SessionHandler> sessionHandlerSupplier;
+  private final ConnectionUtils.ConnectionAffinity affinity;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.environment = builder.environment();
-    builder.connectionSettings().copyTo(this.connectionSettings);
-    this.connectionSettings.consolidate();
+    this.connectionSettings = builder.connectionSettings().consolidate();
     this.sessionHandlerSupplier =
         builder.isolateResources()
             ? () -> new SessionHandler.SingleSessionSessionHandler(this)
@@ -116,8 +115,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.recoveryRequestQueue = null;
       this.recoveryLoop = null;
     }
-    this.nativeConnection = connect(this.connectionSettings, builder.name(), disconnectHandler);
+    this.affinity =
+        this.connectionSettings.affinity().activated()
+            ? new ConnectionUtils.ConnectionAffinity(
+                this.connectionSettings.affinity().queue(),
+                this.connectionSettings.affinity().operation())
+            : null;
+    NativeConnectionWrapper ncw =
+        connect(this.connectionSettings, builder.name(), disconnectHandler, null);
+    this.nativeConnection = ncw.connection;
     this.management = createManagement();
+    ncw =
+        enforceAffinity(
+            ncw,
+            addrs -> connect(this.connectionSettings, builder.name(), disconnectHandler, addrs),
+            this.management,
+            this.affinity,
+            this.environment.affinityCache());
+    this.connectionAddress = ncw.address;
+    this.connectionNodename = ncw.nodename;
+    this.nativeConnection = ncw.connection;
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
   }
@@ -133,7 +150,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.management;
   }
 
-  protected AmqpManagement createManagement() {
+  AmqpManagement createManagement() {
     return new AmqpManagement(
         new AmqpManagementParameters(this).topologyListener(this.topologyListener));
   }
@@ -167,11 +184,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   // internal API
 
-  private org.apache.qpid.protonj2.client.Connection connect(
+  private NativeConnectionWrapper connect(
       DefaultConnectionSettings<?> connectionSettings,
       String name,
-      BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
-          disconnectHandler) {
+      BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler,
+      List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
     if (connectionSettings.credentialsProvider() instanceof UsernamePasswordCredentialsProvider) {
@@ -200,23 +217,66 @@ final class AmqpConnection extends ResourceBase implements Connection {
       sslOptions.sslContextOverride(tlsSettings.sslContext());
       sslOptions.verifyHost(tlsSettings.isHostnameVerification());
     }
-    this.connectionAddress = connectionSettings.selectAddress();
+    Address address = connectionSettings.selectAddress(addresses);
     StopWatch stopWatch = new StopWatch();
     try {
       LOGGER.debug("Connecting...");
       org.apache.qpid.protonj2.client.Connection connection =
-          this.environment
-              .client()
-              .connect(
-                  this.connectionAddress.host(), this.connectionAddress.port(), connectionOptions);
+          this.environment.client().connect(address.host(), address.port(), connectionOptions);
       ExceptionUtils.wrapGet(connection.openFuture());
       LOGGER.debug("Connection attempt succeeded");
       checkBrokerVersion(connection);
-      return connection;
+      return new NativeConnectionWrapper(connection, extractNode(connection), address);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     } finally {
       LOGGER.debug("Connection attempt took {}", stopWatch.stop());
+    }
+  }
+
+  private static NativeConnectionWrapper enforceAffinity(
+      NativeConnectionWrapper connectionWrapper,
+      Function<List<Address>, NativeConnectionWrapper> connectionFactory,
+      AmqpManagement management,
+      ConnectionUtils.ConnectionAffinity affinity,
+      ConnectionUtils.AffinityCache affinityCache) {
+    if (connectionWrapper.nodename == null || affinity == null) {
+      return connectionWrapper;
+    } else {
+      affinityCache.put(connectionWrapper.nodename, connectionWrapper.address);
+      try {
+        management.init();
+        Management.QueueInfo info = management.queueInfo(affinity.queue());
+        NativeConnectionWrapper pickedConnection = null;
+        int attemptCount = 0;
+        while (pickedConnection == null && ++attemptCount <= 5) {
+          List<String> nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+          LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
+          if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
+            LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
+            pickedConnection = connectionWrapper;
+          } else {
+            LOGGER.debug(
+                "Affinity {} not found with node {}", affinity, connectionWrapper.nodename);
+            connectionWrapper.connection.close();
+            management.releaseResources();
+            List<Address> addressHints =
+                nodesWithAffinity.stream()
+                    .map(affinityCache::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            connectionWrapper = connectionFactory.apply(addressHints);
+            affinityCache.put(connectionWrapper.nodename, connectionWrapper.address);
+          }
+        }
+        return pickedConnection;
+      } catch (Exception e) {
+        LOGGER.warn(
+            "Cannot enforce affinity because of error when looking up queue '{}': {}",
+            affinity.queue(),
+            e.getMessage());
+        return connectionWrapper;
+      }
     }
   }
 
@@ -229,6 +289,15 @@ final class AmqpConnection extends ResourceBase implements Connection {
     if (!Utils.is4_0_OrMore(version)) {
       throw new AmqpException("The AMQP client library requires RabbitMQ 4.0 or more");
     }
+  }
+
+  private static String extractNode(org.apache.qpid.protonj2.client.Connection connection)
+      throws ClientException {
+    String node = (String) connection.properties().get("node");
+    if (node == null) {
+      throw new AmqpException("The broker node name is not available");
+    }
+    return node;
   }
 
   TopologyListener createTopologyListener(AmqpConnectionBuilder builder) {
@@ -354,15 +423,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
       }
 
       try {
-        org.apache.qpid.protonj2.client.Connection result =
-            connect(this.connectionSettings, connectionName, disconnectedHandlerReference.get());
-        result.openFuture().get();
+        NativeConnectionWrapper result =
+            connect(
+                this.connectionSettings, connectionName, disconnectedHandlerReference.get(), null);
+        this.connectionAddress = result.address;
         LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
-        return result;
-      } catch (InterruptedException ex) {
-        Thread.currentThread().interrupt();
-        LOGGER.info("Thread interrupted while waiting for connection opening");
-        throw ex;
+        return result.connection;
       } catch (Exception ex) {
         LOGGER.info("Error while trying to recover connection", ex);
         if (!RECOVERY_PREDICATE.test(ex)) {
@@ -573,9 +639,22 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.connectionAddress;
   }
 
+  String connectionNodename() {
+    return this.connectionNodename;
+  }
+
+  ConnectionUtils.ConnectionAffinity affinity() {
+    return this.affinity;
+  }
+
+  long id() {
+    return this.id;
+  }
+
   private void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
+      this.environment.removeConnection(this);
       if (this.recoveryLoop != null) {
         this.recoveryLoop.cancel(true);
       }
@@ -612,5 +691,32 @@ final class AmqpConnection extends ResourceBase implements Connection {
   @Override
   public String toString() {
     return this.environment.toString() + "-" + this.id;
+  }
+
+  private static class NativeConnectionWrapper {
+
+    private final org.apache.qpid.protonj2.client.Connection connection;
+    private final String nodename;
+    private final Address address;
+
+    private NativeConnectionWrapper(
+        org.apache.qpid.protonj2.client.Connection connection, String nodename, Address address) {
+      this.connection = connection;
+      this.nodename = nodename;
+      this.address = address;
+    }
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    AmqpConnection that = (AmqpConnection) o;
+    return id == that.id;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(id);
   }
 }

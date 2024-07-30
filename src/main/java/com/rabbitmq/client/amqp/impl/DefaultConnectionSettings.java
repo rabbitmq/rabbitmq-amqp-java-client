@@ -70,6 +70,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private final List<Address> addresses = new CopyOnWriteArrayList<>();
   private String saslMechanism = ConnectionSettings.SASL_MECHANISM_PLAIN;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
+  private final DefaultAffinity<T> affinity = new DefaultAffinity<>(this);
 
   @Override
   public T uri(String uriString) {
@@ -178,8 +179,12 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return idleTimeout;
   }
 
-  Address selectAddress() {
-    return this.addressSelector.select(this.addresses);
+  Address selectAddress(List<Address> addresses) {
+    if (addresses == null || addresses.isEmpty()) {
+      return this.addressSelector.select(this.addresses);
+    } else {
+      return this.addressSelector.select(addresses);
+    }
   }
 
   String saslMechanism() {
@@ -209,6 +214,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     if (this.tlsSettings.enabled()) {
       this.tlsSettings.copyTo((DefaultTlsSettings<?>) copy.tls());
     }
+
+    this.affinity.copyTo(copy.affinity);
   }
 
   DefaultConnectionSettings<?> consolidate() {
@@ -274,6 +281,11 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   public TlsSettings<T> tls() {
     this.tlsSettings.enable();
     return this.tlsSettings;
+  }
+
+  @Override
+  public DefaultAffinity<? extends T> affinity() {
+    return this.affinity;
   }
 
   static DefaultConnectionSettings<?> instance() {
@@ -392,6 +404,69 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     boolean isHostnameVerification() {
       return this.hostnameVerification;
+    }
+  }
+
+  static class DefaultAffinity<T> implements Affinity<T> {
+
+    private final DefaultConnectionSettings<T> connectionSettings;
+    private String queue;
+    private Operation operation;
+    private boolean reuse = false;
+
+    DefaultAffinity(DefaultConnectionSettings<T> connectionSettings) {
+      this.connectionSettings = connectionSettings;
+    }
+
+    @Override
+    public Affinity<T> queue(String queue) {
+      this.queue = queue;
+      return this;
+    }
+
+    @Override
+    public Affinity<T> operation(Operation operation) {
+      this.operation = operation;
+      return this;
+    }
+
+    @Override
+    public Affinity<T> reuse(boolean reuse) {
+      this.reuse = reuse;
+      return this;
+    }
+
+    @Override
+    public T connection() {
+      return this.connectionSettings.toReturn();
+    }
+
+    String queue() {
+      return this.queue;
+    }
+
+    Operation operation() {
+      return this.operation;
+    }
+
+    boolean reuse() {
+      return this.reuse;
+    }
+
+    void copyTo(Affinity<?> copy) {
+      copy.queue(this.queue);
+      copy.operation(this.operation);
+      copy.reuse(this.reuse);
+    }
+
+    boolean activated() {
+      return this.queue != null || this.operation != null;
+    }
+
+    void validate() {
+      if (this.queue == null || this.queue.isBlank()) {
+        throw new IllegalArgumentException("Connection affinity requires a queue value");
+      }
     }
   }
 }

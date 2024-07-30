@@ -100,6 +100,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public DefaultConnectionSettings.DefaultAffinity<? extends ConnectionBuilder> affinity() {
+    return this.connectionSettings.affinity();
+  }
+
+  @Override
   public ConnectionBuilder listeners(Resource.StateListener... listeners) {
     if (listeners == null || listeners.length == 0) {
       this.listeners.clear();
@@ -126,10 +131,16 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
   @Override
   public Connection build() {
-    // TODO copy the recovery configuration to keep the settings
-    AmqpConnection connection = new AmqpConnection(this);
-    this.environment.addConnection(connection);
-    return connection;
+    return this.environment.connection(this);
+  }
+
+  void copyTo(AmqpConnectionBuilder copy) {
+    this.connectionSettings.copyTo(copy.connectionSettings);
+    this.recoveryConfiguration.copyTo(copy.recoveryConfiguration);
+    copy.listeners(this.listeners.toArray(new Resource.StateListener[0]));
+    copy.name(this.name);
+    copy.topologyListener(this.topologyListener);
+    copy.isolateResources(this.isolateResources);
   }
 
   AmqpConnectionBuilder name(String name) {
@@ -210,6 +221,12 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
     BackOffDelayPolicy backOffDelayPolicy() {
       return this.backOffDelayPolicy;
+    }
+
+    void copyTo(RecoveryConfiguration copy) {
+      copy.activated(this.activated);
+      copy.topology(this.topology);
+      copy.backOffDelayPolicy(this.backOffDelayPolicy);
     }
   }
 

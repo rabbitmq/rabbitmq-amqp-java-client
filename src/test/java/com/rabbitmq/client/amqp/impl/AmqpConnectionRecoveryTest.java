@@ -77,8 +77,7 @@ public class AmqpConnectionRecoveryTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void connectionShouldRecoverAfterClosingIt(boolean isolateResources, TestInfo info)
-      throws Exception {
+  void connectionShouldRecoverAfterClosingIt(boolean isolateResources, TestInfo info) {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
     Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();

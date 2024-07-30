@@ -22,21 +22,14 @@ import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class AmqpEnvironment implements Environment {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
-
-  private final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
 
   private final Client client;
   private final ExecutorService executorService;
@@ -44,7 +37,7 @@ class AmqpEnvironment implements Environment {
       DefaultConnectionSettings.instance();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
-  private final List<AmqpConnection> connections = Collections.synchronizedList(new ArrayList<>());
+  private final ConnectionManager connectionManager = new ConnectionManager(this);
   private final long id;
   private final Clock clock = new Clock();
   private final ScheduledExecutorService scheduledExecutorService;
@@ -52,6 +45,7 @@ class AmqpEnvironment implements Environment {
   private final AtomicBoolean clockRefreshSet = new AtomicBoolean(false);
   private final MetricsCollector metricsCollector;
   private final ObservationCollector observationCollector;
+  private ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
 
   AmqpEnvironment(
       ExecutorService executorService,
@@ -99,13 +93,7 @@ class AmqpEnvironment implements Environment {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      for (AmqpConnection connection : this.connections) {
-        try {
-          connection.close();
-        } catch (Exception e) {
-          LOGGER.warn("Error while closing connection", e);
-        }
-      }
+      this.connectionManager.close();
       this.client.close();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
@@ -138,8 +126,16 @@ class AmqpEnvironment implements Environment {
     return this.observationCollector;
   }
 
-  void addConnection(AmqpConnection connection) {
-    this.connections.add(connection);
+  ConnectionUtils.AffinityCache affinityCache() {
+    return this.affinityCache;
+  }
+
+  AmqpConnection connection(AmqpConnectionBuilder builder) {
+    return this.connectionManager.connection(builder);
+  }
+
+  void removeConnection(AmqpConnection connection) {
+    this.connectionManager.remove(connection);
   }
 
   @Override

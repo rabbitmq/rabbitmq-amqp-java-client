@@ -18,7 +18,6 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Resource;
-import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,7 @@ class StateEventSupport {
   private final List<Resource.StateListener> listeners;
 
   StateEventSupport(List<Resource.StateListener> listeners) {
-    this.listeners = new ArrayList<>(listeners);
+    this.listeners = List.copyOf(listeners);
   }
 
   void dispatch(

@@ -22,7 +22,7 @@ import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.BitSet;
 
-abstract class UriUtils {
+final class UriUtils {
 
   // based on Apache HttpComponents PercentCodec
 

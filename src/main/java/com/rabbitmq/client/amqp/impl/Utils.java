@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-abstract class Utils {
+final class Utils {
 
   static final Supplier<String> NAME_SUPPLIER = new NameSupplier("client.gen-");
 

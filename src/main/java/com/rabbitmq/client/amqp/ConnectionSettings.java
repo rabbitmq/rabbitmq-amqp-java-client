@@ -49,6 +49,8 @@ public interface ConnectionSettings<T> {
 
   TlsSettings<? extends T> tls();
 
+  Affinity<? extends T> affinity();
+
   interface TlsSettings<T> {
 
     TlsSettings<T> hostnameVerification();
@@ -60,5 +62,21 @@ public interface ConnectionSettings<T> {
     TlsSettings<T> trustEverything();
 
     T connection();
+  }
+
+  interface Affinity<T> {
+
+    Affinity<T> queue(String queue);
+
+    Affinity<T> operation(Operation operation);
+
+    Affinity<T> reuse(boolean reuse);
+
+    T connection();
+
+    enum Operation {
+      PUBLISH,
+      CONSUME
+    }
   }
 }
