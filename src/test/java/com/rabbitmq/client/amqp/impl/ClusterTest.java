@@ -25,7 +25,7 @@ import com.rabbitmq.client.amqp.*;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
 
-@Disabled
+@TestUtils.DisabledIfNotCluster
 public class ClusterTest {
 
   Environment environment;

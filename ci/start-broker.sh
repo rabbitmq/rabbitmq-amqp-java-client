@@ -5,8 +5,8 @@ RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-pivotalrabbitmq/rabbitmq:v4.0.x}
 wait_for_message() {
   while ! docker logs "$1" | grep -q "$2";
   do
-      sleep 5
-      echo "Waiting 5 seconds for $1 to start..."
+      sleep 2
+      echo "Waiting 2 seconds for $1 to start..."
   done
 }
 

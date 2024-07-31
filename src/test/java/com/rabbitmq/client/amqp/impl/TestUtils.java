@@ -370,6 +370,10 @@ public abstract class TestUtils {
         .endsWith("true");
   }
 
+  static boolean isCluster() {
+    return !Cli.rabbitmqctl("eval 'nodes().'").output().replace("[", "").replace("]", "").isBlank();
+  }
+
   static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
 
     @Override
@@ -479,6 +483,25 @@ public abstract class TestUtils {
     }
   }
 
+  static class DisabledIfNotClusterCondition implements ExecutionCondition {
+
+    private static final String KEY = "isCluster";
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      boolean isCluster =
+          context
+              .getRoot()
+              .getStore(ExtensionContext.Namespace.GLOBAL)
+              .getOrComputeIfAbsent(KEY, k -> isCluster(), Boolean.class);
+      if (isCluster) {
+        return ConditionEvaluationResult.enabled("Multi-node cluster");
+      } else {
+        return ConditionEvaluationResult.disabled("Not a multi-node cluster");
+      }
+    }
+  }
+
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)
   @Documented
@@ -508,6 +531,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfAuthMechanismSslNotEnabledCondition.class)
   @interface DisabledIfAuthMechanismSslNotEnabled {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfNotClusterCondition.class)
+  @interface DisabledIfNotCluster {}
 
   static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {
 

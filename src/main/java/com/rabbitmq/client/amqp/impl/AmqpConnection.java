@@ -249,11 +249,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
         Management.QueueInfo info = management.queueInfo(affinity.queue());
         NativeConnectionWrapper pickedConnection = null;
         int attemptCount = 0;
-        while (pickedConnection == null && ++attemptCount <= 5) {
+        while (pickedConnection == null) {
+          attemptCount++;
           List<String> nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
           LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
           if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
             LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
+            pickedConnection = connectionWrapper;
+          } else if (attemptCount == 5) {
+            LOGGER.debug(
+                "Could not find affinity {} after {} attempt(s), using last connection",
+                affinity,
+                attemptCount);
             pickedConnection = connectionWrapper;
           } else {
             LOGGER.debug(
