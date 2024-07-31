@@ -28,22 +28,22 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
-#      - name: Start broker
-#        run: ci/start-broker.sh
-#      - name: Start toxiproxy
-#        run: ci/start-toxiproxy.sh
-#      - name: Display Java version
-#        run: ./mvnw --version
-#      - name: Test
-#        run: |
-#          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
-#            -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
-#            -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
-#            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem
-#      - name: Stop toxiproxy
-#        run: docker stop toxiproxy && docker rm toxiproxy
-#      - name: Stop broker
-#        run: docker stop rabbitmq && docker rm rabbitmq
+      - name: Start broker
+        run: ci/start-broker.sh
+      - name: Start toxiproxy
+        run: ci/start-toxiproxy.sh
+      - name: Display Java version
+        run: ./mvnw --version
+      - name: Test
+        run: |
+          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
+            -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
+            -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
+            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem
+      - name: Stop toxiproxy
+        run: docker stop toxiproxy && docker rm toxiproxy
+      - name: Stop broker
+        run: docker stop rabbitmq && docker rm rabbitmq
       - name: Start cluster
         run: ci/start-cluster.sh
       - name: Test against cluster

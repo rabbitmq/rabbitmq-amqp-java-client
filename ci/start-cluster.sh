@@ -11,12 +11,10 @@ wait_for_message() {
 }
 
 docker compose --file ci/cluster/docker-compose.yml down
-docker compose --file ci/cluster/docker-compose.yml config
 docker compose --file ci/cluster/docker-compose.yml up --detach
 
 wait_for_message rabbitmq0 "completed with"
 
 docker exec rabbitmq0 rabbitmqctl await_online_nodes 3
 
-docker exec rabbitmq0 rabbitmq-diagnostics erlang_version
-docker exec rabbitmq0 rabbitmqctl version
+docker exec rabbitmq0 rabbitmqctl cluster_status
