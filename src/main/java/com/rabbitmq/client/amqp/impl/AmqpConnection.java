@@ -243,22 +243,33 @@ final class AmqpConnection extends ResourceBase implements Connection {
     if (affinity == null) {
       return connectionFactory.apply(null);
     }
-    NativeConnectionWrapper connectionWrapper = null;
-    String queue = affinity.queue();
-    Management.QueueInfo info = affinityCache.queueInfo(queue);
-    if (info == null) {
-      connectionWrapper = connectionFactory.apply(null);
-      management.init();
-      info = management.queueInfo(affinity.queue());
-    }
-    affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
     try {
       NativeConnectionWrapper pickedConnection = null;
       int attemptCount = 0;
       boolean queueInfoRefreshed = false;
+      List<String> nodesWithAffinity = null;
+      Management.QueueInfo info = affinityCache.queueInfo(affinity.queue());
       while (pickedConnection == null) {
         attemptCount++;
-        List<String> nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+        NativeConnectionWrapper connectionWrapper = null;
+        if (info == null) {
+          connectionWrapper = connectionFactory.apply(null);
+          management.init();
+          info = management.queueInfo(affinity.queue());
+          queueInfoRefreshed = true;
+        }
+        if (nodesWithAffinity == null) {
+          nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+        }
+        if (connectionWrapper == null) {
+          List<Address> addressHints =
+              nodesWithAffinity.stream()
+                  .map(affinityCache::nodenameToAddress)
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toList());
+          connectionWrapper = connectionFactory.apply(addressHints);
+          affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
+        }
         LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
         if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
           LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
@@ -271,29 +282,20 @@ final class AmqpConnection extends ResourceBase implements Connection {
           pickedConnection = connectionWrapper;
         } else {
           LOGGER.debug("Affinity {} not found with node {}", affinity, connectionWrapper.nodename);
-          connectionWrapper.connection.close();
-          management.releaseResources();
-          List<Address> addressHints =
-              nodesWithAffinity.stream()
-                  .map(affinityCache::nodenameToAddress)
-                  .filter(Objects::nonNull)
-                  .collect(Collectors.toList());
-          connectionWrapper = connectionFactory.apply(addressHints);
-          affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
           if (!queueInfoRefreshed) {
             management.init();
             info = management.queueInfo(affinity.queue());
             affinityCache.queueInfo(info);
+            queueInfoRefreshed = true;
           }
+          connectionWrapper.connection.close();
+          management.releaseResources();
         }
       }
       return pickedConnection;
-    } catch (Exception e) {
-      LOGGER.warn(
-          "Cannot enforce affinity because of error when looking up queue '{}': {}",
-          affinity.queue(),
-          e.getMessage());
-      return connectionWrapper;
+    } catch (RuntimeException e) {
+      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", affinity, e);
+      throw e;
     }
   }
 
