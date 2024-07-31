@@ -235,11 +235,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
-  private static NativeConnectionWrapper enforceAffinity(
+  static NativeConnectionWrapper enforceAffinity(
       Function<List<Address>, NativeConnectionWrapper> connectionFactory,
       AmqpManagement management,
       ConnectionUtils.ConnectionAffinity affinity,
       ConnectionUtils.AffinityCache affinityCache) {
+    // TODO add retry for sensitive operations in affinity mechanism
     if (affinity == null) {
       return connectionFactory.apply(null);
     }
@@ -712,17 +713,25 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.toString() + "-" + this.id;
   }
 
-  private static class NativeConnectionWrapper {
+  static class NativeConnectionWrapper {
 
     private final org.apache.qpid.protonj2.client.Connection connection;
     private final String nodename;
     private final Address address;
 
-    private NativeConnectionWrapper(
+    NativeConnectionWrapper(
         org.apache.qpid.protonj2.client.Connection connection, String nodename, Address address) {
       this.connection = connection;
       this.nodename = nodename;
       this.address = address;
+    }
+
+    String nodename() {
+      return this.nodename;
+    }
+
+    public Address address() {
+      return this.address;
     }
   }
 
