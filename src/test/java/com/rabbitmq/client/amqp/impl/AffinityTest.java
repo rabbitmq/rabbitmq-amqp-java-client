@@ -49,7 +49,7 @@ public class AffinityTest {
     environment
         .connectionBuilder()
         .affinity()
-        .queue("my-qq")
+        .queue(name)
         .operation(ConnectionSettings.Affinity.Operation.PUBLISH)
         .connection()
         .build();

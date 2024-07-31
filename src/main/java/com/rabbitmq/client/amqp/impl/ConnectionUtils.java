@@ -37,15 +37,29 @@ final class ConnectionUtils {
 
   static class AffinityCache {
 
-    private final ConcurrentMap<String, Address> mapping = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Management.QueueInfo> queueInfoCache =
+        new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Address> nodenameToAddressMapping =
+        new ConcurrentHashMap<>();
 
-    AffinityCache put(String nodename, Address address) {
-      this.mapping.put(nodename, address);
+    AffinityCache queueInfo(Management.QueueInfo info) {
+      this.queueInfoCache.put(info.name(), info);
       return this;
     }
 
-    Address get(String name) {
-      return this.mapping.get(name);
+    Management.QueueInfo queueInfo(String queue) {
+      return this.queueInfoCache.get(queue);
+    }
+
+    AffinityCache nodenameToAddress(String nodename, Address address) {
+      if (nodename != null && !nodename.isBlank()) {
+        this.nodenameToAddressMapping.put(nodename, address);
+      }
+      return this;
+    }
+
+    Address nodenameToAddress(String name) {
+      return this.nodenameToAddressMapping.get(name);
     }
   }
 
@@ -109,7 +123,7 @@ final class ConnectionUtils {
 
     @Override
     public String toString() {
-      return "ConnectionAffinity{" + "queue='" + queue + '\'' + ", operation=" + operation + '}';
+      return "{" + "queue='" + queue + '\'' + ", operation=" + operation + '}';
     }
 
     @Override

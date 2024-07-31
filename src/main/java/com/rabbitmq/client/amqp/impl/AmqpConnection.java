@@ -121,14 +121,15 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 this.connectionSettings.affinity().queue(),
                 this.connectionSettings.affinity().operation())
             : null;
-    NativeConnectionWrapper ncw =
-        connect(this.connectionSettings, builder.name(), disconnectHandler, null);
-    this.nativeConnection = ncw.connection;
     this.management = createManagement();
-    ncw =
+    NativeConnectionWrapper ncw =
         enforceAffinity(
-            ncw,
-            addrs -> connect(this.connectionSettings, builder.name(), disconnectHandler, addrs),
+            addrs -> {
+              NativeConnectionWrapper wrapper =
+                  connect(this.connectionSettings, builder.name(), disconnectHandler, addrs);
+              this.nativeConnection = wrapper.connection;
+              return wrapper;
+            },
             this.management,
             this.affinity,
             this.environment.affinityCache());
@@ -220,70 +221,79 @@ final class AmqpConnection extends ResourceBase implements Connection {
     Address address = connectionSettings.selectAddress(addresses);
     StopWatch stopWatch = new StopWatch();
     try {
-      LOGGER.debug("Connecting...");
+      LOGGER.trace("Connecting...");
       org.apache.qpid.protonj2.client.Connection connection =
           this.environment.client().connect(address.host(), address.port(), connectionOptions);
       ExceptionUtils.wrapGet(connection.openFuture());
-      LOGGER.debug("Connection attempt succeeded");
+      LOGGER.trace("Connection attempt succeeded");
       checkBrokerVersion(connection);
       return new NativeConnectionWrapper(connection, extractNode(connection), address);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     } finally {
-      LOGGER.debug("Connection attempt took {}", stopWatch.stop());
+      LOGGER.trace("Connection attempt took {}", stopWatch.stop());
     }
   }
 
   private static NativeConnectionWrapper enforceAffinity(
-      NativeConnectionWrapper connectionWrapper,
       Function<List<Address>, NativeConnectionWrapper> connectionFactory,
       AmqpManagement management,
       ConnectionUtils.ConnectionAffinity affinity,
       ConnectionUtils.AffinityCache affinityCache) {
-    if (connectionWrapper.nodename == null || affinity == null) {
-      return connectionWrapper;
-    } else {
-      affinityCache.put(connectionWrapper.nodename, connectionWrapper.address);
-      try {
-        management.init();
-        Management.QueueInfo info = management.queueInfo(affinity.queue());
-        NativeConnectionWrapper pickedConnection = null;
-        int attemptCount = 0;
-        while (pickedConnection == null) {
-          attemptCount++;
-          List<String> nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
-          LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
-          if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
-            LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
-            pickedConnection = connectionWrapper;
-          } else if (attemptCount == 5) {
-            LOGGER.debug(
-                "Could not find affinity {} after {} attempt(s), using last connection",
-                affinity,
-                attemptCount);
-            pickedConnection = connectionWrapper;
-          } else {
-            LOGGER.debug(
-                "Affinity {} not found with node {}", affinity, connectionWrapper.nodename);
-            connectionWrapper.connection.close();
-            management.releaseResources();
-            List<Address> addressHints =
-                nodesWithAffinity.stream()
-                    .map(affinityCache::get)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
-            connectionWrapper = connectionFactory.apply(addressHints);
-            affinityCache.put(connectionWrapper.nodename, connectionWrapper.address);
+    if (affinity == null) {
+      return connectionFactory.apply(null);
+    }
+    NativeConnectionWrapper connectionWrapper = null;
+    String queue = affinity.queue();
+    Management.QueueInfo info = affinityCache.queueInfo(queue);
+    if (info == null) {
+      connectionWrapper = connectionFactory.apply(null);
+      management.init();
+      info = management.queueInfo(affinity.queue());
+    }
+    affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
+    try {
+      NativeConnectionWrapper pickedConnection = null;
+      int attemptCount = 0;
+      boolean queueInfoRefreshed = false;
+      while (pickedConnection == null) {
+        attemptCount++;
+        List<String> nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+        LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
+        if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
+          LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
+          pickedConnection = connectionWrapper;
+        } else if (attemptCount == 5) {
+          LOGGER.debug(
+              "Could not find affinity {} after {} attempt(s), using last connection",
+              affinity,
+              attemptCount);
+          pickedConnection = connectionWrapper;
+        } else {
+          LOGGER.debug("Affinity {} not found with node {}", affinity, connectionWrapper.nodename);
+          connectionWrapper.connection.close();
+          management.releaseResources();
+          List<Address> addressHints =
+              nodesWithAffinity.stream()
+                  .map(affinityCache::nodenameToAddress)
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toList());
+          connectionWrapper = connectionFactory.apply(addressHints);
+          affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
+          if (!queueInfoRefreshed) {
+            management.init();
+            info = management.queueInfo(affinity.queue());
+            affinityCache.queueInfo(info);
           }
         }
-        return pickedConnection;
-      } catch (Exception e) {
-        LOGGER.warn(
-            "Cannot enforce affinity because of error when looking up queue '{}': {}",
-            affinity.queue(),
-            e.getMessage());
-        return connectionWrapper;
       }
+      return pickedConnection;
+    } catch (Exception e) {
+      LOGGER.warn(
+          "Cannot enforce affinity because of error when looking up queue '{}': {}",
+          affinity.queue(),
+          e.getMessage());
+      return connectionWrapper;
     }
   }
 

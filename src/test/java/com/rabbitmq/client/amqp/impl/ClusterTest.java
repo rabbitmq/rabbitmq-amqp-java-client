@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @TestUtils.DisabledIfNotCluster
 public class ClusterTest {
@@ -54,19 +56,21 @@ public class ClusterTest {
     environment.close();
   }
 
-  @Test
-  void connectionsShouldBeMemberLocalForQuorumQueue() {
+  @EnumSource(names = {"QUORUM", "STREAM"})
+  @ParameterizedTest
+  void connectionsShouldBeMemberLocalReplicatedQueues(Management.QueueType type) {
     try {
-      management.queue(name).type(Management.QueueType.QUORUM).declare();
-      AmqpConnection publishConnection =
-          connection(b -> b.affinity().queue(name).operation(PUBLISH));
+      management.queue(name).type(type).declare();
       AmqpConnection consumeConnection =
           connection(b -> b.affinity().queue(name).operation(CONSUME));
+      AmqpConnection publishConnection =
+          connection(b -> b.affinity().queue(name).operation(PUBLISH));
       Management.QueueInfo info = connection.management().queueInfo(name);
       assertThat(publishConnection.connectionNodename()).isEqualTo(info.leader());
       assertThat(consumeConnection.connectionNodename())
           .isIn(info.replicas())
           .isNotEqualTo(info.leader());
+      assertThat(Cli.listConnections()).hasSize(3);
     } finally {
       management.queueDeletion().delete(name);
     }
