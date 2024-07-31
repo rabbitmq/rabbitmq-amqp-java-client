@@ -22,6 +22,8 @@ import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUB
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.*;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
 
@@ -39,6 +41,7 @@ public class ClusterTest {
     environment =
         new AmqpEnvironmentBuilder()
             .connectionSettings()
+            .addressSelector(new RoundRobinAddressSelector())
             .uris("amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674")
             .environmentBuilder()
             .build();
@@ -73,5 +76,21 @@ public class ClusterTest {
     ConnectionBuilder builder = environment.connectionBuilder();
     operation.accept(builder);
     return (AmqpConnection) builder.build();
+  }
+
+  private static class RoundRobinAddressSelector implements AddressSelector {
+
+    private final AtomicInteger count = new AtomicInteger();
+
+    @Override
+    public Address select(List<Address> addresses) {
+      if (addresses.isEmpty()) {
+        throw new IllegalStateException("There should at least one node to connect to");
+      } else if (addresses.size() == 1) {
+        return addresses.get(0);
+      } else {
+        return addresses.get(count.getAndIncrement() % addresses.size());
+      }
+    }
   }
 }
