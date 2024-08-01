@@ -53,8 +53,21 @@ abstract class Cli {
     }
   }
 
+  static String rabbitmqQueuesCommand() {
+    String rabbitmqctl = rabbitmqctlCommand();
+    int lastIndex = rabbitmqctl.lastIndexOf("rabbitmqctl");
+    if (lastIndex == -1) {
+      throw new IllegalArgumentException("Not a valid rabbitqmctl command: " + rabbitmqctl);
+    }
+    return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-queues";
+  }
+
   static ProcessState rabbitmqctl(String command) {
     return executeCommand(rabbitmqctlCommand() + " " + command);
+  }
+
+  static ProcessState rabbitmqQueues(String command) {
+    return executeCommand(rabbitmqQueuesCommand() + " " + command);
   }
 
   static ProcessState rabbitmqctlIgnoreError(String command) {
@@ -175,6 +188,14 @@ abstract class Cli {
   static boolean exchangeExists(String exchange) {
     String output = rabbitmqctl("list_exchanges -s name").output();
     return Arrays.asList(output.split("\n")).contains(exchange);
+  }
+
+  static void addQuorumQueueMember(String queue, String node) {
+    rabbitmqQueues(" add_member " + queue + " " + node);
+  }
+
+  static void deleteQuorumQueueMember(String queue, String node) {
+    rabbitmqQueues(" delete_member " + queue + " " + node);
   }
 
   static List<ConnectionInfo> listConnections() {

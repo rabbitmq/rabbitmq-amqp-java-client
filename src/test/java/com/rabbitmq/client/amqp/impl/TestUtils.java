@@ -589,6 +589,24 @@ public abstract class TestUtils {
       return this;
     }
 
+    QueueInfoAssert hasLeader(String leader) {
+      Assert.notNull(leader, "Expected leader cannot be null");
+      isNotNull();
+      if (!leader.equals(actual.leader())) {
+        fail("Queue leader should be '%s' but is '%s'", leader, actual.leader());
+      }
+      return this;
+    }
+
+    QueueInfoAssert doesNotHaveLeader(String leader) {
+      Assert.notNull(leader, "Leader cannot be null");
+      isNotNull();
+      if (leader.equals(actual.leader())) {
+        fail("Queue leader should not be '%s'", leader);
+      }
+      return this;
+    }
+
     QueueInfoAssert hasArgument(String key, Object value) {
       isNotNull();
       if (!actual.arguments().containsKey(key) || !actual.arguments().get(key).equals(value)) {

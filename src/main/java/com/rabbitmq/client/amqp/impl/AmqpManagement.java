@@ -255,7 +255,7 @@ class AmqpManagement implements Management {
                   }
                 } catch (ClientException e) {
                   java.util.function.Consumer<String> log =
-                      this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
+                      this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.info(m, e);
                   log.accept("Error while polling AMQP receiver");
                 }
               };

@@ -282,7 +282,23 @@ final class AmqpConnection extends ResourceBase implements Connection {
         affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
         if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
           LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
-          pickedConnection = connectionWrapper;
+          if (!queueInfoRefreshed) {
+            LOGGER.debug("Refreshing queue information.");
+            management.init();
+            info = management.queueInfo(affinity.queue());
+            affinityCache.queueInfo(info);
+            nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+            LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
+            queueInfoRefreshed = true;
+            if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
+              pickedConnection = connectionWrapper;
+            } else {
+              management.releaseResources();
+              connectionWrapper.connection.close();
+            }
+          } else {
+            pickedConnection = connectionWrapper;
+          }
         } else if (attemptCount == 5) {
           LOGGER.debug(
               "Could not find affinity {} after {} attempt(s), using last connection.",
@@ -389,7 +405,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
       AmqpException failureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
-    LOGGER.info("Connection to {} failed, trying to recover", this.currentConnectionLabel());
+    LOGGER.info(
+        "Connection to {} has been disconnected, trying to recover", this.currentConnectionLabel());
     this.state(RECOVERING, failureCause);
     this.changeStateOfPublishers(RECOVERING, failureCause);
     this.changeStateOfConsumers(RECOVERING, failureCause);
@@ -399,9 +416,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.releaseManagementResources();
     try {
       this.recoveringConnection.set(true);
-      this.nativeConnection =
+      NativeConnectionWrapper ncw =
           recoverNativeConnection(
               recoveryConfiguration, connectionName, disconnectedHandlerReference);
+      this.connectionAddress = ncw.address;
+      this.connectionNodename = ncw.nodename;
+      this.nativeConnection = ncw.connection;
+      LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -432,7 +453,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
-  private org.apache.qpid.protonj2.client.Connection recoverNativeConnection(
+  private NativeConnectionWrapper recoverNativeConnection(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
@@ -455,11 +476,21 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
       try {
         NativeConnectionWrapper result =
-            connect(
-                this.connectionSettings, connectionName, disconnectedHandlerReference.get(), null);
-        this.connectionAddress = result.address;
-        LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
-        return result.connection;
+            enforceAffinity(
+                addrs -> {
+                  NativeConnectionWrapper wrapper =
+                      connect(
+                          this.connectionSettings,
+                          connectionName,
+                          disconnectedHandlerReference.get(),
+                          addrs);
+                  this.nativeConnection = wrapper.connection;
+                  return wrapper;
+                },
+                this.management,
+                this.affinity,
+                this.environment.affinityCache());
+        return result;
       } catch (Exception ex) {
         LOGGER.info("Error while trying to recover connection", ex);
         if (!RECOVERY_PREDICATE.test(ex)) {

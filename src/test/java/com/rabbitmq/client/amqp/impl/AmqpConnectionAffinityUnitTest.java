@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.AmqpConnection.enforceAffinity;
 import static org.assertj.core.api.Assertions.fail;
@@ -48,6 +49,11 @@ public class AmqpConnectionAffinityUnitTest {
   private static final String FOLLOWER2_NODENAME = "f2";
   private static final Address FOLLOWER2_ADDRESS = new Address(FOLLOWER2_NODENAME, 5672);
   private static final String Q = "my-queue";
+  private static final Map<String, Address> NODES =
+      Map.of(
+          LEADER_NODENAME, LEADER_ADDRESS,
+          FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS,
+          FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
 
   AutoCloseable mocks;
 
@@ -71,15 +77,37 @@ public class AmqpConnectionAffinityUnitTest {
   }
 
   @Test
-  void noInfoLookupIfAlreadyInCache() {
+  void infoInCache_ShouldLookUpInfoAndCheckIt_ShouldUseConnectionIfMatch() {
     cache.queueInfo(info());
+    when(management.queueInfo(Q)).thenReturn(info());
     when(cf.apply(anyList())).thenReturn(leaderConnection());
     AmqpConnection.NativeConnectionWrapper w = enforceAffinity(cf, management, affinity(), cache);
     assertThat(w).isLeader();
-    verifyNoInteractions(management);
+    verify(management, times(1)).queueInfo(Q);
     verify(cf, times(1)).apply(anyList());
     verify(nativeConnection, never()).close();
     assertThat(cache).contains(info()).hasMapping(LEADER_NODENAME, LEADER_ADDRESS);
+  }
+
+  @Test
+  void infoInCache_ShouldLookUpInfoAndCheckIt_ShouldRetryIfConnectionDoesNotMatch() {
+    String initialLeader = LEADER_NODENAME;
+    when(management.queueInfo(Q)).thenReturn(info(initialLeader));
+    when(cf.apply(anyList())).thenReturn(leaderConnection());
+    AmqpConnection.NativeConnectionWrapper w = enforceAffinity(cf, management, affinity(), cache);
+    assertThat(w).hasNodename(initialLeader);
+
+    String newLeader = FOLLOWER1_NODENAME;
+    // the QQ leader moves to another node for some reason
+    // the cache is stale, the management is the authority
+    when(management.queueInfo(Q)).thenReturn(info(newLeader));
+    when(cf.apply(anyList())).thenReturn(leaderConnection()).thenReturn(follower1Connection());
+    // we want the returned connection to be on the new leader
+    w = enforceAffinity(cf, management, affinity(), cache);
+    assertThat(w).hasNodename(newLeader);
+    verify(management, times(2)).queueInfo(Q);
+    verify(cf, times(3)).apply(anyList());
+    verify(nativeConnection, times(1)).close();
   }
 
   @Test
@@ -145,8 +173,18 @@ public class AmqpConnectionAffinityUnitTest {
         this.nativeConnection, FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
   }
 
+  AmqpConnection.NativeConnectionWrapper connection(String nodename) {
+    return new AmqpConnection.NativeConnectionWrapper(
+        this.nativeConnection, nodename, NODES.get(nodename));
+  }
+
   static ConnectionUtils.ConnectionAffinity affinity() {
     return new ConnectionUtils.ConnectionAffinity(Q, ConnectionSettings.Affinity.Operation.PUBLISH);
+  }
+
+  static Management.QueueInfo info(String leader) {
+    return new TestQueueInfo(
+        Q, QUORUM, leader, List.of(LEADER_NODENAME, FOLLOWER1_NODENAME, FOLLOWER2_NODENAME));
   }
 
   static Management.QueueInfo info() {

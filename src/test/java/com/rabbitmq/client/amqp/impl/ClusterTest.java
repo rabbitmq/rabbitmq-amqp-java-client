@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
+import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.*;
@@ -32,13 +33,15 @@ import org.junit.jupiter.params.provider.EnumSource;
 @TestUtils.DisabledIfNotCluster
 public class ClusterTest {
 
+  static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
   Environment environment;
   Connection connection;
   Management management;
-  String name;
+  String q, name;
 
   @BeforeEach
   void init(TestInfo info) {
+    this.q = TestUtils.name(info);
     this.name = TestUtils.name(info);
     environment =
         new AmqpEnvironmentBuilder()
@@ -60,24 +63,69 @@ public class ClusterTest {
   @ParameterizedTest
   void connectionsShouldBeMemberLocalReplicatedQueues(Management.QueueType type) {
     try {
-      management.queue(name).type(type).declare();
-      AmqpConnection consumeConnection =
-          connection(b -> b.affinity().queue(name).operation(CONSUME));
-      AmqpConnection publishConnection =
-          connection(b -> b.affinity().queue(name).operation(PUBLISH));
-      Management.QueueInfo info = connection.management().queueInfo(name);
+      management.queue(q).type(type).declare();
+      AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
+      Management.QueueInfo info = connection.management().queueInfo(q);
       assertThat(publishConnection.connectionNodename()).isEqualTo(info.leader());
       assertThat(consumeConnection.connectionNodename())
           .isIn(info.replicas())
           .isNotEqualTo(info.leader());
       assertThat(Cli.listConnections()).hasSize(3);
     } finally {
-      management.queueDeletion().delete(name);
+      management.queueDeletion().delete(q);
     }
   }
 
-  AmqpConnection connection(Consumer<ConnectionBuilder> operation) {
-    ConnectionBuilder builder = environment.connectionBuilder();
+  @Test
+  void connectionShouldRecoverToNewQuorumQueueLeaderAfterAfterItHasMoved() {
+    try {
+      management.queue(q).type(Management.QueueType.QUORUM).declare();
+      Management.QueueInfo info = queueInfo();
+      String initialLeader = info.leader();
+
+      TestUtils.Sync recoveredSync = TestUtils.sync();
+      AmqpConnection publishConnection =
+          connection(
+              b ->
+                  b.name(name)
+                      .listeners(
+                          context -> {
+                            if (context.previousState() == Resource.State.RECOVERING
+                                && context.currentState() == Resource.State.OPEN) {
+                              recoveredSync.down();
+                            }
+                          })
+                      .affinity()
+                      .queue(q)
+                      .operation(PUBLISH));
+      assertThat(publishConnection.connectionNodename()).isEqualTo(initialLeader);
+
+      int initialReplicaCount = info.replicas().size();
+      Cli.deleteQuorumQueueMember(q, initialLeader);
+      TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
+      assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
+      Cli.addQuorumQueueMember(q, initialLeader);
+      TestUtils.waitAtMost(() -> queueInfo().replicas().size() == initialReplicaCount);
+      info = queueInfo();
+      TestUtils.assertThat(info).doesNotHaveLeader(initialLeader);
+      String newLeader = info.leader();
+
+      Cli.closeConnection(name);
+      TestUtils.assertThat(recoveredSync).completes();
+      assertThat(publishConnection.connectionNodename()).isEqualTo(newLeader);
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  Management.QueueInfo queueInfo() {
+    return this.management.queueInfo(q);
+  }
+
+  AmqpConnection connection(Consumer<AmqpConnectionBuilder> operation) {
+    AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
+    builder.recovery().backOffDelayPolicy(BACK_OFF_DELAY_POLICY);
     operation.accept(builder);
     return (AmqpConnection) builder.build();
   }
