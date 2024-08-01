@@ -257,10 +257,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
           connectionWrapper = connectionFactory.apply(null);
           management.init();
           info = management.queueInfo(affinity.queue());
+          affinityCache.queueInfo(info);
           queueInfoRefreshed = true;
         }
+        LOGGER.debug(
+            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {})",
+            info.name(),
+            info.type(),
+            info.leader(),
+            info.replicas());
         if (nodesWithAffinity == null) {
           nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+          LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
         }
         if (connectionWrapper == null) {
           List<Address> addressHints =
@@ -269,28 +277,31 @@ final class AmqpConnection extends ResourceBase implements Connection {
                   .filter(Objects::nonNull)
                   .collect(Collectors.toList());
           connectionWrapper = connectionFactory.apply(addressHints);
-          affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
         }
         LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
+        affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
         if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
           LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
           pickedConnection = connectionWrapper;
         } else if (attemptCount == 5) {
           LOGGER.debug(
-              "Could not find affinity {} after {} attempt(s), using last connection",
+              "Could not find affinity {} after {} attempt(s), using last connection.",
               affinity,
               attemptCount);
           pickedConnection = connectionWrapper;
         } else {
-          LOGGER.debug("Affinity {} not found with node {}", affinity, connectionWrapper.nodename);
+          LOGGER.debug("Affinity {} not found with node {}.", affinity, connectionWrapper.nodename);
           if (!queueInfoRefreshed) {
+            LOGGER.debug("Refreshing queue information.");
             management.init();
             info = management.queueInfo(affinity.queue());
             affinityCache.queueInfo(info);
+            nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
+            LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
             queueInfoRefreshed = true;
           }
-          connectionWrapper.connection.close();
           management.releaseResources();
+          connectionWrapper.connection.close();
         }
       }
       return pickedConnection;
