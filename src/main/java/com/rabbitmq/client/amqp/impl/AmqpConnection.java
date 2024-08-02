@@ -30,10 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
@@ -123,19 +121,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
             : null;
     this.management = createManagement();
     NativeConnectionWrapper ncw =
-        enforceAffinity(
+        ConnectionUtils.enforceAffinity(
             addrs -> {
               NativeConnectionWrapper wrapper =
                   connect(this.connectionSettings, builder.name(), disconnectHandler, addrs);
-              this.nativeConnection = wrapper.connection;
+              this.nativeConnection = wrapper.connection();
               return wrapper;
             },
             this.management,
             this.affinity,
             this.environment.affinityCache());
-    this.connectionAddress = ncw.address;
-    this.connectionNodename = ncw.nodename;
-    this.nativeConnection = ncw.connection;
+    this.sync(ncw);
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
   }
@@ -235,96 +231,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
-  static NativeConnectionWrapper enforceAffinity(
-      Function<List<Address>, NativeConnectionWrapper> connectionFactory,
-      AmqpManagement management,
-      ConnectionUtils.ConnectionAffinity affinity,
-      ConnectionUtils.AffinityCache affinityCache) {
-    // TODO add retry for sensitive operations in affinity mechanism
-    if (affinity == null) {
-      return connectionFactory.apply(null);
-    }
-    try {
-      NativeConnectionWrapper pickedConnection = null;
-      int attemptCount = 0;
-      boolean queueInfoRefreshed = false;
-      List<String> nodesWithAffinity = null;
-      Management.QueueInfo info = affinityCache.queueInfo(affinity.queue());
-      while (pickedConnection == null) {
-        attemptCount++;
-        NativeConnectionWrapper connectionWrapper = null;
-        if (info == null) {
-          connectionWrapper = connectionFactory.apply(null);
-          management.init();
-          info = management.queueInfo(affinity.queue());
-          affinityCache.queueInfo(info);
-          queueInfoRefreshed = true;
-        }
-        LOGGER.debug(
-            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {})",
-            info.name(),
-            info.type(),
-            info.leader(),
-            info.replicas());
-        if (nodesWithAffinity == null) {
-          nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
-          LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
-        }
-        if (connectionWrapper == null) {
-          List<Address> addressHints =
-              nodesWithAffinity.stream()
-                  .map(affinityCache::nodenameToAddress)
-                  .filter(Objects::nonNull)
-                  .collect(Collectors.toList());
-          connectionWrapper = connectionFactory.apply(addressHints);
-        }
-        LOGGER.debug("Currently connected to node {}", connectionWrapper.nodename);
-        affinityCache.nodenameToAddress(connectionWrapper.nodename, connectionWrapper.address);
-        if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
-          LOGGER.debug("Affinity {} found with node {}", affinity, connectionWrapper.nodename);
-          if (!queueInfoRefreshed) {
-            LOGGER.debug("Refreshing queue information.");
-            management.init();
-            info = management.queueInfo(affinity.queue());
-            affinityCache.queueInfo(info);
-            nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
-            LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
-            queueInfoRefreshed = true;
-            if (nodesWithAffinity.contains(connectionWrapper.nodename)) {
-              pickedConnection = connectionWrapper;
-            } else {
-              management.releaseResources();
-              connectionWrapper.connection.close();
-            }
-          } else {
-            pickedConnection = connectionWrapper;
-          }
-        } else if (attemptCount == 5) {
-          LOGGER.debug(
-              "Could not find affinity {} after {} attempt(s), using last connection.",
-              affinity,
-              attemptCount);
-          pickedConnection = connectionWrapper;
-        } else {
-          LOGGER.debug("Affinity {} not found with node {}.", affinity, connectionWrapper.nodename);
-          if (!queueInfoRefreshed) {
-            LOGGER.debug("Refreshing queue information.");
-            management.init();
-            info = management.queueInfo(affinity.queue());
-            affinityCache.queueInfo(info);
-            nodesWithAffinity = ConnectionUtils.findAffinity(affinity, info);
-            LOGGER.debug("Nodes matching affinity {}: {}", affinity, nodesWithAffinity);
-            queueInfoRefreshed = true;
-          }
-          management.releaseResources();
-          connectionWrapper.connection.close();
-        }
-      }
-      return pickedConnection;
-    } catch (RuntimeException e) {
-      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", affinity, e);
-      throw e;
-    }
+  private void sync(NativeConnectionWrapper wrapper) {
+    this.connectionAddress = wrapper.address();
+    this.connectionNodename = wrapper.nodename();
+    this.nativeConnection = wrapper.connection();
   }
 
   private static void checkBrokerVersion(org.apache.qpid.protonj2.client.Connection connection)
@@ -419,9 +329,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       NativeConnectionWrapper ncw =
           recoverNativeConnection(
               recoveryConfiguration, connectionName, disconnectedHandlerReference);
-      this.connectionAddress = ncw.address;
-      this.connectionNodename = ncw.nodename;
-      this.nativeConnection = ncw.connection;
+      this.sync(ncw);
       LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
@@ -476,7 +384,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
       try {
         NativeConnectionWrapper result =
-            enforceAffinity(
+            ConnectionUtils.enforceAffinity(
                 addrs -> {
                   NativeConnectionWrapper wrapper =
                       connect(
@@ -484,7 +392,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                           connectionName,
                           disconnectedHandlerReference.get(),
                           addrs);
-                  this.nativeConnection = wrapper.connection;
+                  this.nativeConnection = wrapper.connection();
                   return wrapper;
                 },
                 this.management,
@@ -772,8 +680,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
       return this.nodename;
     }
 
-    public Address address() {
+    Address address() {
       return this.address;
+    }
+
+    org.apache.qpid.protonj2.client.Connection connection() {
+      return this.connection;
     }
   }
 

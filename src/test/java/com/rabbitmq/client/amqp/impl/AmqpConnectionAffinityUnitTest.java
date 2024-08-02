@@ -19,7 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
-import static com.rabbitmq.client.amqp.impl.AmqpConnection.enforceAffinity;
+import static com.rabbitmq.client.amqp.impl.ConnectionUtils.enforceAffinity;
 import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;

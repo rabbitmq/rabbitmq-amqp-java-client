@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,103 @@ final class ConnectionUtils {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionUtils.class);
 
   private ConnectionUtils() {}
+
+  static AmqpConnection.NativeConnectionWrapper enforceAffinity(
+      Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
+      AmqpManagement management,
+      ConnectionAffinity affinity,
+      AffinityCache affinityCache) {
+    // TODO add retry for sensitive operations in affinity mechanism
+    if (affinity == null) {
+      return connectionFactory.apply(null);
+    }
+    try {
+      AmqpConnection.NativeConnectionWrapper pickedConnection = null;
+      int attemptCount = 0;
+      boolean queueInfoRefreshed = false;
+      List<String> nodesWithAffinity = null;
+      Management.QueueInfo info = affinityCache.queueInfo(affinity.queue());
+      while (pickedConnection == null) {
+        attemptCount++;
+        AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
+        if (info == null) {
+          connectionWrapper = connectionFactory.apply(null);
+          info = lookUpQueueInfo(management, affinity, affinityCache);
+          queueInfoRefreshed = true;
+        }
+        LOGGER.debug(
+            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {})",
+            info.name(),
+            info.type(),
+            info.leader(),
+            info.replicas());
+        if (nodesWithAffinity == null) {
+          nodesWithAffinity = findAffinity(affinity, info);
+        }
+        if (connectionWrapper == null) {
+          List<Address> addressHints =
+              nodesWithAffinity.stream()
+                  .map(affinityCache::nodenameToAddress)
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toList());
+          connectionWrapper = connectionFactory.apply(addressHints);
+        }
+        LOGGER.debug("Nodes matching affinity {}: {}.", affinity, nodesWithAffinity);
+        LOGGER.debug("Currently connected to node {}.", connectionWrapper.nodename());
+        affinityCache.nodenameToAddress(connectionWrapper.nodename(), connectionWrapper.address());
+        if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
+          if (!queueInfoRefreshed) {
+            info = lookUpQueueInfo(management, affinity, affinityCache);
+            LOGGER.debug(
+                "Found affinity, but refreshing queue information to check affinity is still valid.");
+            nodesWithAffinity = findAffinity(affinity, info);
+            queueInfoRefreshed = true;
+            if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
+              pickedConnection = connectionWrapper;
+            } else {
+              LOGGER.debug("Affinity no longer valid, retrying.");
+              management.releaseResources();
+              connectionWrapper.connection().close();
+            }
+          } else {
+            pickedConnection = connectionWrapper;
+          }
+          if (pickedConnection != null) {
+            LOGGER.debug(
+                "Affinity found with node {}, returning connection", pickedConnection.nodename());
+          }
+        } else if (attemptCount == 5) {
+          LOGGER.debug(
+              "Could not find affinity {} after {} attempt(s), using last connection.",
+              affinity,
+              attemptCount);
+          pickedConnection = connectionWrapper;
+        } else {
+          LOGGER.debug(
+              "Affinity {} not found with node {}.", affinity, connectionWrapper.nodename());
+          if (!queueInfoRefreshed) {
+            info = lookUpQueueInfo(management, affinity, affinityCache);
+            nodesWithAffinity = findAffinity(affinity, info);
+            queueInfoRefreshed = true;
+          }
+          management.releaseResources();
+          connectionWrapper.connection().close();
+        }
+      }
+      return pickedConnection;
+    } catch (RuntimeException e) {
+      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", affinity, e);
+      throw e;
+    }
+  }
+
+  private static Management.QueueInfo lookUpQueueInfo(
+      AmqpManagement management, ConnectionAffinity affinity, AffinityCache cache) {
+    management.init();
+    Management.QueueInfo info = management.queueInfo(affinity.queue());
+    cache.queueInfo(info);
+    return info;
+  }
 
   static class AffinityCache {
 
