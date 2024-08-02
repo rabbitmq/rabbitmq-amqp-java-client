@@ -21,9 +21,11 @@ import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.Management;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.assertj.core.api.AbstractObjectAssert;
 
 final class Assertions {
@@ -218,11 +220,26 @@ final class Assertions {
     }
 
     ConnectionAssert hasNodename(String nodename) {
+      Assert.notNull(nodename, "Expected nodename cannot be null");
       isNotNull();
       if (!actual.connectionNodename().equals(nodename)) {
         fail(
             "Connection should on node '%s' but is on node '%s'",
             nodename, actual.connectionNodename());
+      }
+      return this;
+    }
+
+    ConnectionAssert isOnFollower(Management.QueueInfo info) {
+      Assert.notNull(info, "Queue info cannot be null");
+      List<String> followers =
+          info.replicas().stream()
+              .filter(n -> !n.equals(info.leader()))
+              .collect(Collectors.toList());
+      if (!followers.contains(actual.connectionNodename())) {
+        fail(
+            "Connection is expected to be on follower node(s) '%s' but is on '%s'",
+            followers, actual.connectionNodename());
       }
       return this;
     }

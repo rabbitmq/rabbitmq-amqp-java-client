@@ -148,7 +148,64 @@ public class ClusterTest {
               })
           .build();
       assertThat(consumeSync).completes();
-      assertThat(messageIds).containsOnly(1L, 2L, 3L);
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  @Test
+  void consumeFromMovingQq() {
+    try {
+      management.queue(q).type(Management.QueueType.QUORUM).declare();
+
+      AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      assertThat(consumeConnection).isOnFollower(queueInfo());
+
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet();
+      Sync consumeSync = sync();
+      consumeConnection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L);
+      consumeSync.reset();
+
+      String follower = consumeConnection.connectionNodename();
+
+      deleteQqMember(follower);
+
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
+      consumeSync.reset();
+
+      addQqMember(follower);
+
+      publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
+      consumeSync.reset();
     } finally {
       management.queueDeletion().delete(q);
     }
@@ -166,10 +223,14 @@ public class ClusterTest {
     Management.QueueInfo info = queueInfo();
     String initialLeader = info.leader();
     int initialReplicaCount = info.replicas().size();
-    Cli.deleteQuorumQueueMember(q, initialLeader);
+    deleteQqMember(initialLeader);
     TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
     assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
     return initialLeader;
+  }
+
+  void deleteQqMember(String member) {
+    Cli.deleteQuorumQueueMember(q, member);
   }
 
   void addQqMember(String newMember) {
