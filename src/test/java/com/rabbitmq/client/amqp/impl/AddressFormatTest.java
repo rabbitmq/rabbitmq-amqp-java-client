@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
@@ -52,7 +51,7 @@ public class AddressFormatTest {
               failedLatch.countDown();
             }
           });
-      assertThat(failedLatch).completes();
+      Assertions.assertThat(failedLatch).completes();
 
       CountDownLatch consumeLatch = new CountDownLatch(1);
       connection
@@ -67,7 +66,7 @@ public class AddressFormatTest {
 
       management.binding().sourceExchange(e).key(k).destinationQueue(q).bind();
       publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeLatch).completes();
+      Assertions.assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);
       management.exchangeDeletion().delete(e);
@@ -93,7 +92,7 @@ public class AddressFormatTest {
               failedLatch.countDown();
             }
           });
-      assertThat(failedLatch).completes();
+      Assertions.assertThat(failedLatch).completes();
 
       CountDownLatch consumeLatch = new CountDownLatch(1);
       connection
@@ -108,7 +107,7 @@ public class AddressFormatTest {
 
       management.binding().sourceExchange(e).destinationQueue(q).bind();
       publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeLatch).completes();
+      Assertions.assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);
       management.exchangeDeletion().delete(e);
@@ -136,7 +135,7 @@ public class AddressFormatTest {
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeLatch).completes();
+      Assertions.assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);
     }
@@ -170,7 +169,7 @@ public class AddressFormatTest {
               failedLatch.countDown();
             }
           });
-      assertThat(failedLatch).completes();
+      Assertions.assertThat(failedLatch).completes();
 
       CountDownLatch consumeLatch = new CountDownLatch(2);
       connection
@@ -185,7 +184,7 @@ public class AddressFormatTest {
 
       publisher.publish(publisher.message().toAddress().exchange(e).key(k).message(), ctx -> {});
       publisher.publish(publisher.message().toAddress().queue(q).message(), ctx -> {});
-      assertThat(consumeLatch).completes();
+      Assertions.assertThat(consumeLatch).completes();
     } finally {
       management.queueDeletion().delete(q);
       management.exchangeDeletion().delete(e);
@@ -220,18 +219,18 @@ public class AddressFormatTest {
                   })
               .build();
       p1.publish(p1.message().toAddress().queue(q).message(), ctx -> {});
-      assertThat(sync).completes();
+      Assertions.assertThat(sync).completes();
 
       sync.reset();
       Publisher p2 = connection.publisherBuilder().queue(q).build();
       p2.publish(p2.message(), ctx -> {});
-      assertThat(sync).completes();
+      Assertions.assertThat(sync).completes();
 
       p1.publish(p1.message(), ctx -> {});
 
       sync.reset();
       p2.publish(p2.message(), ctx -> {});
-      assertThat(sync).completes();
+      Assertions.assertThat(sync).completes();
     } finally {
       consumer.close();
     }

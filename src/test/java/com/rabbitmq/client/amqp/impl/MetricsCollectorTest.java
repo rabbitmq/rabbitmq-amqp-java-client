@@ -58,7 +58,7 @@ public class MetricsCollectorTest {
       verify(metricsCollector, times(1)).openConnection();
 
       Cli.closeConnection(c1Name);
-      TestUtils.assertThat(recoveredLatch).completes();
+      Assertions.assertThat(recoveredLatch).completes();
       // a recovered connection is not closed
       verify(metricsCollector, never()).closeConnection();
 
@@ -88,7 +88,7 @@ public class MetricsCollectorTest {
           .when(metricsCollector)
           .closeConnection();
       Cli.closeConnection(c2Name);
-      TestUtils.assertThat(c2ClosedLatch).completes();
+      Assertions.assertThat(c2ClosedLatch).completes();
       // the connection is closed because automatic recovery was not activated
       verify(metricsCollector, times(1)).closeConnection();
 
@@ -102,7 +102,7 @@ public class MetricsCollectorTest {
       CountDownLatch disposed = new CountDownLatch(1);
       publisher.publish(publisher.message().toAddress().queue(q).message(), disposed(disposed));
       verify(metricsCollector, times(1)).publish();
-      TestUtils.assertThat(disposed).completes();
+      Assertions.assertThat(disposed).completes();
       verify(metricsCollector, times(1))
           .publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
 
@@ -112,7 +112,7 @@ public class MetricsCollectorTest {
           publisher.message().toAddress().queue(UUID.randomUUID().toString()).message(),
           disposed(disposed));
       verify(metricsCollector, times(2)).publish();
-      TestUtils.assertThat(disposed).completes();
+      Assertions.assertThat(disposed).completes();
       // the last message could not be routed, so its disposition state is failed
       verify(metricsCollector, times(1)).publishDisposition(FAILED);
       verify(metricsCollector, times(2)).publishDisposition(any());

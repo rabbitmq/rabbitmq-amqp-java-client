@@ -21,7 +21,6 @@ import static java.lang.String.format;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.rabbitmq.client.amqp.Management;
 import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
 import java.io.IOException;
@@ -42,8 +41,6 @@ import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.UnsignedLong;
-import org.assertj.core.api.AbstractObjectAssert;
-import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
@@ -52,7 +49,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 
 public abstract class TestUtils {
 
-  private static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
+  static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
 
   private TestUtils() {}
 
@@ -156,110 +153,6 @@ public abstract class TestUtils {
       Thread.sleep(timeInMs);
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
-    }
-  }
-
-  public static class CountDownLatchReferenceConditions {
-
-    public static Condition<AtomicReference<CountDownLatch>> completed() {
-      return new Condition<>(
-          latch -> CountDownLatchConditions.latchCondition(latch.get(), DEFAULT_CONDITION_TIMEOUT),
-          "completed in %d ms",
-          DEFAULT_CONDITION_TIMEOUT.toMillis());
-    }
-  }
-
-  static QueueInfoAssert assertThat(Management.QueueInfo queueInfo) {
-    return new QueueInfoAssert(queueInfo);
-  }
-
-  static SyncAssert assertThat(Sync sync) {
-    return new SyncAssert(sync);
-  }
-
-  static class SyncAssert extends AbstractObjectAssert<SyncAssert, Sync> {
-
-    private SyncAssert(Sync sync) {
-      super(sync, SyncAssert.class);
-    }
-
-    SyncAssert completes() {
-      return this.completes(DEFAULT_CONDITION_TIMEOUT);
-    }
-
-    SyncAssert completes(Duration timeout) {
-      try {
-        boolean completed = actual.await(timeout);
-        if (!completed) {
-          fail("Sync timed out after %d ms", timeout.toMillis());
-        }
-      } catch (InterruptedException e) {
-        Thread.interrupted();
-        throw new RuntimeException(e);
-      }
-      return this;
-    }
-  }
-
-  static CountDownLatchAssert assertThat(AtomicReference<CountDownLatch> reference) {
-    return new CountDownLatchAssert(reference);
-  }
-
-  static CountDownLatchAssert assertThat(CountDownLatch latch) {
-    return new CountDownLatchAssert(latch);
-  }
-
-  static class CountDownLatchAssert
-      extends AbstractObjectAssert<CountDownLatchAssert, CountDownLatch> {
-
-    private CountDownLatchAssert(CountDownLatch latch) {
-      super(latch, CountDownLatchAssert.class);
-    }
-
-    private CountDownLatchAssert(AtomicReference<CountDownLatch> reference) {
-      super(reference.get(), CountDownLatchAssert.class);
-    }
-
-    CountDownLatchAssert completes() {
-      return this.completes(DEFAULT_CONDITION_TIMEOUT);
-    }
-
-    CountDownLatchAssert completes(Duration timeout) {
-      try {
-        boolean completed = actual.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (!completed) {
-          fail("Latch timed out after %d ms", timeout.toMillis());
-        }
-      } catch (InterruptedException e) {
-        Thread.interrupted();
-        throw new RuntimeException(e);
-      }
-      return this;
-    }
-  }
-
-  public static class CountDownLatchConditions {
-
-    public static Condition<CountDownLatch> completed() {
-      return completed(Duration.ofSeconds(10));
-    }
-
-    static Condition<CountDownLatch> completed(int timeoutInSeconds) {
-      return completed(Duration.ofSeconds(timeoutInSeconds));
-    }
-
-    static Condition<CountDownLatch> completed(Duration timeout) {
-      return new Condition<>(
-          latch -> latchCondition(latch, timeout), "completed in %d ms", timeout.toMillis());
-    }
-
-    private static boolean latchCondition(CountDownLatch latch, Duration timeout) {
-      try {
-        return latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        Thread.interrupted();
-        throw new RuntimeException(e);
-      }
     }
   }
 
@@ -538,118 +431,6 @@ public abstract class TestUtils {
   @ExtendWith(DisabledIfNotClusterCondition.class)
   @interface DisabledIfNotCluster {}
 
-  static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {
-
-    private QueueInfoAssert(Management.QueueInfo queueInfo) {
-      super(queueInfo, QueueInfoAssert.class);
-    }
-
-    QueueInfoAssert hasName(String name) {
-      isNotNull();
-      if (!actual.name().equals(name)) {
-        fail("Queue should be named '%s' but is '%s'", name, actual.name());
-      }
-      return this;
-    }
-
-    QueueInfoAssert hasConsumerCount(int consumerCount) {
-      isNotNull();
-      if (Integer.compareUnsigned(actual.consumerCount(), consumerCount) != 0) {
-        fail(
-            "Queue should have %s consumer(s) but has %s",
-            Integer.toUnsignedString(consumerCount),
-            Integer.toUnsignedString(actual.consumerCount()));
-      }
-      return this;
-    }
-
-    QueueInfoAssert hasNoConsumers() {
-      return this.hasConsumerCount(0);
-    }
-
-    QueueInfoAssert hasMessageCount(long messageCount) {
-      isNotNull();
-      if (Long.compareUnsigned(actual.messageCount(), messageCount) != 0) {
-        fail(
-            "Queue should contains %s messages(s) but contains %s",
-            Long.toUnsignedString(messageCount), Long.toUnsignedString(actual.messageCount()));
-      }
-      return this;
-    }
-
-    QueueInfoAssert isEmpty() {
-      return this.hasMessageCount(0);
-    }
-
-    QueueInfoAssert is(Management.QueueType type) {
-      isNotNull();
-      if (actual.type() != type) {
-        fail("Queue should be of type %s but is %s", type.name(), actual.type().name());
-      }
-      return this;
-    }
-
-    QueueInfoAssert hasLeader(String leader) {
-      Assert.notNull(leader, "Expected leader cannot be null");
-      isNotNull();
-      if (!leader.equals(actual.leader())) {
-        fail("Queue leader should be '%s' but is '%s'", leader, actual.leader());
-      }
-      return this;
-    }
-
-    QueueInfoAssert doesNotHaveLeader(String leader) {
-      Assert.notNull(leader, "Leader cannot be null");
-      isNotNull();
-      if (leader.equals(actual.leader())) {
-        fail("Queue leader should not be '%s'", leader);
-      }
-      return this;
-    }
-
-    QueueInfoAssert hasArgument(String key, Object value) {
-      isNotNull();
-      if (!actual.arguments().containsKey(key) || !actual.arguments().get(key).equals(value)) {
-        fail(
-            "Queue should have argument %s = %s, but does not (arguments: %s)",
-            key, value.toString(), actual.arguments().toString());
-      }
-      return this;
-    }
-
-    QueueInfoAssert isDurable() {
-      return this.flag("durable", actual.durable(), true);
-    }
-
-    QueueInfoAssert isNotDurable() {
-      return this.flag("durable", actual.durable(), false);
-    }
-
-    QueueInfoAssert isAutoDelete() {
-      return this.flag("auto-delete", actual.autoDelete(), true);
-    }
-
-    QueueInfoAssert isNotAutoDelete() {
-      return this.flag("auto-delete", actual.autoDelete(), false);
-    }
-
-    QueueInfoAssert isExclusive() {
-      return this.flag("exclusive", actual.exclusive(), true);
-    }
-
-    QueueInfoAssert isNotExclusive() {
-      return this.flag("exclusive", actual.exclusive(), false);
-    }
-
-    private QueueInfoAssert flag(String label, boolean expected, boolean actual) {
-      isNotNull();
-      if (expected != actual) {
-        fail("Queue should have %s = %b but does not", label, actual);
-      }
-      return this;
-    }
-  }
-
   static Sync sync() {
     return sync(1);
   }
@@ -691,7 +472,7 @@ public abstract class TestUtils {
       this.latch.get().countDown();
     }
 
-    private boolean await(Duration timeout) throws InterruptedException {
+    boolean await(Duration timeout) throws InterruptedException {
       return this.latch.get().await(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 

@@ -18,7 +18,6 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.*;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,7 +68,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       SortedSet<Long> offsetTail = offsets.tailSet(offsets.last() / 2);
       Assertions.assertThat(offsetTail.first()).isPositive();
       consumer.close();
@@ -85,7 +84,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       consumer.close();
     } finally {
       connection.management().queueDeletion().delete(name);
@@ -110,7 +109,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       consumer.close();
     } finally {
       connection.management().queueDeletion().delete(name);
@@ -137,7 +136,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       Assertions.assertThat(firstOffset).hasPositiveValue();
       consumer.close();
     } finally {
@@ -172,9 +171,9 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(openSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(openSync).completes();
       publish(messageCount);
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       Assertions.assertThat(firstOffset).hasPositiveValue();
       consumer.close();
     } finally {
@@ -200,7 +199,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       consumer.close();
     } finally {
       connection.management().queueDeletion().delete(name);
@@ -225,7 +224,7 @@ public class SourceFiltersTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeSync).completes();
       consumer.close();
     } finally {
       connection.management().queueDeletion().delete(name);
@@ -305,7 +304,7 @@ public class SourceFiltersTest {
                 }
                 publisher.publish(message, ctx -> publishSync.down());
               });
-      assertThat(publishSync).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(publishSync).completes();
     }
   }
 }

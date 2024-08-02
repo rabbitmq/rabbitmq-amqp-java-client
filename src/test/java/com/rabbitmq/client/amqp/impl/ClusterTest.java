@@ -19,10 +19,13 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -84,39 +87,79 @@ public class ClusterTest {
       Management.QueueInfo info = queueInfo();
       String initialLeader = info.leader();
 
-      TestUtils.Sync recoveredSync = TestUtils.sync();
+      Sync recoveredSync = sync();
       AmqpConnection publishConnection =
           connection(
               b ->
                   b.name(name)
-                      .listeners(
-                          context -> {
-                            if (context.previousState() == Resource.State.RECOVERING
-                                && context.currentState() == Resource.State.OPEN) {
-                              recoveredSync.down();
-                            }
-                          })
+                      .listeners(recoveryListener(recoveredSync))
                       .affinity()
                       .queue(q)
                       .operation(PUBLISH));
-      assertThat(publishConnection.connectionNodename()).isEqualTo(initialLeader);
+      assertThat(publishConnection).hasNodename(initialLeader);
 
-      int initialReplicaCount = info.replicas().size();
-      Cli.deleteQuorumQueueMember(q, initialLeader);
-      TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
-      assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
-      Cli.addQuorumQueueMember(q, initialLeader);
-      TestUtils.waitAtMost(() -> queueInfo().replicas().size() == initialReplicaCount);
-      info = queueInfo();
-      TestUtils.assertThat(info).doesNotHaveLeader(initialLeader);
-      String newLeader = info.leader();
+      String newLeader = moveQqLeader();
 
       Cli.closeConnection(name);
-      TestUtils.assertThat(recoveredSync).completes();
+      assertThat(recoveredSync).completes();
       assertThat(publishConnection.connectionNodename()).isEqualTo(newLeader);
     } finally {
       management.queueDeletion().delete(q);
     }
+  }
+
+  @Test
+  void publishToMovingQq() {
+    try {
+      management.queue(q).type(Management.QueueType.QUORUM).declare();
+
+      AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
+      assertThat(publishConnection).hasNodename(queueInfo().leader());
+
+      Publisher publisher = publishConnection.publisherBuilder().queue(q).build();
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+
+      String initialLeader = deleteQqLeader();
+      publishSync.reset();
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+
+      addQqMember(initialLeader);
+      publishSync.reset();
+      publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+
+      assertThat(queueInfo()).hasMessageCount(3);
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  String moveQqLeader() {
+    String initialLeader = deleteQqLeader();
+    addQqMember(initialLeader);
+    String newLeader = queueInfo().leader();
+    assertThat(newLeader).isNotEqualTo(initialLeader);
+    return newLeader;
+  }
+
+  String deleteQqLeader() {
+    Management.QueueInfo info = queueInfo();
+    String initialLeader = info.leader();
+    int initialReplicaCount = info.replicas().size();
+    Cli.deleteQuorumQueueMember(q, initialLeader);
+    TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
+    assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
+    return initialLeader;
+  }
+
+  void addQqMember(String newMember) {
+    Management.QueueInfo info = queueInfo();
+    int initialReplicaCount = info.replicas().size();
+    Cli.addQuorumQueueMember(q, newMember);
+    TestUtils.waitAtMost(() -> queueInfo().replicas().size() == initialReplicaCount + 1);
   }
 
   Management.QueueInfo queueInfo() {
@@ -128,6 +171,15 @@ public class ClusterTest {
     builder.recovery().backOffDelayPolicy(BACK_OFF_DELAY_POLICY);
     operation.accept(builder);
     return (AmqpConnection) builder.build();
+  }
+
+  private static Resource.StateListener recoveryListener(Sync sync) {
+    return context -> {
+      if (context.previousState() == Resource.State.RECOVERING
+          && context.currentState() == Resource.State.OPEN) {
+        sync.down();
+      }
+    };
   }
 
   private static class RoundRobinAddressSelector implements AddressSelector {

@@ -22,7 +22,6 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.*;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
-import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -40,7 +39,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -65,7 +63,7 @@ public class AmqpTest {
       management.queue(name).quorum().queue().declare();
 
       Management.QueueInfo queueInfo = management.queueInfo(name);
-      assertThat(queueInfo)
+      Assertions.assertThat(queueInfo)
           .hasName(name)
           .is(QUORUM)
           .isDurable()
@@ -101,13 +99,13 @@ public class AmqpTest {
                     acceptedCallback(confirmSync));
               });
 
-      assertThat(confirmSync).completes();
+      Assertions.assertThat(confirmSync).completes();
 
       Management.QueueInfo queueInfo = connection.management().queueInfo(name);
-      assertThat(queueInfo).hasName(name).hasNoConsumers().hasMessageCount(messageCount);
+      Assertions.assertThat(queueInfo).hasName(name).hasNoConsumers().hasMessageCount(messageCount);
 
       AtomicReference<String> receivedSubject = new AtomicReference<>();
-      CountDownLatch consumeLatch = new CountDownLatch(messageCount);
+      Sync consumeSync = TestUtils.sync(messageCount);
       com.rabbitmq.client.amqp.Consumer consumer =
           connection
               .consumerBuilder()
@@ -116,14 +114,15 @@ public class AmqpTest {
                   (context, message) -> {
                     receivedSubject.set(message.subject());
                     context.accept();
-                    consumeLatch.countDown();
+                    consumeSync.down();
                   })
               .build();
-      Assertions.assertThat(consumeLatch).is(completed());
+
+      Assertions.assertThat(consumeSync).completes();
       assertThat(receivedSubject).doesNotHaveNullValue().hasValue(subject);
 
       queueInfo = connection.management().queueInfo(name);
-      assertThat(queueInfo).hasConsumerCount(1).isEmpty();
+      Assertions.assertThat(queueInfo).hasConsumerCount(1).isEmpty();
 
       consumer.close();
       publisher.close();
@@ -181,7 +180,7 @@ public class AmqpTest {
       range(0, messageCount).forEach(ignored -> publish.accept(publisher1));
       range(0, messageCount).forEach(ignored -> publish.accept(publisher2));
 
-      assertThat(confirmSync).completes();
+      Assertions.assertThat(confirmSync).completes();
 
       Sync consumeSync = sync(messageCount * 2);
       com.rabbitmq.client.amqp.Consumer consumer =
@@ -194,7 +193,7 @@ public class AmqpTest {
                     consumeSync.down();
                   })
               .build();
-      assertThat(consumeSync).completes();
+      Assertions.assertThat(consumeSync).completes();
       publisher1.close();
       publisher2.close();
       consumer.close();
@@ -239,7 +238,7 @@ public class AmqpTest {
     publisher.publish(publisher.message("one".getBytes(UTF_8)), ctx -> {});
     publisher.publish(publisher.message("two".getBytes(UTF_8)), ctx -> {});
 
-    assertThat(consumeLatch).completes();
+    com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeLatch).completes();
     assertThat(messageBodies).hasSize(2).containsOnly("one".getBytes(UTF_8), "two".getBytes(UTF_8));
   }
 
@@ -252,7 +251,7 @@ public class AmqpTest {
     Publisher.Callback callback = ctx -> publishLatch.countDown();
     range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), callback));
 
-    assertThat(publishLatch).completes();
+    com.rabbitmq.client.amqp.impl.Assertions.assertThat(publishLatch).completes();
 
     int initialCredits = 10;
     Set<com.rabbitmq.client.amqp.Consumer.Context> messageContexts = ConcurrentHashMap.newKeySet();
@@ -266,7 +265,8 @@ public class AmqpTest {
 
     waitAtMost(() -> messageContexts.size() == initialCredits);
 
-    assertThat(connection.management().queueInfo(q)).hasMessageCount(messageCount - initialCredits);
+    Assertions.assertThat(connection.management().queueInfo(q))
+        .hasMessageCount(messageCount - initialCredits);
 
     assertThat(Cli.queueInfo(q).unackedMessageCount()).isEqualTo(initialCredits);
 
@@ -305,7 +305,7 @@ public class AmqpTest {
       connection.management().binding().sourceExchange(name).destinationQueue(q).bind();
       Sync sync = sync();
       publisher.publish(publisher.message(), acceptedCallback(sync));
-      assertThat(sync).completes();
+      Assertions.assertThat(sync).completes();
     } finally {
       connection.management().exchangeDeletion().delete(name);
     }
@@ -320,7 +320,7 @@ public class AmqpTest {
             return true;
           }
         });
-    assertThat(closedSync).completes();
+    Assertions.assertThat(closedSync).completes();
     of(exception.get(), closedException.get())
         .forEach(
             e ->
@@ -353,7 +353,7 @@ public class AmqpTest {
     try {
       Sync sync = sync();
       publisher.publish(publisher.message(), acceptedCallback(sync));
-      assertThat(sync).completes();
+      Assertions.assertThat(sync).completes();
     } finally {
       connection.management().queueDeletion().delete(name);
     }
@@ -368,7 +368,7 @@ public class AmqpTest {
             return true;
           }
         });
-    assertThat(closedSync).completes();
+    Assertions.assertThat(closedSync).completes();
     of(exception.get(), closedException.get())
         .forEach(
             e ->
@@ -399,7 +399,7 @@ public class AmqpTest {
             return true;
           }
         });
-    assertThat(closedSync).completes();
+    Assertions.assertThat(closedSync).completes();
     of(exception.get(), closedException.get())
         .forEach(
             e ->
@@ -447,9 +447,9 @@ public class AmqpTest {
         .build();
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     publisher.publish(publisher.message(), ctx -> {});
-    assertThat(consumeSync).completes();
+    Assertions.assertThat(consumeSync).completes();
     connection.management().queueDeletion().delete(name);
-    assertThat(closedSync).completes();
+    Assertions.assertThat(closedSync).completes();
     assertThat(exception.get())
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
@@ -464,7 +464,7 @@ public class AmqpTest {
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
-    assertThat(publishSync).completes();
+    Assertions.assertThat(publishSync).completes();
 
     AtomicInteger receivedCount = new AtomicInteger(0);
     Set<com.rabbitmq.client.amqp.Consumer.Context> unsettledMessages =
@@ -491,7 +491,7 @@ public class AmqpTest {
     unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
     consumer.close();
     assertThat(receivedCount).hasValue(receivedCountAfterPausing);
-    assertThat(connection.management().queueInfo(name))
+    Assertions.assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());
   }
 
@@ -504,7 +504,7 @@ public class AmqpTest {
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
-    assertThat(publishSync).completes();
+    Assertions.assertThat(publishSync).completes();
 
     AtomicInteger receivedCount = new AtomicInteger(0);
     Random random = new Random();
@@ -526,7 +526,7 @@ public class AmqpTest {
     consumer.pause();
     waitAtMost(() -> consumer.unsettledMessageCount() == 0);
     consumer.close();
-    assertThat(connection.management().queueInfo(name))
+    Assertions.assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());
   }
 
@@ -540,7 +540,7 @@ public class AmqpTest {
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
-    assertThat(publishSync).completes();
+    Assertions.assertThat(publishSync).completes();
 
     AtomicInteger receivedCount = new AtomicInteger(0);
     com.rabbitmq.client.amqp.Consumer consumer =
@@ -559,7 +559,7 @@ public class AmqpTest {
 
     waitAtMost(() -> receivedCount.get() > settledCount);
     consumer.close();
-    assertThat(connection.management().queueInfo(name))
+    Assertions.assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - settledCount);
   }
 
@@ -604,7 +604,7 @@ public class AmqpTest {
 
     publish.run();
 
-    assertThat(consumeSync).completes();
+    Assertions.assertThat(consumeSync).completes();
     assertThat(lowCount).hasValue(0);
     assertThat(highCount).hasValue(messageCount);
 
@@ -612,7 +612,7 @@ public class AmqpTest {
 
     consumeSync.reset(messageCount);
     publish.run();
-    assertThat(consumeSync).completes();
+    Assertions.assertThat(consumeSync).completes();
     assertThat(lowCount).hasValue(messageCount);
     assertThat(highCount).hasValue(messageCount);
 

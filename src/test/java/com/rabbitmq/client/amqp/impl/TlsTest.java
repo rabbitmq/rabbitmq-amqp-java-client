@@ -70,8 +70,8 @@ public class TlsTest {
               ignored ->
                   publisher.publish(
                       publisher.message("hello".getBytes(UTF_8)), ctx -> publishLatch.countDown()));
-      TestUtils.assertThat(publishLatch).completes();
-      TestUtils.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
+      Assertions.assertThat(publishLatch).completes();
+      Assertions.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
 
       CountDownLatch consumeLatch = new CountDownLatch(messageCount);
       consumingConnection
@@ -83,7 +83,7 @@ public class TlsTest {
                 ctx.accept();
               })
           .build();
-      TestUtils.assertThat(consumeLatch).completes();
+      Assertions.assertThat(consumeLatch).completes();
       TestUtils.waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
     }
   }

@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DEFAULT_PASSWORD;
 import static com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DEFAULT_USERNAME;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 
 import com.rabbitmq.client.amqp.DefaultUsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.Environment;
@@ -39,7 +38,7 @@ public class ConnectionSettingsTest {
             .environmentBuilder()
             .build()) {
       environment.connectionBuilder().build();
-      assertThat(usernameReturnedLatch).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(usernameReturnedLatch).completes();
     }
   }
 
@@ -57,7 +56,8 @@ public class ConnectionSettingsTest {
           .connectionBuilder()
           .credentialsProvider(new LatchCredentialsProvider(connectionUsernameReturnedLatch))
           .build();
-      assertThat(connectionUsernameReturnedLatch).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(connectionUsernameReturnedLatch)
+          .completes();
       Assertions.assertThat(environmentUsernameReturnedLatch.getCount()).isEqualTo(1);
     }
   }

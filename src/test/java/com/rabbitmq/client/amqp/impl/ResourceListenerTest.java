@@ -74,7 +74,7 @@ public class ResourceListenerTest {
       publisher = builder.build();
       CountDownLatch acceptedLatch = new CountDownLatch(1);
       publisher.publish(publisher.message(), ctx -> acceptedLatch.countDown());
-      TestUtils.assertThat(acceptedLatch).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(acceptedLatch).completes();
     } finally {
       delete.run();
     }
@@ -90,7 +90,7 @@ public class ResourceListenerTest {
     } catch (AmqpException ex) {
       // expected
     }
-    TestUtils.assertThat(closedLatch).completes();
+    com.rabbitmq.client.amqp.impl.Assertions.assertThat(closedLatch).completes();
     Assertions.assertThat(outboundMessageStatus)
         .is(
             anyOf(
@@ -123,12 +123,12 @@ public class ResourceListenerTest {
 
       Publisher publisher = connection.publisherBuilder().queue(q).build();
       publisher.publish(publisher.message(), ctx -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeLatch).completes();
 
     } finally {
       connection.management().queueDeletion().delete(q);
     }
-    TestUtils.assertThat(closedLatch).completes();
+    com.rabbitmq.client.amqp.impl.Assertions.assertThat(closedLatch).completes();
     Assertions.assertThat(closeCause.get()).isNotNull().isInstanceOf(AmqpException.class);
   }
 }

@@ -19,7 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static java.time.Duration.ofMillis;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
@@ -46,13 +45,13 @@ public class TopologyRecoveryTest {
   static Environment environment;
   TestInfo testInfo;
   String connectionName;
-  AtomicReference<CountDownLatch> recoveredLatch;
+  TestUtils.Sync recoveredSync;
   AtomicInteger connectionAttemptCount;
 
   @BeforeEach
   void init(TestInfo info) {
     this.testInfo = info;
-    this.recoveredLatch = new AtomicReference<>(new CountDownLatch(1));
+    this.recoveredSync = TestUtils.sync();
     this.connectionName = connectionName();
     this.connectionAttemptCount = new AtomicInteger();
   }
@@ -162,7 +161,7 @@ public class TopologyRecoveryTest {
   void queueShouldNotBeRecoveredWhenNoTopologyRecovery() {
     try (Connection connection =
         connection(
-            this.connectionName, false, this.recoveredLatch, b -> b.recovery().topology(false))) {
+            this.connectionName, false, this.recoveredSync, b -> b.recovery().topology(false))) {
       assertThat(connectionAttemptCount).hasValue(1);
       String q = queue();
       connection.management().queue(q).autoDelete(false).exclusive(true).declare();
@@ -180,7 +179,7 @@ public class TopologyRecoveryTest {
         connection(
             this.connectionName,
             isolateResources,
-            this.recoveredLatch,
+            this.recoveredSync,
             b ->
                 b.listeners(
                     context -> events.add("connection " + context.currentState().name())))) {
@@ -240,7 +239,7 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).autoDelete(true).exclusive(true).declare();
       connection.management().binding().sourceExchange(e).key("foo").destinationQueue(q).bind();
 
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e).key("foo").build();
       connection
           .consumerBuilder()
@@ -248,21 +247,21 @@ public class TopologyRecoveryTest {
           .messageHandler(
               (context, message) -> {
                 context.accept();
-                consumeLatch.get().countDown();
+                consumeSync.down();
               })
           .build();
 
       publisher.publish(publisher.message(), context -> {});
 
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
 
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
 
-      consumeLatch.set(new CountDownLatch(1));
+      consumeSync.reset();
 
       publisher.publish(publisher.message(), context -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
     }
   }
 
@@ -281,7 +280,7 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       connection
           .consumerBuilder()
@@ -289,21 +288,21 @@ public class TopologyRecoveryTest {
           .messageHandler(
               (context, message) -> {
                 context.accept();
-                consumeLatch.get().countDown();
+                consumeSync.down();
               })
           .build();
 
       publisher.publish(publisher.message(), context -> {});
 
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
 
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
 
-      consumeLatch.set(new CountDownLatch(1));
+      consumeSync.reset();
 
       publisher.publish(publisher.message(), context -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
     }
   }
 
@@ -319,7 +318,7 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e).build();
       Consumer consumer =
           connection
@@ -328,13 +327,13 @@ public class TopologyRecoveryTest {
               .messageHandler(
                   (context, message) -> {
                     context.accept();
-                    consumeLatch.get().countDown();
+                    consumeSync.down();
                   })
               .build();
 
       publisher.publish(publisher.message(), context -> {});
 
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
 
       connection.management().unbind().sourceExchange(e).destinationQueue(q).unbind();
 
@@ -351,7 +350,7 @@ public class TopologyRecoveryTest {
               acceptedLatch.countDown();
             }
           });
-      TestUtils.assertThat(acceptedLatch).completes();
+      assertThat(acceptedLatch).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty();
     } finally {
       connection.management().queueDeletion().delete(q);
@@ -375,7 +374,7 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       Consumer consumer =
           connection
@@ -384,13 +383,13 @@ public class TopologyRecoveryTest {
               .messageHandler(
                   (context, message) -> {
                     context.accept();
-                    consumeLatch.get().countDown();
+                    consumeSync.down();
                   })
               .build();
 
       publisher.publish(publisher.message(), context -> {});
 
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
 
       connection.management().unbind().sourceExchange(e1).destinationExchange(e2).unbind();
 
@@ -407,7 +406,7 @@ public class TopologyRecoveryTest {
               acceptedLatch.countDown();
             }
           });
-      TestUtils.assertThat(acceptedLatch).completes();
+      assertThat(acceptedLatch).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty();
     } finally {
       connection.management().queueDeletion().delete(q);
@@ -480,11 +479,10 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
       int consumerCount = 100;
-      AtomicReference<CountDownLatch> consumeLatch =
-          new AtomicReference<>(new CountDownLatch(consumerCount));
+      TestUtils.Sync consumeSync = TestUtils.sync(consumerCount);
       Consumer.MessageHandler handler =
           (ctx, m) -> {
-            consumeLatch.get().countDown();
+            consumeSync.down();
             ctx.accept();
           };
       range(0, consumerCount)
@@ -492,14 +490,14 @@ public class TopologyRecoveryTest {
               ignored -> connection.consumerBuilder().queue(q).messageHandler(handler).build());
       Publisher publisher = connection.publisherBuilder().exchange(e).build();
       range(0, consumerCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
       assertThat(connection.management().queueInfo(q)).hasConsumerCount(consumerCount);
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
 
-      consumeLatch.set(new CountDownLatch(consumerCount));
+      consumeSync.reset(consumerCount);
       range(0, consumerCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty().hasConsumerCount(consumerCount);
     } finally {
       connection.management().queueDeletion().delete(q);
@@ -521,13 +519,13 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
       Publisher publisher = connection.publisherBuilder().exchange(e).build();
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>();
+      TestUtils.Sync consumeSync = TestUtils.sync();
       connection
           .consumerBuilder()
           .queue(q)
           .messageHandler(
               (ctx, m) -> {
-                consumeLatch.get().countDown();
+                consumeSync.down();
                 ctx.accept();
               })
           .build();
@@ -537,9 +535,9 @@ public class TopologyRecoveryTest {
               i -> {
                 closeConnectionAndWaitForRecovery();
                 assertThat(connectionAttemptCount).hasValue(2 + i);
-                consumeLatch.set(new CountDownLatch(1));
+                consumeSync.reset();
                 publisher.publish(publisher.message(), ctx -> {});
-                TestUtils.assertThat(consumeLatch).completes();
+                assertThat(consumeSync).completes();
                 assertThat(connection.management().queueInfo(q)).isEmpty().hasConsumerCount(1);
               });
 
@@ -574,7 +572,7 @@ public class TopologyRecoveryTest {
       publisher.publish(publisher.message(), ctx -> {});
       publisher.publish(publisher.message(), ctx -> {});
       publisher.publish(publisher.message(), ctx -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeLatch).completes();
       assertThat(messageContexts).hasSize(3);
 
       closeConnectionAndWaitForRecovery();
@@ -609,7 +607,7 @@ public class TopologyRecoveryTest {
 
       String queueName = queueInfo.name();
 
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().queue(queueName).build();
       connection
           .consumerBuilder()
@@ -617,17 +615,17 @@ public class TopologyRecoveryTest {
           .messageHandler(
               (ctx, message) -> {
                 ctx.accept();
-                consumeLatch.get().countDown();
+                consumeSync.down();
               })
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
 
       closeConnectionAndWaitForRecovery();
 
       publisher.publish(publisher.message(), ctx -> {});
-      TestUtils.assertThat(consumeLatch).completes();
+      assertThat(consumeSync).completes();
       TestUtils.waitAtMost(() -> connection.management().queueInfo(queueName).messageCount() == 0);
     }
   }
@@ -645,17 +643,17 @@ public class TopologyRecoveryTest {
   }
 
   Connection connection(boolean isolateResources) {
-    return this.connection(this.connectionName, isolateResources, this.recoveredLatch, b -> {});
+    return this.connection(this.connectionName, isolateResources, this.recoveredSync, b -> {});
   }
 
   Connection connection() {
-    return this.connection(this.connectionName, false, this.recoveredLatch, b -> {});
+    return this.connection(this.connectionName, false, this.recoveredSync, b -> {});
   }
 
   Connection connection(
       String name,
       boolean isolateResources,
-      AtomicReference<CountDownLatch> recoveredLatch,
+      TestUtils.Sync recoveredSync,
       java.util.function.Consumer<AmqpConnectionBuilder> builderCallback) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
     builder
@@ -670,7 +668,7 @@ public class TopologyRecoveryTest {
             context -> {
               if (context.previousState() == Resource.State.RECOVERING
                   && context.currentState() == Resource.State.OPEN) {
-                recoveredLatch.get().countDown();
+                recoveredSync.down();
               }
             })
         .recovery()
@@ -682,7 +680,7 @@ public class TopologyRecoveryTest {
 
   void closeConnectionAndWaitForRecovery() {
     Cli.closeConnection(this.connectionName);
-    TestUtils.assertThat(this.recoveredLatch).completes();
-    this.recoveredLatch.set(new CountDownLatch(1));
+    assertThat(this.recoveredSync).completes();
+    this.recoveredSync.reset();
   }
 }

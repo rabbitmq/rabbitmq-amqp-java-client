@@ -30,8 +30,6 @@ import io.micrometer.tracing.test.simple.SpansAssert;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Nested;
 
 public class MicrometerObservationCollectorTest {
@@ -79,15 +77,14 @@ public class MicrometerObservationCollectorTest {
               .key("foo")
               .bind();
 
-          AtomicReference<CountDownLatch> consumeLatch =
-              new AtomicReference<>(new CountDownLatch(1));
+          TestUtils.Sync consumeSync = TestUtils.sync();
           consumerConnection
               .consumerBuilder()
               .queue(q)
               .messageHandler(
                   (ctx, msg) -> {
                     ctx.accept();
-                    consumeLatch.get().countDown();
+                    consumeSync.down();
                   })
               .build();
 
@@ -100,7 +97,7 @@ public class MicrometerObservationCollectorTest {
               publisher.message(PAYLOAD).messageId(messageId).correlationId(correlationId),
               ctx -> {});
 
-          TestUtils.assertThat(consumeLatch).completes();
+          Assertions.assertThat(consumeSync).completes();
 
           TestUtils.waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 2);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(2);
@@ -144,10 +141,10 @@ public class MicrometerObservationCollectorTest {
           publisher.close();
           publisher = publisherConnection.publisherBuilder().exchange(e).build();
 
-          consumeLatch.set(new CountDownLatch(1));
+          consumeSync.reset();
           messageId = UUID.randomUUID();
           publisher.publish(publisher.message(PAYLOAD).messageId(messageId), ctx -> {});
-          TestUtils.assertThat(consumeLatch).completes();
+          Assertions.assertThat(consumeSync).completes();
           TestUtils.waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 4);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(4);
           SpanAssert.assertThat(lastPublish(buildingBlocks))
@@ -165,10 +162,10 @@ public class MicrometerObservationCollectorTest {
           publisher.close();
           publisher = publisherConnection.publisherBuilder().queue(q).build();
 
-          consumeLatch.set(new CountDownLatch(1));
+          consumeSync.reset();
           messageId = UUID.randomUUID();
           publisher.publish(publisher.message(PAYLOAD).messageId(messageId), ctx -> {});
-          TestUtils.assertThat(consumeLatch).completes();
+          Assertions.assertThat(consumeSync).completes();
           TestUtils.waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 6);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(6);
           SpanAssert.assertThat(lastPublish(buildingBlocks))
@@ -186,7 +183,7 @@ public class MicrometerObservationCollectorTest {
           publisher.close();
           publisher = publisherConnection.publisherBuilder().build();
 
-          consumeLatch.set(new CountDownLatch(1));
+          consumeSync.reset();
           messageId = UUID.randomUUID();
           publisher.publish(
               publisher
@@ -197,7 +194,7 @@ public class MicrometerObservationCollectorTest {
                   .key("foo")
                   .message(),
               ctx -> {});
-          TestUtils.assertThat(consumeLatch).completes();
+          Assertions.assertThat(consumeSync).completes();
           TestUtils.waitAtMost(() -> buildingBlocks.getFinishedSpans().size() == 8);
           SpansAssert.assertThat(buildingBlocks.getFinishedSpans()).haveSameTraceId().hasSize(8);
           SpanAssert.assertThat(lastPublish(buildingBlocks))

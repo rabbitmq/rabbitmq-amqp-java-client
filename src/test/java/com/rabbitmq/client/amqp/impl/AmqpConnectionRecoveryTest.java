@@ -20,8 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
-import static com.rabbitmq.client.amqp.impl.TestUtils.*;
-import static com.rabbitmq.client.amqp.impl.TestUtils.CountDownLatchConditions.completed;
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.name;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
@@ -34,9 +33,7 @@ import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -80,9 +77,9 @@ public class AmqpConnectionRecoveryTest {
   void connectionShouldRecoverAfterClosingIt(boolean isolateResources, TestInfo info) {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
-    Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();
-    stateLatches.put(RECOVERING, new CountDownLatch(1));
-    stateLatches.put(OPEN, new CountDownLatch(2));
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(RECOVERING, TestUtils.sync(1));
+    stateSync.put(OPEN, TestUtils.sync(2));
     AmqpConnectionBuilder builder =
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
@@ -90,8 +87,8 @@ public class AmqpConnectionRecoveryTest {
                 .isolateResources(isolateResources)
                 .listeners(
                     context -> {
-                      if (stateLatches.containsKey(context.currentState())) {
-                        stateLatches.get(context.currentState()).countDown();
+                      if (stateSync.containsKey(context.currentState())) {
+                        stateSync.get(context.currentState()).down();
                       }
                     })
                 .recovery()
@@ -103,14 +100,14 @@ public class AmqpConnectionRecoveryTest {
       c.management().queue().name(q).declare();
       AtomicInteger consumerOpenCount = new AtomicInteger(0);
       Collection<UUID> receivedMessageIds = Collections.synchronizedList(new ArrayList<>());
-      AtomicReference<CountDownLatch> consumeLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync consumeSync = TestUtils.sync();
       c.consumerBuilder()
           .queue(q)
           .messageHandler(
               (context, message) -> {
                 context.accept();
                 receivedMessageIds.add(message.messageIdAsUuid());
-                consumeLatch.get().countDown();
+                consumeSync.down();
               })
           .listeners(
               context -> {
@@ -119,7 +116,7 @@ public class AmqpConnectionRecoveryTest {
                 }
               })
           .build();
-      AtomicReference<CountDownLatch> publishLatch = new AtomicReference<>(new CountDownLatch(1));
+      TestUtils.Sync publishSync = TestUtils.sync();
       AtomicInteger publisherOpenCount = new AtomicInteger(0);
       Publisher p =
           c.publisherBuilder()
@@ -136,34 +133,34 @@ public class AmqpConnectionRecoveryTest {
           context -> {
             if (context.status() == ACCEPTED) {
               publishedMessageIds.add(context.message().messageIdAsUuid());
-              publishLatch.get().countDown();
+              publishSync.down();
             }
           };
       p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
       assertThat(publisherOpenCount).hasValue(1);
-      assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(publishSync).completes();
 
       assertThat(consumerOpenCount).hasValue(1);
-      assertThat(consumeLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(consumeSync).completes();
       assertThat(receivedMessageIds)
           .hasSameSizeAs(publishedMessageIds)
           .containsAll(publishedMessageIds);
 
-      consumeLatch.set(new CountDownLatch(1));
+      consumeSync.reset();
 
       Cli.closeConnection(connectionName);
-      assertThat(stateLatches.get(RECOVERING)).is(completed());
-      assertThat(stateLatches.get(OPEN)).is(completed());
+      assertThat(stateSync.get(RECOVERING)).completes();
+      assertThat(stateSync.get(OPEN)).completes();
       assertThat(connectionAttemptCount).hasValue(2);
       waitAtMost(() -> consumerOpenCount.get() == 2);
       waitAtMost(() -> publisherOpenCount.get() == 2);
 
-      publishLatch.set(new CountDownLatch(1));
+      publishSync.reset();
       p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
-      assertThat(publishLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(publishSync).completes();
       assertThat(publishedMessageIds).hasSize(2);
 
-      assertThat(consumeLatch).is(CountDownLatchReferenceConditions.completed());
+      assertThat(consumeSync).completes();
       assertThat(receivedMessageIds)
           .hasSameSizeAs(publishedMessageIds)
           .containsAll(publishedMessageIds);
@@ -179,9 +176,9 @@ public class AmqpConnectionRecoveryTest {
   void connectionShouldRecoverAfterBrokerStopStart(boolean isolateResources, TestInfo info) {
     String q = name(info);
     String connectionName = UUID.randomUUID().toString();
-    Map<Resource.State, CountDownLatch> stateLatches = new ConcurrentHashMap<>();
-    stateLatches.put(RECOVERING, new CountDownLatch(1));
-    stateLatches.put(OPEN, new CountDownLatch(2));
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(RECOVERING, TestUtils.sync(1));
+    stateSync.put(OPEN, TestUtils.sync(2));
     AmqpConnectionBuilder builder =
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
@@ -189,8 +186,8 @@ public class AmqpConnectionRecoveryTest {
                 .isolateResources(isolateResources)
                 .listeners(
                     context -> {
-                      if (stateLatches.containsKey(context.currentState())) {
-                        stateLatches.get(context.currentState()).countDown();
+                      if (stateSync.containsKey(context.currentState())) {
+                        stateSync.get(context.currentState()).down();
                       }
                     })
                 .recovery()
@@ -201,7 +198,7 @@ public class AmqpConnectionRecoveryTest {
       c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
       try {
         Cli.stopBroker();
-        assertThat(stateLatches.get(RECOVERING)).is(completed());
+        assertThat(stateSync.get(RECOVERING)).completes();
         stream(
                 new ThrowingCallable[] {
                   () -> c.management().queue().name(q).exclusive(true).declare(),
@@ -216,7 +213,7 @@ public class AmqpConnectionRecoveryTest {
       } finally {
         Cli.startBroker();
       }
-      assertThat(stateLatches.get(OPEN)).is(completed());
+      assertThat(stateSync.get(OPEN)).completes();
       assertThat(connectionAttemptCount).hasValueGreaterThan(1);
       c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
     }

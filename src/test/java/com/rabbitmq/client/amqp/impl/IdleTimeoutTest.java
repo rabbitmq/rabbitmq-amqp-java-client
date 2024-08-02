@@ -61,7 +61,7 @@ public class IdleTimeoutTest {
       proxy
           .toxics()
           .latency("latency", ToxicDirection.DOWNSTREAM, idleTimeout.multipliedBy(10).toMillis());
-      assertThat(closedLatch).completes();
+      Assertions.assertThat(closedLatch).completes();
     } finally {
       proxy.delete();
     }

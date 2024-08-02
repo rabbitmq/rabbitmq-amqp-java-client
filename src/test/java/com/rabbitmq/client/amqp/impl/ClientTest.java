@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
-import static com.rabbitmq.client.amqp.impl.TestUtils.assertThat;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
@@ -354,7 +353,7 @@ public class ClientTest {
                             called.set(true);
                           }));
 
-      assertThat(connectedLatch).completes();
+      Assertions.assertThat(connectedLatch).completes();
       c.close();
       assertThat(called).isFalse();
 
@@ -369,7 +368,7 @@ public class ClientTest {
                       .interruptedHandler((conn, disconnectionEvent) -> called.set(true))
                       .reconnectedHandler((conn, connectionEvent) -> called.set(true)));
       Cli.closeConnection(name);
-      assertThat(disconnectedLatch).completes();
+      Assertions.assertThat(disconnectedLatch).completes();
       assertThat(called).isFalse();
 
       AtomicReference<org.apache.qpid.protonj2.client.Connection> cRef = new AtomicReference<>(c);
@@ -391,8 +390,8 @@ public class ClientTest {
                       .reconnectEnabled(true));
 
       Cli.closeConnection(name);
-      assertThat(interruptedLatch).completes();
-      assertThat(reconnectedLatch).completes();
+      Assertions.assertThat(interruptedLatch).completes();
+      Assertions.assertThat(reconnectedLatch).completes();
       assertThat(called).isFalse();
 
       c.close();

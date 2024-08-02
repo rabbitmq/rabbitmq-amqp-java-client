@@ -43,7 +43,7 @@ public class AlarmsTest {
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
-    assertThat(publishSync).completes();
+    Assertions.assertThat(publishSync).completes();
     Sync consumeSync = sync(messageCount);
     try (AutoCloseable ignored = alarm(alarmType)) {
       Sync publishTimeoutSync = sync();
@@ -55,7 +55,7 @@ public class AlarmsTest {
               if (e.getCause() instanceof ClientSendTimedOutException) publishTimeoutSync.down();
             }
           });
-      assertThat(publishTimeoutSync).completes();
+      Assertions.assertThat(publishTimeoutSync).completes();
       connection
           .consumerBuilder()
           .queue(q)
@@ -65,7 +65,7 @@ public class AlarmsTest {
                 consumeSync.down();
               })
           .build();
-      assertThat(consumeSync).completes();
+      Assertions.assertThat(consumeSync).completes();
       publishSync.reset(messageCount);
       consumeSync.reset(messageCount);
 
@@ -78,8 +78,8 @@ public class AlarmsTest {
 
     range(0, messageCount)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
-    assertThat(publishSync).completes();
-    assertThat(consumeSync).completes();
+    Assertions.assertThat(publishSync).completes();
+    Assertions.assertThat(consumeSync).completes();
   }
 
   private static AutoCloseable alarm(String type) throws Exception {

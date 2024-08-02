@@ -90,7 +90,7 @@ public class RpcTest {
                         latch.countDown();
                         return null;
                       }));
-      TestUtils.assertThat(latch).completes();
+      Assertions.assertThat(latch).completes();
     }
   }
 
@@ -151,7 +151,7 @@ public class RpcTest {
                         latch.countDown();
                         return null;
                       }));
-      TestUtils.assertThat(latch).completes();
+      Assertions.assertThat(latch).completes();
     }
   }
 
@@ -199,7 +199,7 @@ public class RpcTest {
                         latch.countDown();
                         return null;
                       }));
-      TestUtils.assertThat(latch).completes();
+      Assertions.assertThat(latch).completes();
     }
   }
 
@@ -255,7 +255,7 @@ public class RpcTest {
       } catch (AmqpException e) {
         // OK
       }
-      TestUtils.assertThat(clientConnectionLatch).completes();
+      Assertions.assertThat(clientConnectionLatch).completes();
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
@@ -264,7 +264,7 @@ public class RpcTest {
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
-      TestUtils.assertThat(serverConnectionLatch).completes();
+      Assertions.assertThat(serverConnectionLatch).completes();
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
@@ -336,7 +336,7 @@ public class RpcTest {
                           });
                     });
               });
-      TestUtils.assertThat(latch).completes();
+      Assertions.assertThat(latch).completes();
       assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
     }
   }
@@ -404,7 +404,7 @@ public class RpcTest {
                     });
                 allRequestSubmitted.countDown();
               });
-      TestUtils.assertThat(allRequestSubmitted).completes();
+      Assertions.assertThat(allRequestSubmitted).completes();
       waitAtMost(() -> completedRequestCount.get() == requestCount - expectedPoisonCount.get());
       assertThat(timedOutRequestCount).hasValue(0);
       rpcClient.close();

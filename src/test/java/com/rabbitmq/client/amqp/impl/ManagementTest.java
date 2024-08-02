@@ -56,7 +56,7 @@ public class ManagementTest {
         new AmqpManagement(new AmqpManagementParameters(connection).nameSupplier(nameSupplier));
     management.init();
     Management.QueueInfo queueInfo = management.queue().exclusive(true).autoDelete(true).declare();
-    TestUtils.assertThat(queueInfo).hasName(q);
+    Assertions.assertThat(queueInfo).hasName(q);
     assertThat(nameSupplierCallCount).hasValue(1);
     queueInfo = management.queue().exclusive(true).autoDelete(false).declare();
     assertThat(queueInfo.name()).isNotEqualTo(q);
