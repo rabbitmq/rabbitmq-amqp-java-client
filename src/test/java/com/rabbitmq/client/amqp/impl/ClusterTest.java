@@ -27,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
@@ -131,7 +133,22 @@ public class ClusterTest {
       publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
       assertThat(publishSync).completes();
 
-      assertThat(queueInfo()).hasMessageCount(3);
+      int messageCount = 3;
+      assertThat(queueInfo()).hasMessageCount(messageCount);
+      Sync consumeSync = sync(messageCount);
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet(3);
+      connection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsOnly(1L, 2L, 3L);
     } finally {
       management.queueDeletion().delete(q);
     }
