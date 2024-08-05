@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.ConnectionSettings;
 import com.rabbitmq.client.amqp.Management;
 import java.util.Collections;
@@ -43,6 +44,7 @@ final class ConnectionUtils {
       AffinityCache affinityCache) {
     // TODO add retry for sensitive operations in affinity mechanism
     if (affinity == null) {
+      // no affinity asked, we create a connection and return it
       return connectionFactory.apply(null);
     }
     try {
@@ -58,6 +60,10 @@ final class ConnectionUtils {
           connectionWrapper = connectionFactory.apply(null);
           info = lookUpQueueInfo(management, affinity, affinityCache);
           queueInfoRefreshed = true;
+        }
+        if (info == null) {
+          // likely we could not look up the queue info, because e.g. the queue does not exist
+          return connectionWrapper;
         }
         LOGGER.debug(
             "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {})",
@@ -81,24 +87,28 @@ final class ConnectionUtils {
         affinityCache.nodenameToAddress(connectionWrapper.nodename(), connectionWrapper.address());
         if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
           if (!queueInfoRefreshed) {
-            info = lookUpQueueInfo(management, affinity, affinityCache);
             LOGGER.debug(
                 "Found affinity, but refreshing queue information to check affinity is still valid.");
-            nodesWithAffinity = findAffinity(affinity, info);
-            queueInfoRefreshed = true;
-            if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
+            info = lookUpQueueInfo(management, affinity, affinityCache);
+            if (info == null) {
+              LOGGER.debug("Could not look up info for queue '{}'", affinity.queue());
               pickedConnection = connectionWrapper;
             } else {
-              LOGGER.debug("Affinity no longer valid, retrying.");
-              management.releaseResources();
-              connectionWrapper.connection().close();
+              nodesWithAffinity = findAffinity(affinity, info);
+              queueInfoRefreshed = true;
+              if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
+                pickedConnection = connectionWrapper;
+              } else {
+                LOGGER.debug("Affinity no longer valid, retrying.");
+                management.releaseResources();
+                connectionWrapper.connection().close();
+              }
             }
           } else {
             pickedConnection = connectionWrapper;
           }
           if (pickedConnection != null) {
-            LOGGER.debug(
-                "Affinity found with node {}, returning connection", pickedConnection.nodename());
+            LOGGER.debug("Returning connection to node {}", pickedConnection.nodename());
           }
         } else if (attemptCount == 5) {
           LOGGER.debug(
@@ -111,8 +121,10 @@ final class ConnectionUtils {
               "Affinity {} not found with node {}.", affinity, connectionWrapper.nodename());
           if (!queueInfoRefreshed) {
             info = lookUpQueueInfo(management, affinity, affinityCache);
-            nodesWithAffinity = findAffinity(affinity, info);
-            queueInfoRefreshed = true;
+            if (info != null) {
+              nodesWithAffinity = findAffinity(affinity, info);
+              queueInfoRefreshed = true;
+            }
           }
           management.releaseResources();
           connectionWrapper.connection().close();
@@ -127,12 +139,20 @@ final class ConnectionUtils {
 
   private static Management.QueueInfo lookUpQueueInfo(
       AmqpManagement management, ConnectionAffinity affinity, AffinityCache cache) {
+    Management.QueueInfo info = null;
     management.init();
-    Management.QueueInfo info = management.queueInfo(affinity.queue());
-    cache.queueInfo(info);
+    try {
+      info = management.queueInfo(affinity.queue());
+      cache.queueInfo(info);
+    } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+      LOGGER.debug("Queue '{}' does not exist.", affinity.queue());
+      cache.clearQueueInfoEntry(affinity.queue());
+      // we just return null, caller will have to return the last connection
+    }
     return info;
   }
 
+  // TODO clean affinity cache (LRU or size-based)
   static class AffinityCache {
 
     private final ConcurrentMap<String, Management.QueueInfo> queueInfoCache =
@@ -147,6 +167,10 @@ final class ConnectionUtils {
 
     Management.QueueInfo queueInfo(String queue) {
       return this.queueInfoCache.get(queue);
+    }
+
+    void clearQueueInfoEntry(String queue) {
+      this.queueInfoCache.remove(queue);
     }
 
     AffinityCache nodenameToAddress(String nodename, Address address) {

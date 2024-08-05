@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-public class Clock {
+final class Clock {
 
   private volatile long time;
 

@@ -290,7 +290,7 @@ public class AmqpTest {
   }
 
   @Test
-  void publisherSendingShouldThrowWhenExchangeHasBeenDeleted() throws Exception {
+  void publisherSendingShouldThrowWhenExchangeHasBeenDeleted() {
     connection.management().exchange(name).type(FANOUT).declare();
     Sync closedSync = sync();
     AtomicReference<Throwable> closedException = new AtomicReference<>();

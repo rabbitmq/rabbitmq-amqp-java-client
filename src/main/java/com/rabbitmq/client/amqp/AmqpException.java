@@ -54,6 +54,10 @@ public class AmqpException extends RuntimeException {
     public AmqpEntityDoesNotExistException(String message, Throwable cause) {
       super(message, cause);
     }
+
+    public AmqpEntityDoesNotExistException(String message) {
+      super(message);
+    }
   }
 
   public static class AmqpResourceInvalidStateException extends AmqpException {

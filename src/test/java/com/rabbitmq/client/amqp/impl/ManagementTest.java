@@ -18,7 +18,9 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -61,5 +63,11 @@ public class ManagementTest {
     queueInfo = management.queue().exclusive(true).autoDelete(false).declare();
     assertThat(queueInfo.name()).isNotEqualTo(q);
     assertThat(nameSupplierCallCount).hasValue(1 + 2);
+  }
+
+  @Test
+  void queueInfoShouldThrowDoesNotExistExceptionWhenQueueDoesNotExist() {
+    assertThatThrownBy(() -> connection.management().queueInfo("do not exists"))
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
   }
 }

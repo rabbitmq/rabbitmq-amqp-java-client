@@ -58,6 +58,7 @@ class AmqpManagement implements Management {
   private static final int CODE_200 = 200;
   private static final int CODE_201 = 201;
   private static final int CODE_204 = 204;
+  private static final int CODE_404 = 404;
   private static final int CODE_409 = 409;
 
   private final AmqpConnection connection;
@@ -384,12 +385,16 @@ class AmqpManagement implements Management {
     }
     int responseCode = request.mapResponse().code();
     if (IntStream.of(expectedResponseCodes).noneMatch(c -> c == responseCode)) {
-      throw new AmqpException(
-          "Unexpected response code: %d instead of %s",
-          responseCode,
-          IntStream.of(expectedResponseCodes)
-              .mapToObj(String::valueOf)
-              .collect(Collectors.joining(", ")));
+      if (responseCode == CODE_404) {
+        throw new AmqpException.AmqpEntityDoesNotExistException("Entity does not exist");
+      } else {
+        throw new AmqpException(
+            "Unexpected response code: %d instead of %s",
+            responseCode,
+            IntStream.of(expectedResponseCodes)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining(", ")));
+      }
     }
   }
 

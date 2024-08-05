@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.ConnectionSettings;
 import com.rabbitmq.client.amqp.Management;
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import org.assertj.core.api.AbstractObjectAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.AdditionalMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -74,6 +76,48 @@ public class AmqpConnectionAffinityUnitTest {
   @AfterEach
   void tearDown() throws Exception {
     mocks.close();
+  }
+
+  @Test
+  void shouldReturnConnectionIfInfoIsNull() {
+    when(management.queueInfo(Q)).thenThrow(new AmqpException.AmqpEntityDoesNotExistException(""));
+    when(cf.apply(null)).thenReturn(follower1Connection());
+    AmqpConnection.NativeConnectionWrapper w = enforceAffinity(cf, management, affinity(), cache);
+    assertThat(w).hasNodename(FOLLOWER1_NODENAME);
+    verify(management, times(1)).queueInfo(Q);
+    verify(cf, times(1)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, never()).close();
+    assertThat(cache).doesNotContainInfoFor(Q);
+  }
+
+  @Test
+  void infoInCache_ShouldLookUpInfo_ShouldReturnConnectionIfInfoIsNull_cacheEntryShouldBeCleared() {
+    cache.queueInfo(info());
+    when(management.queueInfo(Q)).thenThrow(new AmqpException.AmqpEntityDoesNotExistException(""));
+    when(cf.apply(anyList())).thenReturn(leaderConnection());
+    AmqpConnection.NativeConnectionWrapper w = enforceAffinity(cf, management, affinity(), cache);
+    assertThat(w).isLeader();
+    verify(management, times(1)).queueInfo(Q);
+    verify(cf, times(1)).apply(anyList());
+    verify(nativeConnection, never()).close();
+    assertThat(cache).doesNotContainInfoFor(Q);
+  }
+
+  @Test
+  void
+      infoInCache_ShouldRetry_ShouldLookUpInfo_ShouldReturnConnectionIfInfoIsNull_cacheEntryShouldBeCleared() {
+    cache.queueInfo(info());
+    when(management.queueInfo(Q)).thenThrow(new AmqpException.AmqpEntityDoesNotExistException(""));
+    when(cf.apply(anyListOrNull()))
+        .thenReturn(follower1Connection())
+        .thenReturn(follower2Connection());
+    AmqpConnection.NativeConnectionWrapper w = enforceAffinity(cf, management, affinity(), cache);
+    assertThat(w).hasNodename(FOLLOWER2_NODENAME);
+    verify(management, times(2)).queueInfo(Q);
+    verify(cf, times(2)).apply(anyListOrNull());
+    verify(nativeConnection, times(1)).close();
+    assertThat(cache).doesNotContainInfoFor(Q);
   }
 
   @Test
@@ -205,6 +249,10 @@ public class AmqpConnectionAffinityUnitTest {
     return new TestQueueInfo(Q, type, leader, replicas);
   }
 
+  static <T> List<T> anyListOrNull() {
+    return AdditionalMatchers.or(anyList(), isNull());
+  }
+
   static NativeConnectionWrapperAssert assertThat(AmqpConnection.NativeConnectionWrapper wrapper) {
     return new NativeConnectionWrapperAssert(wrapper);
   }
@@ -258,6 +306,17 @@ public class AmqpConnectionAffinityUnitTest {
       Management.QueueInfo actualInfo = actual.queueInfo(info.name());
       if (!info.equals(actualInfo)) {
         fail("Queue info should be '%s' but is '%s'", info, actualInfo);
+      }
+      return this;
+    }
+
+    AffinityCacheAssert doesNotContainInfoFor(String queue) {
+      Assert.notNull(queue, "Queue argument cannot be null");
+      isNotNull();
+
+      Management.QueueInfo queueInfo = actual.queueInfo(queue);
+      if (queueInfo != null) {
+        fail("There should be no info entry for queue '%s', but found '%s'", queue, queueInfo);
       }
       return this;
     }

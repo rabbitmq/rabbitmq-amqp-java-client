@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.*;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,6 +61,15 @@ public class AffinityTest {
       assertThat(c3.id()).isIn(c1.id(), c2.id());
     } finally {
       management.queueDeletion().delete(name);
+    }
+  }
+
+  @Test
+  void connectionShouldSucceedEvenIfAffinityQueueDoesNotExist() {
+    try (Connection c =
+        environment.connectionBuilder().affinity().queue("does not exist").connection().build()) {
+      // testing the connection
+      c.publisherBuilder().exchange("amq.fanout").build();
     }
   }
 

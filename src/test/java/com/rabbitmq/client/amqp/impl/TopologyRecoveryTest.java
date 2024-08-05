@@ -441,14 +441,13 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
       assertThatThrownBy(() -> connection.management().queueInfo(q))
-          .isInstanceOf(AmqpException.class)
-          .hasMessageContaining("404");
+          .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     }
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void closedConsumerIsNotRecovered(boolean isolateResources) throws Exception {
+  void closedConsumerIsNotRecovered(boolean isolateResources) {
     String q = queue();
     Connection connection = connection(isolateResources);
     assertThat(connectionAttemptCount).hasValue(1);
