@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CON
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -211,6 +212,90 @@ public class ClusterTest {
     }
   }
 
+  @Test
+  void publishToRestartedStream() {
+    try {
+      management.queue(q).type(Management.QueueType.STREAM).declare();
+
+      AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
+      assertThat(publishConnection).isOnLeader(queueInfo());
+
+      Publisher publisher = publishConnection.publisherBuilder().queue(q).build();
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+
+      restartStream();
+
+      publishSync.reset();
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+
+      int messageCount = 2;
+      waitAtMost(() -> queueInfo().messageCount() == messageCount);
+      Sync consumeSync = sync(messageCount);
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet(messageCount);
+      connection.consumerBuilder().queue(q).stream()
+          .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
+          .builder()
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  @Test
+  void consumeFromRestartedStream() {
+    try {
+      management.queue(q).type(Management.QueueType.STREAM).declare();
+
+      AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      assertThat(consumeConnection).isOnFollower(queueInfo());
+
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet();
+      Sync consumeSync = sync();
+      consumeConnection.consumerBuilder().queue(q).stream()
+          .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
+          .builder()
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L);
+      consumeSync.reset();
+
+      restartStream();
+
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
   String moveQqLeader() {
     String initialLeader = deleteQqLeader();
     addQqMember(initialLeader);
@@ -220,23 +305,47 @@ public class ClusterTest {
   }
 
   String deleteQqLeader() {
+    return deleteLeader(this::deleteQqMember);
+  }
+
+  String deleteStreamLeader() {
+    return deleteLeader(leader -> Cli.deleteStreamMember(q, leader));
+  }
+
+  String deleteLeader(Consumer<String> deleteMemberOperation) {
     Management.QueueInfo info = queueInfo();
     String initialLeader = info.leader();
     int initialReplicaCount = info.replicas().size();
-    deleteQqMember(initialLeader);
+    deleteMemberOperation.accept(initialLeader);
     TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
     assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
     return initialLeader;
+  }
+
+  void restartStream() {
+    Cli.restartStream(this.q);
   }
 
   void deleteQqMember(String member) {
     Cli.deleteQuorumQueueMember(q, member);
   }
 
+  void deleteStreamMember(String member) {
+    Cli.deleteStreamMember(q, member);
+  }
+
   void addQqMember(String newMember) {
+    addMember(() -> Cli.addQuorumQueueMember(q, newMember));
+  }
+
+  void addStreamMember(String newMember) {
+    addMember(() -> Cli.addStreamMember(q, newMember));
+  }
+
+  void addMember(Runnable addMemberOperation) {
     Management.QueueInfo info = queueInfo();
     int initialReplicaCount = info.replicas().size();
-    Cli.addQuorumQueueMember(q, newMember);
+    addMemberOperation.run();
     TestUtils.waitAtMost(() -> queueInfo().replicas().size() == initialReplicaCount + 1);
   }
 

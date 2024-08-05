@@ -230,6 +230,17 @@ final class Assertions {
       return this;
     }
 
+    ConnectionAssert isOnLeader(Management.QueueInfo info) {
+      Assert.notNull(info, "Queue info cannot be null");
+      String actualLeader = info.leader();
+      if (!actualLeader.equals(actual.connectionNodename())) {
+        fail(
+            "Connection is expected to be on leader node '%s' but is on '%s'",
+            actualLeader, actual.connectionNodename());
+      }
+      return this;
+    }
+
     ConnectionAssert isOnFollower(Management.QueueInfo info) {
       Assert.notNull(info, "Queue info cannot be null");
       List<String> followers =

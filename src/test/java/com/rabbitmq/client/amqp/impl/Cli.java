@@ -62,12 +62,25 @@ abstract class Cli {
     return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-queues";
   }
 
+  static String rabbitmqStreamsCommand() {
+    String rabbitmqctl = rabbitmqctlCommand();
+    int lastIndex = rabbitmqctl.lastIndexOf("rabbitmqctl");
+    if (lastIndex == -1) {
+      throw new IllegalArgumentException("Not a valid rabbitqmctl command: " + rabbitmqctl);
+    }
+    return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-streams";
+  }
+
   static ProcessState rabbitmqctl(String command) {
     return executeCommand(rabbitmqctlCommand() + " " + command);
   }
 
   static ProcessState rabbitmqQueues(String command) {
     return executeCommand(rabbitmqQueuesCommand() + " " + command);
+  }
+
+  static ProcessState rabbitmqStreams(String command) {
+    return executeCommand(rabbitmqStreamsCommand() + " " + command);
   }
 
   static ProcessState rabbitmqctlIgnoreError(String command) {
@@ -196,6 +209,18 @@ abstract class Cli {
 
   static void deleteQuorumQueueMember(String queue, String node) {
     rabbitmqQueues(" delete_member " + queue + " " + node);
+  }
+
+  static void addStreamMember(String stream, String node) {
+    rabbitmqStreams(" add_replica " + stream + " " + node);
+  }
+
+  static void deleteStreamMember(String stream, String node) {
+    rabbitmqStreams(" delete_replica " + stream + " " + node);
+  }
+
+  static void restartStream(String stream) {
+    rabbitmqStreams(" restart_stream " + stream);
   }
 
   static List<ConnectionInfo> listConnections() {
