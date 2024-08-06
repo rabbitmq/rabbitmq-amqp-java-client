@@ -84,7 +84,7 @@ public class ClusterTest {
   }
 
   @Test
-  void connectionShouldRecoverToNewQuorumQueueLeaderAfterAfterItHasMoved() {
+  void connectionShouldRecoverToNewQuorumQueueLeaderAfterItHasMoved() {
     try {
       management.queue(q).type(Management.QueueType.QUORUM).declare();
       Management.QueueInfo info = queueInfo();
@@ -199,6 +199,65 @@ public class ClusterTest {
       consumeSync.reset();
 
       addQqMember(follower);
+
+      publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
+      consumeSync.reset();
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  @Test
+  void publishConsumeQqWhenLeaderChanges() {
+    try {
+      management.queue(q).type(Management.QueueType.QUORUM).declare();
+
+      AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      assertThat(consumeConnection).isOnFollower(queueInfo());
+
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet();
+      Sync consumeSync = sync();
+      consumeConnection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+
+      AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
+      Publisher publisher = publishConnection.publisherBuilder().queue(q).build();
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L);
+      consumeSync.reset();
+
+      String initialLeader = queueInfo().leader();
+
+      deleteQqMember(initialLeader);
+      assertThat(queueInfo()).doesNotHaveLeader(initialLeader);
+
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
+      consumeSync.reset();
+
+      addQqMember(initialLeader);
 
       publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
       assertThat(publishSync).completes();
