@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -213,7 +214,7 @@ public class ClusterTest {
   }
 
   @Test
-  void publishConsumeQqWhenLeaderChanges() {
+  void publishConsumeQuorumQueueWhenLeaderChanges() {
     try {
       management.queue(q).type(Management.QueueType.QUORUM).declare();
 
@@ -267,6 +268,80 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
       consumeSync.reset();
     } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
+  @Test
+  void consumeFromQuorumQueueWhenLeaderIsPaused() {
+    management.queue(q).type(Management.QueueType.QUORUM).declare();
+    Management.QueueInfo queueInfo = queueInfo();
+    String initialLeader = queueInfo.leader();
+    boolean nodePaused = false;
+    try {
+      AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      assertThat(consumeConnection).isOnFollower(queueInfo());
+      Management mgmt = consumeConnection.management();
+
+      Set<Long> messageIds = ConcurrentHashMap.newKeySet();
+      Sync consumeSync = sync();
+      consumeConnection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                messageIds.add(msg.messageIdAsLong());
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+
+      AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
+      Publisher publisher = publishConnection.publisherBuilder().queue(q).build();
+      assertThat(publishConnection).isOnFollower(queueInfo());
+
+      Sync publishSync = sync();
+      publisher.publish(publisher.message().messageId(1L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L);
+      consumeSync.reset();
+
+      List<String> initialFollowers =
+          queueInfo.replicas().stream()
+              .filter(n -> !n.equals(initialLeader))
+              .collect(Collectors.toList());
+      assertThat(initialFollowers).isNotEmpty();
+
+      Cli.pauseNode(initialLeader);
+      nodePaused = true;
+
+      publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
+      consumeSync.reset();
+
+      Cli.unpauseNode(initialLeader);
+      nodePaused = false;
+
+      publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      publishSync.reset();
+
+      assertThat(consumeSync).completes();
+      assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
+      consumeSync.reset();
+
+      waitAtMost(() -> initialFollowers.contains(mgmt.queueInfo(q).leader()));
+    } finally {
+      if (nodePaused) {
+        Cli.unpauseNode(initialLeader);
+      }
       management.queueDeletion().delete(q);
     }
   }

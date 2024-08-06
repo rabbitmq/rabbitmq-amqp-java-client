@@ -27,6 +27,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -39,6 +40,11 @@ abstract class Cli {
   private static final Pattern CONNECTION_NAME_PATTERN =
       Pattern.compile("\"connection_name\",\"(?<name>[a-zA-Z0-9_\\-]+)?\"");
   private static final String DOCKER_PREFIX = "DOCKER:";
+  private static final Map<String, String> DOCKER_NODES_TO_CONTAINERS =
+      Map.of(
+          "rabbit@node0", "rabbitmq0",
+          "rabbit@node1", "rabbitmq1",
+          "rabbit@node2", "rabbitmq3");
 
   public static String rabbitmqctlCommand() {
     String rabbitmqCtl = System.getProperty("rabbitmqctl.bin");
@@ -221,6 +227,18 @@ abstract class Cli {
 
   static void restartStream(String stream) {
     rabbitmqStreams(" restart_stream " + stream);
+  }
+
+  static void pauseNode(String node) {
+    String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
+    Assert.notNull(containerId, "No container for node " + node);
+    executeCommand("docker pause " + containerId);
+  }
+
+  static void unpauseNode(String node) {
+    String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
+    Assert.notNull(containerId, "No container for node " + node);
+    executeCommand("docker unpause " + containerId);
   }
 
   static List<ConnectionInfo> listConnections() {
