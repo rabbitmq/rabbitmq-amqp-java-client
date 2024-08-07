@@ -38,7 +38,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-// @TestUtils.DisabledIfNotCluster
+@TestUtils.DisabledIfNotCluster
 public class ClusterTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
