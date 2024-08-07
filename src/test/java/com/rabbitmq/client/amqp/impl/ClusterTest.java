@@ -23,6 +23,7 @@ import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.*;
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-@TestUtils.DisabledIfNotCluster
+// @TestUtils.DisabledIfNotCluster
 public class ClusterTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
@@ -319,12 +320,15 @@ public class ClusterTest {
       nodePaused = true;
 
       publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
-      assertThat(publishSync).completes();
+
+      assertThat(publishSync).completes(ofSeconds(20));
       publishSync.reset();
 
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
       consumeSync.reset();
+
+      assertThat(initialFollowers).contains(mgmt.queueInfo(q).leader());
 
       Cli.unpauseNode(initialLeader);
       nodePaused = false;
@@ -335,7 +339,6 @@ public class ClusterTest {
 
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
-      consumeSync.reset();
 
       waitAtMost(() -> initialFollowers.contains(mgmt.queueInfo(q).leader()));
     } finally {
@@ -451,7 +454,7 @@ public class ClusterTest {
     String initialLeader = info.leader();
     int initialReplicaCount = info.replicas().size();
     deleteMemberOperation.accept(initialLeader);
-    TestUtils.waitAtMost(() -> !queueInfo().leader().equals(initialLeader));
+    TestUtils.waitAtMost(() -> !initialLeader.equals(queueInfo().leader()));
     assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
     return initialLeader;
   }

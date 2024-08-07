@@ -17,4 +17,8 @@ wait_for_message rabbitmq0 "completed with"
 
 docker exec rabbitmq0 rabbitmqctl await_online_nodes 3
 
+docker exec rabbitmq0 rabbitmqctl enable_feature_flag khepri_db
+docker exec rabbitmq1 rabbitmqctl enable_feature_flag khepri_db
+docker exec rabbitmq2 rabbitmqctl enable_feature_flag khepri_db
+
 docker exec rabbitmq0 rabbitmqctl cluster_status
