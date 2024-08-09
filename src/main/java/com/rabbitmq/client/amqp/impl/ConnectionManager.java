@@ -46,8 +46,8 @@ final class ConnectionManager {
         && builder.connectionSettings().affinity().reuse()) {
       builder.connectionSettings().affinity().validate();
 
-      ConnectionUtils.ConnectionAffinity affinity =
-          new ConnectionUtils.ConnectionAffinity(
+      ConnectionUtils.AffinityContext affinity =
+          new ConnectionUtils.AffinityContext(
               builder.connectionSettings().affinity().queue(),
               builder.connectionSettings().affinity().operation());
       connection =

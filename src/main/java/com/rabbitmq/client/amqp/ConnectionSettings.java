@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp;
 
 import java.time.Duration;
+import java.util.List;
 import javax.net.ssl.SSLContext;
 
 public interface ConnectionSettings<T> {
@@ -72,11 +73,26 @@ public interface ConnectionSettings<T> {
 
     Affinity<T> reuse(boolean reuse);
 
+    Affinity<T> strategy(AffinityStrategy strategy);
+
     T connection();
 
     enum Operation {
       PUBLISH,
       CONSUME
     }
+  }
+
+  interface AffinityContext {
+
+    String queue();
+
+    Affinity.Operation operation();
+  }
+
+  @FunctionalInterface
+  interface AffinityStrategy {
+
+    List<String> nodesWithAffinity(AffinityContext context, Management.QueueInfo info);
   }
 }

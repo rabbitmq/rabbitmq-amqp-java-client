@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
-import static com.rabbitmq.client.amqp.impl.ConnectionUtils.enforceAffinity;
 import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
@@ -222,8 +221,8 @@ public class AmqpConnectionAffinityUnitTest {
         this.nativeConnection, nodename, NODES.get(nodename));
   }
 
-  static ConnectionUtils.ConnectionAffinity affinity() {
-    return new ConnectionUtils.ConnectionAffinity(Q, ConnectionSettings.Affinity.Operation.PUBLISH);
+  static ConnectionUtils.AffinityContext affinity() {
+    return new ConnectionUtils.AffinityContext(Q, ConnectionSettings.Affinity.Operation.PUBLISH);
   }
 
   static Management.QueueInfo info(String leader) {
@@ -432,5 +431,18 @@ public class AmqpConnectionAffinityUnitTest {
           + replicas
           + '}';
     }
+  }
+
+  private static AmqpConnection.NativeConnectionWrapper enforceAffinity(
+      Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
+      AmqpManagement management,
+      ConnectionUtils.AffinityContext context,
+      ConnectionUtils.AffinityCache affinityCache) {
+    return ConnectionUtils.enforceAffinity(
+        connectionFactory,
+        management,
+        context,
+        affinityCache,
+        ConnectionUtils.PREFER_LEADER_FOR_PUBLISHING_STRATEGY);
   }
 }

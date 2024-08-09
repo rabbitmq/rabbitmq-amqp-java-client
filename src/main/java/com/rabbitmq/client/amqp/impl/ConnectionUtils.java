@@ -33,6 +33,9 @@ import org.slf4j.LoggerFactory;
 
 final class ConnectionUtils {
 
+  static final ConnectionSettings.AffinityStrategy PREFER_LEADER_FOR_PUBLISHING_STRATEGY =
+      new PreferLeaderForPublishingAffinityStrategy();
+
   private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionUtils.class);
 
   private ConnectionUtils() {}
@@ -40,10 +43,11 @@ final class ConnectionUtils {
   static AmqpConnection.NativeConnectionWrapper enforceAffinity(
       Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
       AmqpManagement management,
-      ConnectionAffinity affinity,
-      AffinityCache affinityCache) {
+      AffinityContext context,
+      AffinityCache affinityCache,
+      ConnectionSettings.AffinityStrategy strategy) {
     // TODO add retry for sensitive operations in affinity mechanism
-    if (affinity == null) {
+    if (context == null) {
       // no affinity asked, we create a connection and return it
       return connectionFactory.apply(null);
     }
@@ -52,13 +56,13 @@ final class ConnectionUtils {
       int attemptCount = 0;
       boolean queueInfoRefreshed = false;
       List<String> nodesWithAffinity = null;
-      Management.QueueInfo info = affinityCache.queueInfo(affinity.queue());
+      Management.QueueInfo info = affinityCache.queueInfo(context.queue());
       while (pickedConnection == null) {
         attemptCount++;
         AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
         if (info == null) {
           connectionWrapper = connectionFactory.apply(null);
-          info = lookUpQueueInfo(management, affinity, affinityCache);
+          info = lookUpQueueInfo(management, context, affinityCache);
           queueInfoRefreshed = true;
         }
         if (info == null) {
@@ -72,7 +76,7 @@ final class ConnectionUtils {
             info.leader(),
             info.replicas());
         if (nodesWithAffinity == null) {
-          nodesWithAffinity = findAffinity(affinity, info);
+          nodesWithAffinity = strategy.nodesWithAffinity(context, info);
         }
         if (connectionWrapper == null) {
           List<Address> addressHints =
@@ -82,19 +86,19 @@ final class ConnectionUtils {
                   .collect(Collectors.toList());
           connectionWrapper = connectionFactory.apply(addressHints);
         }
-        LOGGER.debug("Nodes matching affinity {}: {}.", affinity, nodesWithAffinity);
+        LOGGER.debug("Nodes matching affinity {}: {}.", context, nodesWithAffinity);
         LOGGER.debug("Currently connected to node {}.", connectionWrapper.nodename());
         affinityCache.nodenameToAddress(connectionWrapper.nodename(), connectionWrapper.address());
         if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
           if (!queueInfoRefreshed) {
             LOGGER.debug(
                 "Found affinity, but refreshing queue information to check affinity is still valid.");
-            info = lookUpQueueInfo(management, affinity, affinityCache);
+            info = lookUpQueueInfo(management, context, affinityCache);
             if (info == null) {
-              LOGGER.debug("Could not look up info for queue '{}'", affinity.queue());
+              LOGGER.debug("Could not look up info for queue '{}'", context.queue());
               pickedConnection = connectionWrapper;
             } else {
-              nodesWithAffinity = findAffinity(affinity, info);
+              nodesWithAffinity = strategy.nodesWithAffinity(context, info);
               queueInfoRefreshed = true;
               if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
                 pickedConnection = connectionWrapper;
@@ -113,16 +117,16 @@ final class ConnectionUtils {
         } else if (attemptCount == 5) {
           LOGGER.debug(
               "Could not find affinity {} after {} attempt(s), using last connection.",
-              affinity,
+              context,
               attemptCount);
           pickedConnection = connectionWrapper;
         } else {
           LOGGER.debug(
-              "Affinity {} not found with node {}.", affinity, connectionWrapper.nodename());
+              "Affinity {} not found with node {}.", context, connectionWrapper.nodename());
           if (!queueInfoRefreshed) {
-            info = lookUpQueueInfo(management, affinity, affinityCache);
+            info = lookUpQueueInfo(management, context, affinityCache);
             if (info != null) {
-              nodesWithAffinity = findAffinity(affinity, info);
+              nodesWithAffinity = strategy.nodesWithAffinity(context, info);
               queueInfoRefreshed = true;
             }
           }
@@ -132,13 +136,13 @@ final class ConnectionUtils {
       }
       return pickedConnection;
     } catch (RuntimeException e) {
-      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", affinity, e);
+      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", context, e);
       throw e;
     }
   }
 
   private static Management.QueueInfo lookUpQueueInfo(
-      AmqpManagement management, ConnectionAffinity affinity, AffinityCache cache) {
+      AmqpManagement management, AffinityContext affinity, AffinityCache cache) {
     Management.QueueInfo info = null;
     management.init();
     try {
@@ -185,57 +189,17 @@ final class ConnectionUtils {
     }
   }
 
-  static List<String> findAffinity(ConnectionAffinity affinity, Management.QueueInfo info) {
-    ConnectionSettings.Affinity.Operation operation = affinity.operation();
-    String leader = info.leader();
-    List<String> replicas = info.replicas() == null ? Collections.emptyList() : info.replicas();
-    List<String> nodesWithAffinity;
-    LOGGER.debug(
-        "Trying to find affinity {} with leader = {}, replicas = {}", affinity, leader, replicas);
-    if (info.type() == Management.QueueType.QUORUM || info.type() == Management.QueueType.STREAM) {
-      // we may choose between leader and replicas
-      if (operation == ConnectionSettings.Affinity.Operation.PUBLISH) {
-        if (leader == null || leader.isBlank()) {
-          nodesWithAffinity = Collections.emptyList();
-        } else {
-          nodesWithAffinity = List.of(leader);
-        }
-      } else if (operation == ConnectionSettings.Affinity.Operation.CONSUME) {
-        List<String> followers =
-            replicas.stream()
-                .filter(Objects::nonNull)
-                .filter(r -> !r.equals(leader))
-                .collect(Collectors.toList());
-        if (!followers.isEmpty()) {
-          nodesWithAffinity = List.copyOf(followers);
-        } else if (leader != null && !leader.isBlank()) {
-          nodesWithAffinity = List.of(leader);
-        } else {
-          nodesWithAffinity = Collections.emptyList();
-        }
-      } else {
-        // we don't care about the operation, we just return a replica
-        nodesWithAffinity = List.copyOf(replicas);
-      }
-    } else {
-      // classic queue, leader and replica are the same
-      nodesWithAffinity = List.copyOf(replicas);
-    }
-    LOGGER.debug("Nodes with affinity: {}", nodesWithAffinity);
-    return nodesWithAffinity;
-  }
-
-  static class ConnectionAffinity {
+  static class AffinityContext implements ConnectionSettings.AffinityContext {
 
     private final String queue;
     private final ConnectionSettings.Affinity.Operation operation;
 
-    ConnectionAffinity(String queue, ConnectionSettings.Affinity.Operation operation) {
+    AffinityContext(String queue, ConnectionSettings.Affinity.Operation operation) {
       this.queue = queue;
       this.operation = operation;
     }
 
-    String queue() {
+    public String queue() {
       return this.queue;
     }
 
@@ -252,13 +216,60 @@ final class ConnectionUtils {
     public boolean equals(Object o) {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
-      ConnectionAffinity that = (ConnectionAffinity) o;
+      AffinityContext that = (AffinityContext) o;
       return Objects.equals(queue, that.queue) && operation == that.operation;
     }
 
     @Override
     public int hashCode() {
       return Objects.hash(queue, operation);
+    }
+  }
+
+  static class PreferLeaderForPublishingAffinityStrategy
+      implements ConnectionSettings.AffinityStrategy {
+
+    @Override
+    public List<String> nodesWithAffinity(
+        ConnectionSettings.AffinityContext context, Management.QueueInfo info) {
+      ConnectionSettings.Affinity.Operation operation = context.operation();
+      String leader = info.leader();
+      List<String> replicas = info.replicas() == null ? Collections.emptyList() : info.replicas();
+      List<String> nodesWithAffinity;
+      LOGGER.debug(
+          "Trying to find affinity {} with leader = {}, replicas = {}", context, leader, replicas);
+      if (info.type() == Management.QueueType.QUORUM
+          || info.type() == Management.QueueType.STREAM) {
+        // we may choose between leader and replicas
+        if (operation == ConnectionSettings.Affinity.Operation.PUBLISH) {
+          if (leader == null || leader.isBlank()) {
+            nodesWithAffinity = Collections.emptyList();
+          } else {
+            nodesWithAffinity = List.of(leader);
+          }
+        } else if (operation == ConnectionSettings.Affinity.Operation.CONSUME) {
+          List<String> followers =
+              replicas.stream()
+                  .filter(Objects::nonNull)
+                  .filter(r -> !r.equals(leader))
+                  .collect(Collectors.toList());
+          if (!followers.isEmpty()) {
+            nodesWithAffinity = List.copyOf(followers);
+          } else if (leader != null && !leader.isBlank()) {
+            nodesWithAffinity = List.of(leader);
+          } else {
+            nodesWithAffinity = Collections.emptyList();
+          }
+        } else {
+          // we don't care about the operation, we just return a replica
+          nodesWithAffinity = List.copyOf(replicas);
+        }
+      } else {
+        // classic queue, leader and replica are the same
+        nodesWithAffinity = List.copyOf(replicas);
+      }
+      LOGGER.debug("Nodes with affinity: {}", nodesWithAffinity);
+      return nodesWithAffinity;
     }
   }
 }

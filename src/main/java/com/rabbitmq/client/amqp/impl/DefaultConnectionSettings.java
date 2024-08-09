@@ -413,6 +413,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private String queue;
     private Operation operation;
     private boolean reuse = false;
+    private AffinityStrategy strategy = ConnectionUtils.PREFER_LEADER_FOR_PUBLISHING_STRATEGY;
 
     DefaultAffinity(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;
@@ -437,6 +438,13 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     @Override
+    public Affinity<T> strategy(AffinityStrategy strategy) {
+      Assert.notNull(strategy, "Affinity strategy cannot be null");
+      this.strategy = strategy;
+      return this;
+    }
+
+    @Override
     public T connection() {
       return this.connectionSettings.toReturn();
     }
@@ -453,10 +461,15 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       return this.reuse;
     }
 
+    AffinityStrategy strategy() {
+      return strategy;
+    }
+
     void copyTo(Affinity<?> copy) {
       copy.queue(this.queue);
       copy.operation(this.operation);
       copy.reuse(this.reuse);
+      copy.strategy(this.strategy);
     }
 
     boolean activated() {

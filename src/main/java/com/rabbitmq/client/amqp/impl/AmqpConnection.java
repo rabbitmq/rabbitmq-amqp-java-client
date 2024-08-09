@@ -68,7 +68,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
   private final DefaultConnectionSettings<?> connectionSettings;
   private final Supplier<SessionHandler> sessionHandlerSupplier;
-  private final ConnectionUtils.ConnectionAffinity affinity;
+  private final ConnectionUtils.AffinityContext affinity;
+  private final ConnectionSettings.AffinityStrategy affinityStrategy;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -113,12 +114,16 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.recoveryRequestQueue = null;
       this.recoveryLoop = null;
     }
-    this.affinity =
-        this.connectionSettings.affinity().activated()
-            ? new ConnectionUtils.ConnectionAffinity(
-                this.connectionSettings.affinity().queue(),
-                this.connectionSettings.affinity().operation())
-            : null;
+    if (this.connectionSettings.affinity().activated()) {
+      this.affinity =
+          new ConnectionUtils.AffinityContext(
+              this.connectionSettings.affinity().queue(),
+              this.connectionSettings.affinity().operation());
+      this.affinityStrategy = connectionSettings.affinity().strategy();
+    } else {
+      this.affinity = null;
+      this.affinityStrategy = null;
+    }
     this.management = createManagement();
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
@@ -130,7 +135,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
             },
             this.management,
             this.affinity,
-            this.environment.affinityCache());
+            this.environment.affinityCache(),
+            this.affinityStrategy);
     this.sync(ncw);
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
@@ -397,7 +403,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 },
                 this.management,
                 this.affinity,
-                this.environment.affinityCache());
+                this.environment.affinityCache(),
+                this.affinityStrategy);
         return result;
       } catch (Exception ex) {
         LOGGER.info("Error while trying to recover connection", ex);
@@ -613,7 +620,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.connectionNodename;
   }
 
-  ConnectionUtils.ConnectionAffinity affinity() {
+  ConnectionUtils.AffinityContext affinity() {
     return this.affinity;
   }
 
