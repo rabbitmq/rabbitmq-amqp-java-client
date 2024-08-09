@@ -36,6 +36,9 @@ final class ConnectionUtils {
   static final ConnectionSettings.AffinityStrategy PREFER_LEADER_FOR_PUBLISHING_STRATEGY =
       new PreferLeaderForPublishingAffinityStrategy();
 
+  static final ConnectionSettings.AffinityStrategy MEMBER_AFFINITY_STRATEGY =
+      new MemberAffinityStrategy();
+
   private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionUtils.class);
 
   private ConnectionUtils() {}
@@ -223,6 +226,17 @@ final class ConnectionUtils {
     @Override
     public int hashCode() {
       return Objects.hash(queue, operation);
+    }
+  }
+
+  static class MemberAffinityStrategy implements ConnectionSettings.AffinityStrategy {
+
+    @Override
+    public List<String> nodesWithAffinity(
+        ConnectionSettings.AffinityContext context, Management.QueueInfo info) {
+      return (info.replicas() == null || info.replicas().isEmpty())
+          ? Collections.emptyList()
+          : List.copyOf(info.replicas());
     }
   }
 

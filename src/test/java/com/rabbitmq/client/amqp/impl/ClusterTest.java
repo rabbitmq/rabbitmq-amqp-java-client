@@ -20,14 +20,16 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +43,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 @TestUtils.DisabledIfNotCluster
 public class ClusterTest {
 
+  static final String[] URIS =
+      new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
   Environment environment;
   Connection connection;
@@ -49,13 +53,13 @@ public class ClusterTest {
 
   @BeforeEach
   void init(TestInfo info) {
-    this.q = TestUtils.name(info);
-    this.name = TestUtils.name(info);
+    this.q = name(info);
+    this.name = name(info);
     environment =
         new AmqpEnvironmentBuilder()
             .connectionSettings()
             .addressSelector(new RoundRobinAddressSelector())
-            .uris("amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674")
+            .uris(URIS)
             .environmentBuilder()
             .build();
     this.connection = environment.connectionBuilder().build();
@@ -311,9 +315,7 @@ public class ClusterTest {
       consumeSync.reset();
 
       List<String> initialFollowers =
-          queueInfo.replicas().stream()
-              .filter(n -> !n.equals(initialLeader))
-              .collect(Collectors.toList());
+          queueInfo.replicas().stream().filter(n -> !n.equals(initialLeader)).collect(toList());
       assertThat(initialFollowers).isNotEmpty();
 
       Cli.pauseNode(initialLeader);
@@ -433,6 +435,48 @@ public class ClusterTest {
     }
   }
 
+  @Test
+  void connectionShouldBeOnOwningNodeWhenAffinityIsActivatedForClassicQueues(TestInfo info) {
+    List<String> names = range(0, URIS.length).mapToObj(ignored -> name(info)).collect(toList());
+    try {
+      List<Connection> connections =
+          Arrays.stream(URIS)
+              .map(
+                  uri ->
+                      connection(
+                          b ->
+                              b.uri(uri)
+                                  .affinity()
+                                  .strategy(ConnectionUtils.MEMBER_AFFINITY_STRATEGY)))
+              .collect(toList());
+      List<Management.QueueInfo> queueInfos =
+          range(0, URIS.length)
+              .mapToObj(
+                  i ->
+                      connections
+                          .get(i)
+                          .management()
+                          .queue(names.get(i))
+                          .type(Management.QueueType.CLASSIC)
+                          .declare())
+              .collect(toList());
+      assertThat(queueInfos.stream().map(Management.QueueInfo::leader).collect(Collectors.toSet()))
+          .hasSameSizeAs(URIS);
+
+      List<AmqpConnection> connectionsWithAffinity =
+          names.stream().map(n -> connection(b -> b.affinity().queue(n))).collect(toList());
+
+      range(0, URIS.length)
+          .forEach(
+              i ->
+                  assertThat(connectionsWithAffinity.get(i))
+                      .hasNodename(queueInfos.get(i).leader()));
+
+    } finally {
+      names.forEach(n -> management.queueDeletion().delete(n));
+    }
+  }
+
   String moveQqLeader() {
     String initialLeader = deleteQqLeader();
     addQqMember(initialLeader);
@@ -492,7 +536,12 @@ public class ClusterTest {
 
   AmqpConnection connection(Consumer<AmqpConnectionBuilder> operation) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
-    builder.recovery().backOffDelayPolicy(BACK_OFF_DELAY_POLICY);
+    builder
+        .recovery()
+        .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+        .connectionBuilder()
+        .affinity()
+        .strategy(ConnectionUtils.PREFER_LEADER_FOR_PUBLISHING_STRATEGY);
     operation.accept(builder);
     return (AmqpConnection) builder.build();
   }
