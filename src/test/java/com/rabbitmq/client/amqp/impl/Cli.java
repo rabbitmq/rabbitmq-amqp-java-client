@@ -44,12 +44,12 @@ abstract class Cli {
       Map.of(
           "rabbit@node0", "rabbitmq0",
           "rabbit@node1", "rabbitmq1",
-          "rabbit@node2", "rabbitmq3");
+          "rabbit@node2", "rabbitmq2");
 
   public static String rabbitmqctlCommand() {
     String rabbitmqCtl = System.getProperty("rabbitmqctl.bin");
     if (rabbitmqCtl == null) {
-      throw new IllegalStateException("Please define the rabbitmqctl.bin system property");
+      rabbitmqCtl = "DOCKER:rabbitmq";
     }
     if (rabbitmqCtl.startsWith(DOCKER_PREFIX)) {
       String containerId = rabbitmqCtl.split(":")[1];
@@ -59,13 +59,22 @@ abstract class Cli {
     }
   }
 
-  static String rabbitmqQueuesCommand() {
+  private static String rabbitmqQueuesCommand() {
     String rabbitmqctl = rabbitmqctlCommand();
     int lastIndex = rabbitmqctl.lastIndexOf("rabbitmqctl");
     if (lastIndex == -1) {
       throw new IllegalArgumentException("Not a valid rabbitqmctl command: " + rabbitmqctl);
     }
     return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-queues";
+  }
+
+  private static String rabbitmqUpgradeCommand() {
+    String rabbitmqctl = rabbitmqctlCommand();
+    int lastIndex = rabbitmqctl.lastIndexOf("rabbitmqctl");
+    if (lastIndex == -1) {
+      throw new IllegalArgumentException("Not a valid rabbitqmctl command: " + rabbitmqctl);
+    }
+    return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-upgrade";
   }
 
   static String rabbitmqStreamsCommand() {
@@ -87,6 +96,10 @@ abstract class Cli {
 
   static ProcessState rabbitmqStreams(String command) {
     return executeCommand(rabbitmqStreamsCommand() + " " + command);
+  }
+
+  static ProcessState rabbitmqUpgrade(String command) {
+    return executeCommand(rabbitmqUpgradeCommand() + " " + command);
   }
 
   static ProcessState rabbitmqctlIgnoreError(String command) {
@@ -236,9 +249,34 @@ abstract class Cli {
   }
 
   static void unpauseNode(String node) {
+    executeCommand("docker unpause " + nodeToDockerContainer(node));
+  }
+
+  static void restartNode(String node) {
+    String container = nodeToDockerContainer(node);
+    String dockerCommand = "docker exec " + container + " ";
+    String rabbitmqUpgradeCommand = dockerCommand + "rabbitmq-upgrade ";
+    executeCommand(rabbitmqUpgradeCommand + "await_online_quorum_plus_one -t 300");
+    executeCommand(rabbitmqUpgradeCommand + "drain");
+    executeCommand("docker stop " + container);
+    executeCommand("docker start " + container);
+    String otherContainer =
+        DOCKER_NODES_TO_CONTAINERS.values().stream()
+            .filter(c -> !c.endsWith(container))
+            .findAny()
+            .get();
+    executeCommand(
+        "docker exec "
+            + otherContainer
+            + " rabbitmqctl await_online_nodes "
+            + DOCKER_NODES_TO_CONTAINERS.size());
+    executeCommand(dockerCommand + "rabbitmqctl status");
+  }
+
+  private static String nodeToDockerContainer(String node) {
     String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
     Assert.notNull(containerId, "No container for node " + node);
-    executeCommand("docker unpause " + containerId);
+    return containerId;
   }
 
   static List<ConnectionInfo> listConnections() {
