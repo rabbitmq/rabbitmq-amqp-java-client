@@ -447,7 +447,9 @@ public class ClusterTest {
                           b ->
                               b.uri(uri)
                                   .affinity()
-                                  .strategy(ConnectionUtils.MEMBER_AFFINITY_STRATEGY)))
+                                  .strategy(
+                                      ConnectionUtils
+                                          .LEADER_FOR_PUBLISHING_MEMBERS_FOR_CONSUMING_STRATEGY)))
               .collect(toList());
       List<Management.QueueInfo> queueInfos =
           range(0, URIS.length)
@@ -541,7 +543,7 @@ public class ClusterTest {
         .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
         .connectionBuilder()
         .affinity()
-        .strategy(ConnectionUtils.PREFER_LEADER_FOR_PUBLISHING_STRATEGY);
+        .strategy(ConnectionUtils.LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY);
     operation.accept(builder);
     return (AmqpConnection) builder.build();
   }

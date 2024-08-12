@@ -413,7 +413,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private String queue;
     private Operation operation;
     private boolean reuse = false;
-    private AffinityStrategy strategy = ConnectionUtils.MEMBER_AFFINITY_STRATEGY;
+    private AffinityStrategy strategy =
+        ConnectionUtils.LEADER_FOR_PUBLISHING_MEMBERS_FOR_CONSUMING_STRATEGY;
 
     DefaultAffinity(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;

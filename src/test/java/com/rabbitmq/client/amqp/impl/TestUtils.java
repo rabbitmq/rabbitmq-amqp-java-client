@@ -84,6 +84,26 @@ public abstract class TestUtils {
     boolean getAsBoolean() throws Exception;
   }
 
+  @FunctionalInterface
+  interface RunnableWithException {
+
+    void run() throws Exception;
+  }
+
+  public static Duration waitAtMostNoException(RunnableWithException condition) {
+    return waitAtMost(
+        DEFAULT_CONDITION_TIMEOUT,
+        () -> {
+          try {
+            condition.run();
+            return true;
+          } catch (Exception e) {
+            return false;
+          }
+        },
+        null);
+  }
+
   public static Duration waitAtMost(CallableBooleanSupplier condition) {
     return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, null);
   }
@@ -379,14 +399,12 @@ public abstract class TestUtils {
   static class DisabledIfNotClusterCondition implements ExecutionCondition {
 
     private static final String KEY = "isCluster";
+    private static final String KEY_NODES = "clusterNodes";
 
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
-      boolean isCluster =
-          context
-              .getRoot()
-              .getStore(ExtensionContext.Namespace.GLOBAL)
-              .getOrComputeIfAbsent(KEY, k -> isCluster(), Boolean.class);
+      ExtensionContext.Store store = context.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
+      boolean isCluster = store.getOrComputeIfAbsent(KEY, k -> isCluster(), Boolean.class);
       if (isCluster) {
         return ConditionEvaluationResult.enabled("Multi-node cluster");
       } else {
@@ -436,7 +454,11 @@ public abstract class TestUtils {
   }
 
   static Sync sync(int count) {
-    return new Sync(count);
+    return new Sync(count, () -> {});
+  }
+
+  static Sync sync(int count, Runnable doneCallback) {
+    return new Sync(count, doneCallback);
   }
 
   private static class CloseableResourceWrapper<T>
@@ -463,17 +485,26 @@ public abstract class TestUtils {
   static class Sync {
 
     private final AtomicReference<CountDownLatch> latch = new AtomicReference<>();
+    private final AtomicReference<Runnable> doneCallback = new AtomicReference<>();
 
-    private Sync(int count) {
+    private Sync(int count, Runnable doneCallback) {
       this.latch.set(new CountDownLatch(count));
+      this.doneCallback.set(doneCallback);
     }
 
     void down() {
       this.latch.get().countDown();
     }
 
-    boolean await(Duration timeout) throws InterruptedException {
-      return this.latch.get().await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    boolean await(Duration timeout) {
+      try {
+        return this.latch.get().await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(ie);
+      } finally {
+        this.doneCallback.get().run();
+      }
     }
 
     void reset(int count) {

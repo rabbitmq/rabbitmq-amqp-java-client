@@ -32,6 +32,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 abstract class Cli {
 
@@ -271,6 +272,26 @@ abstract class Cli {
             + " rabbitmqctl await_online_nodes "
             + DOCKER_NODES_TO_CONTAINERS.size());
     executeCommand(dockerCommand + "rabbitmqctl status");
+  }
+
+  static void rebalance() {
+    rabbitmqQueues("rebalance all");
+  }
+
+  static List<String> nodes() {
+    List<String> clusterNodes = new ArrayList<>();
+    clusterNodes.add(rabbitmqctl("eval 'node().'").output().trim());
+    List<String> nodes =
+        Arrays.stream(
+                rabbitmqctl("eval 'nodes().'")
+                    .output()
+                    .replace("[", "")
+                    .replace("]", "")
+                    .split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
+    clusterNodes.addAll(nodes);
+    return List.copyOf(clusterNodes);
   }
 
   private static String nodeToDockerContainer(String node) {

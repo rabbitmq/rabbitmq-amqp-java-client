@@ -33,11 +33,13 @@ import org.slf4j.LoggerFactory;
 
 final class ConnectionUtils {
 
-  static final ConnectionSettings.AffinityStrategy PREFER_LEADER_FOR_PUBLISHING_STRATEGY =
-      new PreferLeaderForPublishingAffinityStrategy();
+  static final ConnectionSettings.AffinityStrategy
+      LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY =
+          new LeaderForPublishingFollowersForConsumingStrategy();
 
-  static final ConnectionSettings.AffinityStrategy MEMBER_AFFINITY_STRATEGY =
-      new MemberAffinityStrategy();
+  static final ConnectionSettings.AffinityStrategy
+      LEADER_FOR_PUBLISHING_MEMBERS_FOR_CONSUMING_STRATEGY =
+          new LeaderForPublishingMembersForConsumingStrategy();
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionUtils.class);
 
@@ -229,18 +231,28 @@ final class ConnectionUtils {
     }
   }
 
-  static class MemberAffinityStrategy implements ConnectionSettings.AffinityStrategy {
+  static class LeaderForPublishingMembersForConsumingStrategy
+      implements ConnectionSettings.AffinityStrategy {
 
     @Override
     public List<String> nodesWithAffinity(
         ConnectionSettings.AffinityContext context, Management.QueueInfo info) {
-      return (info.replicas() == null || info.replicas().isEmpty())
-          ? Collections.emptyList()
-          : List.copyOf(info.replicas());
+      List<String> nodesWithAffinity =
+          (info.replicas() == null || info.replicas().isEmpty())
+              ? Collections.emptyList()
+              : List.copyOf(info.replicas());
+      if (context.operation() == ConnectionSettings.Affinity.Operation.PUBLISH) {
+        if (info.leader() != null && !info.leader().isBlank()) {
+          nodesWithAffinity = List.of(info.leader());
+        } else {
+          nodesWithAffinity = Collections.emptyList();
+        }
+      }
+      return nodesWithAffinity;
     }
   }
 
-  static class PreferLeaderForPublishingAffinityStrategy
+  static class LeaderForPublishingFollowersForConsumingStrategy
       implements ConnectionSettings.AffinityStrategy {
 
     @Override

@@ -88,14 +88,9 @@ final class Assertions {
     }
 
     SyncAssert completes(Duration timeout) {
-      try {
-        boolean completed = actual.await(timeout);
-        if (!completed) {
-          fail("Sync timed out after %d ms", timeout.toMillis());
-        }
-      } catch (InterruptedException e) {
-        Thread.interrupted();
-        throw new RuntimeException(e);
+      boolean completed = actual.await(timeout);
+      if (!completed) {
+        fail("Sync timed out after %d ms", timeout.toMillis());
       }
       return this;
     }
