@@ -46,7 +46,7 @@ public class RecoveryClusterTest {
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(1));
   static List<String> nodes;
   Environment environment;
-  Connection connection;
+  AmqpConnection connection;
   Management management;
   TestInfo testInfo;
 
@@ -60,12 +60,13 @@ public class RecoveryClusterTest {
     environment =
         new AmqpEnvironmentBuilder().connectionSettings().uris(URIS).environmentBuilder().build();
     this.connection =
-        environment
-            .connectionBuilder()
-            .recovery()
-            .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
-            .connectionBuilder()
-            .build();
+        (AmqpConnection)
+            environment
+                .connectionBuilder()
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder()
+                .build();
     this.management = connection.management();
     this.testInfo = info;
   }
@@ -112,9 +113,12 @@ public class RecoveryClusterTest {
       nodes.forEach(Cli::restartNode);
       Cli.rebalance();
 
+      waitAtMost(() -> connection.state() == Resource.State.OPEN);
+
       qqNames.stream()
           .parallel()
-          .forEach(n -> waitAtMostNoException(() -> management.queueInfo(n)));
+          .forEach(
+              n -> waitAtMostNoException(TIMEOUT.multipliedBy(2), () -> management.queueInfo(n)));
       qqNames.stream()
           .parallel()
           .forEach(

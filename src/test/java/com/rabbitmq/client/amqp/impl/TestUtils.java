@@ -91,8 +91,12 @@ public abstract class TestUtils {
   }
 
   public static Duration waitAtMostNoException(RunnableWithException condition) {
+    return waitAtMostNoException(DEFAULT_CONDITION_TIMEOUT, condition);
+  }
+
+  public static Duration waitAtMostNoException(Duration timeout, RunnableWithException condition) {
     return waitAtMost(
-        DEFAULT_CONDITION_TIMEOUT,
+        timeout,
         () -> {
           try {
             condition.run();
