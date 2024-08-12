@@ -126,6 +126,7 @@ public class RecoveryClusterTest {
       LOGGER.info("Rebalancing over.");
 
       waitAtMost(
+          TIMEOUT,
           () -> connection.state() == OPEN,
           () -> format("Test connection state is %s, expecting %s", connection.state(), OPEN));
       LOGGER.info("Test connection has recovered");
