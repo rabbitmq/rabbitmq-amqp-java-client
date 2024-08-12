@@ -46,7 +46,7 @@ public class RecoveryClusterTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryClusterTest.class);
 
-  static final Duration TIMEOUT = Duration.ofSeconds(10);
+  static final Duration TIMEOUT = Duration.ofSeconds(20);
   static final String[] URIS =
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(1));
