@@ -27,11 +27,14 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class ConnectionUtils {
+
+  static final RetryStrategy NO_RETRY_STRATEGY = Supplier::get;
 
   static final ConnectionSettings.AffinityStrategy
       LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY =
@@ -50,11 +53,11 @@ final class ConnectionUtils {
       AmqpManagement management,
       AffinityContext context,
       AffinityCache affinityCache,
-      ConnectionSettings.AffinityStrategy strategy) {
-    // TODO add retry for sensitive operations in affinity mechanism
+      ConnectionSettings.AffinityStrategy strategy,
+      RetryStrategy retryStrategy) {
     if (context == null) {
       // no affinity asked, we create a connection and return it
-      return connectionFactory.apply(null);
+      return retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
     }
     try {
       AmqpConnection.NativeConnectionWrapper pickedConnection = null;
@@ -66,8 +69,8 @@ final class ConnectionUtils {
         attemptCount++;
         AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
         if (info == null) {
-          connectionWrapper = connectionFactory.apply(null);
-          info = lookUpQueueInfo(management, context, affinityCache);
+          connectionWrapper = retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
+          info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
           queueInfoRefreshed = true;
         }
         if (info == null) {
@@ -89,7 +92,7 @@ final class ConnectionUtils {
                   .map(affinityCache::nodenameToAddress)
                   .filter(Objects::nonNull)
                   .collect(Collectors.toList());
-          connectionWrapper = connectionFactory.apply(addressHints);
+          connectionWrapper = retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints));
         }
         LOGGER.debug("Nodes matching affinity {}: {}.", context, nodesWithAffinity);
         LOGGER.debug("Currently connected to node {}.", connectionWrapper.nodename());
@@ -98,7 +101,7 @@ final class ConnectionUtils {
           if (!queueInfoRefreshed) {
             LOGGER.debug(
                 "Found affinity, but refreshing queue information to check affinity is still valid.");
-            info = lookUpQueueInfo(management, context, affinityCache);
+            info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
             if (info == null) {
               LOGGER.debug("Could not look up info for queue '{}'", context.queue());
               pickedConnection = connectionWrapper;
@@ -129,7 +132,7 @@ final class ConnectionUtils {
           LOGGER.debug(
               "Affinity {} not found with node {}.", context, connectionWrapper.nodename());
           if (!queueInfoRefreshed) {
-            info = lookUpQueueInfo(management, context, affinityCache);
+            info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
             if (info != null) {
               nodesWithAffinity = strategy.nodesWithAffinity(context, info);
               queueInfoRefreshed = true;
@@ -147,18 +150,24 @@ final class ConnectionUtils {
   }
 
   private static Management.QueueInfo lookUpQueueInfo(
-      AmqpManagement management, AffinityContext affinity, AffinityCache cache) {
-    Management.QueueInfo info = null;
-    management.init();
-    try {
-      info = management.queueInfo(affinity.queue());
-      cache.queueInfo(info);
-    } catch (AmqpException.AmqpEntityDoesNotExistException e) {
-      LOGGER.debug("Queue '{}' does not exist.", affinity.queue());
-      cache.clearQueueInfoEntry(affinity.queue());
-      // we just return null, caller will have to return the last connection
-    }
-    return info;
+      AmqpManagement management,
+      AffinityContext affinity,
+      AffinityCache cache,
+      RetryStrategy retryStrategy) {
+    return retryStrategy.maybeRetry(
+        () -> {
+          Management.QueueInfo info = null;
+          management.init();
+          try {
+            info = management.queueInfo(affinity.queue());
+            cache.queueInfo(info);
+          } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+            LOGGER.debug("Queue '{}' does not exist.", affinity.queue());
+            cache.clearQueueInfoEntry(affinity.queue());
+            // we just return null, caller will have to return the last connection
+          }
+          return info;
+        });
   }
 
   // TODO clean affinity cache (LRU or size-based)
@@ -297,5 +306,11 @@ final class ConnectionUtils {
       LOGGER.debug("Nodes with affinity: {}", nodesWithAffinity);
       return nodesWithAffinity;
     }
+  }
+
+  @FunctionalInterface
+  interface RetryStrategy {
+
+    <T> T maybeRetry(Supplier<T> task);
   }
 }

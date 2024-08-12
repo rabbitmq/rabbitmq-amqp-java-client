@@ -136,7 +136,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
             this.management,
             this.affinity,
             this.environment.affinityCache(),
-            this.affinityStrategy);
+            this.affinityStrategy,
+            ConnectionUtils.NO_RETRY_STRATEGY);
     this.sync(ncw);
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
@@ -404,7 +405,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 this.management,
                 this.affinity,
                 this.environment.affinityCache(),
-                this.affinityStrategy);
+                this.affinityStrategy,
+                new ConnectionUtils.RetryStrategy() {
+                  @Override
+                  public <T> T maybeRetry(Supplier<T> task) {
+                    return RetryUtils.callAndMaybeRetry(
+                        task::get,
+                        e -> true,
+                        recoveryConfiguration.backOffDelayPolicy(),
+                        "Connection affinity operation");
+                  }
+                });
         return result;
       } catch (Exception ex) {
         LOGGER.info("Error while trying to recover connection", ex);

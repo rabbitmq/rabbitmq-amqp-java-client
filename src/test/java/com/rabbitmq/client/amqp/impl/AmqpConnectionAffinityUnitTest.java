@@ -443,6 +443,7 @@ public class AmqpConnectionAffinityUnitTest {
         management,
         context,
         affinityCache,
-        ConnectionUtils.LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY);
+        ConnectionUtils.LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY,
+        ConnectionUtils.NO_RETRY_STRATEGY);
   }
 }
