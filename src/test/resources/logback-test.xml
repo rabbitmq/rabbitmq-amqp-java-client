@@ -13,7 +13,7 @@
     <logger name="com.rabbitmq.client.amqp.impl.AmqpManagement" level="warn" />
     <logger name="org.apache.qpid" level="warn" />
     <logger name="com.rabbitmq.client.amqp.perf" level="info" />
-    <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="warn" />
+    <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="debug" />
     <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="warn" />
 
     <root level="warn">
