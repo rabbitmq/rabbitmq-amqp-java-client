@@ -105,37 +105,28 @@ public class RecoveryClusterTest {
 
       publisherStates.forEach(PublisherState::start);
 
-      consumerStates.stream()
-          .map(s -> s.waitForNewMessages(10))
-          .parallel()
-          .forEach(s -> assertThat(s).completes());
+      List<Sync> syncs =
+          consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
+      syncs.forEach(s -> assertThat(s).completes());
 
       nodes.forEach(Cli::restartNode);
       Cli.rebalance();
 
       waitAtMost(() -> connection.state() == Resource.State.OPEN);
 
-      qqNames.stream()
-          .parallel()
-          .forEach(
-              n -> waitAtMostNoException(TIMEOUT.multipliedBy(2), () -> management.queueInfo(n)));
-      qqNames.stream()
-          .parallel()
-          .forEach(
-              n ->
-                  assertThat(management.queueInfo(n).replicas())
-                      .hasSameSizeAs(nodes)
-                      .containsExactlyInAnyOrderElementsOf(nodes));
+      qqNames.forEach(
+          n -> waitAtMostNoException(TIMEOUT.multipliedBy(2), () -> management.queueInfo(n)));
+      qqNames.forEach(
+          n ->
+              assertThat(management.queueInfo(n).replicas())
+                  .hasSameSizeAs(nodes)
+                  .containsExactlyInAnyOrderElementsOf(nodes));
 
-      publisherStates.stream()
-          .map(s -> s.waitForNewMessages(10))
-          .parallel()
-          .forEach(s -> assertThat(s).completes());
+      syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
+      syncs.forEach(s -> assertThat(s).completes());
 
-      consumerStates.stream()
-          .map(s -> s.waitForNewMessages(10))
-          .parallel()
-          .forEach(s -> assertThat(s).completes());
+      syncs = consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
+      syncs.forEach(s -> assertThat(s).completes());
 
       assertThat(publisherStates).allMatch(s -> s.state() == Resource.State.OPEN);
       assertThat(consumerStates).allMatch(s -> s.state() == Resource.State.OPEN);
