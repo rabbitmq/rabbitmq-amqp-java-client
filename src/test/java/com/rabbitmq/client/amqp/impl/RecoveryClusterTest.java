@@ -19,8 +19,10 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
+import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
+import static java.lang.String.format;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,7 +125,9 @@ public class RecoveryClusterTest {
       Cli.rebalance();
       LOGGER.info("Rebalancing over.");
 
-      waitAtMost(() -> connection.state() == Resource.State.OPEN);
+      waitAtMost(
+          () -> connection.state() == OPEN,
+          () -> format("Test connection state is %s, expecting %s", connection.state(), OPEN));
       LOGGER.info("Test connection has recovered");
 
       qqNames.forEach(
@@ -144,8 +148,8 @@ public class RecoveryClusterTest {
       syncs.forEach(s -> assertThat(s).completes());
       LOGGER.info("Check consumers have recovered.");
 
-      assertThat(publisherStates).allMatch(s -> s.state() == Resource.State.OPEN);
-      assertThat(consumerStates).allMatch(s -> s.state() == Resource.State.OPEN);
+      assertThat(publisherStates).allMatch(s -> s.state() == OPEN);
+      assertThat(consumerStates).allMatch(s -> s.state() == OPEN);
 
       System.out.println("Queues:");
       qqNames.forEach(
@@ -217,7 +221,7 @@ public class RecoveryClusterTest {
               .newThread(
                   () -> {
                     while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
-                      if (state.get() == Resource.State.OPEN) {
+                      if (state.get() == OPEN) {
                         try {
                           this.limiter.acquire(1);
                           this.publisher.publish(publisher.message(BODY), callback);
