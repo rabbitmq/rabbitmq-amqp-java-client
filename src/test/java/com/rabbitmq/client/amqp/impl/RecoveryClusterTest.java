@@ -36,9 +36,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @DisabledIfNotCluster
 public class RecoveryClusterTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryClusterTest.class);
 
   static final Duration TIMEOUT = Duration.ofSeconds(10);
   static final String[] URIS =
@@ -109,24 +113,36 @@ public class RecoveryClusterTest {
           consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
 
-      nodes.forEach(Cli::restartNode);
+      nodes.forEach(
+          n -> {
+            LOGGER.info("Restarting node {}...", n);
+            Cli.restartNode(n);
+            LOGGER.info("Restarted node {}.", n);
+          });
+      LOGGER.info("Rebalancing...");
       Cli.rebalance();
+      LOGGER.info("Rebalancing over.");
 
       waitAtMost(() -> connection.state() == Resource.State.OPEN);
+      LOGGER.info("Test connection has recovered");
 
       qqNames.forEach(
           n -> waitAtMostNoException(TIMEOUT.multipliedBy(2), () -> management.queueInfo(n)));
+      LOGGER.info("Retrieved info for each queue.");
       qqNames.forEach(
           n ->
               assertThat(management.queueInfo(n).replicas())
                   .hasSameSizeAs(nodes)
                   .containsExactlyInAnyOrderElementsOf(nodes));
+      LOGGER.info("Checked replica info for each queue.");
 
       syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
+      LOGGER.info("Check publishers have recovered.");
 
       syncs = consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
+      LOGGER.info("Check consumers have recovered.");
 
       assertThat(publisherStates).allMatch(s -> s.state() == Resource.State.OPEN);
       assertThat(consumerStates).allMatch(s -> s.state() == Resource.State.OPEN);
