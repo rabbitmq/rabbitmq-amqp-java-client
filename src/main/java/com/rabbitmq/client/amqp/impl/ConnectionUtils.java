@@ -54,7 +54,8 @@ final class ConnectionUtils {
       AffinityContext context,
       AffinityCache affinityCache,
       ConnectionSettings.AffinityStrategy strategy,
-      RetryStrategy retryStrategy) {
+      RetryStrategy retryStrategy,
+      String connectionName) {
     if (context == null) {
       // no affinity asked, we create a connection and return it
       return retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
@@ -78,11 +79,12 @@ final class ConnectionUtils {
           return connectionWrapper;
         }
         LOGGER.debug(
-            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {})",
+            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {}) for '{}'",
             info.name(),
             info.type(),
             info.leader(),
-            info.replicas());
+            info.replicas(),
+            connectionName);
         if (nodesWithAffinity == null) {
           nodesWithAffinity = strategy.nodesWithAffinity(context, info);
         }
@@ -94,16 +96,16 @@ final class ConnectionUtils {
                   .collect(Collectors.toList());
           connectionWrapper = retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints));
         }
-        LOGGER.debug("Nodes matching affinity {}: {}.", context, nodesWithAffinity);
-        LOGGER.debug("Currently connected to node {}.", connectionWrapper.nodename());
+        LOGGER.trace("Nodes matching affinity {}: {}.", context, nodesWithAffinity);
+        LOGGER.trace("Currently connected to node {}.", connectionWrapper.nodename());
         affinityCache.nodenameToAddress(connectionWrapper.nodename(), connectionWrapper.address());
         if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
           if (!queueInfoRefreshed) {
-            LOGGER.debug(
+            LOGGER.trace(
                 "Found affinity, but refreshing queue information to check affinity is still valid.");
             info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
             if (info == null) {
-              LOGGER.debug("Could not look up info for queue '{}'", context.queue());
+              LOGGER.trace("Could not look up info for queue '{}'", context.queue());
               pickedConnection = connectionWrapper;
             } else {
               nodesWithAffinity = strategy.nodesWithAffinity(context, info);
@@ -120,16 +122,18 @@ final class ConnectionUtils {
             pickedConnection = connectionWrapper;
           }
           if (pickedConnection != null) {
-            LOGGER.debug("Returning connection to node {}", pickedConnection.nodename());
+            LOGGER.debug(
+                "Connected to node '{}' for '{}'", pickedConnection.nodename(), connectionName);
           }
         } else if (attemptCount == 5) {
           LOGGER.debug(
-              "Could not find affinity {} after {} attempt(s), using last connection.",
+              "Could not find affinity {} after {} attempt(s), using last connection for '{}'.",
               context,
-              attemptCount);
+              attemptCount,
+              connectionName);
           pickedConnection = connectionWrapper;
         } else {
-          LOGGER.debug(
+          LOGGER.trace(
               "Affinity {} not found with node {}.", context, connectionWrapper.nodename());
           if (!queueInfoRefreshed) {
             info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
@@ -144,7 +148,11 @@ final class ConnectionUtils {
       }
       return pickedConnection;
     } catch (RuntimeException e) {
-      LOGGER.warn("Cannot enforce affinity {} of error when looking up queue", context, e);
+      LOGGER.warn(
+          "Cannot enforce affinity {} of '{}' error when looking up queue",
+          context,
+          connectionName,
+          e);
       throw e;
     }
   }

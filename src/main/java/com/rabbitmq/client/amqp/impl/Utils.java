@@ -272,4 +272,29 @@ final class Utils {
       return this.duration;
     }
   }
+
+  static Runnable namedRunnable(Runnable task, String format, Object... args) {
+    return new NamedRunnable(String.format(format, args), task);
+  }
+
+  private static class NamedRunnable implements Runnable {
+
+    private final String name;
+    private final Runnable delegate;
+
+    private NamedRunnable(String name, Runnable delegate) {
+      this.name = name;
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void run() {
+      this.delegate.run();
+    }
+
+    @Override
+    public String toString() {
+      return this.name;
+    }
+  }
 }

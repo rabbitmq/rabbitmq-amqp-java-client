@@ -33,16 +33,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @DisabledIfNotCluster
-@Disabled
 public class RecoveryClusterTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryClusterTest.class);
@@ -50,8 +52,9 @@ public class RecoveryClusterTest {
   static final Duration TIMEOUT = Duration.ofSeconds(20);
   static final String[] URIS =
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
-  static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(1));
+  static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(3));
   static List<String> nodes;
+  ExecutorService executorService;
   Environment environment;
   AmqpConnection connection;
   Management management;
@@ -60,20 +63,20 @@ public class RecoveryClusterTest {
   @BeforeAll
   static void initAll() {
     nodes = Cli.nodes();
+    LOGGER.info("Available processor(s): {}", Runtime.getRuntime().availableProcessors());
   }
 
   @BeforeEach
   void init(TestInfo info) {
+    executorService = Executors.newCachedThreadPool();
     environment =
-        new AmqpEnvironmentBuilder().connectionSettings().uris(URIS).environmentBuilder().build();
-    this.connection =
-        (AmqpConnection)
-            environment
-                .connectionBuilder()
-                .recovery()
-                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
-                .connectionBuilder()
-                .build();
+        new AmqpEnvironmentBuilder()
+            .connectionSettings()
+            .uris(URIS)
+            .environmentBuilder()
+            .executorService(executorService)
+            .build();
+    this.connection = connection(b -> b.name("c-management").recovery().connectionBuilder());
     this.management = connection.management();
     this.testInfo = info;
   }
@@ -81,33 +84,50 @@ public class RecoveryClusterTest {
   @AfterEach
   void tearDown() {
     environment.close();
+    if (executorService != null) {
+      executorService.shutdownNow();
+    }
   }
 
   @Test
   void clusterRestart() {
-    int qqCount = 10;
+    int qqCount = 20;
     List<String> qqNames =
         IntStream.range(0, qqCount).mapToObj(ignored -> name("qq-")).collect(toList());
     List<PublisherState> publisherStates = Collections.emptyList();
     List<ConsumerState> consumerStates = Collections.emptyList();
     try {
       qqNames.forEach(n -> management.queue(n).type(Management.QueueType.QUORUM).declare());
+      AtomicInteger counter = new AtomicInteger(0);
       consumerStates =
           qqNames.stream()
               .map(
                   n ->
                       new ConsumerState(
                           n,
-                          connection(b -> b.affinity().queue(n).operation(CONSUME).connection())))
+                          connection(
+                              b ->
+                                  b.name("consumer-" + counter.getAndIncrement())
+                                      .affinity()
+                                      .queue(n)
+                                      .operation(CONSUME)
+                                      .connection())))
               .collect(toList());
 
+      counter.set(0);
       publisherStates =
           qqNames.stream()
               .map(
                   n ->
                       new PublisherState(
                           n,
-                          connection(b -> b.affinity().queue(n).operation(PUBLISH).connection())))
+                          connection(
+                              b ->
+                                  b.name("publisher-" + counter.getAndIncrement())
+                                      .affinity()
+                                      .queue(n)
+                                      .operation(PUBLISH)
+                                      .connection())))
               .collect(toList());
 
       publisherStates.forEach(PublisherState::start);
@@ -133,7 +153,10 @@ public class RecoveryClusterTest {
       LOGGER.info("Test connection has recovered");
 
       qqNames.forEach(
-          n -> waitAtMostNoException(TIMEOUT.multipliedBy(2), () -> management.queueInfo(n)));
+          n -> {
+            LOGGER.info("Getting info for queue {}", n);
+            waitAtMostNoException(TIMEOUT, () -> management.queueInfo(n));
+          });
       LOGGER.info("Retrieved info for each queue.");
       qqNames.forEach(
           n ->
@@ -144,11 +167,11 @@ public class RecoveryClusterTest {
 
       syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
-      LOGGER.info("Check publishers have recovered.");
+      LOGGER.info("Checked publishers have recovered.");
 
       syncs = consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
-      LOGGER.info("Check consumers have recovered.");
+      LOGGER.info("Checked consumers have recovered.");
 
       assertThat(publisherStates).allMatch(s -> s.state() == OPEN);
       assertThat(consumerStates).allMatch(s -> s.state() == OPEN);
@@ -173,6 +196,13 @@ public class RecoveryClusterTest {
       System.out.println("Consumers:");
       consumerStates.forEach(
           p -> System.out.printf("  queue %s, is on member? %s%n", p.queue, p.isOnMember()));
+    } catch (Throwable e) {
+      LOGGER.info("Test failed with {}", e.getMessage(), e);
+      Consumer<AmqpConnection> log = c -> LOGGER.info("Connection {}: {}", c.name(), c.state());
+      log.accept(this.connection);
+      publisherStates.forEach(s -> log.accept(s.connection));
+      consumerStates.forEach(s -> log.accept(s.connection));
+      throw e;
     } finally {
       publisherStates.forEach(PublisherState::close);
       consumerStates.forEach(ConsumerState::close);
@@ -315,7 +345,13 @@ public class RecoveryClusterTest {
   }
 
   AmqpConnection connection(java.util.function.Consumer<AmqpConnectionBuilder> operation) {
-    AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            environment
+                .connectionBuilder()
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
     operation.accept(builder);
     return (AmqpConnection) builder.build();
   }

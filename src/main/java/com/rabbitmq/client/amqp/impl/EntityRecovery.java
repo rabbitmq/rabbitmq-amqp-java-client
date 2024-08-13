@@ -103,20 +103,22 @@ class EntityRecovery {
   }
 
   private void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
-    LOGGER.debug("Recovering queue {}", queue.name());
-    try {
-      Management.QueueSpecification spec =
-          this.connection
-              .managementNoCheck()
-              .queue()
-              .name(queue.name())
-              .exclusive(queue.exclusive())
-              .autoDelete(queue.autoDelete());
-      queue.arguments().forEach(spec::argument);
-      spec.declare();
-      LOGGER.debug("Queue {} recovered", queue.name());
-    } catch (Exception e) {
-      LOGGER.warn("Error while recovering queue {}", queue.name(), e);
+    if (queue.exclusive()) {
+      LOGGER.debug("Recovering queue {}", queue.name());
+      try {
+        Management.QueueSpecification spec =
+            this.connection
+                .managementNoCheck()
+                .queue()
+                .name(queue.name())
+                .exclusive(queue.exclusive())
+                .autoDelete(queue.autoDelete());
+        queue.arguments().forEach(spec::argument);
+        spec.declare();
+        LOGGER.debug("Queue {} recovered", queue.name());
+      } catch (Exception e) {
+        LOGGER.warn("Error while recovering queue {}", queue.name(), e);
+      }
     }
   }
 

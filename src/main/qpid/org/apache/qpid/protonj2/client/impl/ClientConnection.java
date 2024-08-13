@@ -754,6 +754,7 @@ public final class ClientConnection implements Connection {
         } else {
             FAILURE_CAUSE_UPDATER.compareAndSet(this, null, failureCause);
             engine.shutdown();
+            notifications.shutdownNow();
         }
     }
 

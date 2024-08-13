@@ -57,6 +57,7 @@ public class AmqpConnectionRecoveryTest {
     environment =
         new AmqpEnvironment(
             null,
+            null,
             connectionSettings,
             NoOpMetricsCollector.INSTANCE,
             Utils.NO_OP_OBSERVATION_COLLECTOR);

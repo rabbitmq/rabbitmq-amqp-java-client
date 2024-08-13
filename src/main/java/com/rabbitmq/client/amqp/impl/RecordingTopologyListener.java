@@ -18,19 +18,24 @@
 package com.rabbitmq.client.amqp.impl;
 
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class RecordingTopologyListener implements TopologyListener, AutoCloseable {
 
-  private final EventLoop<State> eventLoop;
+  private static final Logger LOGGER = LoggerFactory.getLogger(RecordingTopologyListener.class);
+
+  private final String label;
+  private final EventLoop.Client<State> eventLoopClient;
 
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
-  RecordingTopologyListener(ExecutorService executorService) {
-    this.eventLoop = new EventLoop<>(State::new, "topology", executorService);
+  RecordingTopologyListener(String label, EventLoop eventLoop) {
+    this.label = label;
+    this.eventLoopClient = eventLoop.register(State::new);
   }
 
   private static class State {
@@ -111,13 +116,13 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      this.eventLoop.close();
+      this.eventLoopClient.close();
     }
   }
 
   private void submit(Consumer<State> task) {
     if (!this.closed.get()) {
-      this.eventLoop.submit(task);
+      this.eventLoopClient.submit(task);
     }
   }
 
@@ -152,6 +157,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
   }
 
   void accept(Visitor visitor) {
+    LOGGER.debug("Topology listener '{}' visitor, retrieving state...", this.label);
     AtomicReference<List<ExchangeSpec>> exchangeCopy = new AtomicReference<>();
     AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>();
     AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>();
@@ -161,9 +167,14 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
           queueCopy.set(new ArrayList<>(s.queues.values()));
           bindingCopy.set(new LinkedHashSet<>(s.bindings));
         });
+    LOGGER.debug(
+        "Topology listener '{}' visitor, state retrieved, visiting topology...", this.label);
     visitor.visitExchanges(exchangeCopy.get());
+    LOGGER.debug("Topology listener '{}' visitor, exchanges visited...", this.label);
     visitor.visitQueues(queueCopy.get());
+    LOGGER.debug("Topology listener '{}' visitor, queues visited...", this.label);
     visitor.visitBindings(bindingCopy.get());
+    LOGGER.debug("Topology listener '{}' visitor, topology visited...", this.label);
   }
 
   static class ExchangeSpec {
@@ -330,7 +341,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
   // for test assertions
 
   private State state() {
-    return this.eventLoop.state();
+    return this.eventLoopClient.state();
   }
 
   Map<String, ExchangeSpec> exchanges() {

@@ -25,12 +25,14 @@ import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   private final DefaultEnvironmentConnectionSettings connectionSettings =
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
+  private ScheduledExecutorService scheduledExecutorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
   private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
 
@@ -38,6 +40,12 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
+    return this;
+  }
+
+  public AmqpEnvironmentBuilder scheduledExecutorService(
+      ScheduledExecutorService scheduledExecutorService) {
+    this.scheduledExecutorService = scheduledExecutorService;
     return this;
   }
 
@@ -59,7 +67,11 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   @Override
   public Environment build() {
     return new AmqpEnvironment(
-        executorService, connectionSettings, metricsCollector, observationCollector);
+        executorService,
+        scheduledExecutorService,
+        connectionSettings,
+        metricsCollector,
+        observationCollector);
   }
 
   public interface EnvironmentConnectionSettings
