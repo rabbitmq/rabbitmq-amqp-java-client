@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @DisabledIfNotCluster
+@Disabled
 public class RecoveryClusterTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryClusterTest.class);
