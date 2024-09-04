@@ -49,6 +49,7 @@ class AmqpEnvironment implements Environment {
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
   private final ExecutorService recoveryEventLoopExecutorService;
+  private final ExecutorService managementExecutorService;
 
   AmqpEnvironment(
       ExecutorService executorService,
@@ -91,6 +92,14 @@ class AmqpEnvironment implements Environment {
             new LinkedBlockingQueue<>(),
             Utils.threadFactory(threadPrefix + "event-loop-"));
     this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopExecutorService);
+    this.managementExecutorService =
+        new ThreadPoolExecutor(
+            0,
+            Integer.MAX_VALUE,
+            30,
+            TimeUnit.SECONDS,
+            new SynchronousQueue<>(),
+            Utils.threadFactory(threadPrefix + "management-loop-"));
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -117,6 +126,7 @@ class AmqpEnvironment implements Environment {
       this.client.close();
       this.recoveryEventLoop.close();
       this.recoveryEventLoopExecutorService.shutdownNow();
+      this.managementExecutorService.shutdownNow();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
       }
@@ -137,6 +147,10 @@ class AmqpEnvironment implements Environment {
 
   ExecutorService executorService() {
     return this.executorService;
+  }
+
+  ExecutorService managementExecutorService() {
+    return this.managementExecutorService;
   }
 
   ScheduledExecutorService scheduledExecutorService() {

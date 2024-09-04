@@ -17,11 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.*;
@@ -58,7 +60,7 @@ public class ManagementTest {
         new AmqpManagement(new AmqpManagementParameters(connection).nameSupplier(nameSupplier));
     management.init();
     Management.QueueInfo queueInfo = management.queue().exclusive(true).autoDelete(true).declare();
-    Assertions.assertThat(queueInfo).hasName(q);
+    assertThat(queueInfo).hasName(q);
     assertThat(nameSupplierCallCount).hasValue(1);
     queueInfo = management.queue().exclusive(true).autoDelete(false).declare();
     assertThat(queueInfo.name()).isNotEqualTo(q);
@@ -69,5 +71,22 @@ public class ManagementTest {
   void queueInfoShouldThrowDoesNotExistExceptionWhenQueueDoesNotExist() {
     assertThatThrownBy(() -> connection.management().queueInfo("do not exists"))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
+  }
+
+  @Test
+  void receiveLoopShouldStopAfterBeingIdle() {
+    management =
+        new AmqpManagement(
+            new AmqpManagementParameters(connection)
+                .receiveLoopIdleTimeout(Duration.ofMillis(500)));
+    management.init();
+    assertThat(management.hasReceiveLoop()).isFalse();
+    Management.QueueInfo info1 = management.queue().exclusive(true).autoDelete(true).declare();
+    assertThat(management.hasReceiveLoop()).isTrue();
+    TestUtils.waitAtMost(() -> !management.hasReceiveLoop());
+    Management.QueueInfo info2 = management.queue().exclusive(true).autoDelete(true).declare();
+    assertThat(management.hasReceiveLoop()).isTrue();
+    assertThat(management.queueInfo(info1.name())).hasName(info1.name());
+    assertThat(management.queueInfo(info2.name())).hasName(info2.name());
   }
 }

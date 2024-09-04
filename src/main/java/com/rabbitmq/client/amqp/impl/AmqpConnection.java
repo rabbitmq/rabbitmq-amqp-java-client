@@ -29,6 +29,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -69,6 +71,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final ConnectionUtils.AffinityContext affinity;
   private final ConnectionSettings.AffinityStrategy affinityStrategy;
   private final String name;
+  private final Lock instanceLock = new ReentrantLock();
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -523,7 +526,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
     Session result = this.nativeSession;
     if (result == null) {
-      synchronized (this) {
+      this.instanceLock.lock();
+      try {
         result = this.nativeSession;
         if (result == null) {
           if (check) {
@@ -531,6 +535,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
           }
           this.nativeSession = result = this.openSession(this.nativeConnection);
         }
+      } finally {
+        this.instanceLock.unlock();
       }
     }
     return result;
@@ -546,6 +552,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   org.apache.qpid.protonj2.client.Connection nativeConnection() {
     return this.nativeConnection;
+  }
+
+  AmqpEnvironment environment() {
+    return this.environment;
   }
 
   ExecutorService executorService() {

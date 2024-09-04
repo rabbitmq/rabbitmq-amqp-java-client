@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -68,7 +69,7 @@ public class RecoveryClusterTest {
 
   @BeforeEach
   void init(TestInfo info) {
-    executorService = Executors.newCachedThreadPool();
+    executorService = Executors.newCachedThreadPool(Utils.threadFactory("recover-cluster-test-"));
     environment =
         new AmqpEnvironmentBuilder()
             .connectionSettings()
@@ -216,6 +217,9 @@ public class RecoveryClusterTest {
 
   private static class PublisherState implements AutoCloseable {
 
+    private static final ThreadFactory THREAD_FACTORY =
+        Utils.threadFactory("cluster-test-publisher-");
+
     private static final byte[] BODY = "hello".getBytes(StandardCharsets.UTF_8);
 
     final String queue;
@@ -249,20 +253,19 @@ public class RecoveryClusterTest {
             }
           };
       this.task =
-          Utils.defaultThreadFactory()
-              .newThread(
-                  () -> {
-                    while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
-                      if (state.get() == OPEN) {
-                        try {
-                          this.limiter.acquire(1);
-                          this.publisher.publish(publisher.message(BODY), callback);
-                        } catch (Exception e) {
+          THREAD_FACTORY.newThread(
+              () -> {
+                while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
+                  if (state.get() == OPEN) {
+                    try {
+                      this.limiter.acquire(1);
+                      this.publisher.publish(publisher.message(BODY), callback);
+                    } catch (Exception e) {
 
-                        }
-                      }
                     }
-                  });
+                  }
+                }
+              });
       this.task.start();
     }
 
@@ -287,6 +290,7 @@ public class RecoveryClusterTest {
     @Override
     public void close() {
       this.task.interrupt();
+      this.stopped.set(true);
       this.publisher.close();
     }
   }

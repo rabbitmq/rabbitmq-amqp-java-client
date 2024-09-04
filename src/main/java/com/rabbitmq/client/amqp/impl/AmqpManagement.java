@@ -28,6 +28,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -72,6 +74,8 @@ class AmqpManagement implements Management {
   private final Supplier<String> nameSupplier;
   private final AtomicReference<State> state = new AtomicReference<>(CREATED);
   private final AtomicBoolean initializing = new AtomicBoolean(false);
+  private final Duration receiveLoopIdleTimeout;
+  private final Lock instanceLock = new ReentrantLock();
 
   AmqpManagement(AmqpManagementParameters parameters) {
     this.id = ID_SEQUENCE.getAndIncrement();
@@ -81,6 +85,10 @@ class AmqpManagement implements Management {
             ? TopologyListener.NO_OP
             : parameters.topologyListener();
     this.nameSupplier = parameters.nameSupplier();
+    this.receiveLoopIdleTimeout =
+        parameters.receiveLoopIdleTimeout() == null
+            ? Duration.ofSeconds(20)
+            : parameters.receiveLoopIdleTimeout();
   }
 
   @Override
@@ -190,6 +198,10 @@ class AmqpManagement implements Management {
         LOGGER.debug("Initializing management ({}).", this);
         this.state(UNAVAILABLE);
         try {
+          if (this.receiveLoop != null) {
+            this.receiveLoop.cancel(true);
+            this.receiveLoop = null;
+          }
           LOGGER.debug("Creating management session ({}).", this);
           this.session = this.connection.nativeConnection().openSession();
           String linkPairName = "management-link-pair";
@@ -217,49 +229,6 @@ class AmqpManagement implements Management {
           LOGGER.debug("Management sender created ({}).", this);
           this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
           LOGGER.debug("Management receiver created ({}).", this);
-          Runnable receiveTask =
-              () -> {
-                try {
-                  while (!Thread.currentThread().isInterrupted()) {
-                    Delivery delivery = receiver.receive(100, MILLISECONDS);
-                    if (delivery != null) {
-                      Object correlationId = delivery.message().correlationId();
-                      if (correlationId instanceof UUID) {
-                        OutstandingRequest request = outstandingRequests.remove(correlationId);
-                        if (request != null) {
-                          request.complete(delivery.message());
-                        } else {
-                          LOGGER.info("Could not find outstanding request {}", correlationId);
-                        }
-                      } else {
-                        LOGGER.info("Could not correlate inbound message with management request");
-                      }
-                    }
-                  }
-                } catch (ClientConnectionRemotelyClosedException
-                    | ClientLinkRemotelyClosedException e) {
-                  // receiver is closed
-                } catch (ClientSessionRemotelyClosedException e) {
-                  this.state(UNAVAILABLE);
-                  LOGGER.info(
-                      "Management session closed in receive loop: {} ({})", e.getMessage(), this);
-                  AmqpException exception = ExceptionUtils.convert(e);
-                  this.failRequests(exception);
-                  if (exception instanceof AmqpException.AmqpSecurityException) {
-                    LOGGER.debug(
-                        "Recovering AMQP management because the failure was a security exception ({}).",
-                        this);
-                    this.init();
-                  }
-                } catch (ClientException e) {
-                  java.util.function.Consumer<String> log =
-                      this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.info(m, e);
-                  log.accept("Error while polling AMQP receiver");
-                }
-              };
-          LOGGER.debug("Starting management receive loop ({}).", this);
-          this.receiveLoop = this.connection.executorService().submit(receiveTask);
-          LOGGER.debug("Management initialized ({}).", this);
           this.state(OPEN);
           this.initializing.set(false);
         } catch (Exception e) {
@@ -267,6 +236,58 @@ class AmqpManagement implements Management {
         }
       }
     }
+  }
+
+  private Runnable receiveTask() {
+    return () -> {
+      try {
+        Duration waitDuration = Duration.ofMillis(100);
+        long idleTime = 0;
+        while (!Thread.currentThread().isInterrupted()) {
+          Delivery delivery = receiver.receive(waitDuration.toMillis(), MILLISECONDS);
+          if (delivery != null) {
+            idleTime = 0;
+            Object correlationId = delivery.message().correlationId();
+            if (correlationId instanceof UUID) {
+              OutstandingRequest request = outstandingRequests.remove(correlationId);
+              if (request != null) {
+                request.complete(delivery.message());
+              } else {
+                LOGGER.info("Could not find outstanding request {}", correlationId);
+              }
+            } else {
+              LOGGER.info("Could not correlate inbound message with management request");
+            }
+          } else {
+            idleTime += waitDuration.toMillis();
+            if (idleTime > receiveLoopIdleTimeout.toMillis()) {
+              LOGGER.debug(
+                  "Management receive loop has been idle for more than {}, finishing it.",
+                  this.receiveLoopIdleTimeout);
+              this.receiveLoop = null;
+              return;
+            }
+          }
+        }
+      } catch (ClientConnectionRemotelyClosedException | ClientLinkRemotelyClosedException e) {
+        // receiver is closed
+      } catch (ClientSessionRemotelyClosedException e) {
+        this.state(UNAVAILABLE);
+        LOGGER.info("Management session closed in receive loop: {} ({})", e.getMessage(), this);
+        AmqpException exception = ExceptionUtils.convert(e);
+        this.failRequests(exception);
+        if (exception instanceof AmqpException.AmqpSecurityException) {
+          LOGGER.debug(
+              "Recovering AMQP management because the failure was a security exception ({}).",
+              this);
+          this.init();
+        }
+      } catch (ClientException e) {
+        java.util.function.Consumer<String> log =
+            this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.info(m, e);
+        log.accept("Error while polling AMQP receiver");
+      }
+    };
   }
 
   private void failRequests(AmqpException exception) {
@@ -284,6 +305,7 @@ class AmqpManagement implements Management {
     this.markUnavailable();
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
+      this.receiveLoop = null;
     }
   }
 
@@ -338,6 +360,22 @@ class AmqpManagement implements Management {
     this.outstandingRequests.put(requestId, outstandingRequest);
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
+    Future<?> loop = this.receiveLoop;
+    if (loop == null) {
+      this.instanceLock.lock();
+      try {
+        loop = this.receiveLoop;
+        if (loop == null) {
+          Runnable receiveTask = receiveTask();
+          LOGGER.debug("Starting management receive loop ({}).", this);
+          this.receiveLoop =
+              this.connection.environment().managementExecutorService().submit(receiveTask);
+          LOGGER.debug("Management initialized ({}).", this);
+        }
+      } finally {
+        this.instanceLock.unlock();
+      }
+    }
     return outstandingRequest;
   }
 
@@ -546,6 +584,11 @@ class AmqpManagement implements Management {
 
   TopologyListener recovery() {
     return this.topologyListener;
+  }
+
+  // for testing
+  boolean hasReceiveLoop() {
+    return this.receiveLoop != null;
   }
 
   private static class DefaultQueueInfo implements QueueInfo {

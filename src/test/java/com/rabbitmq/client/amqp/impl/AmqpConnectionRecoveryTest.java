@@ -165,7 +165,6 @@ public class AmqpConnectionRecoveryTest {
       assertThat(receivedMessageIds)
           .hasSameSizeAs(publishedMessageIds)
           .containsAll(publishedMessageIds);
-
     } finally {
       c.management().queueDeletion().delete(q);
       c.close();

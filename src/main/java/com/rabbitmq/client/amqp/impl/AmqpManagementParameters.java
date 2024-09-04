@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import java.time.Duration;
 import java.util.function.Supplier;
 
 class AmqpManagementParameters {
@@ -24,6 +25,7 @@ class AmqpManagementParameters {
   private final AmqpConnection connection;
   private TopologyListener topologyListener;
   private Supplier<String> nameSupplier = Utils.NAME_SUPPLIER;
+  private Duration receiveLoopIdleTimeout;
 
   AmqpManagementParameters(AmqpConnection connection) {
     this.connection = connection;
@@ -37,6 +39,15 @@ class AmqpManagementParameters {
   AmqpManagementParameters nameSupplier(Supplier<String> nameSupplier) {
     this.nameSupplier = nameSupplier;
     return this;
+  }
+
+  public AmqpManagementParameters receiveLoopIdleTimeout(Duration receiveLoopIdleTimeout) {
+    this.receiveLoopIdleTimeout = receiveLoopIdleTimeout;
+    return this;
+  }
+
+  Duration receiveLoopIdleTimeout() {
+    return receiveLoopIdleTimeout;
   }
 
   AmqpConnection connection() {
