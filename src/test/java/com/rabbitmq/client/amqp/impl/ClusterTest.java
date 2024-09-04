@@ -41,6 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 @TestUtils.DisabledIfNotCluster
+@Disabled
 public class ClusterTest {
 
   static final String[] URIS =

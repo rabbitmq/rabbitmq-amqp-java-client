@@ -43,7 +43,7 @@ import org.slf4j.LoggerFactory;
 
 final class AmqpConnection extends ResourceBase implements Connection {
 
-  private static final Predicate<Throwable> RECOVERY_PREDICATE =
+  private static final Predicate<Exception> RECOVERY_PREDICATE =
       t -> t instanceof AmqpException.AmqpConnectionException;
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
@@ -63,17 +63,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final List<RpcServer> rpcServers = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
   private volatile EntityRecovery entityRecovery;
-  private final Future<?> recoveryLoop;
-  private final BlockingQueue<Runnable> recoveryRequestQueue;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
   private final DefaultConnectionSettings<?> connectionSettings;
   private final Supplier<SessionHandler> sessionHandlerSupplier;
   private final ConnectionUtils.AffinityContext affinity;
   private final ConnectionSettings.AffinityStrategy affinityStrategy;
+  private final String name;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
+    this.name = builder.name();
     this.environment = builder.environment();
     this.connectionSettings = builder.connectionSettings().consolidate();
     this.sessionHandlerSupplier =
@@ -87,22 +87,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.topologyListener = createTopologyListener(builder);
 
     if (recoveryConfiguration.activated()) {
-      this.recoveryRequestQueue = new ArrayBlockingQueue<>(10);
-      this.recoveryLoop =
-          this.executorService()
-              .submit(
-                  () -> {
-                    while (!Thread.currentThread().isInterrupted()) {
-                      try {
-                        Runnable recoveryTask = this.recoveryRequestQueue.take();
-                        recoveryTask.run();
-                      } catch (InterruptedException e) {
-                        return;
-                      } catch (Exception e) {
-                        LOGGER.warn("Error during connection recovery", e);
-                      }
-                    }
-                  });
       disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, builder.name());
     } else {
       disconnectHandler =
@@ -111,8 +95,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 ExceptionUtils.convert(e.failureCause(), "Connection disconnected");
             this.close(failureCause);
           };
-      this.recoveryRequestQueue = null;
-      this.recoveryLoop = null;
     }
     if (this.connectionSettings.affinity().activated()) {
       this.affinity =
@@ -125,6 +107,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.affinityStrategy = null;
     }
     this.management = createManagement();
+    LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
             addrs -> {
@@ -137,8 +120,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
             this.affinity,
             this.environment.affinityCache(),
             this.affinityStrategy,
-            ConnectionUtils.NO_RETRY_STRATEGY);
+            ConnectionUtils.NO_RETRY_STRATEGY,
+            this.name());
     this.sync(ncw);
+    LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
   }
@@ -224,17 +209,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
     Address address = connectionSettings.selectAddress(addresses);
     StopWatch stopWatch = new StopWatch();
     try {
-      LOGGER.trace("Connecting...");
+      LOGGER.trace("Connecting '{}' to {}...", this.name(), address);
       org.apache.qpid.protonj2.client.Connection connection =
           this.environment.client().connect(address.host(), address.port(), connectionOptions);
+      LOGGER.debug("Created native connection instance for '{}'", this.name());
       ExceptionUtils.wrapGet(connection.openFuture());
-      LOGGER.trace("Connection attempt succeeded");
+      LOGGER.debug("Connection attempt '{}' succeeded", this.name());
       checkBrokerVersion(connection);
       return new NativeConnectionWrapper(connection, extractNode(connection), address);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     } finally {
-      LOGGER.trace("Connection attempt took {}", stopWatch.stop());
+      LOGGER.debug("Connection attempt for '{}' took {}", this.name(), stopWatch.stop());
     }
   }
 
@@ -267,7 +253,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   TopologyListener createTopologyListener(AmqpConnectionBuilder builder) {
     TopologyListener topologyListener;
     if (builder.recoveryConfiguration().topology()) {
-      RecordingTopologyListener rtl = new RecordingTopologyListener(this.executorService());
+      RecordingTopologyListener rtl =
+          new RecordingTopologyListener(
+              "topology-listener-connection-" + this.name(), this.environment.recoveryEventLoop());
       this.entityRecovery = new EntityRecovery(this, rtl);
       topologyListener = rtl;
     } else {
@@ -286,7 +274,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
           ClientIOException ioex = event.failureCause();
-          LOGGER.debug("Disconnect handler, error is the following:", ioex);
+          LOGGER.debug(
+              "Disconnect handler of '{}', error is the following: {}",
+              this.name(),
+              ioex.getMessage());
           if (this.state() == OPENING) {
             LOGGER.debug("Connection is still opening, disconnect handler skipped");
             // the broker is not available when opening the connection
@@ -294,21 +285,33 @@ final class AmqpConnection extends ResourceBase implements Connection {
             return;
           }
           if (this.recoveringConnection.get()) {
-            LOGGER.debug("Filtering recovery task enqueueing, connection recovery in progress");
+            LOGGER.debug(
+                "Filtering recovery task scheduling, connection recovery of '{}' already in progress",
+                this.name());
             return;
           }
           AmqpException exception = ExceptionUtils.convert(event.failureCause());
           LOGGER.debug("Converted native exception to {}", exception.getClass().getSimpleName());
 
           if (RECOVERY_PREDICATE.test(exception) && this.state() != OPENING) {
-            LOGGER.debug("Queueing recovery task, error is {}", exception.getMessage());
-            this.recoveryRequestQueue.add(
-                () ->
-                    recoverAfterConnectionFailure(
-                        recoveryConfiguration, name, exception, resultReference));
+            LOGGER.debug(
+                "Queueing recovery task for '{}', error is {}",
+                this.name(),
+                exception.getMessage());
+            this.environment
+                .executorService()
+                .submit(
+                    () -> {
+                      if (!this.recoveringConnection.get()) {
+                        recoverAfterConnectionFailure(
+                            recoveryConfiguration, name, exception, resultReference);
+                      }
+                    });
           } else {
             LOGGER.debug(
-                "Not recovering connection for error {}", event.failureCause().getMessage());
+                "Not recovering connection '{}' for error {}",
+                this.name(),
+                event.failureCause().getMessage());
           }
         };
 
@@ -319,113 +322,124 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private void recoverAfterConnectionFailure(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
-      AmqpException failureCause,
+      Exception failureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
     LOGGER.info(
-        "Connection to {} has been disconnected, trying to recover", this.currentConnectionLabel());
+        "Connection '{}' to '{}' has been disconnected, trying to recover.",
+        this.name(),
+        this.currentConnectionLabel());
+    LOGGER.debug("Notifying listeners of connection '{}'.", this.name());
     this.state(RECOVERING, failureCause);
     this.changeStateOfPublishers(RECOVERING, failureCause);
     this.changeStateOfConsumers(RECOVERING, failureCause);
     this.nativeConnection = null;
     this.nativeSession = null;
     this.connectionAddress = null;
+    LOGGER.debug("Releasing management resource of connection '{}'.", this.name());
     this.releaseManagementResources();
-    try {
+    CompletableFuture<NativeConnectionWrapper> ncwFuture;
+    if (this.recoveringConnection.compareAndSet(false, true)) {
       this.recoveringConnection.set(true);
-      NativeConnectionWrapper ncw =
+      LOGGER.debug("Connection attempt for '{}'.", this.name());
+      ncwFuture =
           recoverNativeConnection(
               recoveryConfiguration, connectionName, disconnectedHandlerReference);
-      this.sync(ncw);
-      LOGGER.debug("Reconnected to {}", this.currentConnectionLabel());
-    } catch (Exception ex) {
-      if (ex instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      this.closed.set(true);
-      this.changeStateOfPublishers(CLOSED, ex);
-      this.changeStateOfConsumers(CLOSED, ex);
-      this.state(CLOSED, ex);
+    } else {
+      LOGGER.debug("Connection '{}' already recovering, returning.", this.name());
       return;
-    } finally {
-      this.recoveringConnection.set(false);
     }
 
-    try {
-      if (recoveryConfiguration.topology()) {
-        LOGGER.debug("Recovering topology");
-        this.recoverTopology();
-        this.recoverConsumers();
-        this.recoverPublishers();
-        LOGGER.debug("Recovered topology");
-      }
-
-      LOGGER.info("Recovered connection to {}", this.currentConnectionLabel());
-      this.state(OPEN);
-    } catch (Exception ex) {
-      // likely InterruptedException or IO exception
-      LOGGER.info("Error while trying to recover connection", ex);
-    }
+    ncwFuture
+        .thenAccept(
+            ncw -> {
+              this.sync(ncw);
+              LOGGER.debug("Reconnected '{}' to {}", this.name(), this.currentConnectionLabel());
+              this.recoveringConnection.set(false);
+              try {
+                if (recoveryConfiguration.topology()) {
+                  this.management.init();
+                  LOGGER.debug("Recovering topology of connection '{}'...", this.name());
+                  this.recoverTopology();
+                  this.recoverConsumers();
+                  this.recoverPublishers();
+                  LOGGER.debug("Recovered topology of connection '{}'.", this.name());
+                }
+                LOGGER.info(
+                    "Recovered connection '{}' to {}", this.name(), this.currentConnectionLabel());
+                this.state(OPEN);
+              } catch (Exception ex) {
+                // likely InterruptedException or IO exception
+                LOGGER.info(
+                    "Error while trying to recover topology for connection '{}': {}",
+                    this.name(),
+                    ex.getMessage());
+                if (RECOVERY_PREDICATE.test(ex)) {
+                  LOGGER.debug(
+                      "Error during topology recoverable, queueing recovery task for '{}', error is {}",
+                      this.name(),
+                      ex.getMessage());
+                  this.environment
+                      .executorService()
+                      .submit(
+                          () -> {
+                            if (!this.recoveringConnection.get()) {
+                              recoverAfterConnectionFailure(
+                                  recoveryConfiguration, name, ex, disconnectedHandlerReference);
+                            }
+                          });
+                }
+              }
+            })
+        .exceptionally(
+            t -> {
+              this.recoveringConnection.set(false);
+              if (t instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+              }
+              this.close(t);
+              return null;
+            });
   }
 
-  private NativeConnectionWrapper recoverNativeConnection(
+  private CompletableFuture<NativeConnectionWrapper> recoverNativeConnection(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
-          disconnectedHandlerReference)
-      throws InterruptedException {
-    int attempt = 0;
-    while (true) {
-      Duration delay = recoveryConfiguration.backOffDelayPolicy().delay(attempt);
-      if (BackOffDelayPolicy.TIMEOUT.equals(delay)) {
-        throw new AmqpException("Recovery retry timed out");
-      } else {
-        try {
-          Thread.sleep(delay.toMillis());
-        } catch (InterruptedException ex) {
-          Thread.currentThread().interrupt();
-          LOGGER.info("Thread interrupted while waiting during connection recovery");
-          throw ex;
-        }
-      }
-
-      try {
-        NativeConnectionWrapper result =
-            ConnectionUtils.enforceAffinity(
-                addrs -> {
-                  NativeConnectionWrapper wrapper =
-                      connect(
-                          this.connectionSettings,
-                          connectionName,
-                          disconnectedHandlerReference.get(),
-                          addrs);
-                  this.nativeConnection = wrapper.connection();
-                  return wrapper;
-                },
-                this.management,
-                this.affinity,
-                this.environment.affinityCache(),
-                this.affinityStrategy,
-                new ConnectionUtils.RetryStrategy() {
-                  @Override
-                  public <T> T maybeRetry(Supplier<T> task) {
-                    return RetryUtils.callAndMaybeRetry(
-                        task::get,
-                        e -> true,
-                        recoveryConfiguration.backOffDelayPolicy(),
-                        "Connection affinity operation");
-                  }
-                });
-        return result;
-      } catch (Exception ex) {
-        LOGGER.info("Error while trying to recover connection", ex);
-        if (!RECOVERY_PREDICATE.test(ex)) {
-          LOGGER.info(
-              "Stopping connection recovery, exception is not recoverable: {}", ex.getMessage());
-          throw new AmqpException("Could not recover connection after fatal exception", ex);
-        }
-      }
-    }
+          disconnectedHandlerReference) {
+    return AsyncRetry.asyncRetry(
+            () ->
+                ConnectionUtils.enforceAffinity(
+                    addrs -> {
+                      NativeConnectionWrapper wrapper =
+                          connect(
+                              this.connectionSettings,
+                              connectionName,
+                              disconnectedHandlerReference.get(),
+                              addrs);
+                      this.nativeConnection = wrapper.connection();
+                      return wrapper;
+                    },
+                    this.management,
+                    this.affinity,
+                    this.environment.affinityCache(),
+                    this.affinityStrategy,
+                    new ConnectionUtils.RetryStrategy() {
+                      @Override
+                      public <T> T maybeRetry(Supplier<T> task) {
+                        return RetryUtils.callAndMaybeRetry(
+                            task::get,
+                            e -> true,
+                            BackOffDelayPolicy.fixed(Duration.ofMillis(10)),
+                            "Connection affinity operation");
+                      }
+                    },
+                    connectionName))
+        .description("Trying to create native connection for '%s'.", connectionName)
+        .delayPolicy(recoveryConfiguration.backOffDelayPolicy())
+        .retry(RECOVERY_PREDICATE)
+        .scheduler(this.scheduledExecutorService())
+        .build();
   }
 
   private void recoverTopology() throws InterruptedException {
@@ -631,6 +645,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.connectionNodename;
   }
 
+  String name() {
+    return this.name == null ? "<no-name>" : this.name;
+  }
+
   ConnectionUtils.AffinityContext affinity() {
     return this.affinity;
   }
@@ -643,9 +661,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       this.environment.removeConnection(this);
-      if (this.recoveryLoop != null) {
-        this.recoveryLoop.cancel(true);
-      }
       if (this.topologyListener instanceof AutoCloseable) {
         try {
           ((AutoCloseable) this.topologyListener).close();
@@ -667,7 +682,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
         consumer.close();
       }
       try {
-        this.nativeConnection.close();
+        org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;
+        if (nc != null) {
+          nc.close();
+        }
       } catch (Exception e) {
         LOGGER.warn("Error while closing native connection", e);
       }

@@ -19,41 +19,52 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class EventLoop<S> implements AutoCloseable {
+final class EventLoop implements AutoCloseable {
 
   private static final Duration TIMEOUT = Duration.ofSeconds(60);
   private static final Logger LOGGER = LoggerFactory.getLogger(EventLoop.class);
 
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final String label;
   private final Future<?> loop;
   private final AtomicReference<Thread> loopThread = new AtomicReference<>();
-  private final AtomicReference<S> stateReference = new AtomicReference<>();
-  private final BlockingQueue<Consumer<S>> taskQueue = new ArrayBlockingQueue<>(100);
+  private final BlockingQueue<ClientTaskContext<Object>> taskQueue =
+      new LinkedBlockingQueue<>(1000);
 
-  EventLoop(Supplier<S> stateSupplier, String label, ExecutorService executorService) {
-    this.label = label;
+  EventLoop(ExecutorService executorService) {
     CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
     this.loop =
         executorService.submit(
             () -> {
-              S state = stateSupplier.get();
               loopThread.set(Thread.currentThread());
-              stateReference.set(state);
               loopThreadSetLatch.countDown();
+              Map<Long, Object> states = new HashMap<>();
               while (!Thread.currentThread().isInterrupted()) {
                 try {
-                  Consumer<S> task = this.taskQueue.take();
-                  task.accept(state);
+                  ClientTaskContext<Object> context =
+                      this.taskQueue.poll(1000, TimeUnit.MILLISECONDS);
+                  if (context != null) {
+                    Object state = states.get(context.client.id);
+                    state = context.task.apply(state);
+                    if (state == null) {
+                      states.remove(context.client.id);
+                    } else {
+                      states.put(context.client.id, state);
+                    }
+                  }
                 } catch (InterruptedException e) {
+                  LOGGER.debug("Event loop has been interrupted.");
                   return;
                 } catch (Exception e) {
                   LOGGER.warn("Error during processing of topology recording task", e);
@@ -70,56 +81,121 @@ final class EventLoop<S> implements AutoCloseable {
     }
   }
 
-  void submit(Consumer<S> task) {
+  <S> Client<S> register(Supplier<S> stateSupplier) {
+    Client<S> client = new Client<>(this);
+    this.submit(
+        client,
+        nullState -> {
+          S state = stateSupplier.get();
+          client.stateReference.set(state);
+          return state;
+        });
+    return client;
+  }
+
+  private <ST> void submit(Client<ST> client, UnaryOperator<ST> task) {
     if (this.closed.get()) {
       throw new IllegalStateException("Event loop is closed");
     } else {
       if (Thread.currentThread().equals(this.loopThread.get())) {
-        task.accept(this.stateReference.get());
+        task.apply(client.stateReference.get());
       } else {
         CountDownLatch latch = new CountDownLatch(1);
         try {
-          boolean added =
-              this.taskQueue.offer(
+          ClientTaskContext<ST> context =
+              new ClientTaskContext<>(
+                  client,
                   state -> {
                     try {
-                      task.accept(state);
+                      return task.apply(state);
                     } catch (Exception e) {
-                      LOGGER.info("Error during {} task", this.label, e);
+                      LOGGER.info("Error during task", e);
                     } finally {
                       latch.countDown();
                     }
-                  },
-                  TIMEOUT.toMillis(),
-                  TimeUnit.MILLISECONDS);
+                    return null;
+                  });
+          @SuppressWarnings("unchecked")
+          boolean added =
+              this.taskQueue.offer(
+                  (ClientTaskContext<Object>) context, TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
           if (!added) {
-            throw new AmqpException("Enqueueing of %s task timed out", this.label);
+            throw new AmqpException("Enqueueing of task timed out");
           }
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new AmqpException(this.label + " task enqueueing has been interrupted", e);
+          throw new AmqpException("Task enqueueing has been interrupted", e);
         }
         try {
           boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
           if (!completed) {
-            LOGGER.warn("Event loop task did not complete in {} second(s)", TIMEOUT.toSeconds());
+            LOGGER.warn(
+                "Event loop task did not complete in {} second(s), queue size is {}",
+                TIMEOUT.toSeconds(),
+                this.taskQueue.size());
           }
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new AmqpException(this.label + " Topology task processing has been interrupted", e);
+          throw new AmqpException("Topology task processing has been interrupted", e);
         }
       }
     }
-  }
-
-  S state() {
-    return this.stateReference.get();
   }
 
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
       this.loop.cancel(true);
+    }
+  }
+
+  private static final AtomicLong CLIENT_ID_SEQUENCE = new AtomicLong();
+
+  static class Client<S> implements AutoCloseable {
+
+    private final long id;
+    private final AtomicReference<S> stateReference = new AtomicReference<>();
+    private final EventLoop loop;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
+    private Client(EventLoop loop) {
+      this.id = CLIENT_ID_SEQUENCE.getAndIncrement();
+      this.loop = loop;
+    }
+
+    void submit(Consumer<S> task) {
+      if (this.closed.get()) {
+        throw new IllegalStateException("Event loop is closed");
+      } else {
+        this.loop.submit(
+            this,
+            s -> {
+              task.accept(s);
+              return s;
+            });
+      }
+    }
+
+    @Override
+    public void close() {
+      if (this.closed.compareAndSet(false, true)) {
+        this.loop.submit(this, s -> null);
+      }
+    }
+
+    S state() {
+      return this.stateReference.get();
+    }
+  }
+
+  private static class ClientTaskContext<S> {
+
+    private final Client<S> client;
+    private final UnaryOperator<S> task;
+
+    private ClientTaskContext(Client<S> client, UnaryOperator<S> task) {
+      this.client = client;
+      this.task = task;
     }
   }
 }

@@ -25,21 +25,85 @@ public interface BackOffDelayPolicy {
 
   Duration delay(int recoveryAttempt);
 
-  static BackOffDelayPolicy fixed(Duration delay) {
-    return new FixedBackOffDelayPolicy(delay);
+  static BackOffDelayPolicy fixedWithInitialDelay(Duration initialDelay, Duration delay) {
+    return new FixedWithInitialDelayBackOffPolicy(initialDelay, delay);
   }
 
-  class FixedBackOffDelayPolicy implements BackOffDelayPolicy {
+  static BackOffDelayPolicy fixedWithInitialDelay(
+      Duration initialDelay, Duration delay, Duration timeout) {
+    return new FixedWithInitialDelayAndTimeoutBackOffPolicy(initialDelay, delay, timeout);
+  }
 
+  static BackOffDelayPolicy fixed(Duration delay) {
+    return new FixedWithInitialDelayBackOffPolicy(delay, delay);
+  }
+
+  final class FixedWithInitialDelayBackOffPolicy implements BackOffDelayPolicy {
+
+    private final Duration initialDelay;
     private final Duration delay;
 
-    private FixedBackOffDelayPolicy(Duration delay) {
+    private FixedWithInitialDelayBackOffPolicy(Duration initialDelay, Duration delay) {
+      this.initialDelay = initialDelay;
       this.delay = delay;
     }
 
     @Override
     public Duration delay(int recoveryAttempt) {
-      return this.delay;
+      return recoveryAttempt == 0 ? initialDelay : delay;
+    }
+
+    @Override
+    public String toString() {
+      return "FixedWithInitialDelayBackOffPolicy{"
+          + "initialDelay="
+          + initialDelay
+          + ", delay="
+          + delay
+          + '}';
+    }
+  }
+
+  final class FixedWithInitialDelayAndTimeoutBackOffPolicy implements BackOffDelayPolicy {
+
+    private final int attemptLimitBeforeTimeout;
+    private final BackOffDelayPolicy delegate;
+
+    private FixedWithInitialDelayAndTimeoutBackOffPolicy(
+        Duration initialDelay, Duration delay, Duration timeout) {
+      this(fixedWithInitialDelay(initialDelay, delay), timeout);
+    }
+
+    private FixedWithInitialDelayAndTimeoutBackOffPolicy(
+        BackOffDelayPolicy policy, Duration timeout) {
+      if (timeout.toMillis() < policy.delay(0).toMillis()) {
+        throw new IllegalArgumentException("Timeout must be longer than initial delay");
+      }
+      this.delegate = policy;
+      // best effort, assume FixedWithInitialDelay-ish policy
+      Duration initialDelay = policy.delay(0);
+      Duration delay = policy.delay(1);
+      long timeoutWithInitialDelay = timeout.toMillis() - initialDelay.toMillis();
+      this.attemptLimitBeforeTimeout = (int) (timeoutWithInitialDelay / delay.toMillis()) + 1;
+    }
+
+    @Override
+    public Duration delay(int recoveryAttempt) {
+      if (recoveryAttempt >= attemptLimitBeforeTimeout) {
+        return TIMEOUT;
+      } else {
+        return delegate.delay(recoveryAttempt);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "FixedWithInitialDelayAndTimeoutBackOffPolicy{"
+          + "attemptLimitBeforeTimeout="
+          + attemptLimitBeforeTimeout
+          + ", delegate="
+          + delegate
+          + '}';
     }
   }
 }

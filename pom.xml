@@ -346,7 +346,6 @@
                     <argLine>${test-arguments}</argLine>
                     <systemPropertyVariables>
                         <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
-                        <rabbitmqctl.bin>DOCKER:rabbitmq</rabbitmqctl.bin>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

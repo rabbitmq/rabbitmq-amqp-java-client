@@ -36,7 +36,7 @@ public class RecordingTopologyListenerTest {
   @BeforeEach
   void init() {
     executorService = Executors.newSingleThreadExecutor();
-    recovery = new RecordingTopologyListener(executorService);
+    recovery = new RecordingTopologyListener("", new EventLoop(executorService));
   }
 
   @AfterEach

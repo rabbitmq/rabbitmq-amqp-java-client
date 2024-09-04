@@ -28,7 +28,8 @@ import org.junit.jupiter.api.*;
 public class EventLoopTest {
 
   static ExecutorService executorService;
-  EventLoop<State> loop;
+  EventLoop loop;
+  EventLoop.Client<State> client;
 
   @BeforeAll
   static void beforeAll() {
@@ -37,7 +38,8 @@ public class EventLoopTest {
 
   @BeforeEach
   void beforeEach() {
-    loop = new EventLoop<>(State::new, "test", executorService);
+    loop = new EventLoop(executorService);
+    client = loop.register(State::new);
   }
 
   @AfterEach
@@ -53,22 +55,27 @@ public class EventLoopTest {
   @Test
   void submitTasks() {
     AtomicInteger buffer = new AtomicInteger();
-    loop.submit(s -> s.a = 42);
-    loop.submit(s -> buffer.set(s.a));
+    client.submit(s -> s.a = 42);
+    client.submit(
+        s -> {
+          buffer.set(s.a);
+        });
     assertThat(buffer).hasValue(42);
 
-    loop.submit(
+    client.submit(
         s -> {
           s.a = 1;
           s.b = 2;
         });
-    loop.submit(s -> buffer.set(s.a));
+    client.submit(s -> buffer.set(s.a));
     assertThat(buffer).hasValue(1);
-    loop.submit(s -> buffer.set(s.b));
+    client.submit(s -> buffer.set(s.b));
     assertThat(buffer).hasValue(2);
 
+    client.close();
+    assertThatThrownBy(() -> client.submit(s -> {})).isInstanceOf(IllegalStateException.class);
     loop.close();
-    assertThatThrownBy(() -> loop.submit(s -> {})).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> loop.register(State::new));
   }
 
   static class State {

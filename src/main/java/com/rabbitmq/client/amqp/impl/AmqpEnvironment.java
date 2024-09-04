@@ -37,6 +37,7 @@ class AmqpEnvironment implements Environment {
       DefaultConnectionSettings.instance();
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
+  private final boolean internalScheduledExecutor;
   private final ConnectionManager connectionManager = new ConnectionManager(this);
   private final long id;
   private final Clock clock = new Clock();
@@ -45,10 +46,13 @@ class AmqpEnvironment implements Environment {
   private final AtomicBoolean clockRefreshSet = new AtomicBoolean(false);
   private final MetricsCollector metricsCollector;
   private final ObservationCollector observationCollector;
-  private ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
+  private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
+  private final EventLoop recoveryEventLoop;
+  private final ExecutorService recoveryEventLoopExecutorService;
 
   AmqpEnvironment(
       ExecutorService executorService,
+      ScheduledExecutorService scheduledExecutorService,
       DefaultConnectionSettings<?> connectionSettings,
       MetricsCollector metricsCollector,
       ObservationCollector observationCollector) {
@@ -58,19 +62,35 @@ class AmqpEnvironment implements Environment {
     ClientOptions clientOptions = new ClientOptions();
     this.client = Client.create(clientOptions);
 
+    String threadPrefix = String.format("rabbitmq-amqp-environment-%d-", this.id);
     if (executorService == null) {
-      this.executorService = Utils.executorService("rabbitmq-amqp-environment-%d-", this.id);
+      this.executorService = Utils.executorService(threadPrefix);
       this.internalExecutor = true;
     } else {
       this.executorService = executorService;
       this.internalExecutor = false;
     }
-    this.scheduledExecutorService =
-        Executors.newScheduledThreadPool(0, Utils.defaultThreadFactory());
+    if (scheduledExecutorService == null) {
+      this.scheduledExecutorService =
+          Executors.newScheduledThreadPool(1, Utils.threadFactory(threadPrefix + "scheduler-"));
+      this.internalScheduledExecutor = true;
+    } else {
+      this.scheduledExecutorService = scheduledExecutorService;
+      this.internalScheduledExecutor = false;
+    }
     this.metricsCollector =
         metricsCollector == null ? NoOpMetricsCollector.INSTANCE : metricsCollector;
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
+    this.recoveryEventLoopExecutorService =
+        new ThreadPoolExecutor(
+            1,
+            1,
+            60,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(),
+            Utils.threadFactory(threadPrefix + "event-loop-"));
+    this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopExecutorService);
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -95,8 +115,13 @@ class AmqpEnvironment implements Environment {
     if (this.closed.compareAndSet(false, true)) {
       this.connectionManager.close();
       this.client.close();
+      this.recoveryEventLoop.close();
+      this.recoveryEventLoopExecutorService.shutdownNow();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
+      }
+      if (this.internalScheduledExecutor) {
+        this.scheduledExecutorService.shutdownNow();
       }
       if (this.clockRefreshFuture != null) {
         this.clockRefreshFuture.cancel(false);
@@ -128,6 +153,10 @@ class AmqpEnvironment implements Environment {
 
   ConnectionUtils.AffinityCache affinityCache() {
     return this.affinityCache;
+  }
+
+  EventLoop recoveryEventLoop() {
+    return this.recoveryEventLoop;
   }
 
   AmqpConnection connection(AmqpConnectionBuilder builder) {
