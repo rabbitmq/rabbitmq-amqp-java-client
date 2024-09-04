@@ -65,7 +65,7 @@
         <google-java-format.version>1.23.0</google-java-format.version>
         <spotbugs-maven-plugin.version>4.8.6.2</spotbugs-maven-plugin.version>
         <spotbugs.version>4.8.6</spotbugs.version>
-        <buildnumber.plugin.version>3.2.0</buildnumber.plugin.version>
+        <buildnumber.plugin.version>3.2.1</buildnumber.plugin.version>
         <maven.gpg.plugin.version>3.2.5</maven.gpg.plugin.version>
         <asciidoctor.maven.plugin.version>3.0.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
