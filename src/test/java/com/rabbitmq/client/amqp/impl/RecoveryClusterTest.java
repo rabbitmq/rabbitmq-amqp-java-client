@@ -34,7 +34,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,14 +68,8 @@ public class RecoveryClusterTest {
 
   @BeforeEach
   void init(TestInfo info) {
-    executorService = Executors.newCachedThreadPool(Utils.threadFactory("recover-cluster-test-"));
     environment =
-        new AmqpEnvironmentBuilder()
-            .connectionSettings()
-            .uris(URIS)
-            .environmentBuilder()
-            .executorService(executorService)
-            .build();
+        new AmqpEnvironmentBuilder().connectionSettings().uris(URIS).environmentBuilder().build();
     this.connection = connection(b -> b.name("c-management").recovery().connectionBuilder());
     this.management = connection.management();
     this.testInfo = info;

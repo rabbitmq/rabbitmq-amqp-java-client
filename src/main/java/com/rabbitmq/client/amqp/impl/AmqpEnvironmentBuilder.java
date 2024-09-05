@@ -33,6 +33,8 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
   private ScheduledExecutorService scheduledExecutorService;
+  private ExecutorService publisherExecutorService;
+  private ExecutorService consumerExecutorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
   private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
 
@@ -46,6 +48,16 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   public AmqpEnvironmentBuilder scheduledExecutorService(
       ScheduledExecutorService scheduledExecutorService) {
     this.scheduledExecutorService = scheduledExecutorService;
+    return this;
+  }
+
+  public AmqpEnvironmentBuilder publisherExecutorService(ExecutorService publisherExecutorService) {
+    this.publisherExecutorService = publisherExecutorService;
+    return this;
+  }
+
+  public AmqpEnvironmentBuilder consumerExecutorService(ExecutorService consumerExecutorService) {
+    this.consumerExecutorService = consumerExecutorService;
     return this;
   }
 
@@ -69,6 +81,8 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return new AmqpEnvironment(
         executorService,
         scheduledExecutorService,
+        publisherExecutorService,
+        consumerExecutorService,
         connectionSettings,
         metricsCollector,
         observationCollector);

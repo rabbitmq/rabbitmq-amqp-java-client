@@ -368,8 +368,7 @@ class AmqpManagement implements Management {
         if (loop == null) {
           Runnable receiveTask = receiveTask();
           LOGGER.debug("Starting management receive loop ({}).", this);
-          this.receiveLoop =
-              this.connection.environment().managementExecutorService().submit(receiveTask);
+          this.receiveLoop = this.connection.environment().executorService().submit(receiveTask);
           LOGGER.debug("Management initialized ({}).", this);
         }
       } finally {

@@ -206,7 +206,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private void startReceivingLoop() {
     Runnable receiveTask = createReceiveTask(nativeReceiver, messageHandler);
-    this.receiveLoop = this.connection.executorService().submit(receiveTask);
+    this.receiveLoop = this.connection.environment().consumerExecutorService().submit(receiveTask);
   }
 
   void recoverAfterConnectionFailure() {

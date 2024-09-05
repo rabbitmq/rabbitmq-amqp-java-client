@@ -558,10 +558,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.environment;
   }
 
-  ExecutorService executorService() {
-    return this.environment.executorService();
-  }
-
   ScheduledExecutorService scheduledExecutorService() {
     return this.environment.scheduledExecutorService();
   }

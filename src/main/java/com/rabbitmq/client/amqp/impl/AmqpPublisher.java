@@ -57,7 +57,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   AmqpPublisher(AmqpPublisherBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
-    this.executorService = builder.connection().executorService();
+    this.executorService = builder.connection().environment().publisherExecutorService();
     this.address = builder.address();
     this.destinationSpec = builder.destination();
     this.connection = builder.connection();
