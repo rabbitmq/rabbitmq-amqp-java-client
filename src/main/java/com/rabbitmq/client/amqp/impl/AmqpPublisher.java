@@ -76,9 +76,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
             return this.sender.send(nativeMessage.durable(true));
           } catch (ClientIllegalStateException e) {
             // the link is closed
+            LOGGER.debug("Error while publishing: '{}'. Closing publisher.", e.getMessage());
             this.close(ExceptionUtils.convert(e));
             throw ExceptionUtils.convert(e);
           } catch (ClientException e) {
+            LOGGER.debug("Error while publishing: '{}'.", e.getMessage());
             throw ExceptionUtils.convert(e);
           }
         };
@@ -109,6 +111,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
         () -> {
           Status status;
           try {
+            // FIXME set a timeout for publishing settlement
             tracker.settlementFuture().get();
             status =
                 tracker.remoteState() == DeliveryState.accepted() ? Status.ACCEPTED : Status.FAILED;

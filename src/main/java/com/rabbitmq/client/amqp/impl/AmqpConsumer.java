@@ -18,10 +18,13 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
+import static java.time.Duration.ofSeconds;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -211,8 +214,25 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   void recoverAfterConnectionFailure() {
     this.nativeReceiver =
-        createNativeReceiver(
-            this.sessionHandler.sessionNoCheck(), this.address, this.linkProperties, this.filters);
+        RetryUtils.callAndMaybeRetry(
+            () ->
+                createNativeReceiver(
+                    this.sessionHandler.sessionNoCheck(),
+                    this.address,
+                    this.linkProperties,
+                    this.filters),
+            e -> {
+              boolean shouldRetry =
+                  e instanceof AmqpException.AmqpResourceClosedException
+                      && e.getMessage().contains("stream queue")
+                      && e.getMessage()
+                          .contains("does not have a running replica on the local node");
+              LOGGER.debug("Retrying receiver creation on consumer recovery: {}", shouldRetry);
+              return shouldRetry;
+            },
+            List.of(ofSeconds(1), ofSeconds(2), ofSeconds(3), BackOffDelayPolicy.TIMEOUT),
+            "Create AMQP receiver to address '%s'",
+            this.address);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
     this.unsettledMessageCount.set(0);

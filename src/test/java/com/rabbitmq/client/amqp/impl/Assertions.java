@@ -90,7 +90,7 @@ final class Assertions {
     SyncAssert completes(Duration timeout) {
       boolean completed = actual.await(timeout);
       if (!completed) {
-        fail("Sync timed out after %d ms", timeout.toMillis());
+        fail("Sync '%s' timed out after %d ms", this.actual.toString(), timeout.toMillis());
       }
       return this;
     }

@@ -37,11 +37,12 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,26 +109,7 @@ public class RecoveryClusterTest {
             Management.QueueType.QUORUM,
             Management.QueueType.CLASSIC,
             Management.QueueType.CLASSIC);
-    AtomicInteger classicQueueCount = new AtomicInteger(0);
-    List<QueueConfiguration> queueConfigurations =
-        queueTypes.stream()
-            .flatMap(
-                (Function<Management.QueueType, Stream<QueueConfiguration>>)
-                    type ->
-                        IntStream.range(0, queueCount)
-                            .mapToObj(
-                                ignored -> {
-                                  boolean exclusive =
-                                      type == Management.QueueType.CLASSIC
-                                          && classicQueueCount.incrementAndGet() > queueCount;
-                                  String prefix =
-                                      type.name().toLowerCase() + (exclusive ? "-ex-" : "-");
-                                  String n = name(prefix);
-                                  UnaryOperator<Management.QueueSpecification> c =
-                                      s -> s.type(type).exclusive(exclusive);
-                                  return new QueueConfiguration(n, type, exclusive, c);
-                                }))
-            .collect(toList());
+    List<QueueConfiguration> queueConfigurations = queueConfigurations(queueTypes, queueCount);
     List<String> queueNames = queueConfigurations.stream().map(c -> c.name).collect(toList());
     List<PublisherState> publisherStates = Collections.emptyList();
     List<ConsumerState> consumerStates = Collections.emptyList();
@@ -152,10 +134,12 @@ public class RecoveryClusterTest {
                           .destinationQueue(conf.name)
                           .bind();
                     } else {
+                      boolean isolate = conf.type == Management.QueueType.STREAM;
                       c =
                           connection(
                               b ->
                                   b.name(cName)
+                                      .isolateResources(isolate)
                                       .affinity()
                                       .queue(conf.name)
                                       .operation(CONSUME)
@@ -210,6 +194,7 @@ public class RecoveryClusterTest {
             waitAtMostNoException(TIMEOUT, () -> management.queueInfo(n));
           });
       LOGGER.info("Retrieved info for each queue.");
+
       queueConfigurations.forEach(
           c -> {
             if (c.type == Management.QueueType.QUORUM || c.type == Management.QueueType.STREAM) {
@@ -258,10 +243,16 @@ public class RecoveryClusterTest {
           p -> System.out.printf("  queue %s, is on member? %s%n", p.queue, p.isOnMember()));
     } catch (Throwable e) {
       LOGGER.info("Test failed with {}", e.getMessage(), e);
-      Consumer<AmqpConnection> log = c -> LOGGER.info("Connection {}: {}", c.name(), c.state());
-      log.accept(this.connection);
-      publisherStates.forEach(s -> log.accept(s.connection));
-      consumerStates.forEach(s -> log.accept(s.connection));
+      BiConsumer<AmqpConnection, ResourceBase> log =
+          (c, r) -> {
+            LOGGER.info("Connection {}: {}", c.name(), c.state());
+            if (r != null) {
+              LOGGER.info("Resource: {}", r.state());
+            }
+          };
+      log.accept(this.connection, null);
+      publisherStates.forEach(s -> log.accept(s.connection, s.publisher));
+      consumerStates.forEach(s -> log.accept(s.connection, s.consumer));
       throw e;
     } finally {
       publisherStates.forEach(PublisherState::close);
@@ -270,6 +261,30 @@ public class RecoveryClusterTest {
           .filter(c -> !c.exclusive)
           .forEach(c -> management.queueDeletion().delete(c.name));
     }
+  }
+
+  @NotNull
+  private List<QueueConfiguration> queueConfigurations(
+      List<Management.QueueType> queueTypes, int queueCount) {
+    AtomicInteger classicQueueCount = new AtomicInteger(0);
+    return queueTypes.stream()
+        .flatMap(
+            (Function<Management.QueueType, Stream<QueueConfiguration>>)
+                type ->
+                    IntStream.range(0, queueCount)
+                        .mapToObj(
+                            ignored -> {
+                              boolean exclusive =
+                                  type == Management.QueueType.CLASSIC
+                                      && classicQueueCount.incrementAndGet() > queueCount;
+                              String prefix =
+                                  type.name().toLowerCase() + (exclusive ? "-ex-" : "-");
+                              String n = name(prefix);
+                              UnaryOperator<Management.QueueSpecification> c =
+                                  s -> s.type(type).exclusive(exclusive);
+                              return new QueueConfiguration(n, type, exclusive, c);
+                            }))
+        .collect(toList());
   }
 
   String name(String prefix) {
@@ -328,7 +343,9 @@ public class RecoveryClusterTest {
     }
 
     Sync waitForNewMessages(int messageCount) {
-      TestUtils.Sync sync = TestUtils.sync(messageCount, () -> this.postAccepted.set(() -> {}));
+      TestUtils.Sync sync =
+          TestUtils.sync(
+              messageCount, () -> this.postAccepted.set(() -> {}), "Publisher to '%s'", this.queue);
       this.postAccepted.set(sync::down);
       return sync;
     }
@@ -383,7 +400,9 @@ public class RecoveryClusterTest {
     }
 
     TestUtils.Sync waitForNewMessages(int messageCount) {
-      TestUtils.Sync sync = TestUtils.sync(messageCount, () -> this.postHandle.set(() -> {}));
+      TestUtils.Sync sync =
+          TestUtils.sync(
+              messageCount, () -> this.postHandle.set(() -> {}), "Consumer from '%s'", this.queue);
       this.postHandle.set(sync::down);
       return sync;
     }

@@ -458,11 +458,11 @@ public abstract class TestUtils {
   }
 
   static Sync sync(int count) {
-    return new Sync(count, () -> {});
+    return new Sync(count, () -> {}, null);
   }
 
-  static Sync sync(int count, Runnable doneCallback) {
-    return new Sync(count, doneCallback);
+  static Sync sync(int count, Runnable doneCallback, String format, Object... args) {
+    return new Sync(count, doneCallback, format, args);
   }
 
   private static class CloseableResourceWrapper<T>
@@ -488,11 +488,17 @@ public abstract class TestUtils {
 
   static class Sync {
 
+    private final String description;
     private final AtomicReference<CountDownLatch> latch = new AtomicReference<>();
     private final AtomicReference<Runnable> doneCallback = new AtomicReference<>();
 
-    private Sync(int count, Runnable doneCallback) {
+    private Sync(int count, Runnable doneCallback, String description, Object... args) {
       this.latch.set(new CountDownLatch(count));
+      if (description == null) {
+        this.description = "N/A";
+      } else {
+        this.description = String.format(description, args);
+      }
       this.doneCallback.set(doneCallback);
     }
 
@@ -517,6 +523,11 @@ public abstract class TestUtils {
 
     void reset() {
       this.reset(1);
+    }
+
+    @Override
+    public String toString() {
+      return this.description;
     }
   }
 }
