@@ -106,6 +106,7 @@ public class RecoveryClusterTest {
     int queueCount = 10;
     List<Management.QueueType> queueTypes =
         List.of(
+            Management.QueueType.STREAM,
             Management.QueueType.QUORUM,
             Management.QueueType.CLASSIC,
             Management.QueueType.CLASSIC);
