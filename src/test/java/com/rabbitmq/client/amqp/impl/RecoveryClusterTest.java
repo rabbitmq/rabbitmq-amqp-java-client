@@ -33,13 +33,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +56,6 @@ public class RecoveryClusterTest {
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(3));
   static List<String> nodes;
-  ExecutorService executorService;
   Environment environment;
   AmqpConnection connection;
   Management management;
@@ -78,48 +79,105 @@ public class RecoveryClusterTest {
   @AfterEach
   void tearDown() {
     environment.close();
-    if (executorService != null) {
-      executorService.shutdownNow();
+  }
+
+  private static class QueueConfiguration {
+
+    private final String name;
+    private final Management.QueueType type;
+    private final boolean exclusive;
+    private final UnaryOperator<Management.QueueSpecification> configurationCallback;
+
+    private QueueConfiguration(
+        String name,
+        Management.QueueType type,
+        boolean exclusive,
+        UnaryOperator<Management.QueueSpecification> configurationCallback) {
+      this.name = name;
+      this.type = type;
+      this.exclusive = exclusive;
+      this.configurationCallback = configurationCallback;
     }
   }
 
   @Test
   void clusterRestart() {
-    int qqCount = 20;
-    List<String> qqNames =
-        IntStream.range(0, qqCount).mapToObj(ignored -> name("qq-")).collect(toList());
+    int queueCount = 10;
+    List<Management.QueueType> queueTypes =
+        List.of(
+            Management.QueueType.QUORUM,
+            Management.QueueType.CLASSIC,
+            Management.QueueType.CLASSIC);
+    AtomicInteger classicQueueCount = new AtomicInteger(0);
+    List<QueueConfiguration> queueConfigurations =
+        queueTypes.stream()
+            .flatMap(
+                (Function<Management.QueueType, Stream<QueueConfiguration>>)
+                    type ->
+                        IntStream.range(0, queueCount)
+                            .mapToObj(
+                                ignored -> {
+                                  boolean exclusive =
+                                      type == Management.QueueType.CLASSIC
+                                          && classicQueueCount.incrementAndGet() > queueCount;
+                                  String prefix =
+                                      type.name().toLowerCase() + (exclusive ? "-ex-" : "-");
+                                  String n = name(prefix);
+                                  UnaryOperator<Management.QueueSpecification> c =
+                                      s -> s.type(type).exclusive(exclusive);
+                                  return new QueueConfiguration(n, type, exclusive, c);
+                                }))
+            .collect(toList());
+    List<String> queueNames = queueConfigurations.stream().map(c -> c.name).collect(toList());
     List<PublisherState> publisherStates = Collections.emptyList();
     List<ConsumerState> consumerStates = Collections.emptyList();
     try {
-      qqNames.forEach(n -> management.queue(n).type(Management.QueueType.QUORUM).declare());
+      queueConfigurations.stream()
+          .filter(c -> !c.exclusive)
+          .forEach(c -> c.configurationCallback.apply(management.queue(c.name)).declare());
       AtomicInteger counter = new AtomicInteger(0);
       consumerStates =
-          qqNames.stream()
+          queueConfigurations.stream()
               .map(
-                  n ->
-                      new ConsumerState(
-                          n,
+                  conf -> {
+                    AmqpConnection c;
+                    String cName = "consumer-" + counter.getAndIncrement();
+                    if (conf.exclusive) {
+                      c = connection(b -> b.name(cName));
+                      conf.configurationCallback.apply(c.management().queue(conf.name)).declare();
+                      c.management()
+                          .binding()
+                          .sourceExchange("amq.direct")
+                          .key(conf.name)
+                          .destinationQueue(conf.name)
+                          .bind();
+                    } else {
+                      c =
                           connection(
                               b ->
-                                  b.name("consumer-" + counter.getAndIncrement())
+                                  b.name(cName)
                                       .affinity()
-                                      .queue(n)
+                                      .queue(conf.name)
                                       .operation(CONSUME)
-                                      .connection())))
+                                      .connection());
+                    }
+                    return new ConsumerState(conf.name, c);
+                  })
               .collect(toList());
 
       counter.set(0);
       publisherStates =
-          qqNames.stream()
+          queueConfigurations.stream()
               .map(
-                  n ->
+                  c ->
                       new PublisherState(
-                          n,
+                          c.name,
+                          c.exclusive,
                           connection(
                               b ->
                                   b.name("publisher-" + counter.getAndIncrement())
                                       .affinity()
-                                      .queue(n)
+                                      .queue(c.name)
                                       .operation(PUBLISH)
                                       .connection())))
               .collect(toList());
@@ -146,17 +204,25 @@ public class RecoveryClusterTest {
           () -> format("Test connection state is %s, expecting %s", connection.state(), OPEN));
       LOGGER.info("Test connection has recovered");
 
-      qqNames.forEach(
+      queueNames.forEach(
           n -> {
             LOGGER.info("Getting info for queue {}", n);
             waitAtMostNoException(TIMEOUT, () -> management.queueInfo(n));
           });
       LOGGER.info("Retrieved info for each queue.");
-      qqNames.forEach(
-          n ->
-              assertThat(management.queueInfo(n).replicas())
+      queueConfigurations.forEach(
+          c -> {
+            if (c.type == Management.QueueType.QUORUM || c.type == Management.QueueType.STREAM) {
+              assertThat(management.queueInfo(c.name).replicas())
                   .hasSameSizeAs(nodes)
-                  .containsExactlyInAnyOrderElementsOf(nodes));
+                  .containsExactlyInAnyOrderElementsOf(nodes);
+            } else {
+              assertThat(management.queueInfo(c.name).replicas())
+                  .hasSize(1)
+                  .containsAnyElementsOf(nodes);
+            }
+          });
+
       LOGGER.info("Checked replica info for each queue.");
 
       syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
@@ -171,7 +237,7 @@ public class RecoveryClusterTest {
       assertThat(consumerStates).allMatch(s -> s.state() == OPEN);
 
       System.out.println("Queues:");
-      qqNames.forEach(
+      queueNames.forEach(
           q -> {
             Management.QueueInfo queueInfo = management.queueInfo(q);
             System.out.printf(
@@ -200,7 +266,9 @@ public class RecoveryClusterTest {
     } finally {
       publisherStates.forEach(PublisherState::close);
       consumerStates.forEach(ConsumerState::close);
-      qqNames.forEach(n -> management.queueDeletion().delete(n));
+      queueConfigurations.stream()
+          .filter(c -> !c.exclusive)
+          .forEach(c -> management.queueDeletion().delete(c.name));
     }
   }
 
@@ -225,16 +293,13 @@ public class RecoveryClusterTest {
     final RateLimiter limiter = RateLimiter.create(10);
     final AtomicReference<Runnable> postAccepted = new AtomicReference<>(() -> {});
 
-    private PublisherState(String queue, AmqpConnection connection) {
+    private PublisherState(String queue, boolean exclusive, AmqpConnection connection) {
       this.queue = queue;
       this.connection = connection;
-      this.publisher =
-          (AmqpPublisher)
-              connection
-                  .publisherBuilder()
-                  .queue(queue)
-                  .listeners(context -> state.set(context.currentState()))
-                  .build();
+      PublisherBuilder builder =
+          connection.publisherBuilder().listeners(context -> state.set(context.currentState()));
+      builder = exclusive ? builder.exchange("amq.direct").key(queue) : builder.queue(queue);
+      this.publisher = (AmqpPublisher) builder.build();
     }
 
     void start() {

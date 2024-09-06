@@ -123,7 +123,6 @@ class AmqpEnvironment implements Environment {
   }
 
   Clock clock() {
-    // FIXME set clock on demand
     if (this.clockRefreshSet.compareAndSet(false, true)) {
       this.clockRefreshFuture =
           this.scheduledExecutorService.scheduleAtFixedRate(
