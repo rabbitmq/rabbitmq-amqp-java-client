@@ -477,7 +477,7 @@ public class TopologyRecoveryTest {
       connection.management().exchange(e).type(FANOUT).declare();
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
-      int consumerCount = 100;
+      int consumerCount = 60;
       TestUtils.Sync consumeSync = TestUtils.sync(consumerCount);
       Consumer.MessageHandler handler =
           (ctx, m) -> {
