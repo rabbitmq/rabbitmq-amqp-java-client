@@ -48,8 +48,6 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
           SASL_MECHANISM_ANONYMOUS,
           SASL_MECHANISM_EXTERNAL);
 
-  static final String DEFAULT_USERNAME = "guest";
-  static final String DEFAULT_PASSWORD = DEFAULT_USERNAME;
   static final String DEFAULT_HOST = "localhost";
   static final int DEFAULT_PORT = 5672;
   static final int DEFAULT_TLS_PORT = 5671;
@@ -57,8 +55,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   private String host = DEFAULT_HOST;
   private int port = DEFAULT_PORT;
-  private CredentialsProvider credentialsProvider =
-      new DefaultUsernamePasswordCredentialsProvider(DEFAULT_USERNAME, DEFAULT_PASSWORD);
+  private CredentialsProvider credentialsProvider;
   private String virtualHost = DEFAULT_VIRTUAL_HOST;
   private List<URI> uris = Collections.emptyList();
   private Duration idleTimeout = Duration.ofMillis(ConnectionOptions.DEFAULT_IDLE_TIMEOUT);
@@ -173,14 +170,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
               SASL_MECHANISMS.stream().map(n -> "'" + n + "'").collect(Collectors.joining(", "))));
     }
     this.saslMechanism = mechanism;
-    if (SASL_MECHANISM_ANONYMOUS.equals(mechanism)) {
-      this.credentialsProvider = null;
-    } else if (SASL_MECHANISM_PLAIN.equals(mechanism)) {
-      this.credentialsProvider =
-          new DefaultUsernamePasswordCredentialsProvider(DEFAULT_USERNAME, DEFAULT_PASSWORD);
-    } else if (SASL_MECHANISM_EXTERNAL.equals(mechanism)) {
-      this.credentialsProvider = null;
-    }
+    this.credentialsProvider = null;
     return this.toReturn();
   }
 
