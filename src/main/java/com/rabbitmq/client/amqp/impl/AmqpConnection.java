@@ -433,7 +433,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
                         return RetryUtils.callAndMaybeRetry(
                             task::get,
                             e -> true,
-                            BackOffDelayPolicy.fixed(Duration.ofMillis(10)),
+                            Duration.ofMillis(10),
+                            5,
                             "Connection affinity operation");
                       }
                     },

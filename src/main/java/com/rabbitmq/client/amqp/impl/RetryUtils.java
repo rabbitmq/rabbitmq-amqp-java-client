@@ -51,6 +51,21 @@ abstract class RetryUtils {
   static <T> T callAndMaybeRetry(
       Callable<T> operation,
       Predicate<Exception> retryCondition,
+      Duration waitTime,
+      int attempts,
+      String format,
+      Object... args) {
+    return callAndMaybeRetry(
+        operation,
+        retryCondition,
+        i -> i > attempts ? BackOffDelayPolicy.TIMEOUT : waitTime,
+        format,
+        args);
+  }
+
+  static <T> T callAndMaybeRetry(
+      Callable<T> operation,
+      Predicate<Exception> retryCondition,
       BackOffDelayPolicy delayPolicy,
       String format,
       Object... args) {
@@ -82,7 +97,7 @@ abstract class RetryUtils {
             try {
               Thread.sleep(delay.toMillis());
             } catch (InterruptedException ex) {
-              Thread.interrupted();
+              Thread.currentThread().interrupt();
               lastException = ex;
               keepTrying = false;
             }
