@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-pivotalrabbitmq/rabbitmq:main}
+export RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-pivotalrabbitmq/rabbitmq:v4.0.x}
 
 wait_for_message() {
   while ! docker logs "$1" | grep -q "$2";
