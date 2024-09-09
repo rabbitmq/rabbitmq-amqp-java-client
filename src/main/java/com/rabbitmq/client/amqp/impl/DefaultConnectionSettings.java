@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
@@ -41,6 +42,11 @@ import org.slf4j.LoggerFactory;
 abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultConnectionSettings.class);
+  private static final List<String> SASL_MECHANISMS =
+      List.of(
+          ConnectionSettings.SASL_MECHANISM_PLAIN,
+          SASL_MECHANISM_ANONYMOUS,
+          SASL_MECHANISM_EXTERNAL);
 
   static final String DEFAULT_USERNAME = "guest";
   static final String DEFAULT_PASSWORD = DEFAULT_USERNAME;
@@ -68,7 +74,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
         }
       };
   private final List<Address> addresses = new CopyOnWriteArrayList<>();
-  private String saslMechanism = ConnectionSettings.SASL_MECHANISM_PLAIN;
+  private String saslMechanism = ConnectionSettings.SASL_MECHANISM_ANONYMOUS;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
   private final DefaultAffinity<T> affinity = new DefaultAffinity<>(this);
 
@@ -100,6 +106,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     } else {
       this.credentialsProvider = new DefaultUsernamePasswordCredentialsProvider(username, null);
     }
+    this.saslMechanism = SASL_MECHANISM_PLAIN;
     return toReturn();
   }
 
@@ -113,6 +120,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     } else {
       this.credentialsProvider = new DefaultUsernamePasswordCredentialsProvider(null, password);
     }
+    this.saslMechanism = SASL_MECHANISM_PLAIN;
     return toReturn();
   }
 
@@ -157,13 +165,22 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
   @Override
   public T saslMechanism(String mechanism) {
-    if (!SASL_MECHANISM_PLAIN.equals(mechanism) && !SASL_MECHANISM_EXTERNAL.equals(mechanism)) {
+    if (!SASL_MECHANISMS.contains(mechanism)) {
       throw new IllegalArgumentException(
           String.format(
-              "Unsupported SASL mechanism: '%s'. " + "Supported mechanisms are '%s' and '%s'.",
-              mechanism, SASL_MECHANISM_PLAIN, SASL_MECHANISM_EXTERNAL));
+              "Unsupported SASL mechanism: '%s'. " + "Supported mechanisms are: %s.",
+              mechanism,
+              SASL_MECHANISMS.stream().map(n -> "'" + n + "'").collect(Collectors.joining(", "))));
     }
     this.saslMechanism = mechanism;
+    if (SASL_MECHANISM_ANONYMOUS.equals(mechanism)) {
+      this.credentialsProvider = null;
+    } else if (SASL_MECHANISM_PLAIN.equals(mechanism)) {
+      this.credentialsProvider =
+          new DefaultUsernamePasswordCredentialsProvider(DEFAULT_USERNAME, DEFAULT_PASSWORD);
+    } else if (SASL_MECHANISM_EXTERNAL.equals(mechanism)) {
+      this.credentialsProvider = null;
+    }
     return this.toReturn();
   }
 
@@ -204,12 +221,12 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   void copyTo(DefaultConnectionSettings<?> copy) {
     copy.host(this.host);
     copy.port(this.port);
+    copy.saslMechanism(this.saslMechanism);
     copy.credentialsProvider(this.credentialsProvider);
     copy.virtualHost(this.virtualHost);
     copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
     copy.addressSelector(this.addressSelector);
     copy.idleTimeout(this.idleTimeout);
-    copy.saslMechanism(this.saslMechanism);
 
     if (this.tlsSettings.enabled()) {
       this.tlsSettings.copyTo((DefaultTlsSettings<?>) copy.tls());

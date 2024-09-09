@@ -33,7 +33,8 @@ ssl_options.fail_if_no_peer_cert = false
 ssl_options.depth = 1
 
 auth_mechanisms.1 = PLAIN
-auth_mechanisms.2 = EXTERNAL" >> rabbitmq-configuration/rabbitmq.conf
+auth_mechanisms.2 = ANONYMOUS
+auth_mechanisms.3 = EXTERNAL" >> rabbitmq-configuration/rabbitmq.conf
 
 echo "Running RabbitMQ ${RABBITMQ_IMAGE}"
 

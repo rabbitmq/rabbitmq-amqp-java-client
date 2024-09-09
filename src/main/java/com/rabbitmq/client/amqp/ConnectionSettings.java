@@ -23,6 +23,7 @@ import javax.net.ssl.SSLContext;
 
 public interface ConnectionSettings<T> {
 
+  String SASL_MECHANISM_ANONYMOUS = "ANONYMOUS";
   String SASL_MECHANISM_PLAIN = "PLAIN";
   String SASL_MECHANISM_EXTERNAL = "EXTERNAL";
 

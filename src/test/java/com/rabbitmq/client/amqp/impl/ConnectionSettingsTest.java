@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.ConnectionSettings.SASL_MECHANISM_PLAIN;
 import static com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DEFAULT_PASSWORD;
 import static com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DEFAULT_USERNAME;
 
@@ -34,6 +35,7 @@ public class ConnectionSettingsTest {
     try (Environment environment =
         TestUtils.environmentBuilder()
             .connectionSettings()
+            .saslMechanism(SASL_MECHANISM_PLAIN)
             .credentialsProvider(new LatchCredentialsProvider(usernameReturnedLatch))
             .environmentBuilder()
             .build()) {
