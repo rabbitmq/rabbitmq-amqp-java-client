@@ -655,43 +655,28 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.1.0-SNAPSHOT</span>
-<br><span id="revremark">(dabf005)</span>
+<br><span id="revremark">(7b3f548)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
-<li><a href="#license">License</a></li>
 <li><a href="#pre-requisites">Pre-requisites</a></li>
-<li><a href="#api-overview">API Overview</a>
-<ul class="sectlevel2">
-<li><a href="#environment">Environment</a></li>
-<li><a href="#connection">Connection</a></li>
-<li><a href="#connection-settings">Connection Settings</a></li>
-<li><a href="#publishing">Publishing</a></li>
-<li><a href="#consuming">Consuming</a>
-<ul class="sectlevel3">
-<li><a href="#graceful-shutdown">Graceful Shutdown</a></li>
-<li><a href="#support-for-streams">Support for Streams</a></li>
-</ul>
-</li>
-<li><a href="#resource-management">Resource Management</a>
-<ul class="sectlevel3">
-<li><a href="#exchanges">Exchanges</a></li>
-<li><a href="#queues">Queues</a></li>
-<li><a href="#bindings">Bindings</a></li>
-</ul>
-</li>
-<li><a href="#lifecycle-listeners">Lifecycle Listeners</a></li>
-<li><a href="#recovery">Recovery</a></li>
-<li><a href="#metrics-collection">Metrics Collection</a></li>
-<li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
-</ul>
-</li>
+<li><a href="#license">License</a></li>
 <li><a href="#dependencies">Dependencies</a>
 <ul class="sectlevel2">
 <li><a href="#maven">Maven</a></li>
 <li><a href="#gradle">Gradle</a></li>
 <li><a href="#snapshots">Snapshots</a></li>
+</ul>
+</li>
+<li><a href="#api-overview">Overview</a></li>
+<li><a href="#advanced-usage">Advanced Usage</a>
+<ul class="sectlevel2">
+<li><a href="#connection-settings-at-the-environment-level">Connection Settings at the Environment Level</a></li>
+<li><a href="#lifecycle-listeners">Lifecycle Listeners</a></li>
+<li><a href="#recovery">Recovery</a></li>
+<li><a href="#metrics-collection">Metrics Collection</a></li>
+<li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
 </ul>
 </li>
 <li><a href="#micrometer-observation">Appendix A: Micrometer Observation</a>
@@ -715,11 +700,10 @@ pre.rouge {
 </div>
 </div>
 <div id="content">
-<div class="sect1">
-<h2 id="license"><a class="anchor" href="#license"></a>License</h2>
+<div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
-<p>The library is open source, developed <a href="https://github.com/rabbitmq/rabbitmq-amqp-java-client/">on GitHub</a>, and is licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0.html">Apache Public License 2.0</a></p>
+<p>The RabbitMQ AMQP 1.0 Java Client is a library to communicate with RabbitMQ using <a href="https://www.rabbitmq.com/docs/next/amqp">AMQP 1.0</a>.</p>
 </div>
 </div>
 </div>
@@ -732,38 +716,111 @@ pre.rouge {
 </div>
 </div>
 <div class="sect1">
-<h2 id="api-overview"><a class="anchor" href="#api-overview"></a>API Overview</h2>
+<h2 id="license"><a class="anchor" href="#license"></a>License</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The library is open source, developed <a href="https://github.com/rabbitmq/rabbitmq-amqp-java-client/">on GitHub</a>, and is licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0.html">Apache Public License 2.0</a></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="dependencies"><a class="anchor" href="#dependencies"></a>Dependencies</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Use your favorite build management tool to add the client dependencies to your project.</p>
+</div>
+<div class="sect2">
+<h3 id="maven"><a class="anchor" href="#maven"></a>Maven</h3>
+<div class="listingblock">
+<div class="title">pom.xml</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="xml"><span class="nt">&lt;dependencies&gt;</span>
+
+  <span class="nt">&lt;dependency&gt;</span>
+    <span class="nt">&lt;groupId&gt;</span>com.rabbitmq.client<span class="nt">&lt;/groupId&gt;</span>
+    <span class="nt">&lt;artifactId&gt;</span>amqp-client<span class="nt">&lt;/artifactId&gt;</span>
+    <span class="nt">&lt;version&gt;</span>0.1.0-SNAPSHOT<span class="nt">&lt;/version&gt;</span>
+  <span class="nt">&lt;/dependency&gt;</span>
+
+<span class="nt">&lt;/dependencies&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="gradle"><a class="anchor" href="#gradle"></a>Gradle</h3>
+<div class="listingblock">
+<div class="title">build.gradle</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="groovy"><span class="n">dependencies</span> <span class="o">{</span>
+  <span class="n">compile</span> <span class="s2">"com.rabbitmq.client:amqp-client:0.1.0-SNAPSHOT"</span>
+<span class="o">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="snapshots"><a class="anchor" href="#snapshots"></a>Snapshots</h3>
+<div class="paragraph">
+<p>Releases are available from Maven Central, which does not require specific declaration.
+Snapshots are available from a repository which must be declared in the dependency management configuration.</p>
+</div>
+<div class="paragraph">
+<p>With Maven:</p>
+</div>
+<div class="listingblock">
+<div class="title">Snapshot repository declaration for Maven</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="xml"><span class="nt">&lt;repositories&gt;</span>
+
+  <span class="nt">&lt;repository&gt;</span>
+    <span class="nt">&lt;id&gt;</span>ossrh<span class="nt">&lt;/id&gt;</span>
+    <span class="nt">&lt;url&gt;</span>https://oss.sonatype.org/content/repositories/snapshots<span class="nt">&lt;/url&gt;</span>
+    <span class="nt">&lt;snapshots&gt;&lt;enabled&gt;</span>true<span class="nt">&lt;/enabled&gt;&lt;/snapshots&gt;</span>
+    <span class="nt">&lt;releases&gt;&lt;enabled&gt;</span>false<span class="nt">&lt;/enabled&gt;&lt;/releases&gt;</span>
+  <span class="nt">&lt;/repository&gt;</span>
+
+<span class="nt">&lt;/repositories&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With Gradle:</p>
+</div>
+<div class="listingblock">
+<div class="title">Snapshot repository declaration for Gradle:</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="groovy"><span class="n">repositories</span> <span class="o">{</span>
+  <span class="n">maven</span> <span class="o">{</span> <span class="n">url</span> <span class="s1">'https://oss.sonatype.org/content/repositories/snapshots'</span> <span class="o">}</span>
+  <span class="n">mavenCentral</span><span class="o">()</span>
+<span class="o">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="api-overview"><a class="anchor" href="#api-overview"></a>Overview</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The RabbitMQ team maintains a set of AMQP 1.0 client libraries designed and optimized for RabbitMQ.
+They offer a simple and safe, yet powerful API on top of AMQP 1.0. Applications can publish and consume messages with these libraries, as well as manage the server topology in a consistent way across programming languages.
+The libraries also offer advanced features like automatic connection and topology recovery, and connection affinity with queues.</p>
+</div>
+<div class="paragraph">
+<p>The RabbitMQ AMQP 1.0 Java Client is one of these libraries.
+This documentation covers only the advanced usage of the library; a <a href="https://amqp-client-libraries.rabbitmq-website.pages.dev/client-libraries/amqp-client-libraries">common page on the RabbitMQ website</a> covers the most common use cases.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="advanced-usage"><a class="anchor" href="#advanced-usage"></a>Advanced Usage</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="environment"><a class="anchor" href="#environment"></a>Environment</h3>
-<div class="paragraph">
-<p>The <code>Environment</code> is the entry point for applications.
-It exposes an API to create connections.</p>
-</div>
-<div class="listingblock">
-<div class="title">Environment creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Environment</span> <span class="n">environment</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">AmqpEnvironmentBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="connection"><a class="anchor" href="#connection"></a>Connection</h3>
-<div class="paragraph">
-<p>The <code>Connection</code> represents an AMQP 1.0 connection on top of TCP.
-It exposes an API to create publishers, consumers, and to manage resources (exchanges, queues, and bindings).</p>
-</div>
-<div class="listingblock">
-<div class="title">Connection creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Connection</span> <span class="n">connection</span> <span class="o">=</span> <span class="n">environment</span><span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="connection-settings"><a class="anchor" href="#connection-settings"></a>Connection Settings</h3>
+<h3 id="connection-settings-at-the-environment-level"><a class="anchor" href="#connection-settings-at-the-environment-level"></a>Connection Settings at the Environment Level</h3>
 <div class="paragraph">
 <p>Connection settings (URI, credentials, etc) can be set at the environment level.
 They will then be re-used for each connection.
@@ -793,450 +850,6 @@ It is possible to override the environment connection settings for a given conne
 <td>Use the <code>admin</code> user for this connection</td>
 </tr>
 </table>
-</div>
-</div>
-<div class="sect2">
-<h3 id="publishing"><a class="anchor" href="#publishing"></a>Publishing</h3>
-<div class="listingblock">
-<div class="title">Publisher creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">).</span><span class="na">key</span><span class="o">(</span><span class="s">"bar"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Message creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Message</span> <span class="n">message</span> <span class="o">=</span> <span class="n">publisher</span>
-    <span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="s">"hello"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="nc">StandardCharsets</span><span class="o">.</span><span class="na">UTF_8</span><span class="o">))</span>
-    <span class="o">.</span><span class="na">messageId</span><span class="o">(</span><span class="mi">1L</span><span class="o">);</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Message publishing</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">publisher</span><span class="o">.</span><span class="na">publish</span><span class="o">(</span><span class="n">message</span><span class="o">,</span> <span class="n">context</span> <span class="o">-&gt;</span> <span class="o">{</span>
-  <span class="k">if</span> <span class="o">(</span><span class="n">context</span><span class="o">.</span><span class="na">status</span><span class="o">()</span> <span class="o">==</span> <span class="no">ACCEPTED</span><span class="o">)</span> <span class="o">{</span>
-    <span class="c1">// the broker accepted (confirmed) the message</span>
-  <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
-    <span class="c1">// deal with possible failure</span>
-  <span class="o">}</span>
-<span class="o">});</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Target address format: exchange and key</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">).</span><span class="na">key</span><span class="o">(</span><span class="s">"bar"</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Translates to <code>/exchanges/foo/bar</code></td>
-</tr>
-</table>
-</div>
-<div class="listingblock">
-<div class="title">Target address format: exchange</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Translates to <code>/exchanges/foo</code></td>
-</tr>
-</table>
-</div>
-<div class="listingblock">
-<div class="title">Target address format: queue</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-queue"</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Translates to <code>/queues/some-queue</code></td>
-</tr>
-</table>
-</div>
-<div class="listingblock">
-<div class="title">Target address format: address in <code>to</code> field</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
-
-<span class="nc">Message</span> <span class="n">message1</span> <span class="o">=</span> <span class="n">publisher</span><span class="o">.</span><span class="na">message</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">toAddress</span><span class="o">().</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">).</span><span class="na">key</span><span class="o">(</span><span class="s">"bar"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
-    <span class="o">.</span><span class="na">message</span><span class="o">();</span>
-
-<span class="nc">Message</span> <span class="n">message2</span> <span class="o">=</span> <span class="n">publisher</span><span class="o">.</span><span class="na">message</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">toAddress</span><span class="o">().</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">)</span> <i class="conum" data-value="3"></i><b>(3)</b>
-    <span class="o">.</span><span class="na">message</span><span class="o">();</span>
-
-<span class="nc">Message</span> <span class="n">message3</span> <span class="o">=</span> <span class="n">publisher</span><span class="o">.</span><span class="na">message</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">toAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span> <i class="conum" data-value="4"></i><b>(4)</b>
-    <span class="o">.</span><span class="na">message</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>No address specified, translates to <code>null</code></td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Exchange and key automatically set in message <code>to</code> field</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Exchange automatically set in message <code>to</code> field</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="4"></i><b>4</b></td>
-<td>Queue automatically set in message <code>to</code> field</td>
-</tr>
-</table>
-</div>
-</div>
-<div class="sect2">
-<h3 id="consuming"><a class="anchor" href="#consuming"></a>Consuming</h3>
-<div class="listingblock">
-<div class="title">Consuming from a queue</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">messageHandler</span><span class="o">((</span><span class="n">context</span><span class="o">,</span> <span class="n">message</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-      <span class="kt">byte</span><span class="o">[]</span> <span class="n">body</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="na">body</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="c1">// ... </span><i class="conum" data-value="2"></i><b>(2)</b>
-      <span class="n">context</span><span class="o">.</span><span class="na">accept</span><span class="o">();</span> <i class="conum" data-value="3"></i><b>(3)</b>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Get message body</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Process the message</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Accept (acknowledge) the message</td>
-</tr>
-</table>
-</div>
-<div class="sect3">
-<h4 id="graceful-shutdown"><a class="anchor" href="#graceful-shutdown"></a>Graceful Shutdown</h4>
-<div class="paragraph">
-<p>A consumer can accept, discard, or requeue a message.
-We say the consumer <em>settles</em> a message.</p>
-</div>
-<div class="paragraph">
-<p>Unsettled messages are requeued when a consumer get closed.
-This can lead to duplicate processing of messages.
-Here is an example:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>A consumer executes a database operation for a given message.</p>
-</li>
-<li>
-<p>The consumer gets closed before it accepts (settles) the message.</p>
-</li>
-<li>
-<p>The message is requeued.</p>
-</li>
-<li>
-<p>Another consumer gets the message and executes the database operation again.</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>It is difficult to completely avoid duplicate messages, this is why processing should be idempotent.
-The consumer API allows nevertheless to <em>pause</em> the delivery of messages, get the number of unsettled messages to make sure it reaches 0 at some point, and then <em>close</em> the consumer.
-This ensures the consumer has finally quiesced and all the received messages have been processed.</p>
-</div>
-<div class="paragraph">
-<p>Here is an example of a consumer graceful shutdown:</p>
-</div>
-<div class="listingblock">
-<div class="title">Closing a consumer gracefully</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">consumer</span><span class="o">.</span><span class="na">pause</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
-<span class="kt">long</span> <span class="n">unsettledMessageCount</span> <span class="o">=</span> <span class="n">consumer</span><span class="o">.</span><span class="na">unsettledMessageCount</span><span class="o">();</span> <i class="conum" data-value="2"></i><b>(2)</b>
-<span class="n">consumer</span><span class="o">.</span><span class="na">close</span><span class="o">();</span> <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Pause the delivery of messages</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Ensure the number of unsettled messages reaches 0</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Close the consumer</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>It is also possible to simplify the consumer shutdown by just closing it, but this is likely to requeue unsettled messages.</p>
-</div>
-<div class="listingblock">
-<div class="title">Closing a consumer abruptly (can lead to duplicate messages)</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">consumer</span><span class="o">.</span><span class="na">close</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Close the consumer with potential unsettled messages</td>
-</tr>
-</table>
-</div>
-</div>
-<div class="sect3">
-<h4 id="support-for-streams"><a class="anchor" href="#support-for-streams"></a>Support for Streams</h4>
-<div class="paragraph">
-<p>There is out-of-the-box support for <a href="https://www.rabbitmq.com/docs/streams">streams</a> in consumer configuration.</p>
-</div>
-<div class="paragraph">
-<p>It is possible to set where to attach to when <a href="https://www.rabbitmq.com/docs/streams#consuming">consuming</a> from a stream:</p>
-</div>
-<div class="listingblock">
-<div class="title">Attaching to the beginning of a stream</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-stream"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">stream</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="o">.</span><span class="na">offset</span><span class="o">(</span><span class="nc">ConsumerBuilder</span><span class="o">.</span><span class="na">StreamOffsetSpecification</span><span class="o">.</span><span class="na">FIRST</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
-    <span class="o">.</span><span class="na">builder</span><span class="o">()</span> <i class="conum" data-value="3"></i><b>(3)</b>
-    <span class="o">.</span><span class="na">messageHandler</span><span class="o">((</span><span class="n">context</span><span class="o">,</span> <span class="n">message</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-      <span class="c1">// message processing</span>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Access to stream-specific configuration helper</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Attach to the first offset in the stream</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Go back to main consumer configuration</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>There is also support for <a href="https://www.rabbitmq.com/docs/streams#filtering">stream filtering</a> configuration:</p>
-</div>
-<div class="listingblock">
-<div class="title">Configuring stream filtering</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-stream"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">stream</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="o">.</span><span class="na">filterValues</span><span class="o">(</span><span class="s">"invoices"</span><span class="o">,</span> <span class="s">"orders"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
-      <span class="o">.</span><span class="na">filterMatchUnfiltered</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span> <i class="conum" data-value="3"></i><b>(3)</b>
-    <span class="o">.</span><span class="na">builder</span><span class="o">()</span> <i class="conum" data-value="4"></i><b>(4)</b>
-    <span class="o">.</span><span class="na">messageHandler</span><span class="o">((</span><span class="n">context</span><span class="o">,</span> <span class="n">message</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-      <span class="c1">// message processing</span>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Access to stream-specific configuration helper</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Set one or several filter values</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>Get "unfiltered" messages as well</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="4"></i><b>4</b></td>
-<td>Go back to main consumer configuration</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>Consider also using the <a href="https://www.rabbitmq.com/docs/stream">native stream protocol</a> with the RabbitMQ <a href="https://github.com/rabbitmq/rabbitmq-stream-java-client">stream Java client</a> when working with streams.</p>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="resource-management"><a class="anchor" href="#resource-management"></a>Resource Management</h3>
-<div class="paragraph">
-<p>The <code>Management</code> object is the entry point to deal with resources.
-It is accessible from the <code>Environment</code>.</p>
-</div>
-<div class="listingblock">
-<div class="title">Getting the management object from the environment</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Management</span> <span class="n">management</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">management</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="sect3">
-<h4 id="exchanges"><a class="anchor" href="#exchanges"></a>Exchanges</h4>
-<div class="listingblock">
-<div class="title">Exchange creation (built-in type)</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">exchange</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">name</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">type</span><span class="o">(</span><span class="no">FANOUT</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">declare</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Exchange creation (not built-in)</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">exchange</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">name</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">type</span><span class="o">(</span><span class="s">"x-delayed-message"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">autoDelete</span><span class="o">(</span><span class="kc">false</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">argument</span><span class="o">(</span><span class="s">"x-delayed-type"</span><span class="o">,</span> <span class="s">"direct"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">declare</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Exchange deletion</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">exchangeDeletion</span><span class="o">().</span><span class="na">delete</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">);</span></code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="queues"><a class="anchor" href="#queues"></a>Queues</h4>
-<div class="listingblock">
-<div class="title">Queue creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">queue</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">name</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">exclusive</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">autoDelete</span><span class="o">(</span><span class="kc">false</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">declare</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>There is no need to remember the argument names and types thanks to explicit configuration methods:</p>
-</div>
-<div class="listingblock">
-<div class="title">Queue creation with arguments</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">name</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">messageTtl</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">10</span><span class="o">))</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">maxLengthBytes</span><span class="o">(</span><span class="nc">ByteCapacity</span><span class="o">.</span><span class="na">MB</span><span class="o">(</span><span class="mi">100</span><span class="o">))</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">declare</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Explicit methods for common queue arguments</td>
-</tr>
-</table>
-</div>
-<div class="listingblock">
-<div class="title">Quorum queue creation</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">name</span><span class="o">(</span><span class="s">"my-quorum-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">quorum</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="o">.</span><span class="na">quorumInitialGroupSize</span><span class="o">(</span><span class="mi">3</span><span class="o">)</span>
-      <span class="o">.</span><span class="na">deliveryLimit</span><span class="o">(</span><span class="mi">3</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">declare</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Queue-type-specific configuration helper</td>
-</tr>
-</table>
-</div>
-<div class="listingblock">
-<div class="title">Queue deletion</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">queueDeletion</span><span class="o">().</span><span class="na">delete</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">);</span></code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="bindings"><a class="anchor" href="#bindings"></a>Bindings</h4>
-<div class="listingblock">
-<div class="title">Exchange-to-queue binding</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">binding</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">sourceExchange</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">destinationQueue</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">key</span><span class="o">(</span><span class="s">"foo"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">bind</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Exchange-to-exchange binding</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">binding</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">sourceExchange</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">destinationExchange</span><span class="o">(</span><span class="s">"my-other-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">key</span><span class="o">(</span><span class="s">"foo"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">bind</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="title">Unbinding</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="n">management</span><span class="o">.</span><span class="na">unbind</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">sourceExchange</span><span class="o">(</span><span class="s">"my-exchange"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">destinationQueue</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">key</span><span class="o">(</span><span class="s">"foo"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">unbind</span><span class="o">();</span></code></pre>
-</div>
-</div>
 </div>
 </div>
 <div class="sect2">
@@ -1772,85 +1385,6 @@ Let&#8217;s also use a random UUID for the correlation ID generation (avoids doi
 </div>
 </div>
 <div class="sect1">
-<h2 id="dependencies"><a class="anchor" href="#dependencies"></a>Dependencies</h2>
-<div class="sectionbody">
-<div class="paragraph">
-<p>Use your favorite build management tool to add the client dependencies to your project.</p>
-</div>
-<div class="sect2">
-<h3 id="maven"><a class="anchor" href="#maven"></a>Maven</h3>
-<div class="listingblock">
-<div class="title">pom.xml</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="xml"><span class="nt">&lt;dependencies&gt;</span>
-
-  <span class="nt">&lt;dependency&gt;</span>
-    <span class="nt">&lt;groupId&gt;</span>com.rabbitmq.client<span class="nt">&lt;/groupId&gt;</span>
-    <span class="nt">&lt;artifactId&gt;</span>amqp-client<span class="nt">&lt;/artifactId&gt;</span>
-    <span class="nt">&lt;version&gt;</span>0.1.0-SNAPSHOT<span class="nt">&lt;/version&gt;</span>
-  <span class="nt">&lt;/dependency&gt;</span>
-
-<span class="nt">&lt;/dependencies&gt;</span></code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="gradle"><a class="anchor" href="#gradle"></a>Gradle</h3>
-<div class="listingblock">
-<div class="title">build.gradle</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="groovy"><span class="n">dependencies</span> <span class="o">{</span>
-  <span class="n">compile</span> <span class="s2">"com.rabbitmq.client:amqp-client:0.1.0-SNAPSHOT"</span>
-<span class="o">}</span></code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Snapshots require to declare the <a href="#snapshots">appropriate repository</a>.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="snapshots"><a class="anchor" href="#snapshots"></a>Snapshots</h3>
-<div class="paragraph">
-<p>Releases are available from Maven Central, which does not require specific declaration.
-Snapshots are available from a repository which must be declared in the dependency management configuration.</p>
-</div>
-<div class="paragraph">
-<p>With Maven:</p>
-</div>
-<div class="listingblock">
-<div class="title">Snapshot repository declaration for Maven</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="xml"><span class="nt">&lt;repositories&gt;</span>
-
-  <span class="nt">&lt;repository&gt;</span>
-    <span class="nt">&lt;id&gt;</span>ossrh<span class="nt">&lt;/id&gt;</span>
-    <span class="nt">&lt;url&gt;</span>https://oss.sonatype.org/content/repositories/snapshots<span class="nt">&lt;/url&gt;</span>
-    <span class="nt">&lt;snapshots&gt;&lt;enabled&gt;</span>true<span class="nt">&lt;/enabled&gt;&lt;/snapshots&gt;</span>
-    <span class="nt">&lt;releases&gt;&lt;enabled&gt;</span>false<span class="nt">&lt;/enabled&gt;&lt;/releases&gt;</span>
-  <span class="nt">&lt;/repository&gt;</span>
-
-<span class="nt">&lt;/repositories&gt;</span></code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>With Gradle:</p>
-</div>
-<div class="listingblock">
-<div class="title">Snapshot repository declaration for Gradle:</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="groovy"><span class="n">repositories</span> <span class="o">{</span>
-  <span class="n">maven</span> <span class="o">{</span> <span class="n">url</span> <span class="s1">'https://oss.sonatype.org/content/repositories/snapshots'</span> <span class="o">}</span>
-  <span class="n">mavenCentral</span><span class="o">()</span>
-<span class="o">}</span></code></pre>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="sect1">
 <h2 id="micrometer-observation"><a class="anchor" href="#micrometer-observation"></a>Appendix A: Micrometer Observation</h2>
 <div class="sectionbody">
 <div class="paragraph">
@@ -2213,7 +1747,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.1.0-SNAPSHOT<br>
-Last updated 2024-09-11 06:54:20 UTC
+Last updated 2024-09-11 15:09:01 UTC
 </div>
 </div>
 </body>
