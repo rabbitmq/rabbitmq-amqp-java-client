@@ -6,14 +6,84 @@ ifndef::sourcedir[:sourcedir: ../../main/java]
 :source-highlighter: prettify
 :javadoc-url: https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api
 
+The RabbitMQ AMQP 1.0 Java Client is a library to communicate with RabbitMQ using https://www.rabbitmq.com/docs/next/amqp[AMQP 1.0].
+
+== Pre-requisites
+
+This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
+
 [[license]]
 == License
 
 The library is open source, developed https://github.com/rabbitmq/rabbitmq-amqp-java-client/[on GitHub], and is licensed under the https://www.apache.org/licenses/LICENSE-2.0.html[Apache Public License 2.0]
 
-== Pre-requisites
+== Dependencies
 
-This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
+Use your favorite build management tool to add the client dependencies to your project.
+
+=== Maven
+
+.pom.xml
+[source,xml,subs="attributes,specialcharacters"]
+----
+<dependencies>
+
+  <dependency>
+    <groupId>{project-group-id}</groupId>
+    <artifactId>{project-artifact-id}</artifactId>
+    <version>{project-version}</version>
+  </dependency>
+
+</dependencies>
+----
+
+Snapshots require to declare the <<snapshots,appropriate repository>>.
+
+=== Gradle
+
+.build.gradle
+[source,groovy,subs="attributes,specialcharacters"]
+----
+dependencies {
+  compile "{project-group-id}:{project-artifact-id}:{project-version}"
+}
+----
+
+Snapshots require to declare the <<snapshots,appropriate repository>>.
+
+[[snapshots]]
+=== Snapshots
+
+Releases are available from Maven Central, which does not require specific declaration.
+Snapshots are available from a repository which must be declared in the dependency management configuration.
+
+With Maven:
+
+.Snapshot repository declaration for Maven
+[source,xml,subs="attributes,specialcharacters"]
+----
+<repositories>
+
+  <repository>
+    <id>ossrh</id>
+    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    <snapshots><enabled>true</enabled></snapshots>
+    <releases><enabled>false</enabled></releases>
+  </repository>
+
+</repositories>
+----
+
+With Gradle:
+
+.Snapshot repository declaration for Gradle:
+[source,groovy,subs="attributes,specialcharacters"]
+----
+repositories {
+  maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+  mavenCentral()
+}
+----
 
 include::usage.adoc[]
 
