@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp;
 
 import java.util.Objects;
 
+/** Utility class to represent a hostname and a port. */
 public class Address {
 
   private final String host;

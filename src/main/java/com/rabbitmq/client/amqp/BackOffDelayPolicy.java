@@ -19,23 +19,57 @@ package com.rabbitmq.client.amqp;
 
 import java.time.Duration;
 
+/**
+ * Contract to determine a delay between attempts of some task.
+ *
+ * <p>The task is typically the creation of a connection.
+ */
 public interface BackOffDelayPolicy {
 
   Duration TIMEOUT = Duration.ofMillis(Long.MAX_VALUE);
 
+  /**
+   * Returns the delay to use for a given attempt.
+   *
+   * <p>The policy can return the TIMEOUT constant to indicate that the task has reached a timeout.
+   *
+   * @param recoveryAttempt number of the recovery attempt
+   * @return the delay, TIMEOUT if the task should stop being retried
+   */
   Duration delay(int recoveryAttempt);
 
+  /**
+   * Policy with a fixed delay.
+   *
+   * @param delay the fixed delay
+   * @return fixed-delay policy
+   */
+  static BackOffDelayPolicy fixed(Duration delay) {
+    return new FixedWithInitialDelayBackOffPolicy(delay, delay);
+  }
+
+  /**
+   * Policy with an initial delay for the first attempt, then a fixed delay.
+   *
+   * @param initialDelay delay for the first attempt
+   * @param delay delay for other attempts than the first one
+   * @return fixed-delay policy with initial delay
+   */
   static BackOffDelayPolicy fixedWithInitialDelay(Duration initialDelay, Duration delay) {
     return new FixedWithInitialDelayBackOffPolicy(initialDelay, delay);
   }
 
+  /**
+   * Policy with an initial delay for the first attempt, then a fixed delay, and a timeout.
+   *
+   * @param initialDelay delay for the first attempt
+   * @param delay delay for other attempts than the first one
+   * @param timeout timeout
+   * @return fixed-delay policy with initial delay and timeout
+   */
   static BackOffDelayPolicy fixedWithInitialDelay(
       Duration initialDelay, Duration delay, Duration timeout) {
     return new FixedWithInitialDelayAndTimeoutBackOffPolicy(initialDelay, delay, timeout);
-  }
-
-  static BackOffDelayPolicy fixed(Duration delay) {
-    return new FixedWithInitialDelayBackOffPolicy(delay, delay);
   }
 
   final class FixedWithInitialDelayBackOffPolicy implements BackOffDelayPolicy {

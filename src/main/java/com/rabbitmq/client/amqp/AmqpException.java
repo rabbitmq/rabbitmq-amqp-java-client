@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/** Exception classes. */
 public class AmqpException extends RuntimeException {
 
   public AmqpException(Throwable cause) {
@@ -38,6 +39,7 @@ public class AmqpException extends RuntimeException {
     }
   }
 
+  /** Exception related to security (authentication, permission, etc). */
   public static class AmqpSecurityException extends AmqpException {
 
     public AmqpSecurityException(String message, Throwable cause) {
@@ -60,6 +62,11 @@ public class AmqpException extends RuntimeException {
     }
   }
 
+  /**
+   * Exception when a resource is not in an appropriate state.
+   *
+   * <p>An example is a connection that is initializing.
+   */
   public static class AmqpResourceInvalidStateException extends AmqpException {
 
     public AmqpResourceInvalidStateException(String format, Object... args) {
@@ -71,6 +78,7 @@ public class AmqpException extends RuntimeException {
     }
   }
 
+  /** Exception when a resource is not usable because it is closed. */
   public static class AmqpResourceClosedException extends AmqpResourceInvalidStateException {
 
     public AmqpResourceClosedException(String message) {

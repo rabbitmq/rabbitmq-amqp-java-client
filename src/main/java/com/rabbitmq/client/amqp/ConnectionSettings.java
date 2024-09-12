@@ -128,6 +128,9 @@ public interface ConnectionSettings<T> {
   /**
    * SASL mechanism to use.
    *
+   * <p>Supported mechanisms are {@link #SASL_MECHANISM_ANONYMOUS}, {@link #SASL_MECHANISM_PLAIN},
+   * and {@link #SASL_MECHANISM_EXTERNAL}.
+   *
    * @param mechanism SASL mechanism
    * @return type-parameter object
    * @see <a href="https://www.rabbitmq.com/docs/access-control#mechanisms">RabbitMQ Authentication
@@ -225,9 +228,9 @@ public interface ConnectionSettings<T> {
     /**
      * The type of operation to look affinity with.
      *
-     * <p>PUBLISH will favor the node with the queue leader on it.
+     * <p>{@link Operation#PUBLISH} will favor the node with the queue leader on it.
      *
-     * <p>CONSUME will favor a node with a queue member (replica) on it.
+     * <p>{@link Operation#CONSUME} will favor a node with a queue member (replica) on it.
      *
      * @param operation type of operation
      * @return affinity settings

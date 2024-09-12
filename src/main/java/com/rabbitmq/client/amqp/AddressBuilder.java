@@ -17,11 +17,35 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/**
+ * Builder for a <a href="https://www.rabbitmq.com/docs/next/amqp#address-v2">AMQP target address
+ * format v2.</a>
+ *
+ * @param <T> the type of object returned by methods, usually the object itself
+ */
 public interface AddressBuilder<T> {
 
+  /**
+   * Set the exchange.
+   *
+   * @param exchange exchange
+   * @return type-parameter object
+   */
   T exchange(String exchange);
 
+  /**
+   * Set the routing key.
+   *
+   * @param key routing key
+   * @return type-parameter object
+   */
   T key(String key);
 
+  /**
+   * Set the queue.
+   *
+   * @param queue queue
+   * @return type-parameter object
+   */
   T queue(String queue);
 }
