@@ -12,8 +12,8 @@ MESSAGE=$(git log -1 --pretty=%B)
 
 ./mvnw javadoc:javadoc -Dmaven.javadoc.skip=false --no-transfer-progress
 
-if [ -e target/site/apidocs/element-list ]
-  then cp target/site/apidocs/element-list target/site/apidocs/package-list
+if [ -e target/javadoc-bundle-options/element-list ]
+  then cp target/javadoc-bundle-options/element-list target/reports/apidocs/package-list
 fi
 
 RELEASE_VERSION=$(cat pom.xml | grep -oPm1 "(?<=<version>)[^<]+")
@@ -26,7 +26,7 @@ git checkout gh-pages
 mkdir -p $RELEASE_VERSION/htmlsingle
 cp target/generated-docs/index.html $RELEASE_VERSION/htmlsingle
 mkdir -p $RELEASE_VERSION/api
-cp -r target/site/apidocs/* $RELEASE_VERSION/api/
+cp -r target/reports/apidocs/* $RELEASE_VERSION/api/
 git add $RELEASE_VERSION/
 
 if [[ $LATEST == "true" ]]
@@ -44,7 +44,7 @@ if [[ $LATEST == "true" ]]
   mkdir -p $DOC_DIR/htmlsingle
   cp target/generated-docs/index.html $DOC_DIR/htmlsingle
   mkdir -p $DOC_DIR/api
-  cp -r target/site/apidocs/* $DOC_DIR/api/
+  cp -r target/reports/apidocs/* $DOC_DIR/api/
   git add $DOC_DIR/
 
 fi
