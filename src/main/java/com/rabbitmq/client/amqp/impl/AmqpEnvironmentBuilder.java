@@ -27,6 +27,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
+/** Builder to create an {@link Environment} instance of the RabbitMQ AMQP 1.0 Java Client. */
 public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   private final DefaultEnvironmentConnectionSettings connectionSettings =
@@ -40,42 +41,103 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
 
   public AmqpEnvironmentBuilder() {}
 
+  /**
+   * Set executor service used for internal tasks (e.g. connection recovery).
+   *
+   * <p>The library uses sensible defaults, override only in case of problems.
+   *
+   * @param executorService the executor service
+   * @return this builder instance
+   */
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
     return this;
   }
 
+  /**
+   * Set scheduled executor service used for internal tasks (e.g. connection recovery).
+   *
+   * <p>The library uses sensible defaults, override only in case of problems.
+   *
+   * @param scheduledExecutorService the scheduled executor service
+   * @return this builder instance
+   */
   public AmqpEnvironmentBuilder scheduledExecutorService(
       ScheduledExecutorService scheduledExecutorService) {
     this.scheduledExecutorService = scheduledExecutorService;
     return this;
   }
 
+  /**
+   * Set executor service used to deal with broker responses after processing outbound messages.
+   *
+   * <p>The library uses sensible defaults, override only in case of problems.
+   *
+   * @param publisherExecutorService the executor service
+   * @return this builder instance
+   */
   public AmqpEnvironmentBuilder publisherExecutorService(ExecutorService publisherExecutorService) {
     this.publisherExecutorService = publisherExecutorService;
     return this;
   }
 
+  /**
+   * Set executor service used for consumer loops.
+   *
+   * <p>The library uses sensible defaults, override only in case of problems.
+   *
+   * @param consumerExecutorService the executor service
+   * @return this builder instance
+   */
   public AmqpEnvironmentBuilder consumerExecutorService(ExecutorService consumerExecutorService) {
     this.consumerExecutorService = consumerExecutorService;
     return this;
   }
 
+  /**
+   * Set up a {@link MetricsCollector}.
+   *
+   * @param metricsCollector the metrics collector
+   * @return this builder instance
+   * @see com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector
+   */
   public AmqpEnvironmentBuilder metricsCollector(MetricsCollector metricsCollector) {
     this.metricsCollector = metricsCollector;
     return this;
   }
 
+  /**
+   * Set up an {@link ObservationCollector}.
+   *
+   * @param observationCollector the observation collector
+   * @return this builder instance
+   * @see com.rabbitmq.client.amqp.observation.micrometer.MicrometerObservationCollectorBuilder
+   */
   public AmqpEnvironmentBuilder observationCollector(ObservationCollector observationCollector) {
     this.observationCollector = observationCollector;
     return this;
   }
 
+  /**
+   * Returns connection settings shared by connection builders.
+   *
+   * <p>These settings are optional, they are overridden with the appropriate methods in {@link
+   * com.rabbitmq.client.amqp.ConnectionBuilder}.
+   *
+   * @return shared connection settings
+   * @see ConnectionSettings
+   * @see com.rabbitmq.client.amqp.ConnectionBuilder
+   */
   @SuppressFBWarnings("EI_EXPOSE_REP")
   public EnvironmentConnectionSettings connectionSettings() {
     return this.connectionSettings;
   }
 
+  /**
+   * Create the environment instance.
+   *
+   * @return the configured environment
+   */
   @Override
   public Environment build() {
     return new AmqpEnvironment(
@@ -88,9 +150,15 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
         observationCollector);
   }
 
+  /** Common settings for connections created by an environment instance. */
   public interface EnvironmentConnectionSettings
       extends ConnectionSettings<EnvironmentConnectionSettings> {
 
+    /**
+     * The owning environment builder.
+     *
+     * @return builder instance
+     */
     AmqpEnvironmentBuilder environmentBuilder();
   }
 

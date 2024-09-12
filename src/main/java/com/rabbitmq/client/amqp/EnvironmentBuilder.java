@@ -17,7 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/** Builder for {@link Environment} instances. */
 public interface EnvironmentBuilder {
 
+  /**
+   * Creates the {@link Environment} instance.
+   *
+   * @return the configured environment
+   */
   Environment build();
 }

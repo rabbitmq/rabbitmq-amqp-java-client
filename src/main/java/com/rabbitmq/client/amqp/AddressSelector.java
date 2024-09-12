@@ -19,7 +19,14 @@ package com.rabbitmq.client.amqp;
 
 import java.util.List;
 
+/** Contract to pick an {@link Address} to connect to a cluster node. */
 public interface AddressSelector {
 
+  /**
+   * Pick an address from a list.
+   *
+   * @param addresses list of addresses
+   * @return the address to connect to
+   */
   Address select(List<Address> addresses);
 }

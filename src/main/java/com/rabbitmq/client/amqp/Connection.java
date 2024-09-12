@@ -19,18 +19,45 @@ package com.rabbitmq.client.amqp;
 
 import java.io.Closeable;
 
+/** A connection to the broker. */
 public interface Connection extends Closeable, Resource {
 
+  /**
+   * The {@link Management} instance of this connection.
+   *
+   * @return management instance
+   */
   Management management();
 
+  /**
+   * Create a builder to configure and create a {@link Publisher}.
+   *
+   * @return publisher builder
+   */
   PublisherBuilder publisherBuilder();
 
+  /**
+   * Create a builder to configure and create a {@link Consumer}.
+   *
+   * @return consumer builder
+   */
   ConsumerBuilder consumerBuilder();
 
+  /**
+   * Create a builder to configure and create a {@link RpcClientBuilder}.
+   *
+   * @return RPC client builder
+   */
   RpcClientBuilder rpcClientBuilder();
 
+  /**
+   * Create a builder to configure and create a {@link RpcServerBuilder}.
+   *
+   * @return RPC server builder
+   */
   RpcServerBuilder rpcServerBuilder();
 
+  /** Close the connection and its resources */
   @Override
   void close();
 }

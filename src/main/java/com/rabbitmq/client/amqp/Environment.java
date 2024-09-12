@@ -17,10 +17,26 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/**
+ * The {@link Environment} is the main entry point to a node or a cluster of nodes.
+ *
+ * <p>The {@link #connectionBuilder()} allows creating {@link Connection} instances. An application
+ * is expected to maintain a single {@link Environment} instance and to close with it exits.
+ *
+ * <p>{@link Environment} instances are expected to be thread-safe.
+ *
+ * @see com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder
+ */
 public interface Environment extends AutoCloseable {
 
+  /**
+   * Create a builder to configure and create a {@link Connection}.
+   *
+   * @return
+   */
   ConnectionBuilder connectionBuilder();
 
+  /** Close the environment and its resources. */
   @Override
   void close();
 }
