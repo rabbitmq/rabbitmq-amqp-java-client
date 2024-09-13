@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * API to manage AMQ 0.9.1 topology (exchanges, queues, and bindings).
+ * API to manage AMQ 0.9.1 model topology (exchanges, queues, and bindings).
  *
  * @see <a href="https://www.rabbitmq.com/tutorials/amqp-concepts">AMQ 0.9.1 Model</a>
  */

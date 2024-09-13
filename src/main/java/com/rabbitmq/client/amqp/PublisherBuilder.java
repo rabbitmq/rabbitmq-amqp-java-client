@@ -19,11 +19,29 @@ package com.rabbitmq.client.amqp;
 
 import java.time.Duration;
 
+/** API to configure and create a {@link Publisher}. */
 public interface PublisherBuilder extends AddressBuilder<PublisherBuilder> {
 
+  /**
+   * Add {@link com.rabbitmq.client.amqp.Resource.StateListener}s to the consumer.
+   *
+   * @param listeners listeners
+   * @return this builder instance
+   */
   PublisherBuilder listeners(Resource.StateListener... listeners);
 
+  /**
+   * The timeout to wait for a response from the broker.
+   *
+   * @param timeout publish timeout
+   * @return this builder instance
+   */
   PublisherBuilder publishTimeout(Duration timeout);
 
+  /**
+   * Build the configured instance.
+   *
+   * @return
+   */
   Publisher build();
 }
