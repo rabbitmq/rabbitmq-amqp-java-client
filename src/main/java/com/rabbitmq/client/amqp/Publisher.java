@@ -102,7 +102,17 @@ public interface Publisher extends AutoCloseable, Resource {
   enum Status {
     /** The message has been accepted by the broker. */
     ACCEPTED,
-    /** The broker could not handle the message properly. */
-    FAILED
+    /**
+     * At least one queue the message was routed to rejected the message. This happens when the
+     * queue length is exceeded and the queue's overflow behaviour is set to reject-publish or when
+     * a target classic queue is unavailable.
+     */
+    REJECTED,
+    /**
+     * The broker could not route the message to any queue.
+     *
+     * <p>This is likely to be due to a topology misconfiguration.
+     */
+    RELEASED
   }
 }

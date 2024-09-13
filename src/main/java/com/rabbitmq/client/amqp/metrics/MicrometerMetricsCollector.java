@@ -29,7 +29,7 @@ public class MicrometerMetricsCollector implements MetricsCollector {
   private final AtomicLong connections;
   private final AtomicLong publishers;
   private final AtomicLong consumers;
-  private final Counter publish, publishAccepted, publishFailed;
+  private final Counter publish, publishAccepted, publishRejected, publishReleased;
   private final Counter consume, consumeAccepted, consumeRequeued, consumeDiscarded;
 
   public MicrometerMetricsCollector(MeterRegistry registry) {
@@ -52,7 +52,8 @@ public class MicrometerMetricsCollector implements MetricsCollector {
     this.consumers = registry.gauge(prefix + ".consumers", tags, new AtomicLong(0));
     this.publish = registry.counter(prefix + ".published", tags);
     this.publishAccepted = registry.counter(prefix + ".published_accepted", tags);
-    this.publishFailed = registry.counter(prefix + ".published_failed", tags);
+    this.publishRejected = registry.counter(prefix + ".published_rejected", tags);
+    this.publishReleased = registry.counter(prefix + ".published_released", tags);
     this.consume = registry.counter(prefix + ".consumed", tags);
     this.consumeAccepted = registry.counter(prefix + ".consumed_accepted", tags);
     this.consumeRequeued = registry.counter(prefix + ".consumed_requeued", tags);
@@ -100,8 +101,11 @@ public class MicrometerMetricsCollector implements MetricsCollector {
       case ACCEPTED:
         this.publishAccepted.increment();
         break;
-      case FAILED:
-        this.publishFailed.increment();
+      case REJECTED:
+        this.publishRejected.increment();
+        break;
+      case RELEASED:
+        this.publishReleased.increment();
         break;
       default:
         break;

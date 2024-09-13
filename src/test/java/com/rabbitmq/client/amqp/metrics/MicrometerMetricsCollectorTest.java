@@ -65,9 +65,13 @@ public class MicrometerMetricsCollectorTest {
     collector.publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
     assertThat(registry.get("rabbitmq.amqp.published_accepted").counter().count()).isEqualTo(1.0);
 
-    assertThat(registry.get("rabbitmq.amqp.published_failed").counter().count()).isZero();
-    collector.publishDisposition(MetricsCollector.PublishDisposition.FAILED);
-    assertThat(registry.get("rabbitmq.amqp.published_failed").counter().count()).isEqualTo(1.0);
+    assertThat(registry.get("rabbitmq.amqp.published_rejected").counter().count()).isZero();
+    collector.publishDisposition(MetricsCollector.PublishDisposition.REJECTED);
+    assertThat(registry.get("rabbitmq.amqp.published_rejected").counter().count()).isEqualTo(1.0);
+
+    assertThat(registry.get("rabbitmq.amqp.published_released").counter().count()).isZero();
+    collector.publishDisposition(MetricsCollector.PublishDisposition.RELEASED);
+    assertThat(registry.get("rabbitmq.amqp.published_released").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.consumed").counter().count()).isZero();
     collector.consume();
@@ -110,7 +114,8 @@ public class MicrometerMetricsCollectorTest {
     collector.publish();
 
     collector.publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
-    collector.publishDisposition(MetricsCollector.PublishDisposition.FAILED);
+    collector.publishDisposition(MetricsCollector.PublishDisposition.REJECTED);
+    collector.publishDisposition(MetricsCollector.PublishDisposition.RELEASED);
 
     collector.consume();
     collector.consume();

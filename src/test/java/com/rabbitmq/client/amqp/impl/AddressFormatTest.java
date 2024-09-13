@@ -47,7 +47,7 @@ public class AddressFormatTest {
       publisher.publish(
           publisher.message(),
           ctx -> {
-            if (ctx.status() == Publisher.Status.FAILED) {
+            if (ctx.status() == Publisher.Status.RELEASED) {
               failedLatch.countDown();
             }
           });
@@ -88,7 +88,7 @@ public class AddressFormatTest {
       publisher.publish(
           publisher.message(),
           ctx -> {
-            if (ctx.status() == Publisher.Status.FAILED) {
+            if (ctx.status() == Publisher.Status.RELEASED) {
               failedLatch.countDown();
             }
           });
@@ -158,14 +158,14 @@ public class AddressFormatTest {
       publisher.publish(
           publisher.message().toAddress().exchange(e).message(),
           ctx -> {
-            if (ctx.status() == Publisher.Status.FAILED) {
+            if (ctx.status() == Publisher.Status.RELEASED) {
               failedLatch.countDown();
             }
           });
       publisher.publish(
           publisher.message().toAddress().exchange(e).key("foo").message(),
           ctx -> {
-            if (ctx.status() == Publisher.Status.FAILED) {
+            if (ctx.status() == Publisher.Status.RELEASED) {
               failedLatch.countDown();
             }
           });

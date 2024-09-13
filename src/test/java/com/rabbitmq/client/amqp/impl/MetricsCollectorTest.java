@@ -18,7 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.*;
-import static com.rabbitmq.client.amqp.metrics.MetricsCollector.PublishDisposition.FAILED;
+import static com.rabbitmq.client.amqp.metrics.MetricsCollector.PublishDisposition.RELEASED;
 import static java.lang.String.format;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -113,8 +113,8 @@ public class MetricsCollectorTest {
           disposed(disposed));
       verify(metricsCollector, times(2)).publish();
       Assertions.assertThat(disposed).completes();
-      // the last message could not be routed, so its disposition state is failed
-      verify(metricsCollector, times(1)).publishDisposition(FAILED);
+      // the last message could not be routed, so its disposition state is RELEASED
+      verify(metricsCollector, times(1)).publishDisposition(RELEASED);
       verify(metricsCollector, times(2)).publishDisposition(any());
 
       verify(metricsCollector, never()).consume();

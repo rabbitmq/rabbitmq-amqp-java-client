@@ -217,7 +217,7 @@ public abstract class ClientDeliveryState implements DeliveryState {
 
         @Override
         public Type getType() {
-            return Type.RELEASED;
+            return Type.REJECTED;
         }
 
         @Override

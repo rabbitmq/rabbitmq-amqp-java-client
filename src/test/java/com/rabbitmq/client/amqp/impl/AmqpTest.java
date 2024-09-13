@@ -667,6 +667,33 @@ public class AmqpTest {
         });
   }
 
+  @Test
+  void publishedMessageShouldBeRejectedWhenQueueLimitIsReached(TestInfo info) {
+    Management management = connection.management();
+    String q = TestUtils.name(info);
+    int maxLength = 10;
+    try {
+      management
+          .queue(q)
+          .maxLength(maxLength)
+          .overflowStrategy(Management.OverFlowStrategy.REJECT_PUBLISH)
+          .declare();
+      CountDownLatch rejectedLatch = new CountDownLatch(1);
+      Publisher.Callback callback =
+          context -> {
+            if (context.status() == Publisher.Status.REJECTED) {
+              rejectedLatch.countDown();
+            }
+          };
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
+      IntStream.range(0, maxLength + 1)
+          .forEach(ignored -> publisher.publish(publisher.message(), callback));
+      Assertions.assertThat(rejectedLatch).completes();
+    } finally {
+      management.queueDeletion().delete(q);
+    }
+  }
+
   private static String uuid() {
     return UUID.randomUUID().toString();
   }

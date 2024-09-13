@@ -113,19 +113,40 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
           try {
             // FIXME set a timeout for publishing settlement
             tracker.settlementFuture().get();
-            status =
-                tracker.remoteState() == DeliveryState.accepted() ? Status.ACCEPTED : Status.FAILED;
+            status = mapDeliveryState(tracker.remoteState());
           } catch (InterruptedException | ExecutionException e) {
-            status = Status.FAILED;
+            status = Status.REJECTED;
           }
           DefaultContext defaultContext = new DefaultContext(message, status);
-          this.metricsCollector.publishDisposition(
-              status == Status.ACCEPTED
-                  ? MetricsCollector.PublishDisposition.ACCEPTED
-                  : MetricsCollector.PublishDisposition.FAILED);
+          this.metricsCollector.publishDisposition(mapToPublishDisposition(status));
           callback.handle(defaultContext);
         });
     this.metricsCollector.publish();
+  }
+
+  private Status mapDeliveryState(DeliveryState in) {
+    if (in.isAccepted()) {
+      return Status.ACCEPTED;
+    } else if (in.getType() == DeliveryState.Type.REJECTED) {
+      return Status.REJECTED;
+    } else if (in.getType() == DeliveryState.Type.RELEASED) {
+      return Status.RELEASED;
+    } else {
+      LOGGER.warn("Delivery state not supported: " + in.getType());
+      throw new IllegalStateException("This delivery state is not supported: " + in.getType());
+    }
+  }
+
+  private static MetricsCollector.PublishDisposition mapToPublishDisposition(Status status) {
+    if (status == Status.ACCEPTED) {
+      return MetricsCollector.PublishDisposition.ACCEPTED;
+    } else if (status == Status.REJECTED) {
+      return MetricsCollector.PublishDisposition.REJECTED;
+    } else if (status == Status.RELEASED) {
+      return MetricsCollector.PublishDisposition.RELEASED;
+    } else {
+      return null;
+    }
   }
 
   void recoverAfterConnectionFailure() {

@@ -132,7 +132,8 @@ The following metrics are recorded:
 * the number of open consumers
 * the total number of published messages
 * the total number of accepted published messages
-* the total number of failed published messages
+* the total number of rejected published messages
+* the total number of released published messages
 * the total number of consumed messages
 * the total number of accepted consumed messages
 * the total number of requeued consumed messages
@@ -167,9 +168,12 @@ rabbitmq_amqp_published_total 2.0
 # HELP rabbitmq_amqp_published_accepted_total
 # TYPE rabbitmq_amqp_published_accepted_total counter
 rabbitmq_amqp_published_accepted_total 1.0
-# HELP rabbitmq_amqp_published_failed_total
-# TYPE rabbitmq_amqp_published_failed_total counter
-rabbitmq_amqp_published_failed_total 1.0
+# HELP rabbitmq_amqp_published_rejected_total
+# TYPE rabbitmq_amqp_published_rejected_total counter
+rabbitmq_amqp_published_rejected_total 1.0
+# HELP rabbitmq_amqp_published_released_total
+# TYPE rabbitmq_amqp_published_released_total counter
+rabbitmq_amqp_published_released_total 1.0
 # HELP rabbitmq_amqp_publishers
 # TYPE rabbitmq_amqp_publishers gauge
 rabbitmq_amqp_publishers 1.0

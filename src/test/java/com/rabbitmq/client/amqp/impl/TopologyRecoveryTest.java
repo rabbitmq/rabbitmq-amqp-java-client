@@ -346,7 +346,7 @@ public class TopologyRecoveryTest {
       publisher.publish(
           publisher.message(),
           context -> {
-            if (context.status() == Publisher.Status.FAILED) {
+            if (context.status() == Publisher.Status.RELEASED) {
               acceptedLatch.countDown();
             }
           });
@@ -402,7 +402,7 @@ public class TopologyRecoveryTest {
       publisher.publish(
           publisher.message(),
           context -> {
-            if (context.status() == Publisher.Status.FAILED) {
+            if (context.status() == Publisher.Status.RELEASED) {
               acceptedLatch.countDown();
             }
           });

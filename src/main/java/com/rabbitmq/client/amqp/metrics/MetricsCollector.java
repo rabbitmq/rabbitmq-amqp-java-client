@@ -41,7 +41,8 @@ public interface MetricsCollector {
 
   enum PublishDisposition {
     ACCEPTED,
-    FAILED
+    REJECTED,
+    RELEASED
   }
 
   enum ConsumeDisposition {
