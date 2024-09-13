@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.1.0-SNAPSHOT</span>
-<br><span id="revremark">(c17a126)</span>
+<br><span id="revremark">(7711063)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -1099,7 +1099,10 @@ Micrometer is a façade for observability systems: the user can choose the Micro
 <p>the total number of accepted published messages</p>
 </li>
 <li>
-<p>the total number of failed published messages</p>
+<p>the total number of rejected published messages</p>
+</li>
+<li>
+<p>the total number of released published messages</p>
 </li>
 <li>
 <p>the total number of consumed messages</p>
@@ -1145,9 +1148,12 @@ Micrometer is a façade for observability systems: the user can choose the Micro
 <span class="c"># HELP rabbitmq_amqp_published_accepted_total</span>
 <span class="c"># TYPE rabbitmq_amqp_published_accepted_total counter</span>
 <span class="n">rabbitmq_amqp_published_accepted_total</span> <span class="mf">1.0</span>
-<span class="c"># HELP rabbitmq_amqp_published_failed_total</span>
-<span class="c"># TYPE rabbitmq_amqp_published_failed_total counter</span>
-<span class="n">rabbitmq_amqp_published_failed_total</span> <span class="mf">1.0</span>
+<span class="c"># HELP rabbitmq_amqp_published_rejected_total</span>
+<span class="c"># TYPE rabbitmq_amqp_published_rejected_total counter</span>
+<span class="n">rabbitmq_amqp_published_rejected_total</span> <span class="mf">1.0</span>
+<span class="c"># HELP rabbitmq_amqp_published_released_total</span>
+<span class="c"># TYPE rabbitmq_amqp_published_released_total counter</span>
+<span class="n">rabbitmq_amqp_published_released_total</span> <span class="mf">1.0</span>
 <span class="c"># HELP rabbitmq_amqp_publishers</span>
 <span class="c"># TYPE rabbitmq_amqp_publishers gauge</span>
 <span class="n">rabbitmq_amqp_publishers</span> <span class="mf">1.0</span></code></pre>
@@ -1747,7 +1753,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.1.0-SNAPSHOT<br>
-Last updated 2024-09-13 15:00:53 UTC
+Last updated 2024-09-13 16:02:22 UTC
 </div>
 </div>
 </body>
