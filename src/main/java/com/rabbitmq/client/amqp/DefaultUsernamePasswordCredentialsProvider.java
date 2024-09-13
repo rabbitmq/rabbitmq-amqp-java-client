@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/** Default implementation of {@link UsernamePasswordCredentialsProvider}. */
 public class DefaultUsernamePasswordCredentialsProvider
     implements UsernamePasswordCredentialsProvider {
 

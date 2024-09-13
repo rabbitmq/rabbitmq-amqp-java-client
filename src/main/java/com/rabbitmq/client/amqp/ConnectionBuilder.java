@@ -30,7 +30,7 @@ public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder>
   /**
    * Add {@link com.rabbitmq.client.amqp.Resource.StateListener}s to the connection.
    *
-   * @param listeners
+   * @param listeners listeners
    * @return this builder instance
    */
   ConnectionBuilder listeners(Resource.StateListener... listeners);

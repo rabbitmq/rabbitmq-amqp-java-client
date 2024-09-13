@@ -19,42 +19,149 @@ package com.rabbitmq.client.amqp;
 
 import java.time.Instant;
 
+/** API to configure and create a {@link Consumer}. */
 public interface ConsumerBuilder {
 
+  /**
+   * The queue to consume from.
+   *
+   * @param queue queue
+   * @return this builder instance
+   */
   ConsumerBuilder queue(String queue);
 
+  /**
+   * The callback for inbound messages.
+   *
+   * @param handler callback
+   * @return this builder instance
+   */
   ConsumerBuilder messageHandler(Consumer.MessageHandler handler);
 
+  /**
+   * The initial number credits to grant to the AMQP receiver.
+   *
+   * <p>The default is 100.
+   *
+   * @param initialCredits number of initial credits
+   * @return this buidler instance
+   */
   ConsumerBuilder initialCredits(int initialCredits);
 
+  /**
+   * The consumer priority.
+   *
+   * @param priority consumer priority
+   * @return this builder instance
+   * @see <a href="https://www.rabbitmq.com/docs/consumer-priority">Consumer Priorities</a>
+   */
   ConsumerBuilder priority(int priority);
 
+  /**
+   * Add {@link com.rabbitmq.client.amqp.Resource.StateListener}s to the consumer.
+   *
+   * @param listeners listeners
+   * @return this builder instance
+   */
   ConsumerBuilder listeners(Resource.StateListener... listeners);
 
+  /**
+   * Options for a consumer consuming from a stream.
+   *
+   * @return stream options
+   * @see <a href="https://www.rabbitmq.com/docs/streams">Streams</a>
+   * @see <a href="https://www.rabbitmq.com/docs/streams#consuming">Stream Consumers</a>
+   */
   StreamOptions stream();
 
+  /**
+   * Build the consumer.
+   *
+   * @return the configured consumer instance
+   */
   Consumer build();
 
+  /**
+   * Options for a consumer consuming from a stream.
+   *
+   * @see <a href="https://www.rabbitmq.com/docs/streams">Streams</a>
+   * @see <a href="https://www.rabbitmq.com/docs/streams#consuming">Stream Consumers</a>
+   */
   interface StreamOptions {
 
+    /**
+     * The offset to start consuming from.
+     *
+     * @param offset offset
+     * @return stream options
+     */
     StreamOptions offset(long offset);
 
+    /**
+     * A point in time to start consuming from.
+     *
+     * <p>Be aware consumers can receive messages published a bit before the specified timestamp.
+     *
+     * @param timestamp the timestamp
+     * @return stream options
+     */
     StreamOptions offset(Instant timestamp);
 
+    /**
+     * The offset to start consuming from.
+     *
+     * @param specification offset specification
+     * @return stream options
+     * @see StreamOffsetSpecification
+     */
     StreamOptions offset(StreamOffsetSpecification specification);
 
+    /**
+     * The offset to start consuming from as an interval string value.
+     *
+     * <p>Valid units are Y, M, D, h, m, s. Examples: <code>7D</code> (7 days), <code>12h</code> (12
+     * hours).
+     *
+     * @param interval the interval
+     * @return stream options
+     * @see <a href="https://www.rabbitmq.com/docs/streams#retention">Interval Syntax</a>
+     */
     StreamOptions offset(String interval);
 
+    /**
+     * Filter values.
+     *
+     * @param values filter values
+     * @return stream options
+     * @see <a href="https://www.rabbitmq.com/docs/streams#filtering">Stream Filtering</a>
+     */
     StreamOptions filterValues(String... values);
 
+    /**
+     * Whether messages without a filter value should be sent.
+     *
+     * <p>Default is <code>false</code> (messages without a filter value are not sent).
+     *
+     * @param matchUnfiltered true to send messages without a filter value
+     * @return stream options
+     */
     StreamOptions filterMatchUnfiltered(boolean matchUnfiltered);
 
+    /**
+     * Return the consumer builder.
+     *
+     * @return the consumer builder
+     */
     ConsumerBuilder builder();
   }
 
+  /** Offset specification to start consuming from. */
   enum StreamOffsetSpecification {
+    /** Beginning of the stream. */
     FIRST,
+    /** Last chunk of the stream. */
     LAST,
+    /** Very end of the stream (new chunks). */
     NEXT
   }
 }

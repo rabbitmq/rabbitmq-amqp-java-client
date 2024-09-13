@@ -301,21 +301,11 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
-    public Management.ClassicQueueSpecification mode(Management.ClassicQueueMode mode) {
-      if (mode == null) {
-        this.parent.arg("x-queue-mode", null);
-      } else {
-        this.parent.arg("x-queue-mode", mode.name().toLowerCase(Locale.ENGLISH));
-      }
-      return this;
-    }
-
-    @Override
     public Management.ClassicQueueSpecification version(Management.ClassicQueueVersion version) {
       if (version == null) {
-        this.parent.arg("x-queue-mode", null);
+        this.parent.arg("x-queue-version", null);
       } else {
-        this.parent.arg("x-queue-mode", version.version());
+        this.parent.arg("x-queue-version", version.version());
       }
       return this;
     }

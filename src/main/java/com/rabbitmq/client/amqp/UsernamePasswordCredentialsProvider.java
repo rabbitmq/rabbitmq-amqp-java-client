@@ -17,9 +17,20 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/** Contract for credentials based on a username/password pair. */
 public interface UsernamePasswordCredentialsProvider extends CredentialsProvider {
 
+  /**
+   * The username
+   *
+   * @return the username
+   */
   String getUsername();
 
+  /**
+   * The password
+   *
+   * @return the password
+   */
   String getPassword();
 }

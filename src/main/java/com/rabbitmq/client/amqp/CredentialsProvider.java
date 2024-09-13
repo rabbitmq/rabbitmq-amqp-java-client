@@ -17,4 +17,5 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/** Marker interface for providing credentials. */
 public interface CredentialsProvider {}
