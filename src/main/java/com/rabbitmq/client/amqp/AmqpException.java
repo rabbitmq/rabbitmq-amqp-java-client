@@ -32,9 +32,7 @@ public class AmqpException extends RuntimeException {
     super(message, cause);
   }
 
-  /**
-   * Exception related to connectivity problems.
-   */
+  /** Exception related to connectivity problems. */
   public static class AmqpConnectionException extends AmqpException {
 
     public AmqpConnectionException(String message, Throwable cause) {
@@ -54,9 +52,7 @@ public class AmqpException extends RuntimeException {
     }
   }
 
-  /**
-   * Exception thrown when an entity (exchange, queue) does not exit.
-   */
+  /** Exception thrown when an entity (exchange, queue) does not exit. */
   public static class AmqpEntityDoesNotExistException extends AmqpException {
 
     public AmqpEntityDoesNotExistException(String message, Throwable cause) {

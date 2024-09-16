@@ -21,6 +21,7 @@ import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import io.micrometer.observation.transport.SenderContext;
 
+/** Publish context. */
 public class PublishContext extends SenderContext<Message> {
 
   private final String exchange;

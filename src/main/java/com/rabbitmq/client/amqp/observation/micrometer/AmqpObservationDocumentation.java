@@ -22,6 +22,7 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationConvention;
 import io.micrometer.observation.docs.ObservationDocumentation;
 
+/** To generate documentation. */
 public enum AmqpObservationDocumentation implements ObservationDocumentation {
   /** Observation for publishing a message. */
   PUBLISH_OBSERVATION {

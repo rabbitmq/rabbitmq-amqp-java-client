@@ -72,9 +72,7 @@ public interface BackOffDelayPolicy {
     return new FixedWithInitialDelayAndTimeoutBackOffPolicy(initialDelay, delay, timeout);
   }
 
-  /**
-   * Policy with an initial delay for the first attempt, then a fixed delay.
-   */
+  /** Policy with an initial delay for the first attempt, then a fixed delay. */
   final class FixedWithInitialDelayBackOffPolicy implements BackOffDelayPolicy {
 
     private final Duration initialDelay;
@@ -101,9 +99,7 @@ public interface BackOffDelayPolicy {
     }
   }
 
-  /**
-   * Policy with an initial delay for the first attempt, then a fixed delay, and a timeout.
-   */
+  /** Policy with an initial delay for the first attempt, then a fixed delay, and a timeout. */
   final class FixedWithInitialDelayAndTimeoutBackOffPolicy implements BackOffDelayPolicy {
 
     private final int attemptLimitBeforeTimeout;

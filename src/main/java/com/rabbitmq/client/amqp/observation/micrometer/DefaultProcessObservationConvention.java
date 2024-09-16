@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.observation.micrometer;
 import io.micrometer.common.KeyValues;
 import io.micrometer.common.util.StringUtils;
 
+/** Default {@link io.micrometer.observation.ObservationConvention} for processing (consuming). */
 public class DefaultProcessObservationConvention implements DeliverObservationConvention {
 
   private static final String OPERATION = "process";

@@ -24,6 +24,9 @@ import io.micrometer.core.instrument.Tags;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * {@link MetricsCollector} implementation using <a href="https://micrometer.io/">Micrometer</a>.
+ */
 public class MicrometerMetricsCollector implements MetricsCollector {
 
   private final AtomicLong connections;

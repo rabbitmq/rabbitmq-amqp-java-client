@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.observation.micrometer;
 import io.micrometer.common.KeyValues;
 import io.micrometer.common.util.StringUtils;
 
+/** Default {@link io.micrometer.observation.ObservationConvention} for publishing. */
 public class DefaultPublishObservationConvention implements PublishObservationConvention {
 
   private static final String OPERATION = "publish";

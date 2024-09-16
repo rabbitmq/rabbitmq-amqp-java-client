@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.observation.micrometer;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationConvention;
 
+/** Contract for publishing {@link ObservationConvention}. */
 public interface PublishObservationConvention extends ObservationConvention<PublishContext> {
 
   @Override

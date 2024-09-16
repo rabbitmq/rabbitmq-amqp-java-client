@@ -21,6 +21,10 @@ import com.rabbitmq.client.amqp.ObservationCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.observation.ObservationRegistry;
 
+/**
+ * Builder to create an instance of {@link ObservationCollector} using <a
+ * href="https://micrometer.io/">Micrometer</a> observation.
+ */
 public class MicrometerObservationCollectorBuilder {
 
   private ObservationRegistry registry = ObservationRegistry.NOOP;
@@ -31,36 +35,73 @@ public class MicrometerObservationCollectorBuilder {
   private DeliverObservationConvention defaultProcessConvention =
       new DefaultProcessObservationConvention();
 
+  /**
+   * Set the Micrometer's {@link ObservationRegistry}.
+   *
+   * @param registry registry
+   * @return this builder instance
+   */
   @SuppressFBWarnings("EI_EXPOSE_REP2")
   public MicrometerObservationCollectorBuilder registry(ObservationRegistry registry) {
     this.registry = registry;
     return this;
   }
 
+  /**
+   * Set the custom {@link io.micrometer.observation.ObservationConvention} for publishing.
+   *
+   * @param customPublishConvention observation convention
+   * @return this builder instance
+   */
   public MicrometerObservationCollectorBuilder customPublishConvention(
       PublishObservationConvention customPublishConvention) {
     this.customPublishConvention = customPublishConvention;
     return this;
   }
 
+  /**
+   * Set the default {@link io.micrometer.observation.ObservationConvention} for publishing.
+   *
+   * @param defaultPublishConvention observation convention
+   * @return this builder instance
+   */
   public MicrometerObservationCollectorBuilder defaultPublishConvention(
       PublishObservationConvention defaultPublishConvention) {
     this.defaultPublishConvention = defaultPublishConvention;
     return this;
   }
 
+  /**
+   * Set the custom {@link io.micrometer.observation.ObservationConvention} for processing
+   * (consuming).
+   *
+   * @param customProcessConvention observation convention
+   * @return this builder instance
+   */
   public MicrometerObservationCollectorBuilder customProcessConvention(
       DeliverObservationConvention customProcessConvention) {
     this.customProcessConvention = customProcessConvention;
     return this;
   }
 
+  /**
+   * Set the default {@link io.micrometer.observation.ObservationConvention} for processing
+   * (consuming).
+   *
+   * @param defaultProcessConvention observation convention
+   * @return this builder instance
+   */
   public MicrometerObservationCollectorBuilder defaultProcessConvention(
       DeliverObservationConvention defaultProcessConvention) {
     this.defaultProcessConvention = defaultProcessConvention;
     return this;
   }
 
+  /**
+   * Create the configured instance.
+   *
+   * @return the created observation collector instance
+   */
   public ObservationCollector build() {
     return new MicrometerObservationCollector(
         this.registry,

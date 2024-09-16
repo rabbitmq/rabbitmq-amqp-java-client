@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.observation.micrometer;
 import com.rabbitmq.client.amqp.Message;
 import io.micrometer.observation.transport.ReceiverContext;
 
+/** Delivery context. */
 public class DeliverContext extends ReceiverContext<Message> {
 
   private final String exchange;

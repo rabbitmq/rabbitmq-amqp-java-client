@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.metrics;
 
+/** No-operation implementation of {@link MetricsCollector}. */
 public final class NoOpMetricsCollector implements MetricsCollector {
 
   public static final MetricsCollector INSTANCE = new NoOpMetricsCollector();
