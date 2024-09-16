@@ -17,21 +17,53 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+/**
+ * Client server class for RPC.
+ *
+ * @see RpcServerBuilder
+ */
 public interface RpcServer extends AutoCloseable {
 
+  /** Contract to process a request message and return a reply message. */
   @FunctionalInterface
   interface Handler {
 
+    /**
+     * Process request message.
+     *
+     * @param ctx context
+     * @param request request message
+     * @return the reply message
+     */
     Message handle(Context ctx, Message request);
   }
 
+  /** Request processing context. */
   interface Context {
 
+    /**
+     * Create a message meant to be published by the underlying publisher instance.
+     *
+     * <p>Once returned in the {@link Handler#handle(Context, Message)} the message instance should
+     * be not be modified or even reused.
+     *
+     * @return a message
+     */
     Message message();
 
+    /**
+     * Create a message meant to be published by the underlying publisher instance.
+     *
+     * <p>Once returned in the {@link Handler#handle(Context, Message)} the message instance should
+     * be not be modified or even reused.
+     *
+     * @param body message body
+     * @return a message with the provided body
+     */
     Message message(byte[] body);
   }
 
+  /** Close the RPC server and its resources. */
   @Override
   void close();
 }

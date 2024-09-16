@@ -147,8 +147,6 @@ abstract class RpcSupport {
 
     private String requestQueue;
     private RpcServer.Handler handler;
-    private final DefaultRpcServerAddressBuilder replyToAddressBuilder =
-        new DefaultRpcServerAddressBuilder(this);
     private Function<Message, Object> correlationIdExtractor;
     private BiFunction<Message, Object, Message> replyPostProcessor;
 
@@ -166,11 +164,6 @@ abstract class RpcSupport {
     public RpcServerBuilder handler(RpcServer.Handler handler) {
       this.handler = handler;
       return this;
-    }
-
-    @Override
-    public RpcServerAddressBuilder replyToAddress() {
-      return this.replyToAddressBuilder;
     }
 
     @Override
@@ -210,23 +203,6 @@ abstract class RpcSupport {
 
     BiFunction<Message, Object, Message> replyPostProcessor() {
       return this.replyPostProcessor;
-    }
-  }
-
-  private static class DefaultRpcServerAddressBuilder
-      extends DefaultAddressBuilder<RpcServerBuilder.RpcServerAddressBuilder>
-      implements RpcServerBuilder.RpcServerAddressBuilder {
-
-    private final AmqpRpcServerBuilder builder;
-
-    private DefaultRpcServerAddressBuilder(AmqpRpcServerBuilder builder) {
-      super(null);
-      this.builder = builder;
-    }
-
-    @Override
-    public RpcServerBuilder rpcServer() {
-      return this.builder;
     }
   }
 }

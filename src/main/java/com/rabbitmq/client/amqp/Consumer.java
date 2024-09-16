@@ -25,7 +25,7 @@ package com.rabbitmq.client.amqp;
  * @see Connection#consumerBuilder()
  * @see ConsumerBuilder
  */
-public interface Consumer extends AutoCloseable {
+public interface Consumer extends AutoCloseable, Resource {
 
   /** Pause the consumer to stop receiving messages. */
   void pause();
