@@ -32,6 +32,9 @@ public class AmqpException extends RuntimeException {
     super(message, cause);
   }
 
+  /**
+   * Exception related to connectivity problems.
+   */
   public static class AmqpConnectionException extends AmqpException {
 
     public AmqpConnectionException(String message, Throwable cause) {
@@ -51,6 +54,9 @@ public class AmqpException extends RuntimeException {
     }
   }
 
+  /**
+   * Exception thrown when an entity (exchange, queue) does not exit.
+   */
   public static class AmqpEntityDoesNotExistException extends AmqpException {
 
     public AmqpEntityDoesNotExistException(String message, Throwable cause) {
@@ -63,7 +69,7 @@ public class AmqpException extends RuntimeException {
   }
 
   /**
-   * Exception when a resource is not in an appropriate state.
+   * Exception thrown when a resource is not in an appropriate state.
    *
    * <p>An example is a connection that is initializing.
    */
@@ -78,7 +84,7 @@ public class AmqpException extends RuntimeException {
     }
   }
 
-  /** Exception when a resource is not usable because it is closed. */
+  /** Exception thrown when a resource is not usable because it is closed. */
   public static class AmqpResourceClosedException extends AmqpResourceInvalidStateException {
 
     public AmqpResourceClosedException(String message) {
