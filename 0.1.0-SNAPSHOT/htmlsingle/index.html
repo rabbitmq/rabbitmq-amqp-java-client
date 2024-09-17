@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.1.0-SNAPSHOT</span>
-<br><span id="revremark">(b10d0de)</span>
+<br><span id="revremark">(e5d48ba)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -673,8 +673,6 @@ pre.rouge {
 <li><a href="#advanced-usage">Advanced Usage</a>
 <ul class="sectlevel2">
 <li><a href="#connection-settings-at-the-environment-level">Connection Settings at the Environment Level</a></li>
-<li><a href="#lifecycle-listeners">Lifecycle Listeners</a></li>
-<li><a href="#recovery">Recovery</a></li>
 <li><a href="#metrics-collection">Metrics Collection</a></li>
 <li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
 </ul>
@@ -848,183 +846,6 @@ It is possible to override the environment connection settings for a given conne
 <tr>
 <td><i class="conum" data-value="2"></i><b>2</b></td>
 <td>Use the <code>admin</code> user for this connection</td>
-</tr>
-</table>
-</div>
-</div>
-<div class="sect2">
-<h3 id="lifecycle-listeners"><a class="anchor" href="#lifecycle-listeners"></a>Lifecycle Listeners</h3>
-<div class="paragraph">
-<p>It is possible to add one or several listeners when creating a <code>Connection</code> instance:</p>
-</div>
-<div class="listingblock">
-<div class="title">Setting a listener on a connection</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Connection</span> <span class="n">connection</span> <span class="o">=</span>  <span class="n">environment</span><span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">listeners</span><span class="o">(</span><span class="n">context</span> <span class="o">-&gt;</span> <span class="o">{</span> <i class="conum" data-value="1"></i><b>(1)</b>
-  <span class="n">context</span><span class="o">.</span><span class="na">previousState</span><span class="o">();</span> <i class="conum" data-value="2"></i><b>(2)</b>
-  <span class="n">context</span><span class="o">.</span><span class="na">currentState</span><span class="o">();</span> <i class="conum" data-value="3"></i><b>(3)</b>
-  <span class="n">context</span><span class="o">.</span><span class="na">failureCause</span><span class="o">();</span> <i class="conum" data-value="4"></i><b>(4)</b>
-  <span class="n">context</span><span class="o">.</span><span class="na">resource</span><span class="o">();</span> <i class="conum" data-value="5"></i><b>(5)</b>
-<span class="o">}).</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Setting a listener</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>The previous state of the connection</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="3"></i><b>3</b></td>
-<td>The current (new) state of the connection</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="4"></i><b>4</b></td>
-<td>The cause of the failure (in case of failure)</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="5"></i><b>5</b></td>
-<td>The connection instance (as a <code>Resource</code>)</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>It is also possible to set listeners on publisher instances:</p>
-</div>
-<div class="listingblock">
-<div class="title">Setting a listener on a publisher</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Publisher</span> <span class="n">publisher</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">publisherBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">listeners</span><span class="o">(</span><span class="n">context</span> <span class="o">-&gt;</span> <span class="o">{</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="c1">// ...</span>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">exchange</span><span class="o">(</span><span class="s">"foo"</span><span class="o">).</span><span class="na">key</span><span class="o">(</span><span class="s">"bar"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Setting a listener</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>And on consumer instances as well:</p>
-</div>
-<div class="listingblock">
-<div class="title">Setting a listener on a consumer</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">listeners</span><span class="o">(</span><span class="n">context</span> <span class="o">-&gt;</span> <span class="o">{</span> <i class="conum" data-value="1"></i><b>(1)</b>
-      <span class="c1">// ...</span>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"my-queue"</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Setting a listener</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>The listener API is the same for connection, publishers, and consumers.
-They all implement the <a href="https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/Resource.html"><code>Resource</code></a> marker interface.
-The <a href="https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/Resource.StateListener.html"><code>StateListener</code></a> interface has only one method that takes a <a href="https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/Resource.Context.html"><code>Context</code></a> argument.
-See the snippet above for the information available in the <code>Context</code>.</p>
-</div>
-<div class="paragraph">
-<p>A resource <a href="https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/Resource.State.html"><code>State</code></a> can have the following values: <code>OPENING</code>, <code>OPEN</code>, <code>RECOVERING</code>, <code>CLOSING</code>, <code>CLOSED</code>.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="recovery"><a class="anchor" href="#recovery"></a>Recovery</h3>
-<div class="paragraph">
-<p>Automatic connection recovery is activated by default: the client will automatically restore a connection after an unexpected closing (e.g. network glitch, node restart, etc).
-Automatic topology recovery is also activated as soon as connection recovery is: the client will recreate AMQP entities, as well as publishers and consumers for the recovering connection.
-Developers have less to worry about network stability and node restart, as the client will take care of it.</p>
-</div>
-<div class="paragraph">
-<p>The client tries to reconnect every 5 seconds until it succeeds.
-It is possible to change this behavior by providing a custom <a href="https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/BackOffDelayPolicy.html"><code>BackOffDelayPolicy</code></a>:</p>
-</div>
-<div class="listingblock">
-<div class="title">Setting a back-off policy for connection recovery</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Connection</span> <span class="n">connection</span> <span class="o">=</span> <span class="n">environment</span><span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">recovery</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">backOffDelayPolicy</span><span class="o">(</span><span class="nc">BackOffDelayPolicy</span><span class="o">.</span><span class="na">fixed</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">2</span><span class="o">)))</span> <i class="conum" data-value="2"></i><b>(2)</b>
-    <span class="o">.</span><span class="na">connectionBuilder</span><span class="o">().</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Configure recovery</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Set the back-off delay policy</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>It is also possible to deactivate topology recovery if it is not appropriate for a given application.
-The application would usually register a connection <a href="#lifecycle-listeners">lifecycle listener</a> to know when the connection is recovered and recover its own state accordingly.</p>
-</div>
-<div class="listingblock">
-<div class="title">Deactivating topology recovery</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Connection</span> <span class="n">connection</span> <span class="o">=</span> <span class="n">environment</span><span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">recovery</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">topology</span><span class="o">(</span><span class="kc">false</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">listeners</span><span class="o">(</span><span class="n">context</span> <span class="o">-&gt;</span> <span class="o">{</span>
-      <i class="conum" data-value="2"></i><b>(2)</b>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Deactivate topology recovery</td>
-</tr>
-<tr>
-<td><i class="conum" data-value="2"></i><b>2</b></td>
-<td>Restore application state when connection is recovered</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>It is also possible to deactivate recovery altogether:</p>
-</div>
-<div class="listingblock">
-<div class="title">Deactivating recovery</div>
-<div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Connection</span> <span class="n">connection</span> <span class="o">=</span> <span class="n">environment</span><span class="o">.</span><span class="na">connectionBuilder</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">recovery</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">activated</span><span class="o">(</span><span class="kc">false</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">connectionBuilder</span><span class="o">().</span><span class="na">build</span><span class="o">();</span></code></pre>
-</div>
-</div>
-<div class="colist arabic">
-<table>
-<tr>
-<td><i class="conum" data-value="1"></i><b>1</b></td>
-<td>Deactivate recovery</td>
 </tr>
 </table>
 </div>
@@ -1753,7 +1574,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.1.0-SNAPSHOT<br>
-Last updated 2024-09-17 06:56:37 UTC
+Last updated 2024-09-17 13:32:45 UTC
 </div>
 </div>
 </body>
