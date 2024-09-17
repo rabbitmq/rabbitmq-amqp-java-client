@@ -228,4 +228,61 @@ public class WebsiteDocumentation {
         .key("foo")
         .unbind();
   }
+
+  void resourceListeners() {
+    Environment environment = null;
+
+    Connection connection = environment.connectionBuilder()
+        .listeners(context -> { // set the listener
+          context.previousState(); // the previous state
+          context.currentState(); // the current (new) state
+          context.failureCause(); // the cause of the failure (in case of failure)
+          context.resource(); // the connection
+        }).build();
+
+    Publisher publisher = connection.publisherBuilder()
+        .listeners(context -> {
+          // ...
+        })
+        .exchange("foo").key("bar")
+        .build();
+
+    Consumer consumer = connection.consumerBuilder()
+        .listeners(context -> {
+          // ...
+        })
+        .queue("my-queue")
+        .build();
+
+  }
+
+  void recovery() {
+    Environment environment = null;
+    Connection connection = environment.connectionBuilder()
+        .recovery()
+        .backOffDelayPolicy(BackOffDelayPolicy.fixed(Duration.ofSeconds(2)))
+        .connectionBuilder().build();
+
+
+  }
+
+  void deactivateTopologyRecovery() {
+    Environment environment = null;
+    Connection connection = environment.connectionBuilder()
+        .recovery()
+        .topology(false)
+        .connectionBuilder()
+        .listeners(context -> {
+
+        })
+        .build();
+  }
+
+  void deactivateRecovery() {
+    Environment environment = null;
+    Connection connection = environment.connectionBuilder()
+        .recovery()
+        .activated(false)
+        .connectionBuilder().build();
+  }
 }
