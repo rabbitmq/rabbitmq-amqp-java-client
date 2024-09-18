@@ -1,6 +1,6 @@
 = RabbitMQ AMQP 1.0 Java Client
 
-This library is in early stages of development.
+This library is part of the https://amqp-client-libraries.rabbitmq-website.pages.dev/client-libraries/amqp-client-libraries[RabbitMQ AMQP 1.0 client libraries].
 It targets RabbitMQ 4.0 and requires at least Java 11 (Java 21 or more is recommended).
 
 == Documentation
