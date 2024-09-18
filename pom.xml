@@ -61,6 +61,7 @@
         <maven-javadoc-plugin.version>3.10.0</maven-javadoc-plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
         <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
+        <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <spotless.version>2.43.0</spotless.version>
         <google-java-format.version>1.23.0</google-java-format.version>
         <spotbugs-maven-plugin.version>4.8.6.3</spotbugs-maven-plugin.version>
@@ -640,6 +641,38 @@
                     <id>ossrh</id>
                     <url>https://oss.sonatype.org/content/repositories/snapshots</url>
                 </snapshotRepository>
+            </distributionManagement>
+        </profile>
+
+        <profile>
+            <id>release</id>
+            <properties>
+                <maven.javadoc.skip>false</maven.javadoc.skip>
+                <gpg.skip>false</gpg.skip>
+                <spotbugs.skip>true</spotbugs.skip>
+            </properties>
+            <build>
+                <plugins>
+
+                    <plugin>
+                        <groupId>org.sonatype.plugins</groupId>
+                        <artifactId>nexus-staging-maven-plugin</artifactId>
+                        <version>${nexus-staging-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <serverId>ossrh</serverId>
+                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                            <stagingProgressTimeoutMinutes>20</stagingProgressTimeoutMinutes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <distributionManagement>
+                <repository>
+                    <id>ossrh</id>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                </repository>
             </distributionManagement>
         </profile>
 
