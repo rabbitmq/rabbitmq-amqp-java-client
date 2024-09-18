@@ -22,6 +22,8 @@ import java.util.function.Function;
 /**
  * API to observe common message operations.
  *
+ * <p>This interface is considered an SPI and is susceptible to change at any time.
+ *
  * @see com.rabbitmq.client.amqp.observation.micrometer.MicrometerObservationCollectorBuilder
  */
 public interface ObservationCollector {
