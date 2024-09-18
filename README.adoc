@@ -1,13 +1,104 @@
 = RabbitMQ AMQP 1.0 Java Client
 
+image:https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml/badge.svg["Build Status", link="https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml"]
+
 This library is part of the https://amqp-client-libraries.rabbitmq-website.pages.dev/client-libraries/amqp-client-libraries[RabbitMQ AMQP 1.0 client libraries].
 It targets RabbitMQ 4.0 and requires at least Java 11 (Java 21 or more is recommended).
 
-== Documentation
+Please refer to the https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/[documentation] to find out more.
 
-* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference]
-* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/package-summary.html[API]
+== Project Maturity
 
-== License
+The project is in development and stabilization phase.
+Features and API are subject to change, but https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/#stability-of-programming-interfaces[breaking changes] will be kept to a minimum.
+
+== Support
+
+* For questions: https://groups.google.com/forum/#!forum/rabbitmq-users[RabbitMQ Users]
+* For bugs and feature requests: https://github.com/rabbitmq/rabbitmq-amqp-java-client/issues[GitHub Issues]
+
+See the https://www.rabbitmq.com/client-libraries/java-versions[RabbitMQ Java libraries support page] for the support timeline of this library.
+
+== How to Use
+
+=== Pre-requisites
+
+This library requires at least Java 11, but Java 21 or more is recommended.
+
+=== Dependencies
+
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/#dependencies[Release]
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/#dependencies[Snapshot]
+
+=== Documentation
+
+==== Release
+
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/[Reference documentation]
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/api/com/rabbitmq/client/amqp/package-summary.html[API documentation]
+
+==== Snapshot
+
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/htmlsingle/[Reference documentation]
+* https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api/com/rabbitmq/client/amqp/package-summary.html[API documentation]
+
+== Versioning
+
+The RabbitMQ AMQP 1.0 Java Client is in development and stabilization phase.
+When the stabilization phase ends, a 1.0.0 version will be cut, and
+https://semver.org/[semantic versioning] is likely to be enforced.
+
+Before reaching the stable phase, the client will use a versioning scheme of `[0.MINOR.PATCH]` where:
+
+* `0` indicates the project is still in a stabilization phase.
+* `MINOR` is a 0-based number incrementing with each new release cycle. It generally reflects significant changes like new features and potentially some programming interfaces changes.
+* `PATCH` is a 0-based number incrementing with each service release, that is bux fixes.
+
+Breaking changes between releases can happen but will be kept to a minimum.
+
+== Build Instructions
+
+You need JDK 11 or later installed.
+
+To build the JAR file:
+
+----
+./mvnw clean package -DskipITs -DskipTests
+----
+
+=== Running Tests with Docker
+
+Start the broker:
+
+----
+docker run -it --rm --name rabbitmq -p 5672:5672 pivotalrabbitmq/rabbitmq:v4.0.x
+----
+
+----
+./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq
+----
+
+=== Running Tests with a Local Broker
+
+To launch the test suite (requires a local RabbitMQ node):
+
+----
+./mvnw verify -Drabbitmqctl.bin=/path/to/rabbitmqctl
+----
+
+== Code Format
+
+The project uses the https://github.com/google/google-java-format[Google Java Format]. Read
+the documentation to support the format in your
+https://github.com/google/google-java-format#intellij-android-studio-and-other-jetbrains-ides[favorite]
+https://github.com/google/google-java-format#eclipse[IDE].
+
+Please launch the `./mvnw spotless:apply` command to format your changes before committing.
+
+
+== Copyright and License
+
+(c) 2024 Broadcom. All Rights Reserved.
+The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 
 This package, the RabbitMQ AMQP 1.0 Java Client library, is licensed under the http://www.apache.org/licenses/LICENSE-2.0[Apache License, version 2].
