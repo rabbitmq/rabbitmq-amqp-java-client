@@ -25,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -96,6 +97,16 @@ final class Utils {
 
   private static boolean isJava21OrMore() {
     return Runtime.version().compareTo(Runtime.Version.parse("21")) >= 0;
+  }
+
+  static void checkMessageAnnotations(Map<String, Object> annotations) {
+    annotations.forEach(
+        (k, v) -> {
+          if (!k.startsWith("x-")) {
+            throw new IllegalArgumentException(
+                "Message annotation keys must start with 'x-opt-': " + k);
+          }
+        });
   }
 
   private static class NamedThreadFactory implements ThreadFactory {

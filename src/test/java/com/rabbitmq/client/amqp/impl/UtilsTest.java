@@ -17,7 +17,10 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.Utils.checkMessageAnnotations;
+import static java.util.Map.of;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -43,5 +46,20 @@ public class UtilsTest {
   @ValueSource(strings = {"foo", "1", "10", "", "7DD", "1y", "6g"})
   void validateMaxAgeKO(String input) {
     assertThat(Utils.validateMaxAge(input)).isFalse();
+  }
+
+  @Test
+  void checkAnnotationsOK() {
+    checkMessageAnnotations(of());
+    checkMessageAnnotations(of("x-foo", "bar"));
+    checkMessageAnnotations(of("x-foo-1", "bar1", "x-foo-2", "bar2"));
+  }
+
+  @Test
+  void checkAnnotationsKO() {
+    assertThatThrownBy(() -> checkMessageAnnotations(of("foo", "bar")))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> checkMessageAnnotations(of("x-foo", "bar1", "foo", "bar2")))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

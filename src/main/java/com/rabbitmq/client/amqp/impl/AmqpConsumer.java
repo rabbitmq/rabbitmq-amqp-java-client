@@ -393,7 +393,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         try {
           annotations = annotations == null ? Collections.emptyMap() : annotations;
-          checkAnnotations(annotations);
+          Utils.checkMessageAnnotations(annotations);
           protonExecutor.execute(replenishCreditOperation);
           delivery.disposition(DeliveryState.modified(true, true, annotations), true);
           unsettledMessageCount.decrementAndGet();
@@ -427,7 +427,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         try {
           annotations = annotations == null ? Collections.emptyMap() : annotations;
-          checkAnnotations(annotations);
+          Utils.checkMessageAnnotations(annotations);
           protonExecutor.execute(replenishCreditOperation);
           delivery.disposition(DeliveryState.modified(false, false, annotations), true);
           unsettledMessageCount.decrementAndGet();
@@ -439,15 +439,5 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         }
       }
     }
-  }
-
-  static void checkAnnotations(Map<String, Object> annotations) {
-    annotations.forEach(
-        (k, v) -> {
-          if (!k.startsWith("x-opt-")) {
-            throw new IllegalArgumentException(
-                "Message annotation keys must start with 'x-opt-': " + k);
-          }
-        });
   }
 }
