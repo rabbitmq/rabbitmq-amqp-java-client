@@ -37,7 +37,7 @@ public class PublishContext extends SenderContext<Message> {
       String routingKey,
       Message message,
       ObservationCollector.ConnectionInfo connectionInfo) {
-    super((carrier, key, value) -> carrier.annotation(key, value));
+    super((carrier, key, value) -> carrier.annotation(Utils.annotationKey(key), value));
     if (exchange == null && routingKey == null) {
       String to = message.to();
       String[] exRk = Utils.exchangeRoutingKeyFromTo(to);

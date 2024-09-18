@@ -33,7 +33,7 @@ public class DeliverContext extends ReceiverContext<Message> {
   DeliverContext(String exchange, String routingKey, String queue, Message message) {
     super(
         (carrier, key) -> {
-          Object result = carrier.annotation(key);
+          Object result = carrier.annotation(Utils.annotationKey(key));
           if (result == null) {
             result = carrier.property(key);
           }

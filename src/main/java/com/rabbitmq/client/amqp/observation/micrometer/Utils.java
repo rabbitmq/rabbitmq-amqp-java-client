@@ -56,6 +56,10 @@ abstract class Utils {
     return exRk;
   }
 
+  static String annotationKey(String key) {
+    return "x-opt-" + key;
+  }
+
   // from Apache HttpComponents PercentCodec
   private static final int RADIX = 16;
 
