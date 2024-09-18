@@ -24,6 +24,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -388,6 +389,24 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
+    public void discard(Map<String, Object> annotations) {
+      if (settled.compareAndSet(false, true)) {
+        try {
+          annotations = annotations == null ? Collections.emptyMap() : annotations;
+          checkAnnotations(annotations);
+          protonExecutor.execute(replenishCreditOperation);
+          delivery.disposition(DeliveryState.modified(true, true, annotations), true);
+          unsettledMessageCount.decrementAndGet();
+          metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
+        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
+          LOGGER.debug("message discard (modified) failed: {}", e.getMessage());
+        } catch (ClientException e) {
+          throw ExceptionUtils.convert(e);
+        }
+      }
+    }
+
+    @Override
     public void requeue() {
       if (settled.compareAndSet(false, true)) {
         try {
@@ -402,5 +421,33 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         }
       }
     }
+
+    @Override
+    public void requeue(Map<String, Object> annotations) {
+      if (settled.compareAndSet(false, true)) {
+        try {
+          annotations = annotations == null ? Collections.emptyMap() : annotations;
+          checkAnnotations(annotations);
+          protonExecutor.execute(replenishCreditOperation);
+          delivery.disposition(DeliveryState.modified(false, false, annotations), true);
+          unsettledMessageCount.decrementAndGet();
+          metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
+        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
+          LOGGER.debug("message requeue (modified) failed: {}", e.getMessage());
+        } catch (ClientException e) {
+          throw ExceptionUtils.convert(e);
+        }
+      }
+    }
+  }
+
+  static void checkAnnotations(Map<String, Object> annotations) {
+    annotations.forEach(
+        (k, v) -> {
+          if (!k.startsWith("x-opt-")) {
+            throw new IllegalArgumentException(
+                "Message annotation keys must start with 'x-opt-': " + k);
+          }
+        });
   }
 }

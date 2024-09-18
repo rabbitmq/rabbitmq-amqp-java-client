@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.util.Map;
+
 /**
  * API to consume messages from a RabbitMQ queue.
  *
@@ -76,11 +78,47 @@ public interface Consumer extends AutoCloseable, Resource {
     void discard();
 
     /**
+     * Discard the message with annotations to combine with the existing message annotations.
+     *
+     * <p>This means the message cannot be processed because it is invalid, the broker can drop it
+     * or dead-letter it if it is configured.
+     *
+     * <p>Annotation keys must start with the <code>x-opt-</code> prefix.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = true, undeliverable-here = true}</code> outcome.
+     *
+     * @param annotations message annotations to combine with existing ones
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     */
+    void discard(Map<String, Object> annotations);
+
+    /**
      * Requeue the message (AMQP 1.0 <code>released</code> outcome).
      *
      * <p>This means the message has not been processed and the broker can requeue it and deliver it
      * to the same or a different consumer.
      */
     void requeue();
+
+    /**
+     * Requeue the message with annotations to combine with the existing message annotations.
+     *
+     * <p>This means the message has not been processed and the broker can requeue it and deliver it
+     * to the same or a different consumer.
+     *
+     * <p>Annotation keys must start with the <code>x-opt-</code> prefix.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome.
+     *
+     * @param annotations message annotations to combine with existing ones
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     */
+    void requeue(Map<String, Object> annotations);
   }
 }

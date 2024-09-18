@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Message;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +43,10 @@ final class Assertions {
 
   static SyncAssert assertThat(TestUtils.Sync sync) {
     return new SyncAssert(sync);
+  }
+
+  static MessageAssert assertThat(Message message) {
+    return new MessageAssert(message);
   }
 
   static ConnectionAssert assertThat(AmqpConnection connection) {
@@ -208,6 +213,51 @@ final class Assertions {
     }
   }
 
+  static class MessageAssert extends AbstractObjectAssert<MessageAssert, Message> {
+
+    private MessageAssert(Message message) {
+      super(message, MessageAssert.class);
+    }
+
+    MessageAssert hasId(Object id) {
+      isNotNull();
+      if (!actual.messageId().equals(id)) {
+        fail("Message ID should be '%s' but is '%s'", id, actual.messageId());
+      }
+      return this;
+    }
+
+    MessageAssert hasAnnotation(String key) {
+      isNotNull();
+      if (!actual.hasAnnotation(key)) {
+        fail("Message should have annotation '%s' but does not", key);
+      }
+      return this;
+    }
+
+    MessageAssert hasAnnotation(String key, Object value) {
+      if (key == null || value == null) {
+        throw new IllegalArgumentException();
+      }
+      isNotNull();
+      hasAnnotation(key);
+      if (!value.equals(this.actual.annotation(key))) {
+        fail(
+            "Message should have annotation '%s = %s' but has '%s = %s'",
+            key, value, key, this.actual.annotation(key));
+      }
+      return this;
+    }
+
+    MessageAssert doesNotHaveAnnotation(String key) {
+      isNotNull();
+      if (actual.hasAnnotation(key)) {
+        fail("Message should not have annotation '%s' but has it", key);
+      }
+      return this;
+    }
+  }
+
   static class ConnectionAssert extends AbstractObjectAssert<ConnectionAssert, AmqpConnection> {
 
     private ConnectionAssert(AmqpConnection connection) {
@@ -219,7 +269,7 @@ final class Assertions {
       isNotNull();
       if (!actual.connectionNodename().equals(nodename)) {
         fail(
-            "Connection should on node '%s' but is on node '%s'",
+            "Connection should be on node '%s' but is on node '%s'",
             nodename, actual.connectionNodename());
       }
       return this;
