@@ -6,7 +6,7 @@ ifndef::sourcedir[:sourcedir: ../../main/java]
 :source-highlighter: prettify
 :javadoc-url: https://rabbitmq.github.io/rabbitmq-amqp-java-client/snapshot/api
 
-The RabbitMQ AMQP 1.0 Java Client is a library to communicate with RabbitMQ using https://www.rabbitmq.com/docs/next/amqp[AMQP 1.0].
+The RabbitMQ AMQP 1.0 Java Client is a library to communicate with RabbitMQ using https://www.rabbitmq.com/docs/amqp[AMQP 1.0].
 
 == Pre-requisites
 

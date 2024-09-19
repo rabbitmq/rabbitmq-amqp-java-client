@@ -89,7 +89,7 @@ public interface Publisher extends AutoCloseable, Resource {
      * The status returned by the broker.
      *
      * @return status of the message
-     * @see <a href="https://www.rabbitmq.com/docs/next/amqp#outcomes">AMQP Outcomes</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#outcomes">AMQP Outcomes</a>
      */
     Status status();
   }
@@ -97,7 +97,7 @@ public interface Publisher extends AutoCloseable, Resource {
   /**
    * Message status.
    *
-   * @see <a href="https://www.rabbitmq.com/docs/next/amqp#outcomes">AMQP Outcomes</a>
+   * @see <a href="https://www.rabbitmq.com/docs/amqp#outcomes">AMQP Outcomes</a>
    */
   enum Status {
     /** The message has been accepted by the broker. */
