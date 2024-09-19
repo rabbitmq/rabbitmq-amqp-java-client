@@ -22,3 +22,5 @@ docker exec rabbitmq1 rabbitmqctl enable_feature_flag --experimental khepri_db
 docker exec rabbitmq2 rabbitmqctl enable_feature_flag --experimental khepri_db
 
 docker exec rabbitmq0 rabbitmqctl cluster_status
+
+docker compose --file ci/cluster/docker-compose.yml ps
