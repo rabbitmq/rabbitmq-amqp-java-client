@@ -71,7 +71,7 @@ To build the JAR file:
 Start the broker:
 
 ----
-docker run -it --rm --name rabbitmq -p 5672:5672 pivotalrabbitmq/rabbitmq:v4.0.x
+docker run -it --rm --name rabbitmq -p 5672:5672 rabbitmq:4.0
 ----
 
 ----
