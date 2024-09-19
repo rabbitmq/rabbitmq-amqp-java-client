@@ -8,7 +8,7 @@ They offer a simple and safe, yet powerful API on top of AMQP 1.0. Applications 
 The libraries also offer advanced features like automatic connection and topology recovery, and connection affinity with queues.
 
 The RabbitMQ AMQP 1.0 Java Client is one of these libraries.
-This documentation covers only the advanced usage of the library; a https://amqp-client-libraries.rabbitmq-website.pages.dev/client-libraries/amqp-client-libraries[common page on the RabbitMQ website] covers the most common use cases.
+This documentation covers only the advanced usage of the library; a https://www.rabbitmq.com/client-libraries/amqp-client-libraries[common page on the RabbitMQ website] covers the most common use cases.
 
 == Advanced Usage
 
