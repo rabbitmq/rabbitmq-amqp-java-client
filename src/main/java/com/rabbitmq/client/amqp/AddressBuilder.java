@@ -18,8 +18,8 @@
 package com.rabbitmq.client.amqp;
 
 /**
- * Builder for a <a href="https://www.rabbitmq.com/docs/amqp#address-v2">AMQP target address
- * format v2.</a>
+ * Builder for a <a href="https://www.rabbitmq.com/docs/amqp#address-v2">AMQP target address format
+ * v2.</a>
  *
  * @param <T> the type of object returned by methods, usually the object itself
  */

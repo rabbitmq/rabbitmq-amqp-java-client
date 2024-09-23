@@ -104,7 +104,7 @@ final class Utils {
         (k, v) -> {
           if (!k.startsWith("x-")) {
             throw new IllegalArgumentException(
-                "Message annotation keys must start with 'x-opt-': " + k);
+                "Message annotation keys must start with 'x-': " + k);
           }
         });
   }

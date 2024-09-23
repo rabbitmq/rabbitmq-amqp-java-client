@@ -83,7 +83,9 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message cannot be processed because it is invalid, the broker can drop it
      * or dead-letter it if it is configured.
      *
-     * <p>Annotation keys must start with the <code>x-opt-</code> prefix.
+     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
+     * Annotation keys the broker understands starts with <code>x-</code>, but not with <code>x-opt-
+     * </code>.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = true, undeliverable-here = true}</code> outcome.
@@ -109,7 +111,9 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message has not been processed and the broker can requeue it and deliver it
      * to the same or a different consumer.
      *
-     * <p>Annotation keys must start with the <code>x-opt-</code> prefix.
+     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
+     * Annotation keys the broker understands starts with <code>x-</code>, but not with <code>x-opt-
+     * </code>.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = false, undeliverable-here = false}</code> outcome.

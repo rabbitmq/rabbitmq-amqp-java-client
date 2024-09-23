@@ -56,8 +56,6 @@ public class ConsumerOutcomeTest {
     this.q = TestUtils.name(info);
     this.dlx = TestUtils.name(info);
     this.dlq = TestUtils.name(info);
-
-    //    this.connection.
   }
 
   @AfterEach
