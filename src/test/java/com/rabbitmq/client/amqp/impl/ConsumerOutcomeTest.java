@@ -125,8 +125,9 @@ public class ConsumerOutcomeTest {
     Message message = messages.poll();
     assertThat(message).doesNotHaveAnnotation("x-delivery-count");
     message = messages.poll();
-    assertThat(message).hasAnnotation("x-delivery-count", 1L);
-    //        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
+    assertThat(message)
+        .hasAnnotation("x-delivery-count", 1L)
+        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
   }
 
@@ -187,8 +188,7 @@ public class ConsumerOutcomeTest {
     publisher.publish(publisher.message().messageId(messageID), ctx -> {});
     assertThat(deadLetteredSync).completes();
     Message message = deadLetteredMessage.get();
-    assertThat(message).hasId(messageID);
-    //        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
+    assertThat(message).hasId(messageID).hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
   }
