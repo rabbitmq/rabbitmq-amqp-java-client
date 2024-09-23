@@ -135,51 +135,6 @@
             <version>${netty4.iouring.version}</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
-
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-buffer</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-common</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-handler</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-transport</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-codec-http</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-transport-native-epoll</artifactId>
-            <version>${netty5.version}</version>
-            <optional>true</optional>
-            <classifier>linux-x86_64</classifier>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty5-transport-native-kqueue</artifactId>
-            <version>${netty5.version}</version>
-            <classifier>osx-x86_64</classifier>
-            <optional>true</optional>
-        </dependency>
         <!-- End of QPid dependencies -->
 
         <dependency>

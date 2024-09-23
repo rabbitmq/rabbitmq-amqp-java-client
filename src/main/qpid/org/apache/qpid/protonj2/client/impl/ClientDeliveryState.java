@@ -240,7 +240,9 @@ public abstract class ClientDeliveryState implements DeliveryState {
         ClientModified(Modified modified) {
             this.modified.setDeliveryFailed(modified.isDeliveryFailed());
             this.modified.setUndeliverableHere(modified.isUndeliverableHere());
-            this.modified.setMessageAnnotations(new LinkedHashMap<>(modified.getMessageAnnotations()));
+            if (modified.getMessageAnnotations() != null) {
+                this.modified.setMessageAnnotations(new LinkedHashMap<>(modified.getMessageAnnotations()));
+            }
         }
 
         /**
