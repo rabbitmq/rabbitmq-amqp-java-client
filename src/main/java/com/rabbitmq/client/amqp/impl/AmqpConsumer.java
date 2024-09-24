@@ -18,15 +18,16 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
+import static com.rabbitmq.client.amqp.impl.AmqpConsumerBuilder.*;
 import static java.time.Duration.ofSeconds;
+import static java.util.Optional.ofNullable;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -59,6 +60,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final String queue;
   private final Map<String, Object> filters;
   private final Map<String, Object> linkProperties;
+  private final ConsumerBuilder.SubscriptionListener subscriptionListener;
   private final AmqpConnection connection;
   private final AtomicReference<PauseStatus> pauseStatus =
       new AtomicReference<>(PauseStatus.UNPAUSED);
@@ -89,11 +91,17 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.queue = builder.queue();
     this.filters = Map.copyOf(builder.filters());
     this.linkProperties = Map.copyOf(builder.properties());
+    this.subscriptionListener =
+        ofNullable(builder.subscriptionListener()).orElse(NO_OP_SUBSCRIPTION_LISTENER);
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
     this.nativeReceiver =
         this.createNativeReceiver(
-            this.sessionHandler.session(), this.address, this.linkProperties, this.filters);
+            this.sessionHandler.session(),
+            this.address,
+            this.linkProperties,
+            this.filters,
+            this.subscriptionListener);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
     this.startReceivingLoop();
@@ -153,8 +161,12 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       Session nativeSession,
       String address,
       Map<String, Object> properties,
-      Map<String, Object> filters) {
+      Map<String, Object> filters,
+      SubscriptionListener subscriptionListener) {
     try {
+      filters = new LinkedHashMap<>(filters);
+      StreamOptions streamOptions = AmqpConsumerBuilder.streamOptions(filters);
+      subscriptionListener.preSubscribe(() -> streamOptions);
       ReceiverOptions receiverOptions =
           new ReceiverOptions()
               .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
@@ -221,7 +233,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.sessionHandler.sessionNoCheck(),
                     this.address,
                     this.linkProperties,
-                    this.filters),
+                    this.filters,
+                    this.subscriptionListener),
             e -> {
               boolean shouldRetry =
                   e instanceof AmqpException.AmqpResourceClosedException

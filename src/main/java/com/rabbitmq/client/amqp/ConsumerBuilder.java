@@ -74,6 +74,8 @@ public interface ConsumerBuilder {
    */
   StreamOptions stream();
 
+  ConsumerBuilder subscriptionListener(SubscriptionListener subscriptionListener);
+
   /**
    * Build the consumer.
    *
@@ -163,5 +165,15 @@ public interface ConsumerBuilder {
     LAST,
     /** Very end of the stream (new chunks). */
     NEXT
+  }
+
+  interface SubscriptionListener {
+
+    void preSubscribe(Context context);
+
+    interface Context {
+
+      ConsumerBuilder.StreamOptions streamOptions();
+    }
   }
 }
