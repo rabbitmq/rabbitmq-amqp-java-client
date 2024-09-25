@@ -74,6 +74,15 @@ public interface ConsumerBuilder {
    */
   StreamOptions stream();
 
+  /**
+   * Set a listener to customize the subscription before the consumer is created (or recovered).
+   *
+   * <p>This callback is available for stream consumers.
+   *
+   * @param subscriptionListener subscription listener
+   * @return this builder instance
+   * @see SubscriptionListener
+   */
   ConsumerBuilder subscriptionListener(SubscriptionListener subscriptionListener);
 
   /**
@@ -167,12 +176,36 @@ public interface ConsumerBuilder {
     NEXT
   }
 
+  /**
+   * Callback to modify a consumer subscription before the link creation.
+   *
+   * <p>This allows looking up the last processed offset for a stream consumer and attaching to this
+   * offset.
+   */
   interface SubscriptionListener {
 
+    /**
+     * Pre-subscription callback.
+     *
+     * <p>It is called before the link is created but also every time it recovers, e.g. after a
+     * connection failure.
+     *
+     * @param context subscription context
+     */
     void preSubscribe(Context context);
 
+    /** Subscription context. */
     interface Context {
 
+      /**
+       * Stream options, to set the offset to start consuming from.
+       *
+       * <p>Only the {@link StreamOptions} are accessible, the {@link StreamOptions#builder()}
+       * method returns <code>null</code>
+       *
+       * @return the stream options
+       * @see StreamOptions
+       */
       ConsumerBuilder.StreamOptions streamOptions();
     }
   }
