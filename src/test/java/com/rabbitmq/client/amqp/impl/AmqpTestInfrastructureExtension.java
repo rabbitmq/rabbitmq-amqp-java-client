@@ -17,6 +17,9 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.TestUtils.name;
+
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
 import java.lang.reflect.Field;
@@ -60,9 +63,18 @@ class AmqpTestInfrastructureExtension
 
     Field connectionField = field(context.getTestClass().get(), "connection");
     if (connectionField != null) {
+      AmqpConnectionBuilder connectionBuilder = (AmqpConnectionBuilder) env.connectionBuilder();
+      Field backOffDelayPolicyField = field(context.getTestClass().get(), "backOffDelayPolicy");
+      if (backOffDelayPolicyField != null) {
+        backOffDelayPolicyField.setAccessible(true);
+        BackOffDelayPolicy backOffDelayPolicy =
+            (BackOffDelayPolicy) backOffDelayPolicyField.get(context.getTestInstance().get());
+        if (backOffDelayPolicy != null) {
+          connectionBuilder.recovery().backOffDelayPolicy(backOffDelayPolicy);
+        }
+      }
+      Connection connection = connectionBuilder.name(name(context)).build();
       connectionField.setAccessible(true);
-      Connection connection =
-          ((AmqpConnectionBuilder) env.connectionBuilder()).name(TestUtils.name(context)).build();
       connectionField.set(context.getTestInstance().get(), connection);
       store(context).put("connection", connection);
     }
@@ -77,7 +89,7 @@ class AmqpTestInfrastructureExtension
   }
 
   @Override
-  public void afterAll(ExtensionContext context) throws Exception {
+  public void afterAll(ExtensionContext context) {
     Environment env = store(context).get("environment", Environment.class);
     if (env != null) {
       env.close();

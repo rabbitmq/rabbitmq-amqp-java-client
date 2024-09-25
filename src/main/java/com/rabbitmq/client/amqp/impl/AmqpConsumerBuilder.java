@@ -27,6 +27,8 @@ import java.util.*;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
 
+  static SubscriptionListener NO_OP_SUBSCRIPTION_LISTENER = ctx -> {};
+
   private final AmqpConnection connection;
   private String queue;
   private Consumer.MessageHandler messageHandler;
@@ -35,6 +37,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private final Map<String, Object> filters = new LinkedHashMap<>();
   private final Map<String, Object> properties = new LinkedHashMap<>();
   private final StreamOptions streamOptions = new DefaultStreamOptions(this, this.filters);
+  private SubscriptionListener subscriptionListener = NO_OP_SUBSCRIPTION_LISTENER;
 
   AmqpConsumerBuilder(AmqpConnection connection) {
     this.connection = connection;
@@ -77,6 +80,16 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   @Override
   public StreamOptions stream() {
     return this.streamOptions;
+  }
+
+  @Override
+  public ConsumerBuilder subscriptionListener(SubscriptionListener subscriptionListener) {
+    this.subscriptionListener = subscriptionListener;
+    return this;
+  }
+
+  SubscriptionListener subscriptionListener() {
+    return this.subscriptionListener;
   }
 
   AmqpConnection connection() {
@@ -185,5 +198,9 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     private void offsetSpecification(Object value) {
       this.filters.put("rabbitmq:stream-offset-spec", value);
     }
+  }
+
+  static StreamOptions streamOptions(Map<String, Object> filters) {
+    return new DefaultStreamOptions(null, filters);
   }
 }

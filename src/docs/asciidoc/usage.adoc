@@ -26,6 +26,26 @@ include::{test-examples}/Api.java[tag=connection-settings]
 <1> Use the `guest` user by default
 <2> Use the `admin` user for this connection
 
+=== Subscription Listener
+
+The client provides a `SubscriptionListener` interface callback to add behavior before a subscription is created.
+This callback is meant for stream consumers: it can be used to dynamically set the offset the consumer attaches to in the stream.
+It is called when the consumer is first created and when the client has to re-subscribe (e.g. after a disconnection).
+
+It is possible to use the callback to get the last processed offset from an external store.
+The following code snippet shows how this can be done (note the interaction with the external store is not detailed):
+
+.Using the subscription listener to attach to a stream
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=subscription-listener]
+--------
+<1> Set subscription listener
+<2> Get offset from external store
+<3> Set offset to use for the subscription
+<4> Get the message offset
+<5> Store the offset in the external store after processing
+
 === Metrics Collection
 
 The library provides the {javadoc-url}/com/rabbitmq/client/amqp/metrics/MetricsCollector.html[`MetricsCollector`] abstraction to collect metrics.

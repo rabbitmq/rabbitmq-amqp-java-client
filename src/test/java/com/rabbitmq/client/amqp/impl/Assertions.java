@@ -99,6 +99,13 @@ final class Assertions {
       }
       return this;
     }
+
+    SyncAssert hasNotCompleted() {
+      if (actual.hasCompleted()) {
+        fail("Sync '%s' should not have completed", this.actual.toString());
+      }
+      return this;
+    }
   }
 
   static class QueueInfoAssert extends AbstractObjectAssert<QueueInfoAssert, Management.QueueInfo> {

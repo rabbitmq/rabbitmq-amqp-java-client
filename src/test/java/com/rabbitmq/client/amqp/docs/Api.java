@@ -26,28 +26,7 @@ import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-
-import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
-import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
-
 class Api {
-
-  void environment() {
-    // tag::environment-creation[]
-    Environment environment = new AmqpEnvironmentBuilder()
-        .build();
-    // end::environment-creation[]
-  }
-
-  void connection() {
-    Environment environment = null;
-    // tag::connection-creation[]
-    Connection connection = environment.connectionBuilder()
-        .build();
-    // end::connection-creation[]
-  }
 
   void connectionSettings() {
     // tag::connection-settings[]
@@ -62,290 +41,31 @@ class Api {
     // end::connection-settings[]
   }
 
-
-  void publishing() {
+  void subscriptionListener() {
     Connection connection = null;
-    // tag::publisher-creation[]
-    Publisher publisher = connection.publisherBuilder()
-        .exchange("foo").key("bar")
-        .build();
-    // end::publisher-creation[]
-
-
-    // tag::message-creation[]
-    Message message = publisher
-        .message("hello".getBytes(StandardCharsets.UTF_8))
-        .messageId(1L);
-    // end::message-creation[]
-
-    // tag::message-publishing[]
-    publisher.publish(message, context -> {
-      if (context.status() == ACCEPTED) {
-        // the broker accepted (confirmed) the message
-      } else {
-        // deal with possible failure
-      }
-    });
-    // end::message-publishing[]
-  }
-
-  void targetAddressFormatExchangeKey() {
-    Connection connection = null;
-    // tag::target-address-exchange-key[]
-    Publisher publisher = connection.publisherBuilder()
-        .exchange("foo").key("bar") // <1>
-        .build();
-    // end::target-address-exchange-key[]
-  }
-
-  void targetAddressFormatExchange() {
-    Connection connection = null;
-    // tag::target-address-exchange[]
-    Publisher publisher = connection.publisherBuilder()
-        .exchange("foo") // <1>
-        .build();
-    // end::target-address-exchange[]
-  }
-
-  void targetAddressFormatQueue() {
-    Connection connection = null;
-    // tag::target-address-queue[]
-    Publisher publisher = connection.publisherBuilder()
-        .queue("some-queue") // <1>
-        .build();
-    // end::target-address-queue[]
-  }
-
-  void targetAddressNull() {
-    Connection connection = null;
-    // tag::target-address-null[]
-    Publisher publisher = connection.publisherBuilder()
-        .build(); // <1>
-
-    Message message1 = publisher.message()
-        .toAddress().exchange("foo").key("bar") // <2>
-        .message();
-
-    Message message2 = publisher.message()
-        .toAddress().exchange("foo") // <3>
-        .message();
-
-    Message message3 = publisher.message()
-        .toAddress().queue("my-queue") // <4>
-        .message();
-    // end::target-address-null[]
-  }
-
-  void consuming() {
-    Connection connection = null;
-    // tag::consumer-consume[]
-    Consumer consumer = connection.consumerBuilder()
-        .queue("some-queue")
-        .messageHandler((context, message) -> {
-          byte[] body = message.body(); // <1>
-          // ... <2>
-          context.accept(); // <3>
-        })
-        .build();
-    // end::consumer-consume[]
-
-    // tag::consumer-graceful-shutdown[]
-    consumer.pause(); // <1>
-    long unsettledMessageCount = consumer.unsettledMessageCount(); // <2>
-    consumer.close(); // <3>
-    // end::consumer-graceful-shutdown[]
-
-    // tag::consumer-abrupt-shutdown[]
-    consumer.close(); // <1>
-    // end::consumer-abrupt-shutdown[]
-  }
-
-  void consumingStream() {
-    Connection connection = null;
-    // tag::consumer-consume-stream[]
-    Consumer consumer = connection.consumerBuilder()
+    // tag::subscription-listener[]
+    connection.consumerBuilder()
         .queue("some-stream")
-        .stream() // <1>
-          .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST) // <2>
-        .builder() // <3>
-        .messageHandler((context, message) -> {
-          // message processing
+        .subscriptionListener(ctx -> {  // <1>
+          long offset = getOffsetFromExternalStore();  // <2>
+          ctx.streamOptions().offset(offset + 1);  // <3>
+        })
+        .messageHandler((ctx, msg) -> {
+          // message handling code...
+
+          long offset = (long) msg.annotation("x-stream-offset");  // <4>
+          storeOffsetInExternalStore(offset);  // <5>
         })
         .build();
-    // end::consumer-consume-stream[]
+    // end::subscription-listener[]
   }
 
-  void consumingStreamFiltering() {
-    Connection connection = null;
-    // tag::consumer-consume-stream-filtering[]
-    Consumer consumer = connection.consumerBuilder()
-        .queue("some-stream")
-        .stream() // <1>
-          .filterValues("invoices", "orders") // <2>
-          .filterMatchUnfiltered(true) // <3>
-        .builder() // <4>
-        .messageHandler((context, message) -> {
-          // message processing
-        })
-        .build();
-    // end::consumer-consume-stream-filtering[]
+  long getOffsetFromExternalStore() {
+    return 0L;
   }
 
-  void management() {
-    Connection connection = null;
-    // tag::management[]
-    Management management = connection.management();
-    // end::management[]
-  }
+  void storeOffsetInExternalStore(long offset) {
 
-  void exchanges() {
-    Management management = null;
-    // tag::fanout-exchange[]
-    management.exchange()
-        .name("my-exchange")
-        .type(FANOUT)
-        .declare();
-    // end::fanout-exchange[]
-
-    // tag::delayed-message-exchange[]
-    management.exchange()
-        .name("my-exchange")
-        .type("x-delayed-message")
-        .autoDelete(false)
-        .argument("x-delayed-type", "direct")
-        .declare();
-    // end::delayed-message-exchange[]
-
-    // tag::delete-exchange[]
-    management.exchangeDeletion().delete("my-exchange");
-    // end::delete-exchange[]
-  }
-
-  void queues() {
-    Management management = null;
-    // tag::queue-creation[]
-    management.queue()
-        .name("my-queue")
-        .exclusive(true)
-        .autoDelete(false)
-        .declare();
-    // end::queue-creation[]
-
-    // tag::queue-creation-with-arguments[]
-    management
-        .queue()
-        .name("my-queue")
-        .messageTtl(Duration.ofMinutes(10)) // <1>
-        .maxLengthBytes(ByteCapacity.MB(100)) // <1>
-        .declare();
-    // end::queue-creation-with-arguments[]
-
-    // tag::quorum-queue-creation[]
-    management
-        .queue()
-        .name("my-quorum-queue")
-        .quorum() // <1>
-          .quorumInitialGroupSize(3)
-          .deliveryLimit(3)
-        .queue()
-        .declare();
-    // end::quorum-queue-creation[]
-
-    // tag::queue-deletion[]
-    management.queueDeletion().delete("my-queue");
-    // end::queue-deletion[]
-  }
-
-  void bindings() {
-    Management management = null;
-    // tag::binding[]
-    management.binding()
-        .sourceExchange("my-exchange")
-        .destinationQueue("my-queue")
-        .key("foo")
-        .bind();
-    // end::binding[]
-
-    // tag::exchange-binding[]
-    management.binding()
-        .sourceExchange("my-exchange")
-        .destinationExchange("my-other-exchange")
-        .key("foo")
-        .bind();
-    // end::exchange-binding[]
-
-    // tag::unbinding[]
-    management.unbind()
-        .sourceExchange("my-exchange")
-        .destinationQueue("my-queue")
-        .key("foo")
-        .unbind();
-    // end::unbinding[]
-  }
-
-  void listeners() {
-    Environment environment = null;
-    // tag::listener-connection[]
-    Connection connection =  environment.connectionBuilder()
-        .listeners(context -> { // <1>
-      context.previousState(); // <2>
-      context.currentState(); // <3>
-      context.failureCause(); // <4>
-      context.resource(); // <5>
-    }).build();
-    // end::listener-connection[]
-
-    // tag::listener-publisher[]
-    Publisher publisher = connection.publisherBuilder()
-        .listeners(context -> { // <1>
-          // ...
-        })
-        .exchange("foo").key("bar")
-        .build();
-    // end::listener-publisher[]
-
-    // tag::listener-consumer[]
-    Consumer consumer = connection.consumerBuilder()
-        .listeners(context -> { // <1>
-          // ...
-        })
-        .queue("my-queue")
-        .build();
-    // end::listener-consumer[]
-  }
-
-  void connectionRecoveryBackOff() {
-    Environment environment = null;
-    // tag::connection-recovery-back-off[]
-    Connection connection = environment.connectionBuilder()
-        .recovery() // <1>
-        .backOffDelayPolicy(BackOffDelayPolicy.fixed(Duration.ofSeconds(2))) // <2>
-        .connectionBuilder().build();
-    // end::connection-recovery-back-off[]
-  }
-
-  void connectionRecoveryNoTopologyRecovery() {
-    Environment environment = null;
-    // tag::connection-recovery-no-topology-recovery[]
-    Connection connection = environment.connectionBuilder()
-        .recovery()
-        .topology(false) // <1>
-        .connectionBuilder()
-        .listeners(context -> {
-          // <2>
-        })
-        .build();
-    // end::connection-recovery-no-topology-recovery[]
-  }
-
-  void connectionRecoveryDeactivate() {
-    Environment environment = null;
-    // tag::connection-recovery-deactivate[]
-    Connection connection = environment.connectionBuilder()
-        .recovery()
-        .activated(false) // <1>
-        .connectionBuilder().build();
-    // end::connection-recovery-deactivate[]
   }
 
   void metricsCollectorMicrometerPrometheus() {

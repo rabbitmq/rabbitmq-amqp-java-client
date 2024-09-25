@@ -525,6 +525,10 @@ public abstract class TestUtils {
       this.reset(1);
     }
 
+    boolean hasCompleted() {
+      return this.latch.get().getCount() == 0;
+    }
+
     @Override
     public String toString() {
       return this.description;
