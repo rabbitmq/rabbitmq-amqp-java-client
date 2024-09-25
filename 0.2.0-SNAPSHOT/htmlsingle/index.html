@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.2.0-SNAPSHOT</span>
-<br><span id="revremark">(295deea)</span>
+<br><span id="revremark">(d4c53d0)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -675,6 +675,7 @@ pre.rouge {
 <li><a href="#advanced-usage">Advanced Usage</a>
 <ul class="sectlevel2">
 <li><a href="#connection-settings-at-the-environment-level">Connection Settings at the Environment Level</a></li>
+<li><a href="#subscription-listener">Subscription Listener</a></li>
 <li><a href="#metrics-collection">Metrics Collection</a></li>
 <li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
 </ul>
@@ -905,6 +906,60 @@ It is possible to override the environment connection settings for a given conne
 <tr>
 <td><i class="conum" data-value="2"></i><b>2</b></td>
 <td>Use the <code>admin</code> user for this connection</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="subscription-listener"><a class="anchor" href="#subscription-listener"></a>Subscription Listener</h3>
+<div class="paragraph">
+<p>The client provides a <code>SubscriptionListener</code> interface callback to add behavior before a subscription is created.
+This callback is meant for stream consumers: it can be used to dynamically set the offset the consumer attaches to in the stream.
+It is called when the consumer is first created and when the client has to re-subscribe (e.g. after a disconnection).</p>
+</div>
+<div class="paragraph">
+<p>It is possible to use the callback to get the last processed offset from an external store.
+The following code snippet shows how this can be done (note the interaction with the external store is not detailed):</p>
+</div>
+<div class="listingblock">
+<div class="title">Using the subscription listener to attach to a stream</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-stream"</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">subscriptionListener</span><span class="o">(</span><span class="n">ctx</span> <span class="o">-&gt;</span> <span class="o">{</span>  <i class="conum" data-value="1"></i><b>(1)</b>
+      <span class="kt">long</span> <span class="n">offset</span> <span class="o">=</span> <span class="n">getOffsetFromExternalStore</span><span class="o">();</span>  <i class="conum" data-value="2"></i><b>(2)</b>
+      <span class="n">ctx</span><span class="o">.</span><span class="na">streamOptions</span><span class="o">().</span><span class="na">offset</span><span class="o">(</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span><span class="o">);</span>  <i class="conum" data-value="3"></i><b>(3)</b>
+    <span class="o">})</span>
+    <span class="o">.</span><span class="na">messageHandler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">msg</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+      <span class="c1">// message handling code...</span>
+
+      <span class="kt">long</span> <span class="n">offset</span> <span class="o">=</span> <span class="o">(</span><span class="kt">long</span><span class="o">)</span> <span class="n">msg</span><span class="o">.</span><span class="na">annotation</span><span class="o">(</span><span class="s">"x-stream-offset"</span><span class="o">);</span>  <i class="conum" data-value="4"></i><b>(4)</b>
+      <span class="n">storeOffsetInExternalStore</span><span class="o">(</span><span class="n">offset</span><span class="o">);</span>  <i class="conum" data-value="5"></i><b>(5)</b>
+    <span class="o">})</span>
+    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Set subscription listener</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Get offset from external store</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Set offset to use for the subscription</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Get the message offset</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>Store the offset in the external store after processing</td>
 </tr>
 </table>
 </div>
@@ -1633,7 +1688,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.2.0-SNAPSHOT<br>
-Last updated 2024-09-24 07:10:45 UTC
+Last updated 2024-09-25 09:36:31 UTC
 </div>
 </div>
 </body>
