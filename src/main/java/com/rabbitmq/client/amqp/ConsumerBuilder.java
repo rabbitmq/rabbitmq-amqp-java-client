@@ -190,6 +190,9 @@ public interface ConsumerBuilder {
      * <p>It is called before the link is created but also every time it recovers, e.g. after a
      * connection failure.
      *
+     * <p>Configuration set with {@link Context#streamOptions()} overrides the one set with {@link
+     * ConsumerBuilder#stream()}.
+     *
      * @param context subscription context
      */
     void preSubscribe(Context context);
