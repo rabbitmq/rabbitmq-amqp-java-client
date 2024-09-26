@@ -18,6 +18,7 @@
 package org.apache.qpid.protonj2.client.impl;
 
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -49,7 +50,7 @@ public abstract class ClientTrackable<SenderType extends ClientSenderLinkType<?>
     protected static final AtomicReferenceFieldUpdater<ClientTrackable, DeliveryState> REMOTEL_DELIVERY_STATE_UPDATER =
         AtomicReferenceFieldUpdater.newUpdater(ClientTrackable.class, DeliveryState.class, "remoteDeliveryState");
 
-    private ClientFuture<TrackerType> remoteSettlementFuture;
+    private final CompletableFuture<TrackerType> remoteSettlementFuture;
     private volatile int remotelySettled;
     private volatile DeliveryState remoteDeliveryState;
 
@@ -64,6 +65,7 @@ public abstract class ClientTrackable<SenderType extends ClientSenderLinkType<?>
     ClientTrackable(SenderType sender, OutgoingDelivery delivery) {
         Objects.requireNonNull(sender, "Sender cannot be null for a Tracker");
 
+        this.remoteSettlementFuture = new CompletableFuture<>();
         this.sender = sender;
         this.delivery = delivery;
         this.delivery.deliveryStateUpdatedHandler(this::processDeliveryUpdated);
@@ -92,12 +94,7 @@ public abstract class ClientTrackable<SenderType extends ClientSenderLinkType<?>
             sender.disposition(delivery, ClientDeliveryState.asProtonType(state), settle);
         } finally {
             if (settle) {
-                synchronized (this) {
-                    if (remoteSettlementFuture == null) {
-                        remoteSettlementFuture = sender.session.connection().getFutureFactory().createFuture();
-                    }
-                    remoteSettlementFuture.complete(self());
-                }
+                remoteSettlementFuture.complete(self());
             }
         }
 
@@ -108,12 +105,7 @@ public abstract class ClientTrackable<SenderType extends ClientSenderLinkType<?>
         try {
             sender.disposition(delivery, null, true);
         } finally {
-            synchronized (this) {
-                if (remoteSettlementFuture == null) {
-                    remoteSettlementFuture = sender.session.connection().getFutureFactory().createFuture();
-                }
-                remoteSettlementFuture.complete(self());
-            }
+            remoteSettlementFuture.complete(self());
         }
 
         return self();
@@ -123,17 +115,10 @@ public abstract class ClientTrackable<SenderType extends ClientSenderLinkType<?>
         return delivery.isSettled();
     }
 
-    public ClientFuture<TrackerType> settlementFuture() {
-        synchronized (this) {
-            if (remoteSettlementFuture == null) {
-                remoteSettlementFuture = sender.session.connection().getFutureFactory().createFuture();
-            }
-
-            if (delivery.isSettled() || remoteSettled()) {
-                remoteSettlementFuture.complete(self());
-            }
+    public CompletableFuture<TrackerType> settlementFuture() {
+        if (delivery.isSettled() || remoteSettled()) {
+            remoteSettlementFuture.complete(self());
         }
-
         return remoteSettlementFuture;
     }
 

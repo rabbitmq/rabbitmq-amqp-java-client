@@ -16,6 +16,7 @@
  */
 package org.apache.qpid.protonj2.client.impl;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -80,8 +81,10 @@ public final class ClientNoOpTracker implements Tracker {
     }
 
     @Override
-    public Future<Tracker> settlementFuture() {
-        return ClientFutureFactory.completedFuture(this);
+    public CompletableFuture<Tracker> settlementFuture() {
+        CompletableFuture<Tracker> result = new CompletableFuture<>();
+        result.complete(this);
+        return result;
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.qpid.protonj2.client;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -90,7 +91,7 @@ public interface Tracker {
      *
      * @return a {@link Future} that can be used to wait on remote settlement.
      */
-    Future<Tracker> settlementFuture();
+    CompletableFuture<Tracker> settlementFuture();
 
     /**
      * Waits if necessary for the remote to settle the sent delivery unless it has

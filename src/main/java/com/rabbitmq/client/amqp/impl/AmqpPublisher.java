@@ -107,20 +107,22 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
             message,
             this.connectionInfo,
             publishCall);
-    this.executorService.submit(
-        () -> {
-          Status status;
-          try {
-            // FIXME set a timeout for publishing settlement
-            tracker.settlementFuture().get();
-            status = mapDeliveryState(tracker.remoteState());
-          } catch (InterruptedException | ExecutionException e) {
-            status = Status.REJECTED;
-          }
-          DefaultContext defaultContext = new DefaultContext(message, status);
-          this.metricsCollector.publishDisposition(mapToPublishDisposition(status));
-          callback.handle(defaultContext);
-        });
+    tracker
+        .settlementFuture()
+        .handleAsync(
+            (t, ex) -> {
+              Status status;
+              if (ex == null) {
+                status = mapDeliveryState(t.remoteState());
+              } else {
+                status = Status.REJECTED;
+              }
+              DefaultContext defaultContext = new DefaultContext(message, status);
+              this.metricsCollector.publishDisposition(mapToPublishDisposition(status));
+              callback.handle(defaultContext);
+              return null;
+            },
+            this.executorService);
     this.metricsCollector.publish();
   }
 

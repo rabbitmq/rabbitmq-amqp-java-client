@@ -214,7 +214,7 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
         // Cancel all settlement futures for in-flight sends passing an appropriate error to the future
         protonSender.unsettled().forEach((delivery) -> {
             try {
-                delivery.getLinkedResource(ClientTrackable.class).settlementFuture().failed(cause);
+                delivery.getLinkedResource(ClientTrackable.class).settlementFuture().completeExceptionally(cause);
             } catch (Exception e) {
             }
         });
