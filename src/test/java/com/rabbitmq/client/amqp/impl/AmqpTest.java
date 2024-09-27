@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.*;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_0_3;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
@@ -30,6 +31,7 @@ import static java.util.stream.Stream.of;
 import static org.assertj.core.api.Assertions.*;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.*;
@@ -378,34 +380,41 @@ public class AmqpTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_0_3)
   void publisherSendingShouldThrowWhenPublishingToNonExistingExchangeWithToProperty() {
     String doesNotExist = uuid();
-    Sync closedSync = sync();
-    AtomicReference<Throwable> closedException = new AtomicReference<>();
-    Publisher publisher =
-        connection
-            .publisherBuilder()
-            .listeners(closedListener(closedSync, ctx -> closedException.set(ctx.failureCause())))
-            .build();
-    AtomicReference<Exception> exception = new AtomicReference<>();
-    waitAtMost(
-        () -> {
-          try {
-            publisher.publish(
-                publisher.message().toAddress().exchange(doesNotExist).message(), ctx -> {});
-            return false;
-          } catch (AmqpException.AmqpEntityDoesNotExistException e) {
-            exception.set(e);
-            return true;
-          }
-        });
-    Assertions.assertThat(closedSync).completes();
-    of(exception.get(), closedException.get())
-        .forEach(
-            e ->
-                assertThat(e)
-                    .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
-                    .hasMessageContaining(doesNotExist));
+    connection.management().queue(name).exclusive(true).declare();
+    Publisher publisher = connection.publisherBuilder().build();
+    Sync consumedSync = sync();
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            (ctx, msg) -> {
+              ctx.accept();
+              consumedSync.down();
+            })
+        .build();
+    Sync acceptedSync = sync();
+    publisher.publish(
+        publisher.message().toAddress().queue(name).message(), ctx -> acceptedSync.down());
+    Assertions.assertThat(acceptedSync).completes();
+    Assertions.assertThat(consumedSync).completes();
+
+    acceptedSync.reset();
+    consumedSync.reset();
+
+    Sync rejectedSync = sync();
+    publisher.publish(
+        publisher.message().toAddress().exchange(doesNotExist).message(),
+        ctx -> rejectedSync.down());
+    Assertions.assertThat(rejectedSync).completes();
+
+    Assertions.assertThat(consumedSync).hasNotCompleted();
+    publisher.publish(
+        publisher.message().toAddress().queue(name).message(), ctx -> acceptedSync.down());
+    Assertions.assertThat(acceptedSync).completes();
+    Assertions.assertThat(consumedSync).completes();
   }
 
   @Test

@@ -244,6 +244,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
+  private static String brokerVersion(org.apache.qpid.protonj2.client.Connection connection) {
+    try {
+      return (String) connection.properties().get("version");
+    } catch (ClientException e) {
+      throw ExceptionUtils.convert(e);
+    }
+  }
+
+  String brokerVersion() {
+    return brokerVersion(this.nativeConnection);
+  }
+
   private static String extractNode(org.apache.qpid.protonj2.client.Connection connection)
       throws ClientException {
     String node = (String) connection.properties().get("node");
