@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.Publisher.Status.REJECTED;
 import static com.rabbitmq.client.amqp.Publisher.Status.RELEASED;
 import static org.assertj.core.api.Assertions.anyOf;
 import static org.assertj.core.api.Assertions.fail;
@@ -95,8 +96,10 @@ public class ResourceListenerTest {
         .is(
             anyOf(
                 new Condition<>(s -> outboundMessageStatus.isEmpty(), "no status"),
-                new Condition<>(s -> outboundMessageStatus.contains(RELEASED), "only released")));
-    //    Assertions.assertThat(outboundMessageStatus).containsOnly(Publisher.Status.FAILED);
+                new Condition<>(s -> outboundMessageStatus.contains(RELEASED), "released"),
+                new Condition<>(
+                    s -> outboundMessageStatus.contains(REJECTED),
+                    "rejected (queue may be considered unavailable during deletion)")));
     Assertions.assertThat(closedCause.get()).isNotNull().isInstanceOf(AmqpException.class);
   }
 
