@@ -90,10 +90,15 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = true, undeliverable-here = true}</code> outcome.
      *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
      * @param annotations message annotations to combine with existing ones
      * @see <a
      *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
      *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
      */
     void discard(Map<String, Object> annotations);
 
@@ -118,10 +123,15 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = false, undeliverable-here = false}</code> outcome.
      *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
      * @param annotations message annotations to combine with existing ones
      * @see <a
      *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
      *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
      */
     void requeue(Map<String, Object> annotations);
   }
