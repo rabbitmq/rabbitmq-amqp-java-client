@@ -84,7 +84,7 @@ public interface Consumer extends AutoCloseable, Resource {
      * or dead-letter it if it is configured.
      *
      * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands starts with <code>x-</code>, but not with <code>x-opt-
+     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
      * </code>.
      *
      * <p>This maps to the AMQP 1.0 <code>
@@ -117,7 +117,7 @@ public interface Consumer extends AutoCloseable, Resource {
      * to the same or a different consumer.
      *
      * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands starts with <code>x-</code>, but not with <code>x-opt-
+     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
      * </code>.
      *
      * <p>This maps to the AMQP 1.0 <code>
