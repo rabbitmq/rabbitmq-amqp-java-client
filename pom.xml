@@ -42,7 +42,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spotless.check.skip>true</spotless.check.skip>
         <slf4j.version>1.7.36</slf4j.version>
-        <netty4.version>4.1.113.Final</netty4.version>
+        <netty4.version>4.1.114.Final</netty4.version>
         <netty4.iouring.version>0.0.25.Final</netty4.iouring.version>
         <netty5.version>5.0.0.Alpha5</netty5.version>
         <micrometer.version>1.13.4</micrometer.version>
