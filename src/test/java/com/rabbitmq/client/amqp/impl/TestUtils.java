@@ -58,8 +58,11 @@ public abstract class TestUtils {
   }
 
   static <T> T waitUntilStable(Supplier<T> call) {
+    return waitUntilStable(call, Duration.ofMillis(200));
+  }
+
+  static <T> T waitUntilStable(Supplier<T> call, Duration waitTime) {
     Duration timeout = Duration.ofSeconds(10);
-    Duration waitTime = Duration.ofMillis(200);
     Duration waitedTime = Duration.ZERO;
     T newValue = null;
     while (waitedTime.compareTo(timeout) <= 0) {

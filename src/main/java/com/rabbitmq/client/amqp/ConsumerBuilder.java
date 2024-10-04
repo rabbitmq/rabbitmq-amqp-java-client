@@ -17,7 +17,10 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
+import org.apache.qpid.protonj2.types.*;
 
 /** API to configure and create a {@link Consumer}. */
 public interface ConsumerBuilder {
@@ -158,6 +161,8 @@ public interface ConsumerBuilder {
      */
     StreamOptions filterMatchUnfiltered(boolean matchUnfiltered);
 
+    StreamFilterOptions filter();
+
     /**
      * Return the consumer builder.
      *
@@ -174,6 +179,80 @@ public interface ConsumerBuilder {
     LAST,
     /** Very end of the stream (new chunks). */
     NEXT
+  }
+
+  interface FilterOptions<T> {
+
+    T messageId(Object id);
+
+    T messageId(String id);
+
+    T messageId(long id);
+
+    T messageId(byte[] id);
+
+    T messageId(UUID id);
+
+    T correlationId(Object correlationId);
+
+    T correlationId(String correlationId);
+
+    T correlationId(long correlationId);
+
+    T correlationId(byte[] correlationId);
+
+    T correlationId(UUID correlationId);
+
+    T userId(byte[] userId);
+
+    T to(String to);
+
+    T subject(String subject);
+
+    T property(String key, boolean value);
+
+    T property(String key, byte value);
+
+    T property(String key, short value);
+
+    T property(String key, int value);
+
+    T property(String key, long value);
+
+    T propertyUnsigned(String key, byte value);
+
+    T propertyUnsigned(String key, short value);
+
+    T propertyUnsigned(String key, int value);
+
+    T propertyUnsigned(String key, long value);
+
+    T property(String key, float value);
+
+    T property(String key, double value);
+
+    T propertyDecimal32(String key, BigDecimal value);
+
+    T propertyDecimal64(String key, BigDecimal value);
+
+    T propertyDecimal128(String key, BigDecimal value);
+
+    T property(String key, char value);
+
+    T propertyTimestamp(String key, long value);
+
+    T property(String key, UUID value);
+
+    T property(String key, byte[] value);
+
+    T property(String key, String value);
+
+    T propertySymbol(String key, String value);
+  }
+
+  interface StreamFilterOptions extends FilterOptions<StreamFilterOptions> {
+
+    StreamOptions stream();
   }
 
   /**

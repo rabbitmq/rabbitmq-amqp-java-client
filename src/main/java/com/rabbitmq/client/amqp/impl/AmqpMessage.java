@@ -29,7 +29,7 @@ import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.types.*;
 
-class AmqpMessage implements Message {
+final class AmqpMessage implements Message {
 
   private static final byte[] EMPTY_BODY = new byte[0];
 

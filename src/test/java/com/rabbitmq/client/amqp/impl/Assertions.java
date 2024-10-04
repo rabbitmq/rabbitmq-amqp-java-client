@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.assertj.core.api.AbstractObjectAssert;
 
 final class Assertions {
@@ -226,10 +227,70 @@ final class Assertions {
       super(message, MessageAssert.class);
     }
 
+    MessageAssert hasId(long id) {
+      return this.hasId(new UnsignedLong(id));
+    }
+
     MessageAssert hasId(Object id) {
       isNotNull();
       if (!actual.messageId().equals(id)) {
         fail("Message ID should be '%s' but is '%s'", id, actual.messageId());
+      }
+      return this;
+    }
+
+    MessageAssert hasCorrelationId(long correlationId) {
+      return this.hasCorrelationId(new UnsignedLong(correlationId));
+    }
+
+    MessageAssert hasCorrelationId(Object id) {
+      isNotNull();
+      if (!actual.correlationId().equals(id)) {
+        fail("Correlation ID should be '%s' but is '%s'", id, actual.correlationId());
+      }
+      return this;
+    }
+
+    MessageAssert hasUserId(byte[] userId) {
+      isNotNull();
+      org.assertj.core.api.Assertions.assertThat(actual.userId()).isEqualTo(userId);
+      return this;
+    }
+
+    MessageAssert hasTo(String to) {
+      isNotNull();
+      if (!actual.to().equals(to)) {
+        fail("To field should be '%s' but is '%s'", to, actual.to());
+      }
+      return this;
+    }
+
+    MessageAssert hasSubject(String subject) {
+      isNotNull();
+      if (!actual.subject().equals(subject)) {
+        fail("Subject should be '%s' but is '%s'", subject, actual.subject());
+      }
+      return this;
+    }
+
+    MessageAssert hasProperty(String key) {
+      isNotNull();
+      if (!actual.hasProperty(key)) {
+        fail("Message should have property '%s' but does not", key);
+      }
+      return this;
+    }
+
+    MessageAssert hasProperty(String key, Object value) {
+      if (key == null || value == null) {
+        throw new IllegalArgumentException();
+      }
+      isNotNull();
+      hasProperty(key);
+      if (!value.equals(this.actual.property(key))) {
+        fail(
+            "Message should have property '%s = %s' but has '%s = %s'",
+            key, value, key, this.actual.property(key));
       }
       return this;
     }
