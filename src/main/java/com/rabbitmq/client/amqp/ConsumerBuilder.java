@@ -209,6 +209,22 @@ public interface ConsumerBuilder {
 
     T subject(String subject);
 
+    T replyTo(String replyTo);
+
+    T contentType(String contentType);
+
+    T contentEncoding(String contentEncoding);
+
+    T absoluteExpiryTime(long absoluteExpiryTime);
+
+    T creationTime(long creationTime);
+
+    T groupId(String groupId);
+
+    T groupSequence(int groupSequence);
+
+    T replyToGroupId(String groupId);
+
     T property(String key, boolean value);
 
     T property(String key, byte value);

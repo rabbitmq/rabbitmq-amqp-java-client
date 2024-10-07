@@ -241,7 +241,7 @@ final class AmqpMessage implements Message {
 
   @Override
   public Message replyToGroupId(String groupId) {
-    callOnDelegate(m -> replyToGroupId(groupId));
+    callOnDelegate(m -> m.replyToGroupId(groupId));
     return this;
   }
 

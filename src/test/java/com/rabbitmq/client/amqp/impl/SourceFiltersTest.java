@@ -32,13 +32,15 @@ import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.UnaryOperator;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.arbitraries.ArrayArbitrary;
+import net.jqwik.api.arbitraries.IntegerArbitrary;
+import net.jqwik.api.arbitraries.StringArbitrary;
 import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.junit.jupiter.api.*;
@@ -49,12 +51,16 @@ public class SourceFiltersTest {
   Connection connection;
   String name;
   ArrayArbitrary<Byte, byte[]> binaryArbitrary;
+  StringArbitrary stringArbitrary;
+  IntegerArbitrary integerArbitrary;
 
   @BeforeEach
   void init(TestInfo info) {
     this.name = TestUtils.name(info);
     connection.management().queue(this.name).type(STREAM).declare();
     binaryArbitrary = Arbitraries.bytes().array(byte[].class).ofMinSize(10).ofMaxSize(20);
+    stringArbitrary = Arbitraries.strings().ofMinLength(10).ofMaxLength(20);
+    integerArbitrary = Arbitraries.integers();
   }
 
   @AfterEach
@@ -268,7 +274,6 @@ public class SourceFiltersTest {
   }
 
   @Test
-  @Disabled
   void filterExpressionApplicationProperties() {
     int messageCount = 10;
     UUID uuid = UUID.randomUUID();
@@ -321,24 +326,39 @@ public class SourceFiltersTest {
   }
 
   @Test
-  @Disabled
   void filterExpressionProperties() {
     int messageCount = 10;
     byte[] userId = "guest".getBytes(UTF_8);
-    byte[] binary1 = binaryArbitrary.sample();
-    byte[] binary2 = binaryArbitrary.sample();
+    long now = System.currentTimeMillis();
+    long later = now + Duration.ofMinutes(10).toMillis();
     UUID uuid = UUID.randomUUID();
     publish(messageCount, msg -> msg.messageId(42));
     publish(messageCount, msg -> msg.messageId(42 * 2));
     publish(messageCount, msg -> msg.messageId(uuid));
-    publish(messageCount, msg -> msg.correlationId(42));
-    publish(messageCount, msg -> msg.correlationId(42 * 2));
+    publish(messageCount, msg -> msg.correlationId(43));
+    publish(messageCount, msg -> msg.correlationId(43 * 2));
     publish(messageCount, msg -> msg.correlationId(uuid));
     publish(messageCount, msg -> msg.userId(userId));
-    publish(messageCount, msg -> msg.to("foo bar"));
-    publish(messageCount, msg -> msg.to("foo baz"));
-    publish(messageCount, msg -> msg.subject("foo bar"));
-    publish(messageCount, msg -> msg.subject("foo baz"));
+    publish(messageCount, msg -> msg.to("to foo bar"));
+    publish(messageCount, msg -> msg.to("to foo baz"));
+    publish(messageCount, msg -> msg.subject("subject foo bar"));
+    publish(messageCount, msg -> msg.subject("subject foo baz"));
+    publish(messageCount, msg -> msg.replyTo("reply-to foo bar"));
+    publish(messageCount, msg -> msg.replyTo("reply-to foo baz"));
+    publish(messageCount, msg -> msg.contentType("text/plain"));
+    publish(messageCount, msg -> msg.contentType("text/html"));
+    publish(messageCount, msg -> msg.contentEncoding("gzip"));
+    publish(messageCount, msg -> msg.contentEncoding("zstd"));
+    publish(messageCount, msg -> msg.absoluteExpiryTime(now));
+    publish(messageCount, msg -> msg.absoluteExpiryTime(later));
+    publish(messageCount, msg -> msg.creationTime(now));
+    publish(messageCount, msg -> msg.creationTime(later));
+    publish(messageCount, msg -> msg.groupId("group-id foo bar"));
+    publish(messageCount, msg -> msg.groupId("group-id foo baz"));
+    publish(messageCount, msg -> msg.groupSequence(44));
+    publish(messageCount, msg -> msg.groupSequence(44 * 2));
+    publish(messageCount, msg -> msg.replyToGroupId("reply-to-group-id foo bar"));
+    publish(messageCount, msg -> msg.replyToGroupId("reply-to-group-id foo baz"));
 
     Collection<Message> msgs = consume(messageCount, options -> options.messageId(42));
     msgs.forEach(m -> assertThat(m).hasId(42));
@@ -346,8 +366,8 @@ public class SourceFiltersTest {
     msgs = consume(messageCount, options -> options.messageId(uuid));
     msgs.forEach(m -> assertThat(m).hasId(uuid));
 
-    msgs = consume(messageCount, options -> options.correlationId(42));
-    msgs.forEach(m -> assertThat(m).hasCorrelationId(42));
+    msgs = consume(messageCount, options -> options.correlationId(43));
+    msgs.forEach(m -> assertThat(m).hasCorrelationId(43));
 
     msgs = consume(messageCount, options -> options.correlationId(uuid));
     msgs.forEach(m -> assertThat(m).hasCorrelationId(uuid));
@@ -355,10 +375,89 @@ public class SourceFiltersTest {
     msgs = consume(messageCount, options -> options.userId(userId));
     msgs.forEach(m -> assertThat(m).hasUserId(userId));
 
-    msgs = consume(messageCount, options -> options.to("foo bar"));
-    msgs.forEach(m -> assertThat(m).hasTo("foo bar"));
+    msgs = consume(messageCount, options -> options.to("to foo bar"));
+    msgs.forEach(m -> assertThat(m).hasTo("to foo bar"));
 
-    msgs = consume(messageCount, options -> options.subject("foo bar"));
+    msgs = consume(messageCount, options -> options.subject("subject foo bar"));
+    msgs.forEach(m -> assertThat(m).hasSubject("subject foo bar"));
+
+    msgs = consume(messageCount, options -> options.replyTo("reply-to foo bar"));
+    msgs.forEach(m -> assertThat(m).hasReplyTo("reply-to foo bar"));
+
+    msgs = consume(messageCount, options -> options.contentType("text/html"));
+    msgs.forEach(m -> assertThat(m).hasContentType("text/html"));
+
+    msgs = consume(messageCount, options -> options.contentEncoding("zstd"));
+    msgs.forEach(m -> assertThat(m).hasContentEncoding("zstd"));
+
+    msgs = consume(messageCount, options -> options.absoluteExpiryTime(later));
+    msgs.forEach(m -> assertThat(m).hasAbsoluteExpiryTime(later));
+
+    msgs = consume(messageCount, options -> options.creationTime(later));
+    msgs.forEach(m -> assertThat(m).hasCreationTime(later));
+
+    msgs = consume(messageCount, options -> options.groupId("group-id foo baz"));
+    msgs.forEach(m -> assertThat(m).hasGroupId("group-id foo baz"));
+
+    msgs = consume(messageCount, options -> options.groupSequence(44));
+    msgs.forEach(m -> assertThat(m).hasGroupSequence(44));
+
+    msgs = consume(messageCount, options -> options.replyToGroupId("reply-to-group-id foo baz"));
+    msgs.forEach(m -> assertThat(m).hasReplyToGroupId("reply-to-group-id foo baz"));
+  }
+
+  @Test
+  void filterExpressionsPropertiesAndApplicationProperties() {
+    int messageCount = 10;
+    String subject = stringArbitrary.sample();
+    String appKey = stringArbitrary.sample();
+    int appValue = integerArbitrary.sample();
+    byte[] body1 = binaryArbitrary.sample();
+    byte[] body2 = binaryArbitrary.sample();
+    byte[] body3 = binaryArbitrary.sample();
+
+    publish(messageCount, msg -> msg.subject(subject).body(body1));
+    publish(messageCount, msg -> msg.property(appKey, appValue).body(body2));
+    publish(messageCount, msg -> msg.subject(subject).property(appKey, appValue).body(body3));
+
+    List<Message> msgs = consume(messageCount * 2, options -> options.subject(subject));
+    msgs.subList(0, messageCount).forEach(m -> assertThat(m).hasSubject(subject).hasBody(body1));
+    msgs.subList(messageCount, messageCount * 2)
+        .forEach(m -> assertThat(m).hasSubject(subject).hasBody(body3));
+
+    msgs = consume(messageCount * 2, options -> options.property(appKey, appValue));
+    msgs.subList(0, messageCount)
+        .forEach(m -> assertThat(m).hasProperty(appKey, appValue).hasBody(body2));
+    msgs.subList(messageCount, messageCount * 2)
+        .forEach(m -> assertThat(m).hasProperty(appKey, appValue).hasBody(body3));
+
+    msgs = consume(messageCount, options -> options.subject(subject).property(appKey, appValue));
+    msgs.subList(0, messageCount)
+        .forEach(
+            m -> assertThat(m).hasSubject(subject).hasProperty(appKey, appValue).hasBody(body3));
+  }
+
+  @Test
+  void filterExpressionFilterFewMessagesFromManyToTestFlowControl() {
+    String groupId = stringArbitrary.sample();
+    publish(1, m -> m.groupId(groupId));
+    publish(1000);
+    publish(1, m -> m.groupId(groupId));
+
+    List<Message> msgs = consume(2, m -> m.groupId(groupId));
+    msgs.forEach(m -> assertThat(m).hasGroupId(groupId));
+  }
+
+  @Test
+  void filterExpressionStringModifier() {
+    publish(1, m -> m.subject("abc 123"));
+    publish(1, m -> m.subject("foo bar"));
+    publish(1, m -> m.subject("ab 12"));
+
+    List<Message> msgs = consume(2, m -> m.subject("$p:ab"));
+    msgs.forEach(m -> assertThat(m.subject()).startsWith("ab"));
+
+    msgs = consume(1, m -> m.subject("$s:bar"));
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
   }
 
@@ -380,10 +479,10 @@ public class SourceFiltersTest {
     }
   }
 
-  Collection<Message> consume(
+  List<Message> consume(
       int expectedMessageCount,
       java.util.function.Consumer<ConsumerBuilder.StreamFilterOptions> filterOptions) {
-    Set<Message> messages = ConcurrentHashMap.newKeySet(expectedMessageCount);
+    Queue<Message> messages = new LinkedBlockingQueue<>();
     Sync consumedSync = sync(expectedMessageCount);
     AtomicInteger receivedMessageCount = new AtomicInteger();
     ConsumerBuilder builder =
@@ -406,6 +505,6 @@ public class SourceFiltersTest {
       assertThat(receivedMessageCount).hasValue(expectedMessageCount);
     }
 
-    return messages;
+    return List.copyOf(messages);
   }
 }

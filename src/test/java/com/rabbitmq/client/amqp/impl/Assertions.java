@@ -23,6 +23,7 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -232,11 +233,7 @@ final class Assertions {
     }
 
     MessageAssert hasId(Object id) {
-      isNotNull();
-      if (!actual.messageId().equals(id)) {
-        fail("Message ID should be '%s' but is '%s'", id, actual.messageId());
-      }
-      return this;
+      return hasField("id", actual.messageId(), id);
     }
 
     MessageAssert hasCorrelationId(long correlationId) {
@@ -244,11 +241,7 @@ final class Assertions {
     }
 
     MessageAssert hasCorrelationId(Object id) {
-      isNotNull();
-      if (!actual.correlationId().equals(id)) {
-        fail("Correlation ID should be '%s' but is '%s'", id, actual.correlationId());
-      }
-      return this;
+      return hasField("correlation-id", actual.correlationId(), id);
     }
 
     MessageAssert hasUserId(byte[] userId) {
@@ -258,18 +251,55 @@ final class Assertions {
     }
 
     MessageAssert hasTo(String to) {
-      isNotNull();
-      if (!actual.to().equals(to)) {
-        fail("To field should be '%s' but is '%s'", to, actual.to());
-      }
-      return this;
+      return hasField("to", actual.to(), to);
     }
 
     MessageAssert hasSubject(String subject) {
+      return hasField("subject", actual.subject(), subject);
+    }
+
+    MessageAssert hasReplyTo(String replyTo) {
+      return hasField("reply-to", actual.replyTo(), replyTo);
+    }
+
+    MessageAssert hasContentType(String contentType) {
+      return hasField("content-type", actual.contentType(), contentType);
+    }
+
+    MessageAssert hasContentEncoding(String contentEncoding) {
+      return hasField("content-encoding", actual.contentEncoding(), contentEncoding);
+    }
+
+    MessageAssert hasAbsoluteExpiryTime(long absoluteExpiryTime) {
       isNotNull();
-      if (!actual.subject().equals(subject)) {
-        fail("Subject should be '%s' but is '%s'", subject, actual.subject());
-      }
+      org.assertj.core.api.Assertions.assertThat(actual.absoluteExpiryTime())
+          .isEqualTo(absoluteExpiryTime);
+      return this;
+    }
+
+    MessageAssert hasCreationTime(long creationTime) {
+      isNotNull();
+      org.assertj.core.api.Assertions.assertThat(actual.creationTime()).isEqualTo(creationTime);
+      return this;
+    }
+
+    MessageAssert hasGroupId(String groupId) {
+      return hasField("group-id", actual.groupId(), groupId);
+    }
+
+    MessageAssert hasGroupSequence(long groupSequence) {
+      isNotNull();
+      org.assertj.core.api.Assertions.assertThat(actual.groupSequence()).isEqualTo(groupSequence);
+      return this;
+    }
+
+    MessageAssert hasReplyToGroupId(String groupId) {
+      return hasField("reply-to-group-id", actual.replyToGroupId(), groupId);
+    }
+
+    MessageAssert hasBody(byte[] body) {
+      isNotNull();
+      org.assertj.core.api.Assertions.assertThat(actual.body()).isEqualTo(body);
       return this;
     }
 
@@ -321,6 +351,14 @@ final class Assertions {
       isNotNull();
       if (actual.hasAnnotation(key)) {
         fail("Message should not have annotation '%s' but has it", key);
+      }
+      return this;
+    }
+
+    private MessageAssert hasField(String fieldLabel, Object value, Object expected) {
+      isNotNull();
+      if (!Objects.equals(value, expected)) {
+        fail("Field '%s' should be '%s' but is '%s'", fieldLabel, expected, value);
       }
       return this;
     }

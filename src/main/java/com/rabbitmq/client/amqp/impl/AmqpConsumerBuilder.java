@@ -297,6 +297,46 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     }
 
     @Override
+    public StreamFilterOptions replyTo(String replyTo) {
+      return propertyFilter("reply-to", replyTo);
+    }
+
+    @Override
+    public StreamFilterOptions contentType(String contentType) {
+      return propertyFilter("content-type", Symbol.valueOf(contentType));
+    }
+
+    @Override
+    public StreamFilterOptions contentEncoding(String contentEncoding) {
+      return propertyFilter("content-encoding", Symbol.valueOf(contentEncoding));
+    }
+
+    @Override
+    public StreamFilterOptions absoluteExpiryTime(long absoluteExpiryTime) {
+      return propertyFilter("absolute-expiry-time", new Date(absoluteExpiryTime));
+    }
+
+    @Override
+    public StreamFilterOptions creationTime(long creationTime) {
+      return propertyFilter("creation-time", new Date(creationTime));
+    }
+
+    @Override
+    public StreamFilterOptions groupId(String groupId) {
+      return propertyFilter("group-id", groupId);
+    }
+
+    @Override
+    public StreamFilterOptions groupSequence(int groupSequence) {
+      return propertyFilter("group-sequence", UnsignedInteger.valueOf(groupSequence));
+    }
+
+    @Override
+    public StreamFilterOptions replyToGroupId(String groupId) {
+      return propertyFilter("reply-to-group-id", groupId);
+    }
+
+    @Override
     public StreamFilterOptions property(String key, boolean value) {
       return this.applicationPropertyFilter(key, value);
     }
