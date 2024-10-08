@@ -41,7 +41,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.UnaryOperator;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.arbitraries.ArrayArbitrary;
-import net.jqwik.api.arbitraries.IntegerArbitrary;
 import net.jqwik.api.arbitraries.StringArbitrary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.junit.jupiter.api.*;
@@ -53,7 +52,6 @@ public class SourceFiltersTest {
   String name;
   ArrayArbitrary<Byte, byte[]> binaryArbitrary;
   StringArbitrary stringArbitrary;
-  IntegerArbitrary integerArbitrary;
 
   @BeforeEach
   void init(TestInfo info) {
@@ -61,7 +59,6 @@ public class SourceFiltersTest {
     connection.management().queue(this.name).type(STREAM).declare();
     binaryArbitrary = Arbitraries.bytes().array(byte[].class).ofMinSize(10).ofMaxSize(20);
     stringArbitrary = Arbitraries.strings().ofMinLength(10).ofMaxLength(20);
-    integerArbitrary = Arbitraries.integers();
   }
 
   @AfterEach
@@ -415,7 +412,7 @@ public class SourceFiltersTest {
     int messageCount = 10;
     String subject = stringArbitrary.sample();
     String appKey = stringArbitrary.sample();
-    int appValue = integerArbitrary.sample();
+    int appValue = new Random().nextInt();
     byte[] body1 = binaryArbitrary.sample();
     byte[] body2 = binaryArbitrary.sample();
     byte[] body3 = binaryArbitrary.sample();
