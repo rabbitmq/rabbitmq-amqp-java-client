@@ -284,7 +284,12 @@ final class AmqpMessage implements Message {
 
   @Override
   public Object property(String key) {
-    return returnFromDelegate(m -> m.property(key));
+    Object value = returnFromDelegate(m -> m.property(key));
+    if (value instanceof Binary) {
+      return ((Binary) value).asByteArray();
+    } else {
+      return value;
+    }
   }
 
   @Override

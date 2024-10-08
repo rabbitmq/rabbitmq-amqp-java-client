@@ -43,7 +43,6 @@ import net.jqwik.api.Arbitraries;
 import net.jqwik.api.arbitraries.ArrayArbitrary;
 import net.jqwik.api.arbitraries.IntegerArbitrary;
 import net.jqwik.api.arbitraries.StringArbitrary;
-import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.junit.jupiter.api.*;
 
@@ -310,7 +309,7 @@ public class SourceFiltersTest {
     msgs.forEach(m -> assertThat(m).hasProperty("foo", uuid));
 
     msgs = consume(messageCount, options -> options.property("foo", binary));
-    msgs.forEach(m -> assertThat(m).hasProperty("foo", new Binary(binary)));
+    msgs.forEach(m -> assertThat(m).hasProperty("foo", binary));
 
     msgs = consume(messageCount, options -> options.property("foo", "baz"));
     msgs.forEach(m -> assertThat(m).hasProperty("foo", "baz"));

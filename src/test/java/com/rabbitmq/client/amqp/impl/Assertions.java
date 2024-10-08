@@ -23,7 +23,6 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -245,9 +244,7 @@ final class Assertions {
     }
 
     MessageAssert hasUserId(byte[] userId) {
-      isNotNull();
-      org.assertj.core.api.Assertions.assertThat(actual.userId()).isEqualTo(userId);
-      return this;
+      return hasField("user-id", actual.userId(), userId);
     }
 
     MessageAssert hasTo(String to) {
@@ -317,11 +314,11 @@ final class Assertions {
       }
       isNotNull();
       hasProperty(key);
-      if (!value.equals(this.actual.property(key))) {
-        fail(
-            "Message should have property '%s = %s' but has '%s = %s'",
-            key, value, key, this.actual.property(key));
-      }
+      org.assertj.core.api.Assertions.assertThat(this.actual.property(key))
+          .describedAs(
+              "Message should have property '%s = %s' but has '%s = %s'",
+              key, value, key, this.actual.property(key))
+          .isEqualTo(value);
       return this;
     }
 
@@ -339,11 +336,11 @@ final class Assertions {
       }
       isNotNull();
       hasAnnotation(key);
-      if (!value.equals(this.actual.annotation(key))) {
-        fail(
-            "Message should have annotation '%s = %s' but has '%s = %s'",
-            key, value, key, this.actual.annotation(key));
-      }
+      org.assertj.core.api.Assertions.assertThat(this.actual.annotation(key))
+          .describedAs(
+              "Message should have annotation '%s = %s' but has '%s = %s'",
+              key, value, key, this.actual.annotation(key))
+          .isEqualTo(value);
       return this;
     }
 
@@ -357,9 +354,9 @@ final class Assertions {
 
     private MessageAssert hasField(String fieldLabel, Object value, Object expected) {
       isNotNull();
-      if (!Objects.equals(value, expected)) {
-        fail("Field '%s' should be '%s' but is '%s'", fieldLabel, expected, value);
-      }
+      org.assertj.core.api.Assertions.assertThat(value)
+          .describedAs("Field '%s' should be '%s' but is '%s'", fieldLabel, expected, value)
+          .isEqualTo(expected);
       return this;
     }
   }
