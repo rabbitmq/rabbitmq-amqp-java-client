@@ -266,8 +266,8 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
 
     @Override
     public Management.QuorumQueueSpecification deliveryLimit(int limit) {
-      validatePositive("x-max-delivery-limit", limit);
-      this.parent.arg("x-max-delivery-limit", limit);
+      validatePositive("x-delivery-limit", limit);
+      this.parent.arg("x-delivery-limit", limit);
       return this;
     }
 
