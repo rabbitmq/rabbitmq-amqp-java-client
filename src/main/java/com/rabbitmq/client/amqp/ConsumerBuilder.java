@@ -143,11 +143,15 @@ public interface ConsumerBuilder {
     StreamOptions offset(String interval);
 
     /**
-     * Filter values.
+     * Filter values for stream filtering.
+     *
+     * <p>This a different filtering mechanism from AMQP filter expressions. Both mechanisms can be
+     * used together.
      *
      * @param values filter values
      * @return stream options
      * @see <a href="https://www.rabbitmq.com/docs/streams#filtering">Stream Filtering</a>
+     * @see #filter()
      */
     StreamOptions filterValues(String... values);
 
@@ -156,11 +160,27 @@ public interface ConsumerBuilder {
      *
      * <p>Default is <code>false</code> (messages without a filter value are not sent).
      *
+     * <p>This a different filtering mechanism from AMQP filter expressions. Both mechanisms can be
+     * used together.
+     *
      * @param matchUnfiltered true to send messages without a filter value
      * @return stream options
+     * @see #filter()
      */
     StreamOptions filterMatchUnfiltered(boolean matchUnfiltered);
 
+    /**
+     * Options for AMQP filter expressions.
+     *
+     * <p>Requires RabbitMQ 4.1 or more.
+     *
+     * <p>This a different filtering mechanism from stream filtering. Both mechanisms can be used
+     * together.
+     *
+     * @return the filter options
+     * @see #filterValues(String...)
+     * @see #filterMatchUnfiltered(boolean)
+     */
     StreamFilterOptions filter();
 
     /**
@@ -181,93 +201,384 @@ public interface ConsumerBuilder {
     NEXT
   }
 
+  /**
+   * Filter options for support of AMQP filter expressions.
+   *
+   * <p>AMQP filter expressions are supported only with streams.
+   *
+   * <p>This a different filtering mechanism from stream filtering. Both mechanisms can be used
+   * together.
+   *
+   * <p>Requires RabbitMQ 4.1 or more.
+   *
+   * @param <T> type of the object returned by methods
+   * @see <a
+   *     href="https://groups.oasis-open.org/higherlogic/ws/public/document?document_id=66227">AMQP
+   *     Filter Expressions</a>
+   */
   interface FilterOptions<T> {
 
+    /**
+     * Filter on message ID.
+     *
+     * @param id message ID
+     * @return type-parameter object
+     */
     T messageId(Object id);
 
+    /**
+     * Filter on message ID.
+     *
+     * @param id message ID
+     * @return type-parameter object
+     */
     T messageId(String id);
 
+    /**
+     * Filter on message ID.
+     *
+     * @param id message ID
+     * @return type-parameter object
+     */
     T messageId(long id);
 
+    /**
+     * Filter on message ID.
+     *
+     * @param id message ID
+     * @return type-parameter object
+     */
     T messageId(byte[] id);
 
+    /**
+     * Filter on message ID.
+     *
+     * @param id message ID
+     * @return type-parameter object
+     */
     T messageId(UUID id);
 
+    /**
+     * Filter on correlation ID.
+     *
+     * @param correlationId correlation ID
+     * @return type-parameter object
+     */
     T correlationId(Object correlationId);
 
+    /**
+     * Filter on correlation ID.
+     *
+     * @param correlationId correlation ID
+     * @return type-parameter object
+     */
     T correlationId(String correlationId);
 
+    /**
+     * Filter on correlation ID.
+     *
+     * @param correlationId correlation ID
+     * @return type-parameter object
+     */
     T correlationId(long correlationId);
 
+    /**
+     * Filter on correlation ID.
+     *
+     * @param correlationId correlation ID
+     * @return type-parameter object
+     */
     T correlationId(byte[] correlationId);
 
+    /**
+     * Filter on correlation ID.
+     *
+     * @param correlationId correlation ID
+     * @return type-parameter object
+     */
     T correlationId(UUID correlationId);
 
+    /**
+     * Filter on user ID.
+     *
+     * @param userId user ID
+     * @return type-parameter object
+     */
     T userId(byte[] userId);
 
+    /**
+     * Filter on to field.
+     *
+     * @param to to
+     * @return type-parameter object
+     */
     T to(String to);
 
+    /**
+     * Filter on subject field.
+     *
+     * @param subject subject
+     * @return type-parameter object
+     */
     T subject(String subject);
 
+    /**
+     * Filter on reply-to field.
+     *
+     * @param replyTo reply-to
+     * @return type-parameter object
+     */
     T replyTo(String replyTo);
 
+    /**
+     * Filter on content-type field.
+     *
+     * @param contentType content-type
+     * @return type-parameter object
+     */
     T contentType(String contentType);
 
+    /**
+     * Filter on content-encoding field.
+     *
+     * @param contentEncoding content-encoding
+     * @return type-parameter object
+     */
     T contentEncoding(String contentEncoding);
 
+    /**
+     * Filter on absolute expiry time field.
+     *
+     * @param absoluteExpiryTime absolute expiry time
+     * @return type-parameter object
+     */
     T absoluteExpiryTime(long absoluteExpiryTime);
 
+    /**
+     * Filter on creation time field.
+     *
+     * @param creationTime creation time
+     * @return type-parameter object
+     */
     T creationTime(long creationTime);
 
+    /**
+     * Filter on group ID.
+     *
+     * @param groupId group ID
+     * @return type-parameter object
+     */
     T groupId(String groupId);
 
+    /**
+     * Filter on group sequence.
+     *
+     * @param groupSequence group sequence
+     * @return type-parameter object
+     */
     T groupSequence(int groupSequence);
 
+    /**
+     * Filter on reply-to group.
+     *
+     * @param groupId group ID
+     * @return type-parameter object
+     */
     T replyToGroupId(String groupId);
 
+    /**
+     * Filter on boolean application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, boolean value);
 
+    /**
+     * Filter on byte application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, byte value);
 
+    /**
+     * Filter on short application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, short value);
 
+    /**
+     * Filter on integer application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, int value);
 
+    /**
+     * Filter on long application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, long value);
 
+    /**
+     * Filter on unsigned byte application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyUnsigned(String key, byte value);
 
+    /**
+     * Filter on unsigned short application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyUnsigned(String key, short value);
 
+    /**
+     * Filter on unsigned integer application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyUnsigned(String key, int value);
 
+    /**
+     * Filter on unsigned long application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyUnsigned(String key, long value);
 
+    /**
+     * Filter on float application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, float value);
 
+    /**
+     * Filter on double application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, double value);
 
+    /**
+     * Filter on 32-bit decimal number application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyDecimal32(String key, BigDecimal value);
 
+    /**
+     * Filter on 64-bit decimal number application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyDecimal64(String key, BigDecimal value);
 
+    /**
+     * Filter on 128-bit decimal number application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyDecimal128(String key, BigDecimal value);
 
+    /**
+     * Filter on character application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, char value);
 
+    /**
+     * Filter on timestamp application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertyTimestamp(String key, long value);
 
+    /**
+     * Filter on UUID application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, UUID value);
 
+    /**
+     * Filter on byte array application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, byte[] value);
 
+    /**
+     * Filter on string application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T property(String key, String value);
 
+    /**
+     * Filter on symbol application property.
+     *
+     * @param key application property key
+     * @param value application property value
+     * @return type-parameter object
+     */
     T propertySymbol(String key, String value);
   }
 
+  /**
+   * Filter options for support of AMQP filter expressions.
+   *
+   * <p>Specialized {@link FilterOptions} in the context of the configuration of a stream consumer.
+   */
   interface StreamFilterOptions extends FilterOptions<StreamFilterOptions> {
 
+    /**
+     * Go back to the stream options.
+     *
+     * @return the stream options
+     */
     StreamOptions stream();
   }
 
