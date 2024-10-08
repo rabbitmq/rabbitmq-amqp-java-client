@@ -33,12 +33,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class TopologyRecoveryTest {
 
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));

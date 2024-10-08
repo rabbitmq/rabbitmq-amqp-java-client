@@ -32,11 +32,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class RpcTest {
 
   private static final RpcServer.Handler HANDLER =

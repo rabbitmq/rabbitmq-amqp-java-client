@@ -26,7 +26,7 @@ import java.lang.annotation.*;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.extension.*;
 
-class AmqpTestInfrastructureExtension
+final class AmqpTestInfrastructureExtension
     implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
 
   private static final ExtensionContext.Namespace NAMESPACE =

@@ -37,9 +37,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
 
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class ConsumerOutcomeTest {
 
   private static final String ANNOTATION_KEY = "x-opt-foo";

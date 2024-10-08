@@ -29,9 +29,8 @@ import com.rabbitmq.client.amqp.Publisher;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class AuthorizationTest {
 
   private static final String VH = "test_amqp";

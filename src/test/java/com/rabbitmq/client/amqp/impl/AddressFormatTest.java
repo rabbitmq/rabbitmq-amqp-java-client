@@ -24,9 +24,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rabbitmq.client.amqp.*;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class AddressFormatTest {
 
   Connection connection;

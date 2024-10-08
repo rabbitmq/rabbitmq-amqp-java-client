@@ -31,10 +31,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 import javax.net.ssl.*;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 @DisabledIfTlsNotEnabled
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 public class TlsTest {
 
   static Environment environment;

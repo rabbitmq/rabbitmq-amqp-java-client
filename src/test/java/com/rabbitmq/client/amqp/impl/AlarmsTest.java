@@ -23,11 +23,10 @@ import static java.util.stream.IntStream.range;
 import com.rabbitmq.client.amqp.*;
 import java.time.Duration;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@ExtendWith(AmqpTestInfrastructureExtension.class)
+@AmqpTestInfrastructure
 @DisabledIfRabbitMqCtlNotSet
 public class AlarmsTest {
 
