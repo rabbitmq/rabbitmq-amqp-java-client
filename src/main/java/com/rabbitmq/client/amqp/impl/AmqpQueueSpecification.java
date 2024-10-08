@@ -272,9 +272,15 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public Management.QuorumQueueSpecification quorumInitialGroupSize(int size) {
-      validatePositive("x-quorum-initial-group-size", size);
-      this.parent.arg("x-quorum-initial-group-size", size);
+      return this.initialMemberCount(size);
+    }
+
+    @Override
+    public Management.QuorumQueueSpecification initialMemberCount(int initialMemberCount) {
+      validatePositive("x-quorum-initial-group-size", initialMemberCount);
+      this.parent.arg("x-quorum-initial-group-size", initialMemberCount);
       return this;
     }
 
@@ -339,9 +345,15 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public Management.StreamSpecification initialClusterSize(int initialClusterSize) {
-      validatePositive("x-initial-cluster-size", initialClusterSize);
-      this.parent.arg("x-initial-cluster-size", initialClusterSize);
+      return this.initialMemberCount(initialClusterSize);
+    }
+
+    @Override
+    public Management.StreamSpecification initialMemberCount(int initialMemberCount) {
+      validatePositive("x-initial-cluster-size", initialMemberCount);
+      this.parent.arg("x-initial-cluster-size", initialMemberCount);
       return this;
     }
 
