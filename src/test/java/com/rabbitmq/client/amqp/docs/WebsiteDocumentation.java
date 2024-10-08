@@ -212,7 +212,7 @@ public class WebsiteDocumentation {
         .queue()
         .name("my-quorum-queue")
         .quorum() // set queue type to 'quorum'
-          .quorumInitialGroupSize(3) // specific to quorum queues
+          .initialMemberCount(3) // specific to quorum queues
           .deliveryLimit(3) // specific to quorum queues
         .queue()
         .declare();

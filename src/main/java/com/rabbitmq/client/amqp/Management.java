@@ -317,14 +317,25 @@ public interface Management extends AutoCloseable {
     QuorumQueueSpecification deliveryLimit(int limit);
 
     /**
-     * Set the number of quorum queue members.
+     * Deprecated, use {@link #initialMemberCount(int)} instead.
      *
      * @param size group size
      * @return quorum queue specification
      * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#replication-factor">Initial
      *     Replication Factor</a>
      */
+    @Deprecated(forRemoval = true)
     QuorumQueueSpecification quorumInitialGroupSize(int size);
+
+    /**
+     * Set the number of initial members the quorum queue should have.
+     *
+     * @param initialMemberCount initial number of nodes
+     * @return quorum queue specification
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#replication-factor">Initial
+     *     Replication Factor</a>
+     */
+    QuorumQueueSpecification initialMemberCount(int initialMemberCount);
 
     /**
      * Go back to the queue specification.
@@ -397,14 +408,25 @@ public interface Management extends AutoCloseable {
     StreamSpecification maxSegmentSizeBytes(ByteCapacity maxSegmentSize);
 
     /**
-     * Set the number of nodes the initial stream cluster should span.
+     * Deprecated, use {@link #initialMemberCount(int)} instead.
      *
      * @param initialClusterSize initial number of nodes
      * @return the stream specification
      * @see <a href="https://www.rabbitmq.com/docs/streams#replication-factor">Initial Replication
      *     Factor</a>
      */
+    @Deprecated(forRemoval = true)
     StreamSpecification initialClusterSize(int initialClusterSize);
+
+    /**
+     * Set the number of initial members the stream should have.
+     *
+     * @param initialMemberCount initial number of nodes
+     * @return the stream specification
+     * @see <a href="https://www.rabbitmq.com/docs/streams#replication-factor">Initial Replication
+     *     Factor</a>
+     */
+    StreamSpecification initialMemberCount(int initialMemberCount);
 
     /**
      * Go back to the queue specification.
