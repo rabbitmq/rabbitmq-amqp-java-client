@@ -34,7 +34,8 @@ public final class TestConditions {
   private TestConditions() {}
 
   public enum BrokerVersion {
-    RABBITMQ_4_0_3("4.0.3");
+    RABBITMQ_4_0_3("4.0.3"),
+    RABBITMQ_4_1_0("4.1.0");
 
     final String value;
 

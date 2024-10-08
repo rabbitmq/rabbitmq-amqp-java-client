@@ -146,6 +146,24 @@ public class WebsiteDocumentation {
 
   }
 
+  void consumingAmqpFilterExpressions() {
+    Connection connection = null;
+
+    Consumer consumer = connection.consumerBuilder()
+        .queue("some-stream")
+        .stream()
+        .filter()
+          .subject("$p:foo") // subject starts with 'foo'
+          .property("k1", "v1") // 'k1' application property equals to 'v1'
+        .stream()
+        .builder()
+        .messageHandler((context, message) -> {
+          // message processing
+        })
+        .build();
+
+  }
+
   void management() {
     Connection connection = null;
 

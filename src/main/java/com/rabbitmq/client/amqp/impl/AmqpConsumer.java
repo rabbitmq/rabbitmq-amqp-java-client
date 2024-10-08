@@ -41,6 +41,7 @@ import org.apache.qpid.protonj2.engine.Scheduler;
 import org.apache.qpid.protonj2.engine.impl.ProtonLinkCreditState;
 import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.engine.impl.ProtonSessionIncomingWindow;
+import org.apache.qpid.protonj2.types.DescribedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +59,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final Long id;
   private final String address;
   private final String queue;
-  private final Map<String, Object> filters;
+  private final Map<String, DescribedType> filters;
   private final Map<String, Object> linkProperties;
   private final ConsumerBuilder.SubscriptionListener subscriptionListener;
   private final AmqpConnection connection;
@@ -161,7 +162,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       Session nativeSession,
       String address,
       Map<String, Object> properties,
-      Map<String, Object> filters,
+      Map<String, DescribedType> filters,
       SubscriptionListener subscriptionListener) {
     try {
       filters = new LinkedHashMap<>(filters);
@@ -174,11 +175,27 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               .autoSettle(false)
               .creditWindow(0)
               .properties(properties);
+      Map<String, Object> localSourceFilters = Collections.emptyMap();
       if (!filters.isEmpty()) {
-        receiverOptions.sourceOptions().filters(filters);
+        localSourceFilters = Map.copyOf(filters);
+        receiverOptions.sourceOptions().filters(localSourceFilters);
       }
-      return (ClientReceiver)
-          ExceptionUtils.wrapGet(nativeSession.openReceiver(address, receiverOptions).openFuture());
+      ClientReceiver receiver =
+          (ClientReceiver)
+              ExceptionUtils.wrapGet(
+                  nativeSession.openReceiver(address, receiverOptions).openFuture());
+      if (!filters.isEmpty()) {
+        Map<String, String> remoteSourceFilters = receiver.source().filters();
+        for (Map.Entry<String, Object> localEntry : localSourceFilters.entrySet()) {
+          if (!remoteSourceFilters.containsKey(localEntry.getKey())) {
+            LOGGER.warn(
+                "Missing filter value in attach response: {} => {}",
+                localEntry.getKey(),
+                localEntry.getValue());
+          }
+        }
+      }
+      return receiver;
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }

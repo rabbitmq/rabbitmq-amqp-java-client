@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.name;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
+import java.lang.annotation.*;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.extension.*;
 
