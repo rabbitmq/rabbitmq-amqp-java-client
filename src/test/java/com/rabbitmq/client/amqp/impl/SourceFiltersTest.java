@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.*;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
 import static java.nio.charset.StandardCharsets.*;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.time.Instant;
@@ -274,6 +276,7 @@ public class SourceFiltersTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionApplicationProperties() {
     int messageCount = 10;
     UUID uuid = UUID.randomUUID();
@@ -326,6 +329,7 @@ public class SourceFiltersTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionProperties() {
     int messageCount = 10;
     byte[] userId = "guest".getBytes(UTF_8);
@@ -407,6 +411,7 @@ public class SourceFiltersTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionsPropertiesAndApplicationProperties() {
     int messageCount = 10;
     String subject = stringArbitrary.sample();
@@ -438,6 +443,7 @@ public class SourceFiltersTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionFilterFewMessagesFromManyToTestFlowControl() {
     String groupId = stringArbitrary.sample();
     publish(1, m -> m.groupId(groupId));
@@ -449,6 +455,7 @@ public class SourceFiltersTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionStringModifier() {
     publish(1, m -> m.subject("abc 123"));
     publish(1, m -> m.subject("foo bar"));

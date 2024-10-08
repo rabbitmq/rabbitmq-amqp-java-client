@@ -72,6 +72,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final ConnectionSettings.AffinityStrategy affinityStrategy;
   private final String name;
   private final Lock instanceLock = new ReentrantLock();
+  private final boolean filterExpressionsSupported;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -126,6 +127,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
             ConnectionUtils.NO_RETRY_STRATEGY,
             this.name());
     this.sync(ncw);
+    this.filterExpressionsSupported =
+        Utils.supportFilterExpressions(brokerVersion(this.nativeConnection));
     LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
@@ -670,6 +673,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   ConnectionUtils.AffinityContext affinity() {
     return this.affinity;
+  }
+
+  boolean filterExpressionsSupported() {
+    return this.filterExpressionsSupported;
   }
 
   long id() {

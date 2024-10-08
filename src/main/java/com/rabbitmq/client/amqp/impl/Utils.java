@@ -224,6 +224,14 @@ final class Utils {
     return versionCompare(currentVersion(brokerVersion), "4.0.0") >= 0;
   }
 
+  static boolean is4_1_OrMore(String brokerVersion) {
+    return versionCompare(currentVersion(brokerVersion), "4.1.0") >= 0;
+  }
+
+  static boolean supportFilterExpressions(String brokerVersion) {
+    return is4_1_OrMore(brokerVersion);
+  }
+
   static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {
 
     private final String address;

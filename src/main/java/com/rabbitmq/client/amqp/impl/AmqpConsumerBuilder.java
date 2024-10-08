@@ -136,10 +136,10 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private static class DefaultStreamOptions implements StreamOptions {
 
     private final Map<String, DescribedType> filters;
-    private final ConsumerBuilder builder;
+    private final AmqpConsumerBuilder builder;
     private final StreamFilterOptions filterOptions;
 
-    private DefaultStreamOptions(ConsumerBuilder builder, Map<String, DescribedType> filters) {
+    private DefaultStreamOptions(AmqpConsumerBuilder builder, Map<String, DescribedType> filters) {
       this.builder = builder;
       this.filters = filters;
       this.filterOptions = new DefaultStreamFilterOptions(this, filters);
@@ -190,6 +190,10 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
     @Override
     public StreamFilterOptions filter() {
+      if (!this.builder.connection.filterExpressionsSupported()) {
+        throw new IllegalArgumentException(
+            "AMQP filter expressions requires at least RabbitMQ 4.1.0");
+      }
       return this.filterOptions;
     }
 

@@ -175,11 +175,27 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               .autoSettle(false)
               .creditWindow(0)
               .properties(properties);
+      Map<String, Object> localSourceFilters = Collections.emptyMap();
       if (!filters.isEmpty()) {
-        receiverOptions.sourceOptions().filters(Map.copyOf(filters));
+        localSourceFilters = Map.copyOf(filters);
+        receiverOptions.sourceOptions().filters(localSourceFilters);
       }
-      return (ClientReceiver)
-          ExceptionUtils.wrapGet(nativeSession.openReceiver(address, receiverOptions).openFuture());
+      ClientReceiver receiver =
+          (ClientReceiver)
+              ExceptionUtils.wrapGet(
+                  nativeSession.openReceiver(address, receiverOptions).openFuture());
+      if (!filters.isEmpty()) {
+        Map<String, String> remoteSourceFilters = receiver.source().filters();
+        for (Map.Entry<String, Object> localEntry : localSourceFilters.entrySet()) {
+          if (!remoteSourceFilters.containsKey(localEntry.getKey())) {
+            LOGGER.warn(
+                "Missing filter value in attach response: {} => {}",
+                localEntry.getKey(),
+                localEntry.getValue());
+          }
+        }
+      }
+      return receiver;
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e, "Error while creating receiver from '%s'", address);
     }
