@@ -212,11 +212,21 @@ public class RecoveryClusterTest {
       LOGGER.info("Checked replica info for each queue.");
 
       syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
-      syncs.forEach(s -> assertThat(s).completes());
+      syncs.forEach(
+          s -> {
+            LOGGER.info("Publishing messages ('{}')", s);
+            assertThat(s).completes();
+            LOGGER.info("Messages published and settled ('{}')", s);
+          });
       LOGGER.info("Checked publishers have recovered.");
 
       syncs = consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
-      syncs.forEach(s -> assertThat(s).completes());
+      syncs.forEach(
+          s -> {
+            LOGGER.info("Waiting for new messages ('{}')", s);
+            assertThat(s).completes(Duration.ofSeconds(20));
+            LOGGER.info("Expected messages received ('{}')", s);
+          });
       LOGGER.info("Checked consumers have recovered.");
 
       assertThat(publisherStates).allMatch(s -> s.state() == OPEN);
