@@ -684,7 +684,7 @@ public class AmqpTest {
       management
           .queue(q)
           .maxLength(maxLength)
-          .overflowStrategy(Management.OverFlowStrategy.REJECT_PUBLISH)
+          .overflowStrategy(Management.OverflowStrategy.REJECT_PUBLISH)
           .declare();
       CountDownLatch rejectedLatch = new CountDownLatch(1);
       Publisher.Callback callback =

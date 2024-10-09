@@ -178,7 +178,7 @@ public interface Management extends AutoCloseable {
      * @see <a href="https://www.rabbitmq.com/docs/maxlength#overflow-behaviour">Overflow
      *     Behavior</a>
      */
-    QueueSpecification overflowStrategy(OverFlowStrategy overflow);
+    QueueSpecification overflowStrategy(OverflowStrategy overflow);
 
     /**
      * Set TTL for a queue.
@@ -478,7 +478,7 @@ public interface Management extends AutoCloseable {
    *
    * @see <a href="https://www.rabbitmq.com/docs/maxlength#overflow-behaviour">Overflow Behavior</a>
    */
-  enum OverFlowStrategy {
+  enum OverflowStrategy {
     /** Drop the messages at the head of the queue. The default strategy. */
     DROP_HEAD("drop-head"),
     /** Discard the most recent published messages. */
@@ -488,7 +488,7 @@ public interface Management extends AutoCloseable {
 
     private final String strategy;
 
-    OverFlowStrategy(String strategy) {
+    OverflowStrategy(String strategy) {
       this.strategy = strategy;
     }
 

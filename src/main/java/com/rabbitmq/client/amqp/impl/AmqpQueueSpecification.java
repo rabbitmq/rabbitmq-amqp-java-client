@@ -98,7 +98,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   }
 
   @Override
-  public Management.QueueSpecification overflowStrategy(Management.OverFlowStrategy overflow) {
+  public Management.QueueSpecification overflowStrategy(Management.OverflowStrategy overflow) {
     this.arg("x-overflow", overflow.strategy());
     return this;
   }
