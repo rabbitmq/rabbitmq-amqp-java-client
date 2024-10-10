@@ -479,8 +479,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
           consumer.recoverAfterConnectionFailure();
+
           consumer.state(OPEN);
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
+        } catch (AmqpException.AmqpConnectionException ex) {
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover consumer {} (queue '{}')",
