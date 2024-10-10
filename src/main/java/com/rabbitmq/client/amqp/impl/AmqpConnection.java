@@ -388,7 +388,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 this.state(OPEN);
               } catch (Exception ex) {
                 // likely InterruptedException or IO exception
-                LOGGER.info(
+                LOGGER.warn(
                     "Error while trying to recover topology for connection '{}': {}",
                     this.name(),
                     ex.getMessage());
@@ -481,6 +481,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
           consumer.recoverAfterConnectionFailure();
           consumer.state(OPEN);
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
+        } catch (AmqpException.AmqpConnectionException ex) {
+          LOGGER.warn(
+              "Connection error while trying to recover consumer {} (queue '{}'), restarting recovery",
+              consumer.id(),
+              consumer.queue(),
+              ex);
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover consumer {} (queue '{}')",
