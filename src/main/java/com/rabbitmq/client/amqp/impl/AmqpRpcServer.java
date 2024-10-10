@@ -71,6 +71,9 @@ class AmqpRpcServer implements RpcServer {
           }
         };
     if (builder.correlationIdExtractor() == null) {
+      // HTTP over AMQP 1.0 extension specification, 5.1:
+      // To associate a response with a request, the correlation-id value of the response properties
+      // MUST be set to the message-id value of the request properties.
       this.correlationIdExtractor = Message::messageId;
     } else {
       this.correlationIdExtractor = builder.correlationIdExtractor();

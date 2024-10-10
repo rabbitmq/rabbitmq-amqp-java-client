@@ -100,6 +100,9 @@ class AmqpRpcClient implements RpcClient {
       DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
       addressBuilder.queue(replyTo);
       String replyToAddress = addressBuilder.address();
+      // HTTP over AMQP 1.0 extension specification, 5.1:
+      // To associate a response with a request, the correlation-id value of the response properties
+      // MUST be set to the message-id value of the request properties.
       this.requestPostProcessor =
           (request, correlationId) -> request.replyTo(replyToAddress).messageId(correlationId);
     } else {

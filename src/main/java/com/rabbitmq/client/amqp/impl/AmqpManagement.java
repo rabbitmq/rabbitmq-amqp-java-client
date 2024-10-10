@@ -41,6 +41,15 @@ import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedExc
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Follow the <a
+ * href="https://github.com/oasis-tcs/amqp-specs/blob/master/http-over-amqp-v1.0-wd06a.docx">HTTP
+ * Semantics and Content over AMQP Version 1.0</a> extension specification.
+ *
+ * @see <a
+ *     href="https://github.com/oasis-tcs/amqp-specs/blob/master/http-over-amqp-v1.0-wd06a.docx">HTTP
+ *     Semantics and Content over AMQP Version 1.0</a>
+ */
 class AmqpManagement implements Management {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
@@ -341,8 +350,7 @@ class AmqpManagement implements Management {
     checkAvailable();
     UUID requestId = messageId();
     try {
-      Message<?> request =
-          Message.create(body).messageId(requestId).to(target).subject(operation).replyTo(REPLY_TO);
+      Message<?> request = Message.create(body).to(target).subject(operation);
 
       OutstandingRequest outstandingRequest = this.request(request, requestId);
       outstandingRequest.block();
@@ -355,6 +363,10 @@ class AmqpManagement implements Management {
   }
 
   OutstandingRequest request(Message<?> request, UUID requestId) throws ClientException {
+    // HTTP over AMQP 1.0 extension specification, 5.1:
+    // To associate a response with a request, the correlation-id value of the response properties
+    // MUST be set to the message-id value of the request properties.
+    request.messageId(requestId).replyTo(REPLY_TO);
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
     LOGGER.debug("Enqueueing request {}", requestId);
     this.outstandingRequests.put(requestId, outstandingRequest);
@@ -382,12 +394,7 @@ class AmqpManagement implements Management {
     checkAvailable();
     UUID requestId = messageId();
     try {
-      Message<?> request =
-          Message.create((Map<?, ?>) null)
-              .messageId(requestId)
-              .to(target)
-              .subject(DELETE)
-              .replyTo(REPLY_TO);
+      Message<?> request = Message.create((Map<?, ?>) null).to(target).subject(DELETE);
 
       OutstandingRequest outstandingRequest = request(request, requestId);
       outstandingRequest.block();
@@ -497,12 +504,7 @@ class AmqpManagement implements Management {
   private OutstandingRequest get(String target) throws ClientException {
     checkAvailable();
     UUID requestId = messageId();
-    Message<?> request =
-        Message.create((Map<?, ?>) null)
-            .messageId(requestId)
-            .to(target)
-            .subject(GET)
-            .replyTo(REPLY_TO);
+    Message<?> request = Message.create((Map<?, ?>) null).to(target).subject(GET);
 
     OutstandingRequest outstandingRequest = request(request, requestId);
     outstandingRequest.block();
