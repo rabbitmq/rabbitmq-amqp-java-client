@@ -499,6 +499,7 @@ final class AmqpMessage implements Message {
 
   @Override
   public Message annotation(String key, Object value) {
+    Utils.validateMessageAnnotationKey(key);
     callOnDelegate(m -> m.annotation(key, value));
     return this;
   }
