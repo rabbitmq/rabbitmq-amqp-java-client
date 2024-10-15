@@ -100,13 +100,13 @@ final class Utils {
   }
 
   static void checkMessageAnnotations(Map<String, Object> annotations) {
-    annotations.forEach(
-        (k, v) -> {
-          if (!k.startsWith("x-")) {
-            throw new IllegalArgumentException(
-                "Message annotation keys must start with 'x-': " + k);
-          }
-        });
+    annotations.forEach((k, v) -> validateMessageAnnotationKey(k));
+  }
+
+  static void validateMessageAnnotationKey(String key) {
+    if (!key.startsWith("x-")) {
+      throw new IllegalArgumentException("Message annotation keys must start with 'x-': " + key);
+    }
   }
 
   private static class NamedThreadFactory implements ThreadFactory {
