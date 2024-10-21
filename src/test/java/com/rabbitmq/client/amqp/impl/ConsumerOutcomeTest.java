@@ -27,6 +27,7 @@ import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
@@ -41,9 +42,25 @@ import org.junit.jupiter.api.TestInfo;
 @AmqpTestInfrastructure
 public class ConsumerOutcomeTest {
 
-  private static final String ANNOTATION_KEY = "x-opt-foo";
+  private static final String ANNOTATION_KEY = "x-opt-string";
   private static final String ANNOTATION_VALUE = "bar";
-  private static final Map<String, Object> ANNOTATIONS = Map.of(ANNOTATION_KEY, ANNOTATION_VALUE);
+  private static final String ANNOTATION_KEY_ARRAY = "x-opt-array";
+  private static final String[] ANNOTATION_VALUE_ARRAY = new String[] {"foo", "bar", "baz"};
+  private static final String ANNOTATION_KEY_LIST = "x-opt-list";
+  private static final List<String> ANNOTATION_VALUE_LIST = List.of("one", "two", "three");
+  private static final String ANNOTATION_KEY_MAP = "x-opt-map";
+  private static final Map<String, String> ANNOTATION_VALUE_MAP =
+      Map.of("k1", "v1", "k2", "v2", "k3", "v3");
+  private static final Map<String, Object> ANNOTATIONS =
+      Map.of(
+          ANNOTATION_KEY,
+          ANNOTATION_VALUE,
+          ANNOTATION_KEY_ARRAY,
+          ANNOTATION_VALUE_ARRAY,
+          ANNOTATION_KEY_LIST,
+          ANNOTATION_VALUE_LIST,
+          ANNOTATION_KEY_MAP,
+          ANNOTATION_VALUE_MAP);
 
   Connection connection;
   Management management;
@@ -126,7 +143,10 @@ public class ConsumerOutcomeTest {
     message = messages.poll();
     assertThat(message)
         .hasAnnotation("x-delivery-count", 1L)
-        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
+        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE)
+        .hasAnnotation(ANNOTATION_KEY_ARRAY, ANNOTATION_VALUE_ARRAY)
+        .hasAnnotation(ANNOTATION_KEY_LIST, ANNOTATION_VALUE_LIST)
+        .hasAnnotation(ANNOTATION_KEY_MAP, ANNOTATION_VALUE_MAP);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
   }
 
@@ -187,7 +207,12 @@ public class ConsumerOutcomeTest {
     publisher.publish(publisher.message().messageId(messageID), ctx -> {});
     assertThat(deadLetteredSync).completes();
     Message message = deadLetteredMessage.get();
-    assertThat(message).hasId(messageID).hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE);
+    assertThat(message)
+        .hasId(messageID)
+        .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE)
+        .hasAnnotation(ANNOTATION_KEY_ARRAY, ANNOTATION_VALUE_ARRAY)
+        .hasAnnotation(ANNOTATION_KEY_LIST, ANNOTATION_VALUE_LIST)
+        .hasAnnotation(ANNOTATION_KEY_MAP, ANNOTATION_VALUE_MAP);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
   }
