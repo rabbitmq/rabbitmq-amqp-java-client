@@ -340,14 +340,14 @@ public class AmqpConnectionAffinityUnitTest {
 
     private final String name, leader;
     private final Management.QueueType type;
-    private final List<String> replicas;
+    private final List<String> members;
 
     private TestQueueInfo(
-        String name, Management.QueueType type, String leader, List<String> replicas) {
+        String name, Management.QueueType type, String leader, List<String> members) {
       this.name = name;
       this.type = type;
       this.leader = leader;
-      this.replicas = replicas;
+      this.members = members;
     }
 
     @Override
@@ -386,8 +386,14 @@ public class AmqpConnectionAffinityUnitTest {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public List<String> replicas() {
-      return this.replicas;
+      return this.members();
+    }
+
+    @Override
+    public List<String> members() {
+      return this.members;
     }
 
     @Override
@@ -408,12 +414,12 @@ public class AmqpConnectionAffinityUnitTest {
       return Objects.equals(name, that.name)
           && Objects.equals(leader, that.leader)
           && type == that.type
-          && Objects.equals(replicas, that.replicas);
+          && Objects.equals(members, that.members);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, leader, type, replicas);
+      return Objects.hash(name, leader, type, members);
     }
 
     @Override
@@ -428,7 +434,7 @@ public class AmqpConnectionAffinityUnitTest {
           + leader
           + '\''
           + ", replicas="
-          + replicas
+          + members
           + '}';
     }
   }
