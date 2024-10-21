@@ -81,7 +81,7 @@ public class ClusterTest {
       Management.QueueInfo info = connection.management().queueInfo(q);
       assertThat(publishConnection.connectionNodename()).isEqualTo(info.leader());
       assertThat(consumeConnection.connectionNodename())
-          .isIn(info.replicas())
+          .isIn(info.members())
           .isNotEqualTo(info.leader());
       assertThat(Cli.listConnections()).hasSize(3);
     } finally {
@@ -315,7 +315,7 @@ public class ClusterTest {
       consumeSync.reset();
 
       List<String> initialFollowers =
-          queueInfo.replicas().stream().filter(n -> !n.equals(initialLeader)).collect(toList());
+          queueInfo.members().stream().filter(n -> !n.equals(initialLeader)).collect(toList());
       assertThat(initialFollowers).isNotEmpty();
 
       Cli.pauseNode(initialLeader);
@@ -498,10 +498,10 @@ public class ClusterTest {
   String deleteLeader(Consumer<String> deleteMemberOperation) {
     Management.QueueInfo info = queueInfo();
     String initialLeader = info.leader();
-    int initialReplicaCount = info.replicas().size();
+    int initialReplicaCount = info.members().size();
     deleteMemberOperation.accept(initialLeader);
     TestUtils.waitAtMost(() -> !initialLeader.equals(queueInfo().leader()));
-    assertThat(queueInfo().replicas()).hasSize(initialReplicaCount - 1);
+    assertThat(queueInfo().members()).hasSize(initialReplicaCount - 1);
     return initialLeader;
   }
 
@@ -527,9 +527,9 @@ public class ClusterTest {
 
   void addMember(Runnable addMemberOperation) {
     Management.QueueInfo info = queueInfo();
-    int initialReplicaCount = info.replicas().size();
+    int initialReplicaCount = info.members().size();
     addMemberOperation.run();
-    TestUtils.waitAtMost(() -> queueInfo().replicas().size() == initialReplicaCount + 1);
+    TestUtils.waitAtMost(() -> queueInfo().members().size() == initialReplicaCount + 1);
   }
 
   Management.QueueInfo queueInfo() {

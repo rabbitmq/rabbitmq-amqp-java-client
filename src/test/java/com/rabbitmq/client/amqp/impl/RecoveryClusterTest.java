@@ -199,11 +199,11 @@ public class RecoveryClusterTest {
       queueConfigurations.forEach(
           c -> {
             if (c.type == Management.QueueType.QUORUM || c.type == Management.QueueType.STREAM) {
-              assertThat(management.queueInfo(c.name).replicas())
+              assertThat(management.queueInfo(c.name).members())
                   .hasSameSizeAs(nodes)
                   .containsExactlyInAnyOrderElementsOf(nodes);
             } else {
-              assertThat(management.queueInfo(c.name).replicas())
+              assertThat(management.queueInfo(c.name).members())
                   .hasSize(1)
                   .containsAnyElementsOf(nodes);
             }
@@ -240,7 +240,7 @@ public class RecoveryClusterTest {
                 "Queue '%s': leader '%s', followers '%s'%n",
                 q,
                 queueInfo.leader(),
-                queueInfo.replicas().stream()
+                queueInfo.members().stream()
                     .filter(n -> !n.equals(queueInfo.leader()))
                     .collect(toList()));
           });
@@ -426,7 +426,7 @@ public class RecoveryClusterTest {
       return this.connection
           .management()
           .queueInfo(this.queue)
-          .replicas()
+          .members()
           .contains(this.connection.connectionNodename());
     }
 

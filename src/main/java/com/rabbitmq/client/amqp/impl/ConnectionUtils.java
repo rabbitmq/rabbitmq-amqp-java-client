@@ -83,7 +83,7 @@ final class ConnectionUtils {
             info.name(),
             info.type(),
             info.leader(),
-            info.replicas(),
+            info.members(),
             connectionName);
         if (nodesWithAffinity == null) {
           nodesWithAffinity = strategy.nodesWithAffinity(context, info);
@@ -255,9 +255,9 @@ final class ConnectionUtils {
     public List<String> nodesWithAffinity(
         ConnectionSettings.AffinityContext context, Management.QueueInfo info) {
       List<String> nodesWithAffinity =
-          (info.replicas() == null || info.replicas().isEmpty())
+          (info.members() == null || info.members().isEmpty())
               ? Collections.emptyList()
-              : List.copyOf(info.replicas());
+              : List.copyOf(info.members());
       if (context.operation() == ConnectionSettings.Affinity.Operation.PUBLISH) {
         if (info.leader() != null && !info.leader().isBlank()) {
           nodesWithAffinity = List.of(info.leader());
@@ -277,7 +277,7 @@ final class ConnectionUtils {
         ConnectionSettings.AffinityContext context, Management.QueueInfo info) {
       ConnectionSettings.Affinity.Operation operation = context.operation();
       String leader = info.leader();
-      List<String> replicas = info.replicas() == null ? Collections.emptyList() : info.replicas();
+      List<String> replicas = info.members() == null ? Collections.emptyList() : info.members();
       List<String> nodesWithAffinity;
       LOGGER.debug(
           "Trying to find affinity {} with leader = {}, replicas = {}", context, leader, replicas);
