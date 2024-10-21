@@ -47,7 +47,7 @@
         <netty5.version>5.0.0.Alpha5</netty5.version>
         <micrometer.version>1.13.6</micrometer.version>
         <logback.version>1.2.13</logback.version>
-        <junit.jupiter.version>5.11.2</junit.jupiter.version>
+        <junit.jupiter.version>5.11.3</junit.jupiter.version>
         <assertj.version>3.26.3</assertj.version>
         <mockito.version>5.14.2</mockito.version>
         <jqwik.version>1.9.1</jqwik.version>
