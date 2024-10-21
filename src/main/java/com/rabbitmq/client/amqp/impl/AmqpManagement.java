@@ -611,7 +611,7 @@ class AmqpManagement implements Management {
     private final QueueType type;
     private final Map<String, Object> arguments;
     private final String leader;
-    private final List<String> replicas;
+    private final List<String> members;
     private final long messageCount;
     private final int consumerCount;
 
@@ -624,11 +624,11 @@ class AmqpManagement implements Management {
       this.type = QueueType.valueOf(((String) response.get("type")).toUpperCase(Locale.ENGLISH));
       this.arguments = Map.copyOf((Map<String, Object>) response.get("arguments"));
       this.leader = (String) response.get("leader");
-      String[] replicas = (String[]) response.get("replicas");
-      if (replicas == null || replicas.length == 0) {
-        this.replicas = Collections.emptyList();
+      String[] members = (String[]) response.get("replicas");
+      if (members == null || members.length == 0) {
+        this.members = Collections.emptyList();
       } else {
-        this.replicas = List.of(replicas);
+        this.members = List.of(members);
       }
       this.messageCount = ((Number) response.get("message_count")).longValue();
       this.consumerCount = ((Number) response.get("consumer_count")).intValue();
@@ -670,8 +670,14 @@ class AmqpManagement implements Management {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public List<String> replicas() {
-      return this.replicas;
+      return this.members();
+    }
+
+    @Override
+    public List<String> members() {
+      return this.members;
     }
 
     @Override
@@ -704,7 +710,7 @@ class AmqpManagement implements Management {
           + leader
           + '\''
           + ", replicas="
-          + replicas
+          + members
           + ", messageCount="
           + messageCount
           + ", consumerCount="

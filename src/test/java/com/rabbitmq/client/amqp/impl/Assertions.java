@@ -392,7 +392,7 @@ final class Assertions {
     ConnectionAssert isOnFollower(Management.QueueInfo info) {
       Assert.notNull(info, "Queue info cannot be null");
       List<String> followers =
-          info.replicas().stream()
+          info.members().stream()
               .filter(n -> !n.equals(info.leader()))
               .collect(Collectors.toList());
       if (!followers.contains(actual.connectionNodename())) {

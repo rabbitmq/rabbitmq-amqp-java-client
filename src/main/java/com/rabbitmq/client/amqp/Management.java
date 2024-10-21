@@ -861,11 +861,19 @@ public interface Management extends AutoCloseable {
     String leader();
 
     /**
-     * The nodes the queue has replicas (members) on.
+     * Deprecated, use {@link #members()} instead.
      *
-     * @return the nodes of the queue replicas (members)
+     * @return the nodes of the queue members
      */
+    @Deprecated(forRemoval = true)
     List<String> replicas();
+
+    /**
+     * The nodes the queue has members on.
+     *
+     * @return the nodes of the queue members
+     */
+    List<String> members();
 
     /**
      * The number of messages in the queue.
