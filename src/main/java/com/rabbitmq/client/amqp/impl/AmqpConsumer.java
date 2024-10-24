@@ -53,7 +53,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private volatile ClientReceiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile Future<?> receiveLoop;
   private final int initialCredits;
   private final MessageHandler messageHandler;
   private final Long id;
@@ -70,6 +69,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
   private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
+  private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+  private final java.util.function.Consumer<Delivery> nativeHandler;
+  private final java.util.function.Consumer<ClientException> nativeReceiverCloseHandler;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private volatile Scheduler protonExecutor;
@@ -96,16 +98,33 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ofNullable(builder.subscriptionListener()).orElse(NO_OP_SUBSCRIPTION_LISTENER);
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
+
+    this.nativeHandler = createNativeHandler(messageHandler);
+    this.nativeReceiverCloseHandler =
+        e ->
+            this.executorService.submit(
+                () -> {
+                  // get result to make spotbugs happy
+                  boolean ignored = maybeCloseConsumerOnException(this, e);
+                });
     this.nativeReceiver =
         this.createNativeReceiver(
             this.sessionHandler.session(),
             this.address,
             this.linkProperties,
             this.filters,
-            this.subscriptionListener);
+            this.subscriptionListener,
+            this.nativeHandler,
+            this.nativeReceiverCloseHandler);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
-    this.startReceivingLoop();
+    try {
+      this.nativeReceiver.addCredit(this.initialCredits);
+    } catch (ClientException e) {
+      AmqpException ex = ExceptionUtils.convert(e);
+      this.close(ex);
+      throw ex;
+    }
     this.state(OPEN);
     this.metricsCollector.openConsumer();
   }
@@ -163,7 +182,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       String address,
       Map<String, Object> properties,
       Map<String, DescribedType> filters,
-      SubscriptionListener subscriptionListener) {
+      SubscriptionListener subscriptionListener,
+      java.util.function.Consumer<Delivery> nativeHandler,
+      java.util.function.Consumer<ClientException> closeHandler) {
     try {
       filters = new LinkedHashMap<>(filters);
       StreamOptions streamOptions = AmqpConsumerBuilder.streamOptions(filters);
@@ -173,6 +194,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
               .autoAccept(false)
               .autoSettle(false)
+              .handler(nativeHandler)
+              .closeHandler(closeHandler)
               .creditWindow(0)
               .properties(properties);
       Map<String, Object> localSourceFilters = Collections.emptyMap();
@@ -201,6 +224,37 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
+  private java.util.function.Consumer<Delivery> createNativeHandler(MessageHandler handler) {
+    return delivery -> {
+      this.unsettledMessageCount.incrementAndGet();
+      this.metricsCollector.consume();
+      this.executorService.submit(
+          () -> {
+            AmqpMessage message;
+            try {
+              message = new AmqpMessage(delivery.message());
+            } catch (ClientException e) {
+              LOGGER.warn("Error while decoding message: {}", e.getMessage());
+              try {
+                delivery.disposition(DeliveryState.rejected("", ""), true);
+              } catch (ClientException ex) {
+                LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
+              }
+              return;
+            }
+            Consumer.Context context =
+                new DeliveryContext(
+                    delivery,
+                    this.protonExecutor,
+                    this.metricsCollector,
+                    this.unsettledMessageCount,
+                    this.replenishCreditOperation,
+                    this);
+            handler.handle(context, message);
+          });
+    };
+  }
+
   private Runnable createReceiveTask(Receiver receiver, MessageHandler messageHandler) {
     return () -> {
       try {
@@ -217,7 +271,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.protonExecutor,
                     this.metricsCollector,
                     this.unsettledMessageCount,
-                    this.replenishCreditOperation);
+                    this.replenishCreditOperation,
+                    this);
             messageHandler.handle(context, message);
           }
         }
@@ -237,11 +292,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     };
   }
 
-  private void startReceivingLoop() {
-    Runnable receiveTask = createReceiveTask(nativeReceiver, messageHandler);
-    this.receiveLoop = this.connection.environment().consumerExecutorService().submit(receiveTask);
-  }
-
   void recoverAfterConnectionFailure() {
     this.nativeReceiver =
         RetryUtils.callAndMaybeRetry(
@@ -251,7 +301,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.address,
                     this.linkProperties,
                     this.filters,
-                    this.subscriptionListener),
+                    this.subscriptionListener,
+                    this.nativeHandler,
+                    this.nativeReceiverCloseHandler),
             e -> {
               boolean shouldRetry =
                   e instanceof AmqpException.AmqpResourceClosedException
@@ -267,15 +319,21 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.pauseStatus.set(PauseStatus.UNPAUSED);
     this.unsettledMessageCount.set(0);
-    startReceivingLoop();
+    try {
+      this.nativeReceiver.addCredit(this.initialCredits);
+    } catch (ClientException e) {
+      throw ExceptionUtils.convert(e);
+    }
   }
 
   private void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
-      if (this.receiveLoop != null) {
-        this.receiveLoop.cancel(true);
+      try {
+        this.executorService.shutdownNow();
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing consumer executor service");
       }
       try {
         this.nativeReceiver.close();
@@ -283,6 +341,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       } catch (Exception e) {
         LOGGER.warn("Error while closing receiver", e);
       }
+
       this.state(CLOSED, cause);
       this.metricsCollector.closeConsumer();
     }
@@ -372,18 +431,21 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
     private final Runnable replenishCreditOperation;
+    private final AmqpConsumer consumer;
 
     private DeliveryContext(
         Delivery delivery,
         Scheduler protonExecutor,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
-        Runnable replenishCreditOperation) {
+        Runnable replenishCreditOperation,
+        AmqpConsumer consumer) {
       this.delivery = delivery;
       this.protonExecutor = protonExecutor;
       this.metricsCollector = metricsCollector;
       this.unsettledMessageCount = unsettledMessageCount;
       this.replenishCreditOperation = replenishCreditOperation;
+      this.consumer = consumer;
     }
 
     @Override
@@ -394,10 +456,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           delivery.disposition(DeliveryState.accepted(), true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
-        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
-          LOGGER.debug("message accept failed: {}", e.getMessage());
-        } catch (ClientException e) {
-          throw ExceptionUtils.convert(e);
+        } catch (Exception e) {
+          handleException(e, "accept");
         }
       }
     }
@@ -410,10 +470,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           delivery.disposition(DeliveryState.rejected("", ""), true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
-        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
-          LOGGER.debug("message discard failed: {}", e.getMessage());
-        } catch (ClientException e) {
-          throw ExceptionUtils.convert(e);
+        } catch (Exception e) {
+          handleException(e, "discard");
         }
       }
     }
@@ -428,10 +486,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           delivery.disposition(DeliveryState.modified(true, true, annotations), true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
-        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
-          LOGGER.debug("message discard (modified) failed: {}", e.getMessage());
-        } catch (ClientException e) {
-          throw ExceptionUtils.convert(e);
+        } catch (Exception e) {
+          handleException(e, "discard (modified)");
         }
       }
     }
@@ -444,10 +500,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           delivery.disposition(DeliveryState.released(), true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
-        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
-          LOGGER.debug("message requeue failed: {}", e.getMessage());
-        } catch (ClientException e) {
-          throw ExceptionUtils.convert(e);
+        } catch (Exception e) {
+          handleException(e, "requeue");
         }
       }
     }
@@ -462,12 +516,34 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           delivery.disposition(DeliveryState.modified(false, false, annotations), true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
-        } catch (ClientIllegalStateException | RejectedExecutionException | ClientIOException e) {
-          LOGGER.debug("message requeue (modified) failed: {}", e.getMessage());
-        } catch (ClientException e) {
-          throw ExceptionUtils.convert(e);
+        } catch (Exception e) {
+          handleException(e, "requeue (modified)");
         }
       }
     }
+
+    private void handleException(Exception ex, String operation) {
+      if (maybeCloseConsumerOnException(this.consumer, ex)) {
+        return;
+      }
+      if (ex instanceof ClientIllegalStateException
+          || ex instanceof RejectedExecutionException
+          || ex instanceof ClientIOException) {
+        LOGGER.debug("message {} failed: {}", operation, ex.getMessage());
+      } else if (ex instanceof ClientException) {
+        throw ExceptionUtils.convert((ClientException) ex);
+      }
+    }
+  }
+
+  private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
+    if (ex instanceof ClientLinkRemotelyClosedException) {
+      ClientLinkRemotelyClosedException e = (ClientLinkRemotelyClosedException) ex;
+      if (ExceptionUtils.notFound(e) || ExceptionUtils.resourceDeleted(e)) {
+        consumer.close(ExceptionUtils.convert(e));
+        return true;
+      }
+    }
+    return false;
   }
 }
