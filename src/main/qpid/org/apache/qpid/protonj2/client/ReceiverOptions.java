@@ -16,7 +16,10 @@
  */
 package org.apache.qpid.protonj2.client;
 
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
+
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Options that control the behavior of the {@link Receiver} created from them.
@@ -26,6 +29,8 @@ public class ReceiverOptions extends LinkOptions<ReceiverOptions> implements Clo
     private long drainTimeout = ConnectionOptions.DEFAULT_DRAIN_TIMEOUT;
     private boolean autoAccept = true;
     private int creditWindow = 10;
+    private Consumer<Delivery> handler;
+    private Consumer<ClientException> closeHandler;
 
     /**
      * Create a new ReceiverOptions instance with defaults set for all options.
@@ -128,6 +133,24 @@ public class ReceiverOptions extends LinkOptions<ReceiverOptions> implements Clo
         return this;
     }
 
+    public ReceiverOptions handler(Consumer<Delivery> handler) {
+        this.handler = handler;
+        return this;
+    }
+
+    public Consumer<Delivery> handler() {
+        return this.handler;
+    }
+
+    public ReceiverOptions closeHandler(Consumer<ClientException> closeHandler) {
+        this.closeHandler = closeHandler;
+        return this;
+    }
+
+    public Consumer<ClientException> closeHandler() {
+        return this.closeHandler;
+    }
+
     @Override
     public ReceiverOptions clone() {
         return copyInto(new ReceiverOptions());
@@ -148,6 +171,8 @@ public class ReceiverOptions extends LinkOptions<ReceiverOptions> implements Clo
         other.autoAccept(autoAccept);
         other.creditWindow(creditWindow);
         other.drainTimeout(drainTimeout);
+        other.handler(handler);
+        other.closeHandler(closeHandler);
 
         return other;
     }
