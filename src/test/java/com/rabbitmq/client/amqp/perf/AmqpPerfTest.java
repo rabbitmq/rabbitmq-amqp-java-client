@@ -17,10 +17,12 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.perf;
 
+import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestUtils;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector;
 import com.sun.net.httpserver.HttpServer;
@@ -33,7 +35,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +56,8 @@ public class AmqpPerfTest {
     PrintWriter out = new PrintWriter(System.out, true);
     PerformanceMetrics metrics = new PerformanceMetrics(registry, executorService, out);
 
-    //    String e = TestUtils.name(AmqpPerfTest.class, "main");
-    //    String q = TestUtils.name(AmqpPerfTest.class, "main");
-    String q = "qq";
+    String e = TestUtils.name(AmqpPerfTest.class, "main");
+    String q = TestUtils.name(AmqpPerfTest.class, "main");
     String rk = "foo";
     Environment environment = environmentBuilder().metricsCollector(collector).build();
     Connection connection = environment.connectionBuilder().build();
@@ -76,19 +76,18 @@ public class AmqpPerfTest {
             metrics.close();
             executorService.shutdownNow();
             shutdownLatch.countDown();
-            //            management.queueDeletion().delete(q);
-            //            management.exchangeDeletion().delete(e);
+            management.queueDeletion().delete(q);
+            management.exchangeDeletion().delete(e);
             management.close();
           }
         };
 
     Runtime.getRuntime().addShutdownHook(new Thread(shutdownSequence::run));
     try {
-      //      management.exchange().name(e).type(DIRECT).declare();
+      management.exchange().name(e).type(DIRECT).declare();
       management.queue().name(q).type(QUORUM).declare();
-      //      management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
+      management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
 
-      AtomicInteger count = new AtomicInteger(0);
       connection
           .consumerBuilder()
           .listeners(
@@ -102,17 +101,13 @@ public class AmqpPerfTest {
           .messageHandler(
               (context, message) -> {
                 context.accept();
-                if (count.incrementAndGet() == 1_000_000) {
-                  shutdownLatch.countDown();
+                try {
+                  long time = readLong(message.body());
+                  metrics.latency(System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
+                } catch (Exception ex) {
+                  // not able to read the body, maybe not a message from the
+                  // tool
                 }
-                //                try {
-                //                  long time = readLong(message.body());
-                //                  metrics.latency(System.currentTimeMillis() - time,
-                // TimeUnit.MILLISECONDS);
-                //                } catch (Exception ex) {
-                //                  // not able to read the body, maybe not a message from the
-                //                  // tool
-                //                }
               })
           .build();
 
@@ -122,13 +117,12 @@ public class AmqpPerfTest {
             Publisher publisher =
                 connection
                     .publisherBuilder()
-                    .queue(q)
-                    //                    .exchange(e)
-                    //                    .key(rk)
+                    .exchange(e)
+                    .key(rk)
                     .listeners(
                         context -> {
                           if (context.currentState() == Resource.State.OPEN) {
-                            //                            shouldPublish.set(true);
+                            shouldPublish.set(true);
                           } else {
                             if (context.currentState() == Resource.State.RECOVERING) {
                               LOGGER.info("Publisher is recovering...");
@@ -145,9 +139,6 @@ public class AmqpPerfTest {
                         System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
                   } catch (Exception ex) {
                     // not able to read the body, should not happen
-                  }
-                  if (count.incrementAndGet() == 1_000_000) {
-                    shutdownLatch.countDown();
                   }
                 };
             int msgSize = 10;

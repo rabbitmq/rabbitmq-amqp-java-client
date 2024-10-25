@@ -69,7 +69,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
   private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
-  private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+  private final ExecutorService dispatchingExecutorService;
   private final java.util.function.Consumer<Delivery> nativeHandler;
   private final java.util.function.Consumer<ClientException> nativeReceiverCloseHandler;
   // native receiver internal state, accessed only in the native executor/scheduler
@@ -99,10 +99,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
 
+    this.dispatchingExecutorService = connection.dispatchingExecutorService();
     this.nativeHandler = createNativeHandler(messageHandler);
     this.nativeReceiverCloseHandler =
         e ->
-            this.executorService.submit(
+            this.dispatchingExecutorService.submit(
                 () -> {
                   // get result to make spotbugs happy
                   boolean ignored = maybeCloseConsumerOnException(this, e);
@@ -228,7 +229,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     return delivery -> {
       this.unsettledMessageCount.incrementAndGet();
       this.metricsCollector.consume();
-      this.executorService.submit(
+      this.dispatchingExecutorService.submit(
           () -> {
             AmqpMessage message;
             try {
@@ -330,11 +331,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
-      try {
-        this.executorService.shutdownNow();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing consumer executor service");
-      }
       try {
         this.nativeReceiver.close();
         this.sessionHandler.close();
