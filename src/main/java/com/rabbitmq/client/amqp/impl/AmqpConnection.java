@@ -73,6 +73,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final String name;
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported;
+  private volatile ExecutorService dispatchingExecutorService;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -547,22 +548,21 @@ final class AmqpConnection extends ResourceBase implements Connection {
     if (check) {
       checkOpen();
     }
+
     Session result = this.nativeSession;
-    if (result == null) {
-      this.instanceLock.lock();
-      try {
-        result = this.nativeSession;
-        if (result == null) {
-          if (check) {
-            checkOpen();
-          }
-          this.nativeSession = result = this.openSession(this.nativeConnection);
-        }
-      } finally {
-        this.instanceLock.unlock();
-      }
+    if (result != null) {
+      return result;
     }
-    return result;
+
+    this.instanceLock.lock();
+    try {
+      if (this.nativeSession == null) {
+        this.nativeSession = this.openSession(this.nativeConnection);
+      }
+      return this.nativeSession;
+    } finally {
+      this.instanceLock.unlock();
+    }
   }
 
   private Session openSession(org.apache.qpid.protonj2.client.Connection connection) {
@@ -583,6 +583,27 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   ScheduledExecutorService scheduledExecutorService() {
     return this.environment.scheduledExecutorService();
+  }
+
+  ExecutorService dispatchingExecutorService() {
+    checkOpen();
+
+    ExecutorService result = this.dispatchingExecutorService;
+    if (result != null) {
+      return result;
+    }
+
+    this.instanceLock.lock();
+    try {
+      if (this.dispatchingExecutorService == null) {
+        this.dispatchingExecutorService =
+            Executors.newSingleThreadExecutor(
+                Utils.threadFactory("dispatching-" + this.name + "-"));
+      }
+      return this.dispatchingExecutorService;
+    } finally {
+      this.instanceLock.unlock();
+    }
   }
 
   Clock clock() {
@@ -713,6 +734,14 @@ final class AmqpConnection extends ResourceBase implements Connection {
       }
       for (AmqpConsumer consumer : this.consumers) {
         consumer.close();
+      }
+      try {
+        this.dispatchingExecutorService.shutdownNow();
+      } catch (Exception e) {
+        LOGGER.info(
+            "Error while shutting down dispatching executor service for connection '{}': {}",
+            this.name(),
+            e.getMessage());
       }
       try {
         org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;

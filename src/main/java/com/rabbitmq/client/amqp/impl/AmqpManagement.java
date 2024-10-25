@@ -82,7 +82,6 @@ class AmqpManagement implements Management {
   private final TopologyListener topologyListener;
   private final Supplier<String> nameSupplier;
   private final AtomicReference<State> state = new AtomicReference<>(CREATED);
-  //  private final AtomicBoolean initializing = new AtomicBoolean(false);
   private volatile boolean initializing = false;
   private final Lock initializationLock = new ReentrantLock();
   private final Duration receiveLoopIdleTimeout;
@@ -208,7 +207,7 @@ class AmqpManagement implements Management {
       if (!this.initializing) {
         try {
           initializationLock.lock();
-          if (!this.initializing) {
+          if (!this.initializing && this.state() != OPEN) {
             this.initializing = true;
             LOGGER.debug("Initializing management ({}).", this);
             this.state(UNAVAILABLE);

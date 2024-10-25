@@ -19,6 +19,7 @@ package org.apache.qpid.protonj2.client.impl;
 import java.lang.invoke.MethodHandles;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.apache.qpid.protonj2.client.Delivery;
 import org.apache.qpid.protonj2.client.Receiver;
@@ -31,7 +32,6 @@ import org.apache.qpid.protonj2.client.util.DeliveryQueue;
 import org.apache.qpid.protonj2.client.util.FifoDeliveryQueue;
 import org.apache.qpid.protonj2.engine.IncomingDelivery;
 import org.apache.qpid.protonj2.engine.Scheduler;
-import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.types.messaging.Accepted;
 import org.apache.qpid.protonj2.types.messaging.Released;
 import org.slf4j.Logger;
@@ -46,6 +46,8 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
 
     private final ReceiverOptions options;
     private final FifoDeliveryQueue deliveryQueue;
+    private final Consumer<Delivery> handler;
+    private final Consumer<ClientException> closeHandler;
 
     ClientReceiver(ClientSession session, ReceiverOptions options, String receiverId, org.apache.qpid.protonj2.engine.Receiver receiver) {
         super(session, receiverId, options, receiver);
@@ -58,6 +60,13 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
 
         deliveryQueue = new FifoDeliveryQueue(options.creditWindow());
         deliveryQueue.start();
+        if (options.handler() == null) {
+            this.handler = d -> deliveryQueue.enqueue((ClientDelivery) d);
+        } else {
+            this.handler = options.handler();
+        }
+
+        this.closeHandler = options.closeHandler() == null ? e ->  { } : options.closeHandler();
     }
 
     @Override
@@ -186,9 +195,19 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
 
         if (!delivery.isPartial()) {
             LOG.trace("{} has incoming Message(s).", this);
-            deliveryQueue.enqueue(new ClientDelivery(this, delivery));
+            this.handler.accept(new ClientDelivery(this, delivery));
         } else {
             delivery.claimAvailableBytes();
+        }
+    }
+
+    @Override
+    protected void linkSpecificCleanupHandler(ClientException failureCause) {
+        super.linkSpecificCleanupHandler(failureCause);
+        try {
+            this.closeHandler.accept(failureCause);
+        } catch (Exception e) {
+            LOG.warn("Error in close handler: {}", e.getMessage());
         }
     }
 
