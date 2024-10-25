@@ -35,7 +35,6 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   private ExecutorService executorService;
   private ScheduledExecutorService scheduledExecutorService;
   private ExecutorService publisherExecutorService;
-  private ExecutorService consumerExecutorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
   private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
 
@@ -82,15 +81,18 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   }
 
   /**
-   * Set executor service used for consumer loops.
+   * Deprecated, do not use anymore. Consumers do not use a polling loop anymore.
+   *
+   * <p>Set executor service used for consumer loops.
    *
    * <p>The library uses sensible defaults, override only in case of problems.
    *
    * @param consumerExecutorService the executor service
    * @return this builder instance
+   * @deprecated Do not use anymore
    */
+  @Deprecated(forRemoval = true)
   public AmqpEnvironmentBuilder consumerExecutorService(ExecutorService consumerExecutorService) {
-    this.consumerExecutorService = consumerExecutorService;
     return this;
   }
 
@@ -144,7 +146,6 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
         executorService,
         scheduledExecutorService,
         publisherExecutorService,
-        consumerExecutorService,
         connectionSettings,
         metricsCollector,
         observationCollector);

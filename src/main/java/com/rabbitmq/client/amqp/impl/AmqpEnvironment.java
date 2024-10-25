@@ -37,12 +37,10 @@ class AmqpEnvironment implements Environment {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final boolean internalExecutor;
   private final boolean internalScheduledExecutor;
-  private final boolean internalConsumerExecutor;
   private final boolean internalPublisherExecutor;
   private final ExecutorService executorService;
   private final ScheduledExecutorService scheduledExecutorService;
   private final ExecutorService publisherExecutorService;
-  private final ExecutorService consumerExecutorService;
   private final ConnectionManager connectionManager = new ConnectionManager(this);
   private final long id;
   private final Clock clock = new Clock();
@@ -58,7 +56,6 @@ class AmqpEnvironment implements Environment {
       ExecutorService executorService,
       ScheduledExecutorService scheduledExecutorService,
       ExecutorService publisherExecutorService,
-      ExecutorService consumerExecutorService,
       DefaultConnectionSettings<?> connectionSettings,
       MetricsCollector metricsCollector,
       ObservationCollector observationCollector) {
@@ -90,14 +87,6 @@ class AmqpEnvironment implements Environment {
     } else {
       this.publisherExecutorService = publisherExecutorService;
       this.internalPublisherExecutor = false;
-    }
-    if (consumerExecutorService == null) {
-      this.consumerExecutorService =
-          Executors.newCachedThreadPool(Utils.threadFactory(threadPrefix + "consumer-"));
-      this.internalConsumerExecutor = true;
-    } else {
-      this.consumerExecutorService = consumerExecutorService;
-      this.internalConsumerExecutor = false;
     }
     this.metricsCollector =
         metricsCollector == null ? NoOpMetricsCollector.INSTANCE : metricsCollector;
@@ -147,9 +136,6 @@ class AmqpEnvironment implements Environment {
       if (this.internalPublisherExecutor) {
         this.publisherExecutorService.shutdownNow();
       }
-      if (this.internalConsumerExecutor) {
-        this.consumerExecutorService.shutdownNow();
-      }
       if (this.clockRefreshFuture != null) {
         this.clockRefreshFuture.cancel(false);
       }
@@ -168,10 +154,6 @@ class AmqpEnvironment implements Environment {
 
   ExecutorService publisherExecutorService() {
     return this.publisherExecutorService;
-  }
-
-  ExecutorService consumerExecutorService() {
-    return this.consumerExecutorService;
   }
 
   ScheduledExecutorService scheduledExecutorService() {
