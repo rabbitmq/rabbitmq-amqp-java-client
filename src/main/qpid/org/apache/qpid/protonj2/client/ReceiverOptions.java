@@ -133,20 +133,47 @@ public class ReceiverOptions extends LinkOptions<ReceiverOptions> implements Clo
         return this;
     }
 
+    /**
+     * Behavior when a message is delivered.
+     *
+     * <p>The default is to add the delivery to an internal queue, which can be polled with the <code>
+     * receive</code> methods.
+     *
+     * <p>Setting a custom handler makes the <code>receive</code> methods ineffective.
+     *
+     * @param handler behavior for a new delivery
+     * @return this {@link ReceiverOptions} instance.
+     */
     public ReceiverOptions handler(Consumer<Delivery> handler) {
         this.handler = handler;
         return this;
     }
 
+    /**
+     * The configured message handler.
+     *
+     * @return the configured handler
+     */
     public Consumer<Delivery> handler() {
         return this.handler;
     }
 
+    /**
+     * Callback when the receiver is closed / shut down.
+     *
+     * @param closeHandler close / shutdown handler
+     * @return this {@link ReceiverOptions} instance.
+     */
     public ReceiverOptions closeHandler(Consumer<ClientException> closeHandler) {
         this.closeHandler = closeHandler;
         return this;
     }
 
+    /**
+     * Configured close / shutdown handler.
+     *
+     * @return the configured handler
+     */
     public Consumer<ClientException> closeHandler() {
         return this.closeHandler;
     }
