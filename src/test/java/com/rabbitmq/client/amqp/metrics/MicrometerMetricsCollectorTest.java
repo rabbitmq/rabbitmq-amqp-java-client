@@ -17,11 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.metrics;
 
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 public class MicrometerMetricsCollectorTest {
@@ -125,8 +127,29 @@ public class MicrometerMetricsCollectorTest {
     collector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
     collector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
 
-    assertThat(registry.scrape())
-        .contains("# TYPE rabbitmq_amqp_connections gauge")
-        .contains("rabbitmq_amqp_connections 1.0");
+    Stream.of(
+            "# TYPE rabbitmq_amqp_connections gauge",
+            "rabbitmq_amqp_connections 1.0",
+            "# TYPE rabbitmq_amqp_consumers gauge",
+            "rabbitmq_amqp_consumers 1.0",
+            "TYPE rabbitmq_amqp_publishers gauge",
+            "rabbitmq_amqp_publishers 1.0",
+            "# TYPE rabbitmq_amqp_published_total counter",
+            "rabbitmq_amqp_published_total 2.0",
+            "# TYPE rabbitmq_amqp_published_accepted_total counter",
+            "rabbitmq_amqp_published_accepted_total 1.0",
+            "# TYPE rabbitmq_amqp_published_rejected_total counter",
+            "rabbitmq_amqp_published_rejected_total 1.0",
+            "# TYPE rabbitmq_amqp_published_released_total counter",
+            "rabbitmq_amqp_published_released_total 1.0",
+            "# TYPE rabbitmq_amqp_consumed_total counter",
+            "rabbitmq_amqp_consumed_total 3.0",
+            "# TYPE rabbitmq_amqp_consumed_accepted_total counter",
+            "rabbitmq_amqp_consumed_accepted_total 1.0",
+            "# TYPE rabbitmq_amqp_consumed_discarded_total counter",
+            "rabbitmq_amqp_consumed_discarded_total 1.0",
+            "# TYPE rabbitmq_amqp_consumed_requeued_total counter",
+            "rabbitmq_amqp_consumed_requeued_total 1.0")
+        .forEach(expected -> waitAtMost(() -> registry.scrape().contains(expected)));
   }
 }
