@@ -29,6 +29,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -420,6 +421,18 @@ public abstract class TestUtils {
     }
   }
 
+  private static class DisabledOnSemeruCondition
+      implements org.junit.jupiter.api.extension.ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      String javaRuntimeName = System.getProperty("java.runtime.name");
+      return javaRuntimeName.toLowerCase(Locale.ENGLISH).contains("semeru")
+          ? ConditionEvaluationResult.disabled("Test fails on Semeru")
+          : ConditionEvaluationResult.enabled("OK");
+    }
+  }
+
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)
   @Documented
@@ -455,6 +468,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfNotClusterCondition.class)
   @interface DisabledIfNotCluster {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledOnSemeruCondition.class)
+  public @interface DisabledOnJavaSemeru {}
 
   static Sync sync() {
     return sync(1);

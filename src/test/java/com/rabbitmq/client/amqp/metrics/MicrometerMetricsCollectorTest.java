@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.metrics;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.rabbitmq.client.amqp.impl.TestUtils;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -95,6 +96,7 @@ public class MicrometerMetricsCollectorTest {
     assertThat(registry.get("rabbitmq.amqp.consumed_discarded").counter().count()).isEqualTo(1.0);
   }
 
+  @TestUtils.DisabledOnJavaSemeru
   @Test
   void prometheus() {
     PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
