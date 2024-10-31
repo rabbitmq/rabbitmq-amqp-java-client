@@ -51,9 +51,10 @@
         <assertj.version>3.26.3</assertj.version>
         <mockito.version>5.14.2</mockito.version>
         <jqwik.version>1.9.1</jqwik.version>
-        <amqp-client.version>5.20.0</amqp-client.version>
+        <amqp-client.version>5.22.0</amqp-client.version>
         <micrometer-tracing-test.version>1.4.0</micrometer-tracing-test.version>
         <micrometer-docs-generator.version>1.0.4</micrometer-docs-generator.version>
+        <jose4j.version>0.9.6</jose4j.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
@@ -235,6 +236,14 @@
             <version>${spotbugs.version}</version>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.bitbucket.b_c</groupId>
+            <artifactId>jose4j</artifactId>
+            <version>${jose4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+
 
     </dependencies>
 

@@ -99,7 +99,8 @@ public class ManagementTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void setToken(boolean isolateResources, TestInfo info) {
+  void sessionShouldGetClosedAfterPermissionsChangedAndSetTokenCalled(
+      boolean isolateResources, TestInfo info) {
     String username = "foo";
     String password = "bar";
     String vh = "/";
@@ -121,7 +122,10 @@ public class ManagementTest {
       Sync publisherClosedSync = sync();
       Sync consumerClosedSync = sync();
       Publisher p =
-          c.publisherBuilder().queue(q).listeners(closedListener(publisherClosedSync)).build();
+          c.publisherBuilder()
+              .queue(q)
+              .listeners(closedOnSecurityExceptionListener(publisherClosedSync))
+              .build();
       c.consumerBuilder()
           .queue(q)
           .messageHandler(
@@ -129,7 +133,7 @@ public class ManagementTest {
                 ctx.accept();
                 consumeSync.down();
               })
-          .listeners(closedListener(consumerClosedSync))
+          .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
           .build();
 
       p.publish(p.message(), ctx -> {});
@@ -149,7 +153,7 @@ public class ManagementTest {
     }
   }
 
-  private static Resource.StateListener closedListener(Sync sync) {
+  private static Resource.StateListener closedOnSecurityExceptionListener(Sync sync) {
     return context -> {
       if (context.currentState() == Resource.State.CLOSED
           && context.failureCause() instanceof AmqpException.AmqpSecurityException) {

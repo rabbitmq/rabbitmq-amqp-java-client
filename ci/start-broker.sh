@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-rabbitmq:4.0}
+RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-pivotalrabbitmq/rabbitmq:amqp-token-renew}
 
 wait_for_message() {
   while ! docker logs "$1" | grep -q "$2";
@@ -17,7 +17,7 @@ cp -R "${PWD}"/tls-gen/basic/result/* rabbitmq-configuration/tls
 chmod o+r rabbitmq-configuration/tls/*
 chmod g+r rabbitmq-configuration/tls/*
 
-echo "[rabbitmq_auth_mechanism_ssl]." >> rabbitmq-configuration/enabled_plugins
+echo "[rabbitmq_auth_mechanism_ssl,rabbitmq_auth_backend_oauth2]." >> rabbitmq-configuration/enabled_plugins
 
 echo "loopback_users = none
 
@@ -34,7 +34,24 @@ ssl_options.depth = 1
 
 auth_mechanisms.1 = PLAIN
 auth_mechanisms.2 = ANONYMOUS
-auth_mechanisms.3 = EXTERNAL" >> rabbitmq-configuration/rabbitmq.conf
+auth_mechanisms.3 = EXTERNAL
+
+auth_backends.1 = internal
+auth_backends.2 = rabbit_auth_backend_oauth2" >> rabbitmq-configuration/rabbitmq.conf
+
+echo "[
+  {rabbitmq_auth_backend_oauth2, [{key_config,
+         [{signing_keys,
+              #{<<\"token-key\">> =>
+                    {map,
+                        #{<<\"alg\">> => <<\"HS256\">>,
+                          <<\"k\">> => <<\"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH\">>,
+                          <<\"kid\">> => <<\"token-key\">>,
+                          <<\"kty\">> => <<\"oct\">>,
+                          <<\"use\">> => <<\"sig\">>,
+                          <<\"value\">> => <<\"token-key\">>}}}}]},
+     {resource_server_id,<<\"rabbitmq\">>}]}
+]." >> rabbitmq-configuration/advanced.config
 
 echo "Running RabbitMQ ${RABBITMQ_IMAGE}"
 
