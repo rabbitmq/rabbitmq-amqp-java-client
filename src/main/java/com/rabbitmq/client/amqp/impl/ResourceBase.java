@@ -28,6 +28,7 @@ abstract class ResourceBase implements Resource {
 
   private final AtomicReference<State> state = new AtomicReference<>();
   private final StateEventSupport stateEventSupport;
+  private volatile Throwable closeReason;
 
   ResourceBase(List<StateListener> listeners) {
     this.stateEventSupport = new StateEventSupport(listeners);
@@ -36,7 +37,9 @@ abstract class ResourceBase implements Resource {
 
   protected void checkOpen() {
     State state = this.state.get();
-    if (state == CLOSED) {
+    if (state != OPEN && this.closeReason instanceof AmqpException) {
+      throw (AmqpException) this.closeReason;
+    } else if (state == CLOSED) {
       throw new AmqpException.AmqpResourceClosedException("Resource is closed");
     } else if (state != OPEN) {
       throw new AmqpException.AmqpResourceInvalidStateException(
@@ -55,6 +58,9 @@ abstract class ResourceBase implements Resource {
   protected void state(Resource.State state, Throwable failureCause) {
     Resource.State previousState = this.state.getAndSet(state);
     if (state != previousState) {
+      if ((state == CLOSING || state == CLOSED) && this.closeReason == null) {
+        this.closeReason = failureCause;
+      }
       this.dispatch(previousState, state, failureCause);
     }
   }
