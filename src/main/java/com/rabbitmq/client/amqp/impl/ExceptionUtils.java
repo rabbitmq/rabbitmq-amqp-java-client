@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.AmqpException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.*;
@@ -67,19 +68,13 @@ abstract class ExceptionUtils {
       return new AmqpException.AmqpSecurityException(message, e);
     } else if (isNetworkError(e)) {
       return new AmqpException.AmqpConnectionException(e.getMessage(), e);
-    } else if (e instanceof ClientSessionRemotelyClosedException) {
+    } else if (e instanceof ClientSessionRemotelyClosedException
+        || e instanceof ClientLinkRemotelyClosedException) {
       ErrorCondition errorCondition =
-          ((ClientSessionRemotelyClosedException) e).getErrorCondition();
+          ((ClientResourceRemotelyClosedException) e).getErrorCondition();
       if (isUnauthorizedAccess(errorCondition)) {
         return new AmqpException.AmqpSecurityException(e.getMessage(), e);
       } else if (isNotFound(errorCondition)) {
-        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
-      } else {
-        return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
-      }
-    } else if (e instanceof ClientLinkRemotelyClosedException) {
-      ErrorCondition errorCondition = ((ClientLinkRemotelyClosedException) e).getErrorCondition();
-      if (isNotFound(errorCondition)) {
         return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else if (isResourceDeleted(errorCondition)) {
         return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
@@ -109,6 +104,10 @@ abstract class ExceptionUtils {
         && "amqp:not-found".equals(e.getErrorCondition().condition());
   }
 
+  static boolean unauthorizedAccess(ClientResourceRemotelyClosedException e) {
+    return isUnauthorizedAccess(e.getErrorCondition());
+  }
+
   private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {
     return errorConditionEquals(errorCondition, ERROR_UNAUTHORIZED_ACCESS);
   }
@@ -131,6 +130,18 @@ abstract class ExceptionUtils {
       if (message != null) {
         message = message.toLowerCase();
         return message.contains("connection reset") || message.contains("connection refused");
+      }
+    }
+    return false;
+  }
+
+  static boolean maybeCloseConsumerOnException(Consumer<Throwable> closing, Exception ex) {
+    if (ex instanceof ClientLinkRemotelyClosedException
+        || ex instanceof ClientSessionRemotelyClosedException) {
+      ClientResourceRemotelyClosedException e = (ClientResourceRemotelyClosedException) ex;
+      if (notFound(e) || resourceDeleted(e) || unauthorizedAccess(e)) {
+        closing.accept(ExceptionUtils.convert(e));
+        return true;
       }
     }
     return false;
