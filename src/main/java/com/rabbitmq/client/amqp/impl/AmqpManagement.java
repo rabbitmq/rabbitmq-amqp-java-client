@@ -22,6 +22,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -38,6 +39,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosed
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
+import org.apache.qpid.protonj2.types.Binary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,6 +169,24 @@ class AmqpManagement implements Management {
   public UnbindSpecification unbind() {
     checkAvailable();
     return new AmqpBindingManagement.AmqpUnbindSpecification(this);
+  }
+
+  void setToken(String token) {
+    checkAvailable();
+    UUID requestId = messageId();
+    try {
+      Message<?> request =
+          Message.create(new Binary(token.getBytes(StandardCharsets.UTF_8)))
+              .to("/auth/tokens")
+              .subject("PUT");
+
+      OutstandingRequest outstandingRequest = this.request(request, requestId);
+      outstandingRequest.block();
+
+      checkResponse(outstandingRequest, requestId, 204);
+    } catch (ClientException e) {
+      throw new AmqpException("Error on set-token operation", e);
+    }
   }
 
   @Override
