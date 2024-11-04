@@ -70,6 +70,7 @@ public abstract class TestUtils {
       T previousValue = call.get();
       try {
         Thread.sleep(waitTime.toMillis());
+        waitedTime = waitedTime.plus(waitTime);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RuntimeException(e);
