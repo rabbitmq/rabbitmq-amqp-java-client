@@ -41,7 +41,7 @@ public class AuthorizationTest {
   String name;
 
   @BeforeAll
-  static void initAll() throws Exception {
+  static void initAll() {
     addVhost(VH);
     addUser(USERNAME, PASSWORD);
     setPermissions(USERNAME, VH, "^amqp.*$");

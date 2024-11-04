@@ -331,6 +331,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 "Not recovering connection '{}' for error {}",
                 this.name(),
                 event.failureCause().getMessage());
+            close(ExceptionUtils.convert(ioex));
           }
         };
 
@@ -730,10 +731,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
         rpcServer.close();
       }
       for (AmqpPublisher publisher : this.publishers) {
-        publisher.close();
+        publisher.close(cause);
       }
       for (AmqpConsumer consumer : this.consumers) {
-        consumer.close();
+        consumer.close(cause);
       }
       try {
         this.dispatchingExecutorService.shutdownNow();

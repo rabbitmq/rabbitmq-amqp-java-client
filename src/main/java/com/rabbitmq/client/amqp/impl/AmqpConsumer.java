@@ -328,7 +328,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void close(Throwable cause) {
+  void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);

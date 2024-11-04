@@ -25,7 +25,7 @@ jobs:
       - name: Start broker
         run: ci/start-broker.sh
         env:
-          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:amqp-token-renew'
+          RABBITMQ_IMAGE: 'pivotalrabbitmq/rabbitmq:main'
       - name: Start toxiproxy
         run: ci/start-toxiproxy.sh
       - name: Display Java version

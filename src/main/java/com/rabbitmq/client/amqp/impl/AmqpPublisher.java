@@ -205,7 +205,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private void close(Throwable cause) {
+  void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(State.CLOSING, cause);
       this.connection.removePublisher(this);

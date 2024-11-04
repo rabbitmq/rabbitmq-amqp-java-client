@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.Cli.*;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
+import static com.rabbitmq.client.amqp.impl.TestUtils.closedOnSecurityExceptionListener;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -151,14 +152,5 @@ public class ManagementTest {
       this.connection.management().queueDeletion().delete(q);
       deleteUser(username);
     }
-  }
-
-  private static Resource.StateListener closedOnSecurityExceptionListener(Sync sync) {
-    return context -> {
-      if (context.currentState() == Resource.State.CLOSED
-          && context.failureCause() instanceof AmqpException.AmqpSecurityException) {
-        sync.down();
-      }
-    };
   }
 }
