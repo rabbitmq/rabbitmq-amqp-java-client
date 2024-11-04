@@ -172,6 +172,9 @@ class AmqpManagement implements Management {
   }
 
   void setToken(String token) {
+    if (!this.connection.setTokenSupported()) {
+      throw new UnsupportedOperationException("Token renewal requires at least RabbitMQ 4.1.0");
+    }
     checkAvailable();
     UUID requestId = messageId();
     try {
