@@ -212,8 +212,9 @@ final class Utils {
     }
     // compare first non-equal ordinal number
     if (i < vals1.length && i < vals2.length) {
-      int diff = Integer.valueOf(vals1[i]).compareTo(Integer.valueOf(vals2[i]));
-      return Integer.signum(diff);
+      Integer val1 = Integer.valueOf(vals1[i]);
+      Integer val2 = Integer.valueOf(vals2[i]);
+      return val1.compareTo(val2);
     }
     // the strings are equal or one string is a substring of the other
     // e.g. "1.2.3" = "1.2.3" or "1.2.3" < "1.2.3.4"
