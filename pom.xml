@@ -69,7 +69,7 @@
         <spotbugs.version>4.8.6</spotbugs.version>
         <buildnumber.plugin.version>3.2.1</buildnumber.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
-        <asciidoctor.maven.plugin.version>3.1.0</asciidoctor.maven.plugin.version>
+        <asciidoctor.maven.plugin.version>3.1.1</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj.diagram.version>2.3.1</asciidoctorj.diagram.version>
         <maven.javadoc.skip>true</maven.javadoc.skip>
