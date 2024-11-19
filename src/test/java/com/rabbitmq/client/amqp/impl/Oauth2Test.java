@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.lang.System.currentTimeMillis;
 import static java.time.Duration.ofMillis;
@@ -25,6 +26,7 @@ import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfOauth2AuthBackendNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
@@ -48,7 +50,7 @@ public class Oauth2Test {
   Environment environment;
 
   @Test
-  void expiredTokenShouldFail() throws Exception {
+  void expiredTokenShouldFail() throws JoseException {
     String expiredToken = token(currentTimeMillis() - 1000);
     assertThatThrownBy(
             () -> environment.connectionBuilder().username("").password(expiredToken).build())
@@ -56,14 +58,15 @@ public class Oauth2Test {
   }
 
   @Test
-  void validTokenShouldSucceed() throws Exception {
+  void validTokenShouldSucceed() throws JoseException {
     String validToken = token(currentTimeMillis() + Duration.ofMinutes(10).toMillis());
     try (Connection ignored =
         environment.connectionBuilder().username("").password(validToken).build()) {}
   }
 
   @Test
-  void connectionShouldBeClosedWhenTokenExpires(TestInfo info) throws Exception {
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void connectionShouldBeClosedWhenTokenExpires(TestInfo info) throws JoseException {
     String q = TestUtils.name(info);
     long expiry = currentTimeMillis() + ofSeconds(2).toMillis();
     String token = token(expiry);
