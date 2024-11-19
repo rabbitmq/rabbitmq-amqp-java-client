@@ -43,7 +43,8 @@ public class PlainMechanism extends AbstractMechanism {
 
     @Override
     public boolean isApplicable(SaslCredentialsProvider credentials) {
-        return credentials.username() != null && credentials.password() != null;
+        return credentials.username() != null &&
+               credentials.password() != null && !credentials.password().isEmpty();
     }
 
     @Override
