@@ -182,12 +182,11 @@ abstract class Cli {
     rabbitmqctl("add_vhost " + vhost);
   }
 
-  public static void addUser(String username, String password) throws IOException {
+  public static void addUser(String username, String password) {
     rabbitmqctl(format("add_user %s %s", username, password));
   }
 
-  public static void setPermissions(String username, String vhost, String permission)
-      throws IOException {
+  public static void setPermissions(String username, String vhost, String permission) {
     setPermissions(username, vhost, asList(permission, permission, permission));
   }
 

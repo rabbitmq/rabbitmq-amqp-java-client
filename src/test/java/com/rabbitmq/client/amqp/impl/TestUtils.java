@@ -21,6 +21,8 @@ import static java.lang.String.format;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.fail;
 
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Resource;
 import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
 import java.io.IOException;
@@ -82,6 +84,15 @@ public abstract class TestUtils {
     }
     fail("Value did not stabilize in %s, last value was %s", timeout, newValue);
     return null;
+  }
+
+  static Resource.StateListener closedOnSecurityExceptionListener(Sync sync) {
+    return context -> {
+      if (context.currentState() == Resource.State.CLOSED
+          && context.failureCause() instanceof AmqpException.AmqpSecurityException) {
+        sync.down();
+      }
+    };
   }
 
   @FunctionalInterface
@@ -405,6 +416,16 @@ public abstract class TestUtils {
     }
   }
 
+  private static class DisabledIfOauth2AuthBackendNotEnabledCondition
+      extends DisabledIfPluginNotEnabledCondition {
+
+    DisabledIfOauth2AuthBackendNotEnabledCondition() {
+      super(
+          "OAuth2 authentication backend",
+          output -> output.contains("rabbitmq_auth_backend_oauth2"));
+    }
+  }
+
   static class DisabledIfNotClusterCondition implements ExecutionCondition {
 
     private static final String KEY = "isCluster";
@@ -463,6 +484,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfAuthMechanismSslNotEnabledCondition.class)
   @interface DisabledIfAuthMechanismSslNotEnabled {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfOauth2AuthBackendNotEnabledCondition.class)
+  @interface DisabledIfOauth2AuthBackendNotEnabled {}
 
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)

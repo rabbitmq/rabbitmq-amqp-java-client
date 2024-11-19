@@ -21,6 +21,7 @@ import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
@@ -49,11 +50,13 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
 
     private final Deque<ClientOutgoingEnvelope> blocked = new ArrayDeque<>();
     private final SenderOptions options;
+    private final Consumer<ClientException> closeHandler;
 
     ClientSender(ClientSession session, SenderOptions options, String senderId, org.apache.qpid.protonj2.engine.Sender protonSender) {
         super(session, senderId, options, protonSender);
 
         this.options = new SenderOptions(options);
+        this.closeHandler = options.closeHandler() == null ? e ->  { } : options.closeHandler();
     }
 
     @Override
@@ -207,6 +210,11 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
             failPendingUnsettledAndBlockedSends(failureCause);
         } else {
             failPendingUnsettledAndBlockedSends(new ClientResourceRemotelyClosedException("The sender link has closed"));
+        }
+        try {
+            this.closeHandler.accept(failureCause);
+        } catch (Exception e) {
+            LOG.warn("Error in close handler: {}", e.getMessage());
         }
     }
 

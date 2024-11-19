@@ -233,6 +233,10 @@ final class Utils {
     return is4_1_OrMore(brokerVersion);
   }
 
+  static boolean supportSetToken(String brokerVersion) {
+    return is4_1_OrMore(brokerVersion);
+  }
+
   static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {
 
     private final String address;

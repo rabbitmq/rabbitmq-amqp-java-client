@@ -18,19 +18,27 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.Cli.*;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
+import static com.rabbitmq.client.amqp.impl.TestUtils.closedOnSecurityExceptionListener;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.AmqpException;
-import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
+import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
 public class ManagementTest {
 
+  Environment environment;
   AmqpConnection connection;
   AmqpManagement management;
 
@@ -87,5 +95,62 @@ public class ManagementTest {
     assertThat(management.hasReceiveLoop()).isTrue();
     assertThat(management.queueInfo(info1.name())).hasName(info1.name());
     assertThat(management.queueInfo(info2.name())).hasName(info2.name());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void sessionShouldGetClosedAfterPermissionsChangedAndSetTokenCalled(
+      boolean isolateResources, TestInfo info) {
+    String username = "foo";
+    String password = "bar";
+    String vh = "/";
+    String q = TestUtils.name(info);
+
+    Connection c = null;
+    try {
+      addUser(username, password);
+      setPermissions(username, vh, ".*");
+      this.connection.management().queue(q).declare();
+
+      c =
+          ((AmqpConnectionBuilder) environment.connectionBuilder())
+              .isolateResources(isolateResources)
+              .username(username)
+              .password(password)
+              .build();
+      Sync consumeSync = sync();
+      Sync publisherClosedSync = sync();
+      Sync consumerClosedSync = sync();
+      Publisher p =
+          c.publisherBuilder()
+              .queue(q)
+              .listeners(closedOnSecurityExceptionListener(publisherClosedSync))
+              .build();
+      c.consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
+          .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
+          .build();
+
+      p.publish(p.message(), ctx -> {});
+      assertThat(consumeSync).completes();
+
+      setPermissions(username, vh, "foobar");
+      AmqpManagement m = (AmqpManagement) c.management();
+      m.setToken(password);
+      assertThat(publisherClosedSync).completes();
+      assertThat(consumerClosedSync).completes();
+    } finally {
+      if (c != null) {
+        c.close();
+      }
+      this.connection.management().queueDeletion().delete(q);
+      deleteUser(username);
+    }
   }
 }

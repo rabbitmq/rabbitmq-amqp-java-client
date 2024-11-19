@@ -17,8 +17,10 @@
 package org.apache.qpid.protonj2.client;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
 import org.apache.qpid.protonj2.engine.DeliveryTagGenerator;
 
@@ -28,6 +30,7 @@ import org.apache.qpid.protonj2.engine.DeliveryTagGenerator;
 public class SenderOptions extends LinkOptions<SenderOptions> implements Cloneable {
 
     private long sendTimeout = ConnectionOptions.DEFAULT_SEND_TIMEOUT;
+    private Consumer<ClientException> closeHandler;
 
     private Supplier<DeliveryTagGenerator> tagGeneratorSupplier;
 
@@ -87,6 +90,26 @@ public class SenderOptions extends LinkOptions<SenderOptions> implements Cloneab
     public SenderOptions sendTimeout(long timeout, TimeUnit units) {
         this.sendTimeout = units.toMillis(timeout);
         return this;
+    }
+
+    /**
+     * Callback when the sender is closed / shut down.
+     *
+     * @param closeHandler close / shutdown handler
+     * @return this {@link SenderOptions} instance.
+     */
+    public SenderOptions closeHandler(Consumer<ClientException> closeHandler) {
+        this.closeHandler = closeHandler;
+        return this;
+    }
+
+    /**
+     * Configured close / shutdown handler.
+     *
+     * @return the configured handler
+     */
+    public Consumer<ClientException> closeHandler() {
+        return this.closeHandler;
     }
 
     @Override

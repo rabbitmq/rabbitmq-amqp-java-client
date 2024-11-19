@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
 import static com.rabbitmq.client.amqp.impl.AmqpConsumerBuilder.*;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.*;
 import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 
@@ -71,7 +72,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
   private final ExecutorService dispatchingExecutorService;
   private final java.util.function.Consumer<Delivery> nativeHandler;
-  private final java.util.function.Consumer<ClientException> nativeReceiverCloseHandler;
+  private final java.util.function.Consumer<ClientException> nativeCloseHandler;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private volatile Scheduler protonExecutor;
@@ -101,7 +102,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     this.dispatchingExecutorService = connection.dispatchingExecutorService();
     this.nativeHandler = createNativeHandler(messageHandler);
-    this.nativeReceiverCloseHandler =
+    this.nativeCloseHandler =
         e ->
             this.dispatchingExecutorService.submit(
                 () -> {
@@ -116,7 +117,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.filters,
             this.subscriptionListener,
             this.nativeHandler,
-            this.nativeReceiverCloseHandler);
+            this.nativeCloseHandler);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
     try {
@@ -277,8 +278,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             messageHandler.handle(context, message);
           }
         }
-      } catch (ClientLinkRemotelyClosedException e) {
-        if (ExceptionUtils.notFound(e) || ExceptionUtils.resourceDeleted(e)) {
+      } catch (ClientLinkRemotelyClosedException | ClientSessionRemotelyClosedException e) {
+        if (notFound(e) || resourceDeleted(e) || unauthorizedAccess(e)) {
           this.close(ExceptionUtils.convert(e));
         }
       } catch (ClientConnectionRemotelyClosedException e) {
@@ -304,7 +305,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.filters,
                     this.subscriptionListener,
                     this.nativeHandler,
-                    this.nativeReceiverCloseHandler),
+                    this.nativeCloseHandler),
             e -> {
               boolean shouldRetry =
                   e instanceof AmqpException.AmqpResourceClosedException
@@ -327,7 +328,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void close(Throwable cause) {
+  void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
@@ -533,13 +534,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
-    if (ex instanceof ClientLinkRemotelyClosedException) {
-      ClientLinkRemotelyClosedException e = (ClientLinkRemotelyClosedException) ex;
-      if (ExceptionUtils.notFound(e) || ExceptionUtils.resourceDeleted(e)) {
-        consumer.close(ExceptionUtils.convert(e));
-        return true;
-      }
-    }
-    return false;
+    return ExceptionUtils.maybeCloseConsumerOnException(consumer::close, ex);
   }
 }

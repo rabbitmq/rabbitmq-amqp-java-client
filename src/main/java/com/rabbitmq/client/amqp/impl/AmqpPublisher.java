@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -53,6 +54,8 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final Duration publishTimeout;
   private final SessionHandler sessionHandler;
   private volatile ObservationCollector.ConnectionInfo connectionInfo;
+  private final ExecutorService dispatchingExecutorService;
+  private final java.util.function.Consumer<ClientException> nativeCloseHandler;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
     super(builder.listeners());
@@ -63,7 +66,17 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.connection = builder.connection();
     this.publishTimeout = builder.publishTimeout();
     this.sessionHandler = this.connection.createSessionHandler();
-    this.sender = this.createSender(sessionHandler.session(), this.address, this.publishTimeout);
+    this.dispatchingExecutorService = connection.dispatchingExecutorService();
+    this.nativeCloseHandler =
+        e ->
+            this.dispatchingExecutorService.submit(
+                () -> {
+                  // get result to make spotbugs happy
+                  boolean ignored = maybeCloseConsumerOnException(this, e);
+                });
+    this.sender =
+        this.createSender(
+            sessionHandler.session(), this.address, this.publishTimeout, this.nativeCloseHandler);
     this.metricsCollector = this.connection.metricsCollector();
     this.observationCollector = this.connection.observationCollector();
     this.state(OPEN);
@@ -154,7 +167,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   void recoverAfterConnectionFailure() {
     this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
     this.sender =
-        this.createSender(this.sessionHandler.sessionNoCheck(), this.address, this.publishTimeout);
+        this.createSender(
+            this.sessionHandler.sessionNoCheck(),
+            this.address,
+            this.publishTimeout,
+            this.nativeCloseHandler);
   }
 
   @Override
@@ -164,14 +181,19 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
   // internal API
 
-  private Sender createSender(Session session, String address, Duration publishTimeout) {
+  private Sender createSender(
+      Session session,
+      String address,
+      Duration publishTimeout,
+      Consumer<ClientException> nativeCloseHandler) {
     SenderOptions senderOptions =
         new SenderOptions()
             .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
             .sendTimeout(
                 publishTimeout.isNegative()
                     ? ConnectionOptions.INFINITE
-                    : publishTimeout.toMillis());
+                    : publishTimeout.toMillis())
+            .closeHandler(nativeCloseHandler);
     try {
       Sender s =
           address == null
@@ -183,7 +205,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private void close(Throwable cause) {
+  void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(State.CLOSING, cause);
       this.connection.removePublisher(this);
@@ -196,6 +218,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
       this.state(State.CLOSED, cause);
       this.metricsCollector.closePublisher();
     }
+  }
+
+  private static boolean maybeCloseConsumerOnException(AmqpPublisher publisher, Exception ex) {
+    return ExceptionUtils.maybeCloseConsumerOnException(publisher::close, ex);
   }
 
   private static class DefaultContext implements Publisher.Context {
