@@ -64,38 +64,40 @@ public class UtilsTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-  "3.13.6",
-  "3.13.6.2",
-  "3.13.6-alpha.0",
-  "3.13.6~beta-1",
-  "3.13.6+funky-metadata-1",
-  "4.0.6",
-  "4.0.6.9",
-  "4.0.6-alpha.0",
-  "4.0.6~beta-1",
-  "4.0.6+funky-metadata-1"
-  })
+  @ValueSource(
+      strings = {
+        "3.13.6",
+        "3.13.6.2",
+        "3.13.6-alpha.0",
+        "3.13.6~beta-1",
+        "3.13.6+funky-metadata-1",
+        "4.0.6",
+        "4.0.6.9",
+        "4.0.6-alpha.0",
+        "4.0.6~beta-1",
+        "4.0.6+funky-metadata-1"
+      })
   void validateBrokerVersionParsing4AndEarlier(String brokerVersion) {
-      assertThat(Utils.is4_1_OrMore(brokerVersion)).isFalse();
-      assertThat(Utils.supportFilterExpressions(brokerVersion)).isFalse();
+    assertThat(Utils.is4_1_OrMore(brokerVersion)).isFalse();
+    assertThat(Utils.supportFilterExpressions(brokerVersion)).isFalse();
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-  "4.1.6",
-  "4.1.6.9",
-  "4.1.6-alpha.0",
-  "4.1.6~beta-1",
-  "4.1.6+funky-metadata-1",
-  "4.2.6",
-  "4.2.6.9",
-  "4.2.6-alpha.0",
-  "4.2.6~beta-1",
-  "4.2.6+funky-metadata-1"
-  })
+  @ValueSource(
+      strings = {
+        "4.1.6",
+        "4.1.6.9",
+        "4.1.6-alpha.0",
+        "4.1.6~beta-1",
+        "4.1.6+funky-metadata-1",
+        "4.2.6",
+        "4.2.6.9",
+        "4.2.6-alpha.0",
+        "4.2.6~beta-1",
+        "4.2.6+funky-metadata-1"
+      })
   void validateBrokerVersionParsing41AndLater(String brokerVersion) {
-      assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
-      assertThat(Utils.supportFilterExpressions(brokerVersion)).isTrue();
+    assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
+    assertThat(Utils.supportFilterExpressions(brokerVersion)).isTrue();
   }
 }
