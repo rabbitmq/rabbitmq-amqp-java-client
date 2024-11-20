@@ -180,8 +180,7 @@ public class ConsumerOutcomeTest {
   }
 
   @Test
-  void
-      discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured() {
+  void discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured() {
     declareDeadLetterTopology();
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
     this.connection
