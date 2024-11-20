@@ -130,9 +130,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
             ConnectionUtils.NO_RETRY_STRATEGY,
             this.name());
     this.sync(ncw);
-    String brokerVesion = brokerVersion(this.nativeConnection);
-    this.filterExpressionsSupported = supportFilterExpressions(brokerVesion);
-    this.setTokenSupported = supportSetToken(brokerVesion);
+    String brokerVersion = brokerVersion(this.nativeConnection);
+    this.filterExpressionsSupported = supportFilterExpressions(brokerVersion);
+    this.setTokenSupported = supportSetToken(brokerVersion);
     LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
