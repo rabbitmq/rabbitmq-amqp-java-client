@@ -65,7 +65,7 @@
         <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
         <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <spotless.version>2.43.0</spotless.version>
-        <google-java-format.version>1.24.0</google-java-format.version>
+        <google-java-format.version>1.25.0</google-java-format.version>
         <spotbugs-maven-plugin.version>4.8.6.6</spotbugs-maven-plugin.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <buildnumber.plugin.version>3.2.1</buildnumber.plugin.version>
