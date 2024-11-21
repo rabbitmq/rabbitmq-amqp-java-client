@@ -76,6 +76,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ExecutorService dispatchingExecutorService;
+  private final Credentials credentials;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -114,6 +115,14 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.affinityStrategy = null;
     }
     this.management = createManagement();
+    if (this.connectionSettings.credentialsProvider()
+        instanceof UsernamePasswordCredentialsProvider) {
+      UsernamePasswordCredentialsProvider credentialsProvider =
+          (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
+      this.credentials = new UsernamePasswordCredentials(credentialsProvider);
+    } else {
+      this.credentials = callback -> {};
+    }
     LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
@@ -190,12 +199,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
-    if (connectionSettings.credentialsProvider() instanceof UsernamePasswordCredentialsProvider) {
-      UsernamePasswordCredentialsProvider credentialsProvider =
-          (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
-      connectionOptions.user(credentialsProvider.getUsername());
-      connectionOptions.password(credentialsProvider.getPassword());
-    }
+    credentials.configure(new TokenConnectionCallback(connectionOptions));
     connectionOptions.virtualHost("vhost:" + connectionSettings.virtualHost());
     connectionOptions.saslOptions().addAllowedMechanism(connectionSettings.saslMechanism());
     connectionOptions.idleTimeout(
@@ -806,5 +810,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
   @Override
   public int hashCode() {
     return Objects.hashCode(id);
+  }
+
+  private static class TokenConnectionCallback implements Credentials.ConnectionCallback {
+
+    private final ConnectionOptions options;
+
+    private TokenConnectionCallback(ConnectionOptions options) {
+      this.options = options;
+    }
+
+    @Override
+    public Credentials.ConnectionCallback username(String username) {
+      options.user(username);
+      return this;
+    }
+
+    @Override
+    public Credentials.ConnectionCallback password(String password) {
+      options.password(password);
+      return this;
+    }
   }
 }

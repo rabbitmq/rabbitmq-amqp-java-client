@@ -210,7 +210,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
       this.state(State.CLOSING, cause);
       this.connection.removePublisher(this);
       try {
-        this.sender.close();
+        if (this.sender != null) {
+          this.sender.close();
+        }
         this.sessionHandler.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing sender", e);

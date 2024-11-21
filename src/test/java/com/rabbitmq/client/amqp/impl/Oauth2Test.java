@@ -17,10 +17,12 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.ConnectionSettings.SASL_MECHANISM_PLAIN;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.lang.System.currentTimeMillis;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,15 +31,25 @@ import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfOauth2AuthBackendNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import com.rabbitmq.client.amqp.oauth.HttpTokenRequester;
+import com.rabbitmq.client.amqp.oauth.Token;
+import com.rabbitmq.client.amqp.oauth.TokenParser;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpServer;
+import java.io.OutputStream;
 import java.time.Duration;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
-import org.jose4j.base64url.Base64;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.NumericDate;
+import org.jose4j.jwt.consumer.JwtConsumer;
+import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.keys.HmacKey;
 import org.jose4j.lang.JoseException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
@@ -46,11 +58,40 @@ import org.junit.jupiter.api.TestInfo;
 public class Oauth2Test {
 
   private static final String BASE64_KEY = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH";
-
+  private static final HmacKey KEY = new HmacKey(Base64.getDecoder().decode(BASE64_KEY));
   Environment environment;
+  HttpServer server;
+
+  private static String token(long expirationTime) {
+    JwtClaims claims = new JwtClaims();
+    claims.setIssuer("unit_test");
+    claims.setAudience("rabbitmq");
+    claims.setExpirationTime(NumericDate.fromMilliseconds(expirationTime));
+    claims.setStringListClaim(
+        "scope", List.of("rabbitmq.configure:*/*", "rabbitmq.write:*/*", "rabbitmq.read:*/*"));
+
+    JsonWebSignature signature = new JsonWebSignature();
+
+    signature.setKeyIdHeaderValue("token-key");
+    signature.setAlgorithmHeaderValue(AlgorithmIdentifiers.HMAC_SHA256);
+    signature.setKey(KEY);
+    signature.setPayload(claims.toJson());
+    try {
+      return signature.getCompactSerialization();
+    } catch (JoseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @AfterEach
+  void tearDown() {
+    if (this.server != null) {
+      server.stop(0);
+    }
+  }
 
   @Test
-  void expiredTokenShouldFail() throws JoseException {
+  void expiredTokenShouldFail() {
     String expiredToken = token(currentTimeMillis() - 1000);
     assertThatThrownBy(
             () -> environment.connectionBuilder().username("").password(expiredToken).build())
@@ -58,7 +99,7 @@ public class Oauth2Test {
   }
 
   @Test
-  void validTokenShouldSucceed() throws JoseException {
+  void validTokenShouldSucceed() {
     String validToken = token(currentTimeMillis() + Duration.ofMinutes(10).toMillis());
     try (Connection ignored =
         environment.connectionBuilder().username("").password(validToken).build()) {}
@@ -113,23 +154,75 @@ public class Oauth2Test {
     assertThat(consumerClosedSync).completes();
   }
 
-  private static String token(long expirationTime) throws JoseException {
-    JwtClaims claims = new JwtClaims();
-    claims.setIssuer("unit_test");
-    claims.setAudience("rabbitmq");
-    claims.setExpirationTime(NumericDate.fromMilliseconds(expirationTime));
-    claims.setStringListClaim(
-        "scope", List.of("rabbitmq.configure:*/*", "rabbitmq.write:*/*", "rabbitmq.read:*/*"));
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void httpClientProviderShouldGetToken(TestInfo info) throws Exception {
+    String q = TestUtils.name(info);
 
-    JsonWebSignature signature = new JsonWebSignature();
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
 
-    byte[] key = Base64.decode(BASE64_KEY);
-    HmacKey hmacKey = new HmacKey(key);
-    signature.setKeyIdHeaderValue("token-key");
-    signature.setAlgorithmHeaderValue(AlgorithmIdentifiers.HMAC_SHA256);
-    signature.setKey(hmacKey);
-    signature.setPayload(claims.toJson());
+    this.server =
+        HttpTestUtils.startHttpServer(
+            port,
+            contextPath,
+            exchange -> {
+              long expirationTime = currentTimeMillis() + 60_000;
+              byte[] data = token(expirationTime).getBytes(UTF_8);
+              Headers responseHeaders = exchange.getResponseHeaders();
+              responseHeaders.set("content-type", "application/json");
+              exchange.sendResponseHeaders(200, data.length);
+              OutputStream responseBody = exchange.getResponseBody();
+              responseBody.write(data);
+              responseBody.close();
+            });
 
-    return signature.getCompactSerialization();
+    HttpTokenRequester tokenRequester =
+        new HttpTokenRequester(
+            "http://localhost:" + port + contextPath,
+            "",
+            "",
+            "",
+            Collections.emptyMap(),
+            null,
+            null,
+            null,
+            null);
+    TokenParser tokenParser =
+        tokenAsString -> {
+          long expirationTime;
+          try {
+            JwtConsumer consumer =
+                new JwtConsumerBuilder()
+                    .setExpectedAudience("rabbitmq")
+                    .setVerificationKey(KEY)
+                    .build();
+            JwtClaims claims = consumer.processToClaims(tokenAsString);
+            expirationTime = claims.getExpirationTime().getValueInMillis();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+          return new Token() {
+            @Override
+            public String value() {
+              return tokenAsString;
+            }
+
+            @Override
+            public long expirationTime() {
+              return expirationTime;
+            }
+          };
+        };
+
+    CredentialsProvider credentialsProvider =
+        new OAuthCredentialsProvider(tokenRequester, tokenParser);
+    Connection c =
+        environment
+            .connectionBuilder()
+            .saslMechanism(SASL_MECHANISM_PLAIN)
+            .credentialsProvider(credentialsProvider)
+            .build();
+    c.management().queue(q).exclusive(true).declare();
   }
 }
