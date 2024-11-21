@@ -261,7 +261,7 @@ public abstract class TestUtils {
     return proxy;
   }
 
-  static int randomNetworkPort() throws IOException {
+  public static int randomNetworkPort() throws IOException {
     ServerSocket socket = new ServerSocket();
     socket.bind(null);
     int port = socket.getLocalPort();

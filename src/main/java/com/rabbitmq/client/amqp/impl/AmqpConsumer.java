@@ -329,7 +329,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
       try {
-        this.nativeReceiver.close();
+        if (this.nativeReceiver != null) {
+          this.nativeReceiver.close();
+        }
         this.sessionHandler.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing receiver", e);
