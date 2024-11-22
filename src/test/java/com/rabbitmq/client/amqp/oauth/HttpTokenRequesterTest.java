@@ -97,9 +97,10 @@ public class HttpTokenRequesterTest {
             null,
             null,
             null,
-            null);
+            null,
+            StringToken::new);
 
-    String token = requester.request();
+    String token = requester.request().value();
     assertThat(token).contains(accessToken);
     Gson gson = new Gson();
     TypeToken<Map<String, Object>> mapType = new TypeToken<>() {};
@@ -125,6 +126,25 @@ public class HttpTokenRequesterTest {
   public void tearDown() {
     if (server != null) {
       server.stop(0);
+    }
+  }
+
+  private static class StringToken implements Token {
+
+    private final String value;
+
+    private StringToken(String value) {
+      this.value = value;
+    }
+
+    @Override
+    public String value() {
+      return this.value;
+    }
+
+    @Override
+    public long expirationTime() {
+      return 0;
     }
   }
 }

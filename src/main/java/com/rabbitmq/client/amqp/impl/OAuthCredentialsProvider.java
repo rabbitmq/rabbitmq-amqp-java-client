@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.oauth.Token;
-import com.rabbitmq.client.amqp.oauth.TokenParser;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -27,13 +26,11 @@ import java.util.concurrent.locks.ReentrantLock;
 final class OAuthCredentialsProvider implements UsernamePasswordCredentialsProvider {
 
   private final TokenRequester requester;
-  private final TokenParser parser;
   private volatile Token token;
   private final Lock lock = new ReentrantLock();
 
-  OAuthCredentialsProvider(TokenRequester requester, TokenParser parser) {
+  OAuthCredentialsProvider(TokenRequester requester) {
     this.requester = requester;
-    this.parser = parser;
   }
 
   @Override
@@ -46,7 +43,7 @@ final class OAuthCredentialsProvider implements UsernamePasswordCredentialsProvi
     lock.lock();
     try {
       if (token == null || token.expirationTime() < System.currentTimeMillis()) {
-        this.token = this.parser.parse(this.requester.request());
+        this.token = this.requester.request();
       }
     } finally {
       lock.unlock();

@@ -92,7 +92,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ExecutorService dispatchingExecutorService;
-  private final Credentials credentials;
+  private final Credentials.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -135,9 +135,14 @@ final class AmqpConnection extends ResourceBase implements Connection {
         instanceof UsernamePasswordCredentialsProvider) {
       UsernamePasswordCredentialsProvider credentialsProvider =
           (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
-      this.credentials = new UsernamePasswordCredentials(credentialsProvider);
+      Credentials credentials = new UsernamePasswordCredentials(credentialsProvider);
+      this.credentialsRegistration =
+          credentials.register(
+              (u, p) -> {
+                ((AmqpManagement) management()).setToken(p);
+              });
     } else {
-      this.credentials = callback -> {};
+      this.credentialsRegistration = Credentials.NO_OP.register((u, p) -> {});
     }
     LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
@@ -215,7 +220,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
-    credentials.configure(new TokenConnectionCallback(connectionOptions));
+    credentialsRegistration.connect(new TokenConnectionCallback(connectionOptions));
     connectionOptions.virtualHost("vhost:" + connectionSettings.virtualHost());
     connectionOptions.saslOptions().addAllowedMechanism(connectionSettings.saslMechanism());
     connectionOptions.idleTimeout(
@@ -777,6 +782,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
+      this.credentialsRegistration.unregister();
       this.environment.removeConnection(this);
       if (this.topologyListener instanceof AutoCloseable) {
         try {

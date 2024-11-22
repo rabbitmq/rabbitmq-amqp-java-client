@@ -43,7 +43,6 @@ import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.function.LongSupplier;
-import org.jose4j.lang.JoseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -79,7 +78,7 @@ public class Oauth2Test {
 
   @Test
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void connectionShouldBeClosedWhenTokenExpires(TestInfo info) throws JoseException {
+  void connectionShouldBeClosedWhenTokenExpires(TestInfo info) {
     String q = name(info);
     long expiry = currentTimeMillis() + ofSeconds(2).toMillis();
     String token = token(expiry);
@@ -137,14 +136,8 @@ public class Oauth2Test {
         startHttpServer(port, contextPath, tokenHttpHandler(() -> currentTimeMillis() + 60_000));
 
     TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
-    TokenParser tokenParser =
-        json -> {
-          String compact = parse(json).get("value").toString();
-          return parseToken(compact);
-        };
 
-    CredentialsProvider credentialsProvider =
-        new OAuthCredentialsProvider(tokenRequester, tokenParser);
+    CredentialsProvider credentialsProvider = new OAuthCredentialsProvider(tokenRequester);
     Connection c =
         environment
             .connectionBuilder()
@@ -176,14 +169,8 @@ public class Oauth2Test {
         startHttpServer(port, contextPath, tokenHttpHandler(() -> currentTimeMillis() - 60_000));
 
     TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
-    TokenParser tokenParser =
-        json -> {
-          String compact = parse(json).get("value").toString();
-          return parseToken(compact);
-        };
 
-    CredentialsProvider credentialsProvider =
-        new OAuthCredentialsProvider(tokenRequester, tokenParser);
+    CredentialsProvider credentialsProvider = new OAuthCredentialsProvider(tokenRequester);
     assertThatThrownBy(
             () ->
                 environment
@@ -209,6 +196,12 @@ public class Oauth2Test {
   }
 
   private static TokenRequester httpTokenRequester(String uri) {
-    return new HttpTokenRequester(uri, "", "", "", Collections.emptyMap(), null, null, null, null);
+    TokenParser parser =
+        json -> {
+          String compact = parse(json).get("value").toString();
+          return parseToken(compact);
+        };
+    return new HttpTokenRequester(
+        uri, "", "", "", Collections.emptyMap(), null, null, null, null, parser);
   }
 }

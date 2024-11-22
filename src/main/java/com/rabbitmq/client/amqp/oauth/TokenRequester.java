@@ -19,5 +19,5 @@ package com.rabbitmq.client.amqp.oauth;
 
 public interface TokenRequester {
 
-  String request();
+  Token request();
 }
