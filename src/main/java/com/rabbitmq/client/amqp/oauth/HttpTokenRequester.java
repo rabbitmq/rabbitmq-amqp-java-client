@@ -51,6 +51,8 @@ public final class HttpTokenRequester implements TokenRequester {
   private final HttpClient client;
   private final Consumer<HttpRequest.Builder> requestBuilderConsumer;
 
+  private TokenParser parser;
+
   public HttpTokenRequester(
       String tokenEndpointUri,
       String clientId,
@@ -60,7 +62,8 @@ public final class HttpTokenRequester implements TokenRequester {
       HostnameVerifier hostnameVerifier,
       SSLSocketFactory sslSocketFactory,
       Consumer<HttpClient.Builder> clientBuilderConsumer,
-      Consumer<HttpRequest.Builder> requestBuilderConsumer) {
+      Consumer<HttpRequest.Builder> requestBuilderConsumer,
+      TokenParser parser) {
     try {
       this.tokenEndpointUri = new URI(tokenEndpointUri);
     } catch (URISyntaxException e) {
@@ -72,6 +75,7 @@ public final class HttpTokenRequester implements TokenRequester {
     this.parameters = Map.copyOf(parameters);
     this.hostnameVerifier = hostnameVerifier;
     this.sslSocketFactory = sslSocketFactory;
+    this.parser = parser;
     if (requestBuilderConsumer == null) {
       this.requestBuilderConsumer =
           requestBuilder ->
@@ -95,7 +99,7 @@ public final class HttpTokenRequester implements TokenRequester {
   }
 
   @Override
-  public String request() {
+  public Token request() {
     StringBuilder urlParameters = new StringBuilder();
     encode(urlParameters, "grant_type", grantType);
     for (Map.Entry<String, String> parameter : parameters.entrySet()) {
@@ -117,7 +121,7 @@ public final class HttpTokenRequester implements TokenRequester {
           this.client.send(request, HttpResponse.BodyHandlers.ofString(UTF_8));
       checkStatusCode(response.statusCode());
       checkContentType(response.headers().firstValue("content-type").orElse(null));
-      return response.body();
+      return this.parser.parse(response.body());
     } catch (IOException e) {
       throw new OAuthException("Error while retrieving OAuth 2 token", e);
     } catch (InterruptedException e) {

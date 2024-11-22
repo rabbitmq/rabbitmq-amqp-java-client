@@ -19,12 +19,43 @@ package com.rabbitmq.client.amqp.impl;
 
 interface Credentials {
 
-  void configure(ConnectionCallback callback);
+  Credentials NO_OP = new NoOpCredentials();
+
+  Registration register(RefreshCallback refreshCallback);
+
+  interface Registration {
+
+    void connect(ConnectionCallback callback);
+
+    void unregister();
+  }
 
   interface ConnectionCallback {
 
     ConnectionCallback username(String username);
 
     ConnectionCallback password(String password);
+  }
+
+  interface RefreshCallback {
+
+    void refresh(String username, String password);
+  }
+
+  class NoOpCredentials implements Credentials {
+
+    @Override
+    public Registration register(RefreshCallback refreshCallback) {
+      return new NoOpRegistration();
+    }
+  }
+
+  class NoOpRegistration implements Registration {
+
+    @Override
+    public void connect(ConnectionCallback callback) {}
+
+    @Override
+    public void unregister() {}
   }
 }
