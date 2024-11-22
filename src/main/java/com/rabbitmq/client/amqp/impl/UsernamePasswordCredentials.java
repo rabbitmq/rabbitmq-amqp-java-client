@@ -28,7 +28,18 @@ final class UsernamePasswordCredentials implements Credentials {
   }
 
   @Override
-  public void configure(ConnectionCallback callback) {
-    callback.username(this.provider.getUsername()).password(this.provider.getPassword());
+  public Registration register(RefreshCallback refreshCallback) {
+    return new RegistrationImpl();
+  }
+
+  private final class RegistrationImpl implements Registration {
+
+    @Override
+    public void connect(ConnectionCallback callback) {
+      callback.username(provider.getUsername()).password(provider.getPassword());
+    }
+
+    @Override
+    public void unregister() {}
   }
 }
