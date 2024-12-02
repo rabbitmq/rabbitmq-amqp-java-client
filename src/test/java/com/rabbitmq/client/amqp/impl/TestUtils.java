@@ -53,6 +53,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 public abstract class TestUtils {
 
   static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
+  static final Duration DEFAULT_WAIT_TIME = Duration.ofMillis(100);
 
   private TestUtils() {}
 
@@ -113,6 +114,7 @@ public abstract class TestUtils {
   public static Duration waitAtMostNoException(Duration timeout, RunnableWithException condition) {
     return waitAtMost(
         timeout,
+        DEFAULT_WAIT_TIME,
         () -> {
           try {
             condition.run();
@@ -125,15 +127,20 @@ public abstract class TestUtils {
   }
 
   public static Duration waitAtMost(CallableBooleanSupplier condition) {
-    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, null);
+    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, DEFAULT_WAIT_TIME, condition, null);
   }
 
   public static Duration waitAtMost(CallableBooleanSupplier condition, Supplier<String> message) {
-    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, condition, message);
+    return waitAtMost(DEFAULT_CONDITION_TIMEOUT, DEFAULT_WAIT_TIME, condition, message);
+  }
+
+  public static Duration waitAtMost(
+      Duration timeout, Duration waitTime, CallableBooleanSupplier condition) {
+    return waitAtMost(timeout, waitTime, condition, null);
   }
 
   public static Duration waitAtMost(Duration timeout, CallableBooleanSupplier condition) {
-    return waitAtMost(timeout, condition, null);
+    return waitAtMost(timeout, DEFAULT_WAIT_TIME, condition, null);
   }
 
   public static Duration waitAtMost(int timeoutInSeconds, CallableBooleanSupplier condition) {
@@ -142,17 +149,24 @@ public abstract class TestUtils {
 
   public static Duration waitAtMost(
       int timeoutInSeconds, CallableBooleanSupplier condition, Supplier<String> message) {
-    return waitAtMost(Duration.ofSeconds(timeoutInSeconds), condition, message);
+    return waitAtMost(Duration.ofSeconds(timeoutInSeconds), DEFAULT_WAIT_TIME, condition, message);
   }
 
   public static Duration waitAtMost(
       Duration timeout, CallableBooleanSupplier condition, Supplier<String> message) {
+    return waitAtMost(timeout, DEFAULT_WAIT_TIME, condition, message);
+  }
+
+  public static Duration waitAtMost(
+      Duration timeout,
+      Duration waitTime,
+      CallableBooleanSupplier condition,
+      Supplier<String> message) {
     long start = System.nanoTime();
     try {
       if (condition.getAsBoolean()) {
         return Duration.ZERO;
       }
-      Duration waitTime = Duration.ofMillis(100);
       Duration waitedTime = Duration.ofNanos(System.nanoTime() - start);
       Exception exception = null;
       while (waitedTime.compareTo(timeout) <= 0) {
@@ -429,7 +443,6 @@ public abstract class TestUtils {
   static class DisabledIfNotClusterCondition implements ExecutionCondition {
 
     private static final String KEY = "isCluster";
-    private static final String KEY_NODES = "clusterNodes";
 
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {

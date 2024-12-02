@@ -56,11 +56,13 @@ final class TokenCredentials implements Credentials {
   }
 
   private boolean expiresSoon(Token t) {
+    // TODO use strategy to tell if the token expires soon
     return t.expirationTime() < System.currentTimeMillis() - 20_000;
   }
 
   private Duration delayBeforeTokenRenewal(Token token) {
     long expiresIn = token.expirationTime() - System.currentTimeMillis();
+    // TODO use strategy to decide when to renew token
     long delay = (long) (expiresIn * 0.8);
     return Duration.ofMillis(delay);
   }
@@ -77,31 +79,43 @@ final class TokenCredentials implements Credentials {
     return registration;
   }
 
-  private void refresh() {
+  private void refreshRegistrations(Token t) {
     this.scheduledExecutorService.execute(
         () -> {
           for (RegistrationImpl registration : this.registrations.values()) {
-            if (!registration.isClosed() && !this.token.equals(registration.registrationToken)) {
-              // the registration does not have the new token yet
-              registration.refreshCallback.refresh("", this.token.value());
-              registration.registrationToken = this.token;
+            if (t.equals(this.token)) {
+              if (!registration.isClosed() && !registration.hasSameToken(t)) {
+                // the registration does not have the new token yet
+                registration.refreshCallback.refresh("", this.token.value());
+                registration.registrationToken = this.token;
+              }
             }
           }
         });
   }
 
   private void token(Token t) {
-    if (!t.equals(this.token)) {
-      this.token = t;
-      if (this.schedulingRenewal.compareAndSet(false, true)) {
-        if (this.renewalTask != null) {
-          this.renewalTask.cancel(false);
-        }
-        Duration delay = delayBeforeTokenRenewal(t);
-        if (delay.isZero() || delay.isNegative()) {
-          delay = Duration.ofSeconds(1);
-        }
-        // TODO check delay is > 0, schedule 1 second later at least
+    lock();
+    try {
+      if (!t.equals(this.token)) {
+        this.token = t;
+        scheduleRenewal(t);
+      }
+    } finally {
+      unlock();
+    }
+  }
+
+  private void scheduleRenewal(Token t) {
+    if (this.schedulingRenewal.compareAndSet(false, true)) {
+      if (this.renewalTask != null) {
+        this.renewalTask.cancel(false);
+      }
+      Duration delay = delayBeforeTokenRenewal(t);
+      if (delay.isZero() || delay.isNegative()) {
+        delay = Duration.ofSeconds(1);
+      }
+      if (!this.registrations.isEmpty()) {
         this.renewalTask =
             this.scheduledExecutorService.schedule(
                 () -> {
@@ -111,7 +125,7 @@ final class TokenCredentials implements Credentials {
                     if (this.token.equals(previousToken)) {
                       Token newToken = getToken();
                       token(newToken);
-                      refresh();
+                      refreshRegistrations(newToken);
                     }
                   } finally {
                     unlock();
@@ -119,8 +133,10 @@ final class TokenCredentials implements Credentials {
                 },
                 delay.toMillis(),
                 TimeUnit.MILLISECONDS);
-        this.schedulingRenewal.set(false);
+      } else {
+        this.renewalTask = null;
       }
+      this.schedulingRenewal.set(false);
     }
   }
 
@@ -139,6 +155,7 @@ final class TokenCredentials implements Credentials {
     @Override
     public void connect(ConnectionCallback callback) {
       boolean shouldRefresh = false;
+      Token tokenToUse;
       lock();
       try {
         if (token == null) {
@@ -148,13 +165,17 @@ final class TokenCredentials implements Credentials {
           token(getToken());
         }
         this.registrationToken = token;
+        tokenToUse = this.registrationToken;
+        if (renewalTask == null) {
+          scheduleRenewal(tokenToUse);
+        }
       } finally {
         unlock();
       }
 
-      callback.username("").password(this.registrationToken.value());
+      callback.username("").password(tokenToUse.value());
       if (shouldRefresh) {
-        refresh();
+        refreshRegistrations(tokenToUse);
       }
     }
 
@@ -162,7 +183,22 @@ final class TokenCredentials implements Credentials {
     public void unregister() {
       if (this.closed.compareAndSet(false, true)) {
         registrations.remove(this.id);
+        ScheduledFuture<?> task = renewalTask;
+        if (registrations.isEmpty() && task != null) {
+          lock();
+          try {
+            if (renewalTask != null) {
+              renewalTask.cancel(false);
+            }
+          } finally {
+            unlock();
+          }
+        }
       }
+    }
+
+    private boolean hasSameToken(Token t) {
+      return t.equals(this.registrationToken);
     }
 
     private boolean isClosed() {
