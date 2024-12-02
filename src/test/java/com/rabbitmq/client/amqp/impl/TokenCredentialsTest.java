@@ -18,13 +18,21 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.IntStream.range;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import com.rabbitmq.client.amqp.oauth.Token;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,31 +58,86 @@ public class TokenCredentialsTest {
   }
 
   @Test
-  void refresh() {
+  void refreshShouldStopOnceUnregistered() throws InterruptedException {
+    Duration tokenExpiry = Duration.ofMillis(50);
+    AtomicInteger requestCount = new AtomicInteger(0);
     when(this.requester.request())
-        .thenAnswer(ignored -> token("ok", System.currentTimeMillis() + 100));
+        .thenAnswer(
+            ignored -> {
+              requestCount.incrementAndGet();
+              return token("ok", System.currentTimeMillis() + tokenExpiry.toMillis());
+            });
     TokenCredentials credentials =
         new TokenCredentials(this.requester, this.scheduledExecutorService);
-    Sync refreshSync = TestUtils.sync(3);
+    int expectedRefreshCount = 3;
+    AtomicInteger refreshCount = new AtomicInteger();
+    Sync refreshSync = sync(expectedRefreshCount);
     Credentials.Registration registration =
         credentials.register(
             (u, p) -> {
+              refreshCount.incrementAndGet();
               refreshSync.down();
             });
-    registration.connect(
-        new Credentials.ConnectionCallback() {
-          @Override
-          public Credentials.ConnectionCallback username(String username) {
-            return this;
-          }
-
-          @Override
-          public Credentials.ConnectionCallback password(String password) {
-            return this;
-          }
-        });
+    registration.connect(connectionCallback(() -> {}));
+    assertThat(requestCount).hasValue(1);
     assertThat(refreshSync).completes();
+    assertThat(requestCount).hasValue(expectedRefreshCount + 1);
     registration.unregister();
+    assertThat(refreshCount).hasValue(expectedRefreshCount);
+    assertThat(requestCount).hasValue(expectedRefreshCount + 1);
+    Thread.sleep(tokenExpiry.multipliedBy(2).toMillis());
+    assertThat(refreshCount).hasValue(expectedRefreshCount);
+    assertThat(requestCount).hasValue(expectedRefreshCount + 1);
+  }
+
+  @Test
+  void severalRegistrationsShouldBeRefreshed() throws InterruptedException {
+    Duration tokenExpiry = Duration.ofMillis(50);
+    Duration waitTime = tokenExpiry.dividedBy(2);
+    Duration timeout = tokenExpiry.multipliedBy(10);
+    when(this.requester.request())
+        .thenAnswer(ignored -> token("ok", System.currentTimeMillis() + tokenExpiry.toMillis()));
+    TokenCredentials credentials =
+        new TokenCredentials(this.requester, this.scheduledExecutorService);
+    int expectedRefreshCountPerConnection = 3;
+    int connectionCount = 10;
+    AtomicInteger totalRefreshCount = new AtomicInteger();
+    List<Tuples.Pair<Credentials.Registration, Sync>> registrations =
+        range(0, connectionCount)
+            .mapToObj(
+                ignored -> {
+                  Sync sync = sync(expectedRefreshCountPerConnection);
+                  Credentials.Registration r =
+                      credentials.register(
+                          (username, password) -> {
+                            totalRefreshCount.incrementAndGet();
+                            sync.down();
+                          });
+                  return Tuples.pair(r, sync);
+                })
+            .collect(toList());
+
+    registrations.forEach(r -> r.v1().connect(connectionCallback(() -> {})));
+    registrations.forEach(r -> assertThat(r.v2()).completes());
+    // all connections have been refreshed once
+    int refreshCountSnapshot = totalRefreshCount.get();
+    assertThat(refreshCountSnapshot).isEqualTo(connectionCount * expectedRefreshCountPerConnection);
+
+    // unregister half of the connections
+    int splitCount = connectionCount / 2;
+    registrations.subList(0, splitCount).forEach(r -> r.v1().unregister());
+    // only the remaining connections should get refreshed again
+    waitAtMost(
+        timeout, waitTime, () -> totalRefreshCount.get() == refreshCountSnapshot + splitCount);
+    // waiting another round of refresh
+    waitAtMost(
+        timeout, waitTime, () -> totalRefreshCount.get() == refreshCountSnapshot + splitCount * 2);
+    // unregister all connections
+    registrations.forEach(r -> r.v1().unregister());
+    // wait 2 expiry times
+    Thread.sleep(tokenExpiry.multipliedBy(2).toMillis());
+    // no new refresh
+    assertThat(totalRefreshCount).hasValue(refreshCountSnapshot + splitCount * 2);
   }
 
   private static Token token(String value, long expirationTime) {
@@ -87,6 +150,21 @@ public class TokenCredentialsTest {
       @Override
       public long expirationTime() {
         return expirationTime;
+      }
+    };
+  }
+
+  private static Credentials.ConnectionCallback connectionCallback(Runnable passwordCallback) {
+    return new Credentials.ConnectionCallback() {
+      @Override
+      public Credentials.ConnectionCallback username(String username) {
+        return this;
+      }
+
+      @Override
+      public Credentials.ConnectionCallback password(String password) {
+        passwordCallback.run();
+        return this;
       }
     };
   }

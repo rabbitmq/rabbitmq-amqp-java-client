@@ -504,7 +504,7 @@ abstract class Cli {
       String line;
       while (true) {
         try {
-          if (!((line = reader.readLine()) != null)) break;
+          if ((line = reader.readLine()) == null) break;
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
