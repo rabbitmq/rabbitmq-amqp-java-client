@@ -50,7 +50,7 @@
         <junit.jupiter.version>5.11.3</junit.jupiter.version>
         <assertj.version>3.26.3</assertj.version>
         <mockito.version>5.14.2</mockito.version>
-        <jqwik.version>1.9.1</jqwik.version>
+        <jqwik.version>1.9.2</jqwik.version>
         <amqp-client.version>5.22.0</amqp-client.version>
         <micrometer-tracing-test.version>1.4.0</micrometer-tracing-test.version>
         <micrometer-docs-generator.version>1.0.4</micrometer-docs-generator.version>
