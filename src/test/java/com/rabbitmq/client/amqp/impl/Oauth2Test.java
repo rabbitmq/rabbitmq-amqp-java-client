@@ -23,6 +23,7 @@ import static com.rabbitmq.client.amqp.impl.HttpTestUtils.startHttpServer;
 import static com.rabbitmq.client.amqp.impl.JwtTestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
+import static com.rabbitmq.client.amqp.oauth.OAuthTestUtils.sampleJsonToken;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
@@ -39,6 +40,7 @@ import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import io.netty.channel.EventLoopGroup;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collections;
@@ -53,6 +55,7 @@ public class Oauth2Test {
 
   Environment environment;
   HttpServer server;
+  EventLoopGroup eventLoopGroup;
 
   @AfterEach
   void tearDown() {
@@ -133,7 +136,7 @@ public class Oauth2Test {
     String contextPath = "/uaa/oauth/token";
 
     this.server =
-        startHttpServer(port, contextPath, tokenHttpHandler(() -> currentTimeMillis() + 60_000));
+        startHttpServer(port, contextPath, jwtTokenHttpHandler(() -> currentTimeMillis() + 60_000));
 
     TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
 
@@ -166,7 +169,7 @@ public class Oauth2Test {
     String contextPath = "/uaa/oauth/token";
 
     this.server =
-        startHttpServer(port, contextPath, tokenHttpHandler(() -> currentTimeMillis() - 60_000));
+        startHttpServer(port, contextPath, jwtTokenHttpHandler(() -> currentTimeMillis() - 60_000));
 
     TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
 
@@ -181,7 +184,51 @@ public class Oauth2Test {
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
   }
 
-  private static HttpHandler tokenHttpHandler(LongSupplier expirationTimeSupplier) {
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void oauth2(TestInfo info) throws Exception {
+    String q = name(info);
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
+
+    Sync tokenRequestSync = TestUtils.sync(3);
+    HttpHandler httpHandler =
+        oauthTokenHttpHandler(() -> currentTimeMillis() + 1_000, tokenRequestSync::down);
+    this.server = startHttpServer(port, contextPath, httpHandler);
+
+    String uri = "http://localhost:" + port + contextPath;
+    try (Environment env =
+        new AmqpEnvironmentBuilder()
+            .connectionSettings()
+            .oauth()
+            .tokenEndpointUri(uri)
+            .clientId("rabbitmq")
+            .clientSecret("rabbitmq")
+            .connection()
+            .environmentBuilder()
+            .build()) {
+      Connection c = env.connectionBuilder().build();
+      c.management().queue(q).exclusive(true).declare();
+      Publisher publisher = c.publisherBuilder().queue(q).build();
+      Sync consumeSync = TestUtils.sync();
+      c.consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, msg) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
+          .build();
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeSync).completes();
+      assertThat(tokenRequestSync).completes();
+      consumeSync.reset(1);
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeSync).completes();
+    }
+  }
+
+  private static HttpHandler jwtTokenHttpHandler(LongSupplier expirationTimeSupplier) {
     return exchange -> {
       long expirationTime = expirationTimeSupplier.getAsLong();
       String token = token(expirationTime);
@@ -192,6 +239,24 @@ public class Oauth2Test {
       OutputStream responseBody = exchange.getResponseBody();
       responseBody.write(data);
       responseBody.close();
+    };
+  }
+
+  private static HttpHandler oauthTokenHttpHandler(
+      LongSupplier expirationTimeSupplier, Runnable requestCallback) {
+    return exchange -> {
+      long expirationTime = expirationTimeSupplier.getAsLong();
+      String jwtToken = token(expirationTime);
+      Duration expiresIn = Duration.ofMillis(expirationTime - System.currentTimeMillis());
+      String oauthToken = sampleJsonToken(jwtToken, expiresIn);
+      byte[] data = oauthToken.getBytes(UTF_8);
+      Headers responseHeaders = exchange.getResponseHeaders();
+      responseHeaders.set("content-type", "application/json");
+      exchange.sendResponseHeaders(200, data.length);
+      OutputStream responseBody = exchange.getResponseBody();
+      responseBody.write(data);
+      responseBody.close();
+      requestCallback.run();
     };
   }
 

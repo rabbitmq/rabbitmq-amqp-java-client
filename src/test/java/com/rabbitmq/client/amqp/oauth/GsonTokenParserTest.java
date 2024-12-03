@@ -34,7 +34,7 @@ public class GsonTokenParserTest {
   void parse() {
     String accessToken = UUID.randomUUID().toString();
     Duration expireIn = ofSeconds(60);
-    String jsonToken = sampleJsonToken(accessToken, expireIn.toSeconds());
+    String jsonToken = sampleJsonToken(accessToken, expireIn);
     Token token = parser.parse(jsonToken);
     assertThat(token.value()).isEqualTo(accessToken);
     assertThat(token.expirationTime())

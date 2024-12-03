@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.oauth;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import java.time.Duration;
 import java.util.Map;
 
 public class GsonTokenParser implements TokenParser {
@@ -31,8 +32,8 @@ public class GsonTokenParser implements TokenParser {
     Map<String, Object> tokenAsMap = GSON.fromJson(tokenAsString, MAP_TYPE);
     String accessToken = (String) tokenAsMap.get("access_token");
     // in seconds, see https://www.rfc-editor.org/rfc/rfc6749#section-5.1
-    long expiresIn = ((Number) tokenAsMap.get("expires_in")).longValue();
-    long expirationTime = System.currentTimeMillis() + expiresIn * 1_000;
+    Duration expiresIn = Duration.ofSeconds(((Number) tokenAsMap.get("expires_in")).longValue());
+    long expirationTime = System.currentTimeMillis() + expiresIn.toMillis();
     return new DefaultTokenInfo(accessToken, expirationTime);
   }
 
