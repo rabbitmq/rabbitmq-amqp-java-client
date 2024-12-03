@@ -154,6 +154,8 @@ public interface ConnectionSettings<T> {
    */
   Affinity<? extends T> affinity();
 
+  OAuthSettings<? extends T> oauth();
+
   /**
    * TLS settings.
    *

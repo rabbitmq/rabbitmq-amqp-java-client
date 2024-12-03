@@ -17,9 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth;
 
-public class OAuthTestUtils {
+import java.time.Duration;
 
-  static String sampleJsonToken(String accessToken, long expiresIn) {
+public final class OAuthTestUtils {
+
+  private OAuthTestUtils() {}
+
+  public static String sampleJsonToken(String accessToken, Duration expiresIn) {
     String json =
         "{\n"
             + "  \"access_token\" : \"{accessToken}\",\n"
@@ -28,6 +32,7 @@ public class OAuthTestUtils {
             + "  \"scope\" : \"clients.read emails.write scim.userids password.write idps.write notifications.write oauth.login scim.write critical_notifications.write\",\n"
             + "  \"jti\" : \"18c1b1dfdda04382a8bcc14d077b71dd\"\n"
             + "}";
-    return json.replace("{accessToken}", accessToken).replace("{expiresIn}", expiresIn + "");
+    return json.replace("{accessToken}", accessToken)
+        .replace("{expiresIn}", expiresIn.toSeconds() + "");
   }
 }

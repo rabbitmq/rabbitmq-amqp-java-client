@@ -51,6 +51,7 @@ class AmqpEnvironment implements Environment {
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
   private final ExecutorService recoveryEventLoopExecutorService;
+  private final CredentialsFactory credentialsFactory = new CredentialsFactory(this);
 
   AmqpEnvironment(
       ExecutorService executorService,
@@ -118,6 +119,10 @@ class AmqpEnvironment implements Environment {
               this.clock::refresh, 1, 1, TimeUnit.SECONDS);
     }
     return this.clock;
+  }
+
+  CredentialsFactory credentialsFactory() {
+    return this.credentialsFactory;
   }
 
   @Override

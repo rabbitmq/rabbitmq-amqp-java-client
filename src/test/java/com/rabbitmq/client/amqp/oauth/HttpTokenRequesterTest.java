@@ -28,6 +28,7 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -57,7 +58,7 @@ public class HttpTokenRequesterTest {
 
     String accessToken = UUID.randomUUID().toString();
 
-    int expiresIn = 60;
+    Duration expiresIn = Duration.ofSeconds(60);
     String contextPath = "/uaa/oauth/token";
     server =
         startHttpServer(
@@ -107,7 +108,7 @@ public class HttpTokenRequesterTest {
     Map<String, Object> tokenMap = gson.fromJson(token, mapType);
     assertThat(tokenMap)
         .containsEntry("access_token", accessToken)
-        .containsEntry("expires_in", (double) expiresIn);
+        .containsEntry("expires_in", (double) expiresIn.toSeconds());
 
     assertThat(httpMethod).hasValue("POST");
     assertThat(contentType).hasValue("application/x-www-form-urlencoded");

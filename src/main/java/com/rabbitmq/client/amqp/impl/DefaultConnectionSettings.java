@@ -28,9 +28,7 @@ import java.net.URLDecoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
@@ -74,6 +72,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private String saslMechanism = ConnectionSettings.SASL_MECHANISM_ANONYMOUS;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
   private final DefaultAffinity<T> affinity = new DefaultAffinity<>(this);
+  private final DefaultOAuthSettings<T> oAuthSettings = new DefaultOAuthSettings<>(this);
 
   @Override
   public T uri(String uriString) {
@@ -223,6 +222,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     this.affinity.copyTo(copy.affinity);
+
+    if (this.oAuthSettings.enabled()) {
+      this.oAuthSettings.copyTo((DefaultOAuthSettings<?>) copy.oauth());
+    }
   }
 
   DefaultConnectionSettings<?> consolidate() {
@@ -293,6 +296,11 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   @Override
   public DefaultAffinity<? extends T> affinity() {
     return this.affinity;
+  }
+
+  @Override
+  public DefaultOAuthSettings<? extends T> oauth() {
+    return this.oAuthSettings;
   }
 
   static DefaultConnectionSettings<?> instance() {
@@ -488,6 +496,91 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       if (this.queue == null || this.queue.isBlank()) {
         throw new IllegalArgumentException("Connection affinity requires a queue value");
       }
+    }
+  }
+
+  static class DefaultOAuthSettings<T> implements OAuthSettings<T> {
+
+    private final DefaultConnectionSettings<T> connectionSettings;
+    private final Map<String, String> parameters = new HashMap<>();
+    private String tokenEndpointUri;
+    private String clientId;
+    private String clientSecret;
+    private String grantType = "client_credentials";
+
+    DefaultOAuthSettings(DefaultConnectionSettings<T> connectionSettings) {
+      this.connectionSettings = connectionSettings;
+    }
+
+    @Override
+    public OAuthSettings<T> tokenEndpointUri(String uri) {
+      this.tokenEndpointUri = uri;
+      return this;
+    }
+
+    @Override
+    public OAuthSettings<T> clientId(String clientId) {
+      this.clientId = clientId;
+      return this;
+    }
+
+    @Override
+    public OAuthSettings<T> clientSecret(String clientSecret) {
+      this.clientSecret = clientSecret;
+      return this;
+    }
+
+    @Override
+    public OAuthSettings<T> grantType(String grantType) {
+      this.grantType = grantType;
+      return this;
+    }
+
+    @Override
+    public OAuthSettings<T> parameter(String name, String value) {
+      if (value == null) {
+        this.parameters.remove(name);
+      } else {
+        this.parameters.put(name, value);
+      }
+      return this;
+    }
+
+    @Override
+    public T connection() {
+      return this.connectionSettings.toReturn();
+    }
+
+    void copyTo(DefaultOAuthSettings<?> copy) {
+      copy.tokenEndpointUri(this.tokenEndpointUri);
+      copy.clientId(this.clientId);
+      copy.clientSecret(this.clientSecret);
+      copy.grantType(this.grantType);
+      this.parameters.forEach(copy::parameter);
+    }
+
+    String tokenEndpointUri() {
+      return this.tokenEndpointUri;
+    }
+
+    String clientId() {
+      return this.clientId;
+    }
+
+    String clientSecret() {
+      return this.clientSecret;
+    }
+
+    String grantType() {
+      return this.grantType;
+    }
+
+    Map<String, String> parameters() {
+      return Map.copyOf(this.parameters);
+    }
+
+    boolean enabled() {
+      return this.tokenEndpointUri != null;
     }
   }
 }

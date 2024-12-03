@@ -20,6 +20,8 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Resource.State.*;
 import static com.rabbitmq.client.amqp.impl.Utils.supportFilterExpressions;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSetToken;
+import static java.lang.System.nanoTime;
+import static java.time.Duration.ofNanos;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.ObservationCollector;
@@ -97,8 +99,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
-    this.name = builder.name();
     this.environment = builder.environment();
+    this.name =
+        builder.name() == null ? this.environment.toString() + "-" + this.id : builder.name();
     this.connectionSettings = builder.connectionSettings().consolidate();
     this.sessionHandlerSupplier =
         builder.isolateResources()
@@ -131,19 +134,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.affinityStrategy = null;
     }
     this.management = createManagement();
-    if (this.connectionSettings.credentialsProvider()
-        instanceof UsernamePasswordCredentialsProvider) {
-      UsernamePasswordCredentialsProvider credentialsProvider =
-          (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
-      Credentials credentials = new UsernamePasswordCredentials(credentialsProvider);
-      this.credentialsRegistration =
-          credentials.register(
-              (u, p) -> {
-                ((AmqpManagement) management()).setToken(p);
-              });
-    } else {
-      this.credentialsRegistration = Credentials.NO_OP.register((u, p) -> {});
-    }
+    Credentials credentials = builder.credentials();
+    this.credentialsRegistration =
+        credentials.register(
+            (username, password) -> {
+              LOGGER.debug("Setting new token for connection {}", this.name);
+              long start = nanoTime();
+              ((AmqpManagement) management()).setToken(password);
+              LOGGER.debug(
+                  "Set new token for connection {} in {} ms",
+                  this.name,
+                  ofNanos(nanoTime() - start).toMillis());
+            });
     LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
@@ -662,7 +664,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       if (this.dispatchingExecutorService == null) {
         this.dispatchingExecutorService =
             Executors.newSingleThreadExecutor(
-                Utils.threadFactory("dispatching-" + this.name + "-"));
+                Utils.threadFactory("dispatching-" + this.name() + "-"));
       }
       return this.dispatchingExecutorService;
     } finally {
@@ -849,7 +851,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   @Override
   public String toString() {
-    return this.environment.toString() + "-" + this.id;
+    return this.name();
   }
 
   static class NativeConnectionWrapper {

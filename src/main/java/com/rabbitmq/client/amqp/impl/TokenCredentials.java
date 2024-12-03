@@ -20,6 +20,8 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.oauth.Token;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,8 +32,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class TokenCredentials implements Credentials {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(TokenCredentials.class);
 
   private final TokenRequester requester;
   private final ScheduledExecutorService scheduledExecutorService;
@@ -68,7 +74,16 @@ final class TokenCredentials implements Credentials {
   }
 
   private Token getToken() {
-    return requester.request();
+    LOGGER.debug("Requesting new token...");
+    Utils.StopWatch stopWatch = new Utils.StopWatch();
+    Token token = requester.request();
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug(
+          "Got new token in {} ms, token expires on {}",
+          stopWatch.stop().toMillis(),
+          format(token.expirationTime()));
+    }
+    return token;
   }
 
   @Override
@@ -82,15 +97,19 @@ final class TokenCredentials implements Credentials {
   private void refreshRegistrations(Token t) {
     this.scheduledExecutorService.execute(
         () -> {
+          LOGGER.debug("Refreshing {} registration(s)", this.registrations.size());
+          int refreshedCount = 0;
           for (RegistrationImpl registration : this.registrations.values()) {
             if (t.equals(this.token)) {
               if (!registration.isClosed() && !registration.hasSameToken(t)) {
                 // the registration does not have the new token yet
                 registration.refreshCallback.refresh("", this.token.value());
                 registration.registrationToken = this.token;
+                refreshedCount++;
               }
             }
           }
+          LOGGER.debug("Refreshed {} registration(s)", refreshedCount);
         });
   }
 
@@ -116,6 +135,7 @@ final class TokenCredentials implements Credentials {
         delay = Duration.ofSeconds(1);
       }
       if (!this.registrations.isEmpty()) {
+        LOGGER.debug("Scheduling token retrieval in {}", delay);
         this.renewalTask =
             this.scheduledExecutorService.schedule(
                 () -> {
@@ -138,6 +158,10 @@ final class TokenCredentials implements Credentials {
       }
       this.schedulingRenewal.set(false);
     }
+  }
+
+  private static String format(long timestampMs) {
+    return DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(timestampMs));
   }
 
   private final class RegistrationImpl implements Registration {
