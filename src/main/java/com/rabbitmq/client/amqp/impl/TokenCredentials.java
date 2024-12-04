@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,11 +47,13 @@ final class TokenCredentials implements Credentials {
   private final Map<Long, RegistrationImpl> registrations = new ConcurrentHashMap<>();
   private final AtomicLong registrationSequence = new AtomicLong(0);
   private final AtomicBoolean schedulingRenewal = new AtomicBoolean(false);
+  private final Function<Instant, Duration> refreshDelayStrategy;
   private volatile ScheduledFuture<?> renewalTask;
 
   TokenCredentials(TokenRequester requester, ScheduledExecutorService scheduledExecutorService) {
     this.requester = requester;
     this.scheduledExecutorService = scheduledExecutorService;
+    this.refreshDelayStrategy = new RatioRefreshDelayStrategy(0.8f);
   }
 
   private void lock() {
@@ -61,16 +64,8 @@ final class TokenCredentials implements Credentials {
     this.lock.unlock();
   }
 
-  private boolean expiresSoon(Token t) {
-    // TODO use strategy to tell if the token expires soon
-    return t.expirationTime() < System.currentTimeMillis() - 20_000;
-  }
-
-  private Duration delayBeforeTokenRenewal(Token token) {
-    long expiresIn = token.expirationTime() - System.currentTimeMillis();
-    // TODO use strategy to decide when to renew token
-    long delay = (long) (expiresIn * 0.8);
-    return Duration.ofMillis(delay);
+  private boolean expiresSoon(Token ignores) {
+    return false;
   }
 
   private Token getToken() {
@@ -138,10 +133,7 @@ final class TokenCredentials implements Credentials {
       if (this.renewalTask != null) {
         this.renewalTask.cancel(false);
       }
-      Duration delay = delayBeforeTokenRenewal(t);
-      if (delay.isZero() || delay.isNegative()) {
-        delay = Duration.ofSeconds(1);
-      }
+      Duration delay = this.refreshDelayStrategy.apply(t.expirationTime());
       if (!this.registrations.isEmpty()) {
         LOGGER.debug("Scheduling token retrieval in {}", delay);
         this.renewalTask =
@@ -168,8 +160,8 @@ final class TokenCredentials implements Credentials {
     }
   }
 
-  private static String format(long timestampMs) {
-    return DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(timestampMs));
+  private static String format(Instant instant) {
+    return DateTimeFormatter.ISO_INSTANT.format(instant);
   }
 
   private final class RegistrationImpl implements Registration {
@@ -257,6 +249,34 @@ final class TokenCredentials implements Credentials {
     @Override
     public int hashCode() {
       return Objects.hashCode(id);
+    }
+  }
+
+  static Function<Instant, Duration> ratioRefreshDelayStrategy(float ratio) {
+    return new RatioRefreshDelayStrategy(ratio);
+  }
+
+  private static class RatioRefreshDelayStrategy implements Function<Instant, Duration> {
+
+    private final float ratio;
+
+    private RatioRefreshDelayStrategy(float ratio) {
+      if (ratio < 0 || ratio > 1) {
+        throw new IllegalArgumentException("Ratio should be > 0 and <= 1: " + ratio);
+      }
+      this.ratio = ratio;
+    }
+
+    @Override
+    public Duration apply(Instant expirationTime) {
+      Duration expiresIn = Duration.between(Instant.now(), expirationTime);
+      Duration delay;
+      if (expiresIn.isZero() || expiresIn.isNegative()) {
+        delay = Duration.ofSeconds(1);
+      } else {
+        delay = Duration.ofMillis((long) (expiresIn.toMillis() * ratio));
+      }
+      return delay;
     }
   }
 }

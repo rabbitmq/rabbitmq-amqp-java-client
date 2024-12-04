@@ -29,6 +29,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -144,8 +145,8 @@ public class HttpTokenRequesterTest {
     }
 
     @Override
-    public long expirationTime() {
-      return 0;
+    public Instant expirationTime() {
+      return Instant.EPOCH;
     }
   }
 }
