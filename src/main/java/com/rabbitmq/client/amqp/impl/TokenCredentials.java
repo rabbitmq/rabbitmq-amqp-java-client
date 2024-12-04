@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.oauth.Token;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -260,6 +261,7 @@ final class TokenCredentials implements Credentials {
 
     private final float ratio;
 
+    @SuppressFBWarnings("CT_CONSTRUCTOR_THROW")
     private RatioRefreshDelayStrategy(float ratio) {
       if (ratio < 0 || ratio > 1) {
         throw new IllegalArgumentException("Ratio should be > 0 and <= 1: " + ratio);
