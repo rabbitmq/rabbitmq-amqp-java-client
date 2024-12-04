@@ -20,10 +20,12 @@ package com.rabbitmq.client.amqp.oauth;
 import static com.rabbitmq.client.amqp.oauth.OAuthTestUtils.sampleJsonToken;
 import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
-import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
 public class GsonTokenParserTest {
@@ -38,6 +40,6 @@ public class GsonTokenParserTest {
     Token token = parser.parse(jsonToken);
     assertThat(token.value()).isEqualTo(accessToken);
     assertThat(token.expirationTime())
-        .isCloseTo(System.currentTimeMillis() + expireIn.toMillis(), Offset.offset(1000L));
+        .isCloseTo(Instant.now().plus(expireIn), within(1, ChronoUnit.SECONDS));
   }
 }
