@@ -23,6 +23,7 @@ import com.rabbitmq.client.amqp.oauth.Token;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
@@ -49,6 +50,7 @@ final class JwtTestUtils {
       claims.setExpirationTime(NumericDate.fromMilliseconds(expirationTime));
       claims.setStringListClaim(
           "scope", List.of("rabbitmq.configure:*/*", "rabbitmq.write:*/*", "rabbitmq.read:*/*"));
+      claims.setStringClaim("random", RandomStringUtils.insecure().nextAscii(6));
 
       JsonWebSignature signature = new JsonWebSignature();
 

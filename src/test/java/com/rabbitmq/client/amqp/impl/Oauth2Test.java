@@ -26,28 +26,34 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static com.rabbitmq.client.amqp.oauth.OAuthTestUtils.sampleJsonToken;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.time.Duration.ofMillis;
-import static java.time.Duration.ofSeconds;
+import static java.time.Duration.*;
+import static java.util.stream.Collectors.toList;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfOauth2AuthBackendNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import com.rabbitmq.client.amqp.oauth.GsonTokenParser;
 import com.rabbitmq.client.amqp.oauth.HttpTokenRequester;
 import com.rabbitmq.client.amqp.oauth.TokenParser;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import io.netty.channel.EventLoopGroup;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
 @DisabledIfOauth2AuthBackendNotEnabled
@@ -55,7 +61,6 @@ public class Oauth2Test {
 
   Environment environment;
   HttpServer server;
-  EventLoopGroup eventLoopGroup;
 
   @AfterEach
   void tearDown() {
@@ -65,16 +70,8 @@ public class Oauth2Test {
   }
 
   @Test
-  void expiredTokenShouldFail() {
-    String expiredToken = token(currentTimeMillis() - 1000);
-    assertThatThrownBy(
-            () -> environment.connectionBuilder().username("").password(expiredToken).build())
-        .isInstanceOf(AmqpException.AmqpSecurityException.class);
-  }
-
-  @Test
   void validTokenShouldSucceed() {
-    String validToken = token(currentTimeMillis() + Duration.ofMinutes(10).toMillis());
+    String validToken = token(currentTimeMillis() + ofMinutes(10).toMillis());
     try (Connection ignored =
         environment.connectionBuilder().username("").password(validToken).build()) {}
   }
@@ -130,70 +127,101 @@ public class Oauth2Test {
 
   @Test
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void openingConnectionWithHttpValidTokenShouldWork(TestInfo info) throws Exception {
-    String q = name(info);
+  void openingConnectionWithExpiredTokenShouldFail() throws Exception {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
+    String uri = "http://localhost:" + port + contextPath;
 
     this.server =
-        startHttpServer(port, contextPath, jwtTokenHttpHandler(() -> currentTimeMillis() + 60_000));
+        startHttpServer(
+            port,
+            contextPath,
+            oauthTokenHttpHandler(() -> currentTimeMillis() - ofMinutes(60).toMillis()));
 
-    TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
-
-    CredentialsProvider credentialsProvider = new OAuthCredentialsProvider(tokenRequester);
-    Connection c =
-        environment
-            .connectionBuilder()
-            .saslMechanism(SASL_MECHANISM_PLAIN)
-            .credentialsProvider(credentialsProvider)
-            .build();
-    c.management().queue(q).exclusive(true).declare();
-    Publisher publisher = c.publisherBuilder().queue(q).build();
-    Sync consumeSync = TestUtils.sync();
-    c.consumerBuilder()
-        .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumeSync.down();
-            })
-        .build();
-    publisher.publish(publisher.message(), ctx -> {});
-    assertThat(consumeSync).completes();
-  }
-
-  @Test
-  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void openingConnectionWithHttpExpiredTokenShouldFail() throws Exception {
-    int port = randomNetworkPort();
-    String contextPath = "/uaa/oauth/token";
-
-    this.server =
-        startHttpServer(port, contextPath, jwtTokenHttpHandler(() -> currentTimeMillis() - 60_000));
-
-    TokenRequester tokenRequester = httpTokenRequester("http://localhost:" + port + contextPath);
-
-    CredentialsProvider credentialsProvider = new OAuthCredentialsProvider(tokenRequester);
     assertThatThrownBy(
             () ->
                 environment
                     .connectionBuilder()
-                    .saslMechanism(SASL_MECHANISM_PLAIN)
-                    .credentialsProvider(credentialsProvider)
+                    .oauth()
+                    .tokenEndpointUri(uri)
+                    .clientId("rabbitmq")
+                    .clientSecret("rabbitmq")
+                    .connection()
                     .build())
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void oauth2(TestInfo info) throws Exception {
-    String q = name(info);
+  void tokenShouldBeRefreshedAutomatically(boolean shared, TestInfo info) throws Exception {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
-
-    Sync tokenRequestSync = TestUtils.sync(3);
+    int connectionCount = 10;
+    int refreshRounds = 3;
+    int expectedRefreshCount = shared ? refreshRounds : refreshRounds * connectionCount;
+    Sync tokenRequestSync = sync(expectedRefreshCount);
+    AtomicInteger refreshCount = new AtomicInteger();
     HttpHandler httpHandler =
-        oauthTokenHttpHandler(() -> currentTimeMillis() + 1_000, tokenRequestSync::down);
+        oauthTokenHttpHandler(
+            () -> currentTimeMillis() + 2_000,
+            () -> {
+              refreshCount.incrementAndGet();
+              tokenRequestSync.down();
+            });
+    this.server = startHttpServer(port, contextPath, httpHandler);
+
+    String uri = "http://localhost:" + port + contextPath;
+    try (Environment env =
+        new AmqpEnvironmentBuilder()
+            .connectionSettings()
+            .oauth()
+            .tokenEndpointUri(uri)
+            .clientId("rabbitmq")
+            .clientSecret("rabbitmq")
+            .shared(shared)
+            .connection()
+            .environmentBuilder()
+            .build()) {
+      List<Tuples.Pair<Publisher, Sync>> states =
+          IntStream.range(0, connectionCount)
+              .mapToObj(
+                  ignored -> {
+                    Connection c = env.connectionBuilder().build();
+                    String q = name(info);
+                    c.management().queue(q).exclusive(true).declare();
+                    Publisher publisher = c.publisherBuilder().queue(q).build();
+                    Sync consumeSync = sync();
+                    c.consumerBuilder()
+                        .queue(q)
+                        .messageHandler(
+                            (ctx, msg) -> {
+                              ctx.accept();
+                              consumeSync.down();
+                            })
+                        .build();
+                    return Tuples.pair(publisher, consumeSync);
+                  })
+              .collect(toList());
+
+      Runnable publish = () -> states.forEach(s -> s.v1().publish(s.v1().message(), ctx -> {}));
+      Runnable expectMessages = () -> states.forEach(s -> assertThat(s.v2()).completes());
+
+      publish.run();
+      expectMessages.run();
+
+      assertThat(tokenRequestSync).completes();
+
+      publish.run();
+      expectMessages.run();
+    }
+  }
+
+  @Test
+  void oauthConfigurationShouldUsePlainSaslMechanism() throws Exception {
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
+    HttpHandler httpHandler = oauthTokenHttpHandler(() -> currentTimeMillis() + 2_000);
     this.server = startHttpServer(port, contextPath, httpHandler);
 
     String uri = "http://localhost:" + port + contextPath;
@@ -207,39 +235,32 @@ public class Oauth2Test {
             .connection()
             .environmentBuilder()
             .build()) {
-      Connection c = env.connectionBuilder().build();
-      c.management().queue(q).exclusive(true).declare();
-      Publisher publisher = c.publisherBuilder().queue(q).build();
-      Sync consumeSync = TestUtils.sync();
-      c.consumerBuilder()
-          .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
-          .build();
-      publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeSync).completes();
-      assertThat(tokenRequestSync).completes();
-      consumeSync.reset(1);
-      publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeSync).completes();
+
+      Connection c1 = env.connectionBuilder().build();
+      Connection c2 =
+          env.connectionBuilder()
+              .oauth()
+              .tokenEndpointUri(uri)
+              .clientId("rabbitmq")
+              .clientSecret("rabbitmq")
+              .shared(false)
+              .connection()
+              .build();
+
+      List<String> connectionNames = List.of(c1.toString(), c2.toString());
+      List<Cli.ConnectionInfo> connections =
+          Cli.listConnections().stream()
+              .filter(c -> connectionNames.contains(c.clientProvidedName()))
+              .collect(toList());
+      assertThat(connections)
+          .hasSameSizeAs(connectionNames)
+          .as("Authentication mechanism should be PLAIN")
+          .allMatch(c -> SASL_MECHANISM_PLAIN.equals(c.authMechanism()));
     }
   }
 
-  private static HttpHandler jwtTokenHttpHandler(LongSupplier expirationTimeSupplier) {
-    return exchange -> {
-      long expirationTime = expirationTimeSupplier.getAsLong();
-      String token = token(expirationTime);
-      byte[] data = String.format("{ 'value': '%s' }", token).replace('\'', '"').getBytes(UTF_8);
-      Headers responseHeaders = exchange.getResponseHeaders();
-      responseHeaders.set("content-type", "application/json");
-      exchange.sendResponseHeaders(200, data.length);
-      OutputStream responseBody = exchange.getResponseBody();
-      responseBody.write(data);
-      responseBody.close();
-    };
+  private static HttpHandler oauthTokenHttpHandler(LongSupplier expirationTimeSupplier) {
+    return oauthTokenHttpHandler(expirationTimeSupplier, () -> {});
   }
 
   private static HttpHandler oauthTokenHttpHandler(
@@ -261,11 +282,7 @@ public class Oauth2Test {
   }
 
   private static TokenRequester httpTokenRequester(String uri) {
-    TokenParser parser =
-        json -> {
-          String compact = parse(json).get("value").toString();
-          return parseToken(compact);
-        };
+    TokenParser parser = new GsonTokenParser();
     return new HttpTokenRequester(
         uri, "", "", "", Collections.emptyMap(), null, null, null, null, parser);
   }
