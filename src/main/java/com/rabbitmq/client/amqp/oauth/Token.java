@@ -17,9 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth;
 
+import java.time.Instant;
+
 public interface Token {
 
   String value();
 
-  long expirationTime();
+  Instant expirationTime();
 }

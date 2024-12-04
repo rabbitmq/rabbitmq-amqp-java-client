@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.rabbitmq.client.amqp.oauth.Token;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -87,8 +88,8 @@ final class JwtTestUtils {
       }
 
       @Override
-      public long expirationTime() {
-        return expirationTime;
+      public Instant expirationTime() {
+        return Instant.ofEpochMilli(expirationTime);
       }
     };
   }

@@ -20,6 +20,8 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,10 +31,12 @@ import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import com.rabbitmq.client.amqp.oauth.Token;
 import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,13 +63,13 @@ public class TokenCredentialsTest {
 
   @Test
   void refreshShouldStopOnceUnregistered() throws InterruptedException {
-    Duration tokenExpiry = Duration.ofMillis(50);
+    Duration tokenExpiry = ofMillis(50);
     AtomicInteger requestCount = new AtomicInteger(0);
     when(this.requester.request())
         .thenAnswer(
             ignored -> {
               requestCount.incrementAndGet();
-              return token("ok", System.currentTimeMillis() + tokenExpiry.toMillis());
+              return token("ok", Instant.now().plus(tokenExpiry));
             });
     TokenCredentials credentials =
         new TokenCredentials(this.requester, this.scheduledExecutorService);
@@ -93,11 +97,11 @@ public class TokenCredentialsTest {
 
   @Test
   void severalRegistrationsShouldBeRefreshed() throws InterruptedException {
-    Duration tokenExpiry = Duration.ofMillis(50);
+    Duration tokenExpiry = ofMillis(50);
     Duration waitTime = tokenExpiry.dividedBy(4);
     Duration timeout = tokenExpiry.multipliedBy(20);
     when(this.requester.request())
-        .thenAnswer(ignored -> token("ok", System.currentTimeMillis() + tokenExpiry.toMillis()));
+        .thenAnswer(ignored -> token("ok", Instant.now().plus(tokenExpiry)));
     TokenCredentials credentials =
         new TokenCredentials(this.requester, this.scheduledExecutorService);
     int expectedRefreshCountPerConnection = 3;
@@ -142,7 +146,15 @@ public class TokenCredentialsTest {
     assertThat(totalRefreshCount).hasValue(refreshCountSnapshot + splitCount * 2);
   }
 
-  private static Token token(String value, long expirationTime) {
+  @Test
+  void refreshDelayStrategy() {
+    Duration diff = ofMillis(100);
+    Function<Instant, Duration> strategy = TokenCredentials.ratioRefreshDelayStrategy(0.8f);
+    assertThat(strategy.apply(Instant.now().plusSeconds(10))).isCloseTo(ofSeconds(8), diff);
+    assertThat(strategy.apply(Instant.now().minusSeconds(10))).isEqualTo(ofSeconds(1));
+  }
+
+  private static Token token(String value, Instant expirationTime) {
     return new Token() {
       @Override
       public String value() {
@@ -150,7 +162,7 @@ public class TokenCredentialsTest {
       }
 
       @Override
-      public long expirationTime() {
+      public Instant expirationTime() {
         return expirationTime;
       }
     };
