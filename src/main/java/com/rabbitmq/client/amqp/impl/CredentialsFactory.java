@@ -26,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 final class CredentialsFactory {
 
-  private volatile Credentials oauthCredentials;
+  private volatile Credentials globalOAuthCredentials;
   private final Lock oauthCredentialsLock = new ReentrantLock();
   private final AmqpEnvironment environment;
 
@@ -38,8 +38,11 @@ final class CredentialsFactory {
     CredentialsProvider provider = settings.credentialsProvider();
     Credentials credentials;
     if (settings.oauth().enabled()) {
-      // TODO consider OAuth credentials are not shared
-      credentials = oauthCredentials(settings);
+      if (settings.oauth().shared()) {
+        credentials = globalOAuthCredentials(settings);
+      } else {
+        credentials = createOAuthCredentials(settings);
+      }
     } else {
       if (provider instanceof UsernamePasswordCredentialsProvider) {
         UsernamePasswordCredentialsProvider credentialsProvider =
@@ -52,36 +55,39 @@ final class CredentialsFactory {
     return credentials;
   }
 
-  private Credentials oauthCredentials(DefaultConnectionSettings<?> connectionSettings) {
-    Credentials result = this.oauthCredentials;
+  private Credentials globalOAuthCredentials(DefaultConnectionSettings<?> connectionSettings) {
+    Credentials result = this.globalOAuthCredentials;
     if (result != null) {
       return result;
     }
 
     this.oauthCredentialsLock.lock();
     try {
-      if (this.oauthCredentials == null) {
-        DefaultConnectionSettings.DefaultOAuthSettings<?> settings = connectionSettings.oauth();
-        // TODO set TLS configuration on TLS requester
-        // TODO use pre-configured token requester if any
-        HttpTokenRequester tokenRequester =
-            new HttpTokenRequester(
-                settings.tokenEndpointUri(),
-                settings.clientId(),
-                settings.clientSecret(),
-                settings.grantType(),
-                settings.parameters(),
-                null,
-                null,
-                null,
-                null,
-                new GsonTokenParser());
-        this.oauthCredentials =
-            new TokenCredentials(tokenRequester, environment.scheduledExecutorService());
+      if (this.globalOAuthCredentials == null) {
+        this.globalOAuthCredentials = createOAuthCredentials(connectionSettings);
       }
-      return this.oauthCredentials;
+      return this.globalOAuthCredentials;
     } finally {
       this.oauthCredentialsLock.unlock();
     }
+  }
+
+  private Credentials createOAuthCredentials(DefaultConnectionSettings<?> connectionSettings) {
+    DefaultConnectionSettings.DefaultOAuthSettings<?> settings = connectionSettings.oauth();
+    // TODO set TLS configuration on TLS requester
+    // TODO use pre-configured token requester if any
+    HttpTokenRequester tokenRequester =
+        new HttpTokenRequester(
+            settings.tokenEndpointUri(),
+            settings.clientId(),
+            settings.clientSecret(),
+            settings.grantType(),
+            settings.parameters(),
+            null,
+            null,
+            null,
+            null,
+            new GsonTokenParser());
+    return new TokenCredentials(tokenRequester, environment.scheduledExecutorService());
   }
 }

@@ -22,21 +22,29 @@ import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
 final class UsernamePasswordCredentials implements Credentials {
 
   private final UsernamePasswordCredentialsProvider provider;
+  private final Registration registration;
 
   UsernamePasswordCredentials(UsernamePasswordCredentialsProvider provider) {
     this.provider = provider;
+    this.registration = new RegistrationImpl(provider);
   }
 
   @Override
-  public Registration register(RefreshCallback refreshCallback) {
-    return new RegistrationImpl();
+  public Registration register(String name, AuthenticationCallback refreshCallback) {
+    return this.registration;
   }
 
-  private final class RegistrationImpl implements Registration {
+  private static final class RegistrationImpl implements Registration {
+
+    private final UsernamePasswordCredentialsProvider provider;
+
+    private RegistrationImpl(UsernamePasswordCredentialsProvider provider) {
+      this.provider = provider;
+    }
 
     @Override
-    public void connect(ConnectionCallback callback) {
-      callback.username(provider.getUsername()).password(provider.getPassword());
+    public void connect(AuthenticationCallback callback) {
+      callback.authenticate(provider.getUsername(), provider.getPassword());
     }
 
     @Override

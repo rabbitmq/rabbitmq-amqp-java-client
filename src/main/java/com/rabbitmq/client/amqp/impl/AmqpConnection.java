@@ -114,7 +114,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.topologyListener = createTopologyListener(builder);
 
     if (recoveryConfiguration.activated()) {
-      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, builder.name());
+      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, this.name());
     } else {
       disconnectHandler =
           (c, e) -> {
@@ -137,21 +137,30 @@ final class AmqpConnection extends ResourceBase implements Connection {
     Credentials credentials = builder.credentials();
     this.credentialsRegistration =
         credentials.register(
+            this.name(),
             (username, password) -> {
-              LOGGER.debug("Setting new token for connection {}", this.name);
-              long start = nanoTime();
-              ((AmqpManagement) management()).setToken(password);
-              LOGGER.debug(
-                  "Set new token for connection {} in {} ms",
-                  this.name,
-                  ofNanos(nanoTime() - start).toMillis());
+              State state = this.state();
+              if (state == OPEN) {
+                LOGGER.debug("Setting new token for connection {}", this.name);
+                long start = nanoTime();
+                ((AmqpManagement) management()).setToken(password);
+                LOGGER.debug(
+                    "Set new token for connection {} in {} ms",
+                    this.name,
+                    ofNanos(nanoTime() - start).toMillis());
+              } else {
+                LOGGER.debug(
+                    "Could not set new token for connection {} because its state is {}",
+                    this.name(),
+                    state);
+              }
             });
     LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
             addrs -> {
               NativeConnectionWrapper wrapper =
-                  connect(this.connectionSettings, builder.name(), disconnectHandler, addrs);
+                  connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
               this.nativeConnection = wrapper.connection();
               return wrapper;
             },
@@ -440,8 +449,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
                             if (!this.recoveringConnection.get()) {
                               recoverAfterConnectionFailure(
                                   recoveryConfiguration,
-                                  name,
+                                  this.name(),
                                   amqpException,
+
                                   disconnectedHandlerReference);
                             }
                           });
@@ -893,7 +903,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return Objects.hashCode(id);
   }
 
-  private static class TokenConnectionCallback implements Credentials.ConnectionCallback {
+  private static class TokenConnectionCallback implements Credentials.AuthenticationCallback {
 
     private final ConnectionOptions options;
 
@@ -902,15 +912,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
 
     @Override
-    public Credentials.ConnectionCallback username(String username) {
-      options.user(username);
-      return this;
-    }
-
-    @Override
-    public Credentials.ConnectionCallback password(String password) {
-      options.password(password);
-      return this;
+    public void authenticate(String username, String password) {
+      options.user(username).password(password);
     }
   }
 }

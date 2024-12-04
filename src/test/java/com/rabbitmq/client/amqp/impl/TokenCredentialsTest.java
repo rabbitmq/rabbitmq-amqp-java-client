@@ -74,6 +74,7 @@ public class TokenCredentialsTest {
     Sync refreshSync = sync(expectedRefreshCount);
     Credentials.Registration registration =
         credentials.register(
+            "",
             (u, p) -> {
               refreshCount.incrementAndGet();
               refreshSync.down();
@@ -93,8 +94,8 @@ public class TokenCredentialsTest {
   @Test
   void severalRegistrationsShouldBeRefreshed() throws InterruptedException {
     Duration tokenExpiry = Duration.ofMillis(50);
-    Duration waitTime = tokenExpiry.dividedBy(2);
-    Duration timeout = tokenExpiry.multipliedBy(10);
+    Duration waitTime = tokenExpiry.dividedBy(4);
+    Duration timeout = tokenExpiry.multipliedBy(20);
     when(this.requester.request())
         .thenAnswer(ignored -> token("ok", System.currentTimeMillis() + tokenExpiry.toMillis()));
     TokenCredentials credentials =
@@ -109,6 +110,7 @@ public class TokenCredentialsTest {
                   Sync sync = sync(expectedRefreshCountPerConnection);
                   Credentials.Registration r =
                       credentials.register(
+                          "",
                           (username, password) -> {
                             totalRefreshCount.incrementAndGet();
                             sync.down();
@@ -154,18 +156,7 @@ public class TokenCredentialsTest {
     };
   }
 
-  private static Credentials.ConnectionCallback connectionCallback(Runnable passwordCallback) {
-    return new Credentials.ConnectionCallback() {
-      @Override
-      public Credentials.ConnectionCallback username(String username) {
-        return this;
-      }
-
-      @Override
-      public Credentials.ConnectionCallback password(String password) {
-        passwordCallback.run();
-        return this;
-      }
-    };
+  private static Credentials.AuthenticationCallback connectionCallback(Runnable passwordCallback) {
+    return (username, password) -> passwordCallback.run();
   }
 }

@@ -87,9 +87,10 @@ final class TokenCredentials implements Credentials {
   }
 
   @Override
-  public Registration register(RefreshCallback refreshCallback) {
+  public Registration register(String name, AuthenticationCallback refreshCallback) {
     Long id = this.registrationSequence.getAndIncrement();
-    RegistrationImpl registration = new RegistrationImpl(id, refreshCallback);
+    name = name == null ? id.toString() : name;
+    RegistrationImpl registration = new RegistrationImpl(id, name, refreshCallback);
     this.registrations.put(id, registration);
     return registration;
   }
@@ -103,7 +104,14 @@ final class TokenCredentials implements Credentials {
             if (t.equals(this.token)) {
               if (!registration.isClosed() && !registration.hasSameToken(t)) {
                 // the registration does not have the new token yet
-                registration.refreshCallback.refresh("", this.token.value());
+                try {
+                  registration.refreshCallback().authenticate("", this.token.value());
+                } catch (Exception e) {
+                  LOGGER.warn(
+                      "Error while refreshing token for registration '{}': {}",
+                      registration.name(),
+                      e.getMessage());
+                }
                 registration.registrationToken = this.token;
                 refreshedCount++;
               }
@@ -167,17 +175,19 @@ final class TokenCredentials implements Credentials {
   private final class RegistrationImpl implements Registration {
 
     private final Long id;
-    private final RefreshCallback refreshCallback;
+    private final String name;
+    private final AuthenticationCallback refreshCallback;
     private volatile Token registrationToken;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    private RegistrationImpl(Long id, RefreshCallback refreshCallback) {
+    private RegistrationImpl(Long id, String name, AuthenticationCallback refreshCallback) {
       this.id = id;
+      this.name = name;
       this.refreshCallback = refreshCallback;
     }
 
     @Override
-    public void connect(ConnectionCallback callback) {
+    public void connect(AuthenticationCallback callback) {
       boolean shouldRefresh = false;
       Token tokenToUse;
       lock();
@@ -197,7 +207,7 @@ final class TokenCredentials implements Credentials {
         unlock();
       }
 
-      callback.username("").password(tokenToUse.value());
+      callback.authenticate("", tokenToUse.value());
       if (shouldRefresh) {
         refreshRegistrations(tokenToUse);
       }
@@ -219,6 +229,14 @@ final class TokenCredentials implements Credentials {
           }
         }
       }
+    }
+
+    private AuthenticationCallback refreshCallback() {
+      return this.refreshCallback;
+    }
+
+    private String name() {
+      return this.name;
     }
 
     private boolean hasSameToken(Token t) {

@@ -29,5 +29,7 @@ public interface OAuthSettings<T> {
 
   OAuthSettings<T> parameter(String name, String value);
 
+  OAuthSettings<T> shared(boolean shared);
+
   T connection();
 }

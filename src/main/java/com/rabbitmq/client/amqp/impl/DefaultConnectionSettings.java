@@ -507,6 +507,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private String clientId;
     private String clientSecret;
     private String grantType = "client_credentials";
+    private boolean shared = true;
 
     DefaultOAuthSettings(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;
@@ -514,6 +515,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     @Override
     public OAuthSettings<T> tokenEndpointUri(String uri) {
+      this.connectionSettings.saslMechanism(SASL_MECHANISM_PLAIN);
       this.tokenEndpointUri = uri;
       return this;
     }
@@ -547,6 +549,12 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     @Override
+    public OAuthSettings<T> shared(boolean shared) {
+      this.shared = shared;
+      return this;
+    }
+
+    @Override
     public T connection() {
       return this.connectionSettings.toReturn();
     }
@@ -556,6 +564,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       copy.clientId(this.clientId);
       copy.clientSecret(this.clientSecret);
       copy.grantType(this.grantType);
+      copy.shared(this.shared);
       this.parameters.forEach(copy::parameter);
     }
 
@@ -577,6 +586,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     Map<String, String> parameters() {
       return Map.copyOf(this.parameters);
+    }
+
+    boolean shared() {
+      return this.shared;
     }
 
     boolean enabled() {
