@@ -47,9 +47,9 @@ final class TokenCredentials implements Credentials {
   private final Lock lock = new ReentrantLock();
   private final Map<Long, RegistrationImpl> registrations = new ConcurrentHashMap<>();
   private final AtomicLong registrationSequence = new AtomicLong(0);
-  private final AtomicBoolean schedulingRenewal = new AtomicBoolean(false);
+  private final AtomicBoolean schedulingRefresh = new AtomicBoolean(false);
   private final Function<Instant, Duration> refreshDelayStrategy;
-  private volatile ScheduledFuture<?> renewalTask;
+  private volatile ScheduledFuture<?> refreshTask;
 
   TokenCredentials(TokenRequester requester, ScheduledExecutorService scheduledExecutorService) {
     this.requester = requester;
@@ -83,28 +83,28 @@ final class TokenCredentials implements Credentials {
   }
 
   @Override
-  public Registration register(String name, AuthenticationCallback refreshCallback) {
+  public Registration register(String name, AuthenticationCallback updateCallback) {
     Long id = this.registrationSequence.getAndIncrement();
     name = name == null ? id.toString() : name;
-    RegistrationImpl registration = new RegistrationImpl(id, name, refreshCallback);
+    RegistrationImpl registration = new RegistrationImpl(id, name, updateCallback);
     this.registrations.put(id, registration);
     return registration;
   }
 
-  private void refreshRegistrations(Token t) {
+  private void updateRegistrations(Token t) {
     this.scheduledExecutorService.execute(
         () -> {
-          LOGGER.debug("Refreshing {} registration(s)", this.registrations.size());
+          LOGGER.debug("Updating {} registration(s)", this.registrations.size());
           int refreshedCount = 0;
           for (RegistrationImpl registration : this.registrations.values()) {
             if (t.equals(this.token)) {
               if (!registration.isClosed() && !registration.hasSameToken(t)) {
                 // the registration does not have the new token yet
                 try {
-                  registration.refreshCallback().authenticate("", this.token.value());
+                  registration.updateCallback().authenticate("", this.token.value());
                 } catch (Exception e) {
                   LOGGER.warn(
-                      "Error while refreshing token for registration '{}': {}",
+                      "Error while updating token for registration '{}': {}",
                       registration.name(),
                       e.getMessage());
                 }
@@ -113,7 +113,7 @@ final class TokenCredentials implements Credentials {
               }
             }
           }
-          LOGGER.debug("Refreshed {} registration(s)", refreshedCount);
+          LOGGER.debug("Updated {} registration(s)", refreshedCount);
         });
   }
 
@@ -122,22 +122,22 @@ final class TokenCredentials implements Credentials {
     try {
       if (!t.equals(this.token)) {
         this.token = t;
-        scheduleRenewal(t);
+        scheduleTokenRefresh(t);
       }
     } finally {
       unlock();
     }
   }
 
-  private void scheduleRenewal(Token t) {
-    if (this.schedulingRenewal.compareAndSet(false, true)) {
-      if (this.renewalTask != null) {
-        this.renewalTask.cancel(false);
+  private void scheduleTokenRefresh(Token t) {
+    if (this.schedulingRefresh.compareAndSet(false, true)) {
+      if (this.refreshTask != null) {
+        this.refreshTask.cancel(false);
       }
       Duration delay = this.refreshDelayStrategy.apply(t.expirationTime());
       if (!this.registrations.isEmpty()) {
         LOGGER.debug("Scheduling token retrieval in {}", delay);
-        this.renewalTask =
+        this.refreshTask =
             this.scheduledExecutorService.schedule(
                 () -> {
                   Token previousToken = this.token;
@@ -146,7 +146,7 @@ final class TokenCredentials implements Credentials {
                     if (this.token.equals(previousToken)) {
                       Token newToken = getToken();
                       token(newToken);
-                      refreshRegistrations(newToken);
+                      updateRegistrations(newToken);
                     }
                   } finally {
                     unlock();
@@ -155,9 +155,9 @@ final class TokenCredentials implements Credentials {
                 delay.toMillis(),
                 TimeUnit.MILLISECONDS);
       } else {
-        this.renewalTask = null;
+        this.refreshTask = null;
       }
-      this.schedulingRenewal.set(false);
+      this.schedulingRefresh.set(false);
     }
   }
 
@@ -169,14 +169,14 @@ final class TokenCredentials implements Credentials {
 
     private final Long id;
     private final String name;
-    private final AuthenticationCallback refreshCallback;
+    private final AuthenticationCallback updateCallback;
     private volatile Token registrationToken;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    private RegistrationImpl(Long id, String name, AuthenticationCallback refreshCallback) {
+    private RegistrationImpl(Long id, String name, AuthenticationCallback updateCallback) {
       this.id = id;
       this.name = name;
-      this.refreshCallback = refreshCallback;
+      this.updateCallback = updateCallback;
     }
 
     @Override
@@ -185,24 +185,26 @@ final class TokenCredentials implements Credentials {
       Token tokenToUse;
       lock();
       try {
-        if (token == null) {
+        Token globalToken = token;
+        if (globalToken == null) {
           token(getToken());
-        } else if (expiresSoon(token)) {
+        } else if (expiresSoon(globalToken)) {
           shouldRefresh = true;
           token(getToken());
         }
-        this.registrationToken = token;
+        if (!token.equals(this.registrationToken)) {
+          this.registrationToken = token;
+        }
         tokenToUse = this.registrationToken;
-        if (renewalTask == null) {
-          scheduleRenewal(tokenToUse);
+        if (refreshTask == null) {
+          scheduleTokenRefresh(tokenToUse);
         }
       } finally {
         unlock();
       }
-
       callback.authenticate("", tokenToUse.value());
       if (shouldRefresh) {
-        refreshRegistrations(tokenToUse);
+        updateRegistrations(tokenToUse);
       }
     }
 
@@ -210,12 +212,12 @@ final class TokenCredentials implements Credentials {
     public void unregister() {
       if (this.closed.compareAndSet(false, true)) {
         registrations.remove(this.id);
-        ScheduledFuture<?> task = renewalTask;
+        ScheduledFuture<?> task = refreshTask;
         if (registrations.isEmpty() && task != null) {
           lock();
           try {
-            if (renewalTask != null) {
-              renewalTask.cancel(false);
+            if (refreshTask != null) {
+              refreshTask.cancel(false);
             }
           } finally {
             unlock();
@@ -224,8 +226,8 @@ final class TokenCredentials implements Credentials {
       }
     }
 
-    private AuthenticationCallback refreshCallback() {
-      return this.refreshCallback;
+    private AuthenticationCallback updateCallback() {
+      return this.updateCallback;
     }
 
     private String name() {

@@ -30,7 +30,7 @@ final class UsernamePasswordCredentials implements Credentials {
   }
 
   @Override
-  public Registration register(String name, AuthenticationCallback refreshCallback) {
+  public Registration register(String name, AuthenticationCallback updateCallback) {
     return this.registration;
   }
 
