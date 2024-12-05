@@ -21,24 +21,26 @@ interface Credentials {
 
   Credentials NO_OP = new NoOpCredentials();
 
-  Registration register(String name, AuthenticationCallback refreshCallback);
+  Registration register(String name, AuthenticationCallback updateCallback);
 
   interface Registration {
 
     void connect(AuthenticationCallback callback);
 
     void unregister();
+
   }
 
   interface AuthenticationCallback {
 
     void authenticate(String username, String password);
+
   }
 
   class NoOpCredentials implements Credentials {
 
     @Override
-    public Registration register(String name, AuthenticationCallback refreshCallback) {
+    public Registration register(String name, AuthenticationCallback updateCallback) {
       return new NoOpRegistration();
     }
   }
