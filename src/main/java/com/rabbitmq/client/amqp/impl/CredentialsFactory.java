@@ -21,8 +21,10 @@ import com.rabbitmq.client.amqp.CredentialsProvider;
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.oauth.GsonTokenParser;
 import com.rabbitmq.client.amqp.oauth.HttpTokenRequester;
+import java.net.http.HttpClient;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 final class CredentialsFactory {
 
@@ -74,8 +76,12 @@ final class CredentialsFactory {
 
   private Credentials createOAuthCredentials(DefaultConnectionSettings<?> connectionSettings) {
     DefaultConnectionSettings.DefaultOAuthSettings<?> settings = connectionSettings.oauth();
-    // TODO set TLS configuration on TLS requester
-    // TODO use pre-configured token requester if any
+    Consumer<HttpClient.Builder> clientBuilderConsumer;
+    if (settings.tlsEnabled()) {
+      clientBuilderConsumer = b -> b.sslContext(settings.tls().sslContext());
+    } else {
+      clientBuilderConsumer = ignored -> {};
+    }
     HttpTokenRequester tokenRequester =
         new HttpTokenRequester(
             settings.tokenEndpointUri(),
@@ -83,9 +89,7 @@ final class CredentialsFactory {
             settings.clientSecret(),
             settings.grantType(),
             settings.parameters(),
-            null,
-            null,
-            null,
+            clientBuilderConsumer,
             null,
             new GsonTokenParser());
     return new TokenCredentials(tokenRequester, environment.scheduledExecutorService());
