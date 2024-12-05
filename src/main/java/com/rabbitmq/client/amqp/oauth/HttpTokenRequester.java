@@ -30,8 +30,6 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.function.Consumer;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLSocketFactory;
 
 public final class HttpTokenRequester implements TokenRequester {
 
@@ -45,9 +43,6 @@ public final class HttpTokenRequester implements TokenRequester {
 
   private final Map<String, String> parameters;
 
-  private final HostnameVerifier hostnameVerifier;
-  private final SSLSocketFactory sslSocketFactory;
-
   private final HttpClient client;
   private final Consumer<HttpRequest.Builder> requestBuilderConsumer;
 
@@ -59,8 +54,6 @@ public final class HttpTokenRequester implements TokenRequester {
       String clientSecret,
       String grantType,
       Map<String, String> parameters,
-      HostnameVerifier hostnameVerifier,
-      SSLSocketFactory sslSocketFactory,
       Consumer<HttpClient.Builder> clientBuilderConsumer,
       Consumer<HttpRequest.Builder> requestBuilderConsumer,
       TokenParser parser) {
@@ -73,8 +66,6 @@ public final class HttpTokenRequester implements TokenRequester {
     this.clientSecret = clientSecret;
     this.grantType = grantType;
     this.parameters = Map.copyOf(parameters);
-    this.hostnameVerifier = hostnameVerifier;
-    this.sslSocketFactory = sslSocketFactory;
     this.parser = parser;
     if (requestBuilderConsumer == null) {
       this.requestBuilderConsumer =

@@ -19,7 +19,6 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConnectionSettings.SASL_MECHANISM_PLAIN;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
-import static com.rabbitmq.client.amqp.impl.HttpTestUtils.startHttpServer;
 import static com.rabbitmq.client.amqp.impl.JwtTestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
@@ -35,35 +34,39 @@ import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfOauth2AuthBackendNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import com.rabbitmq.client.amqp.oauth.GsonTokenParser;
-import com.rabbitmq.client.amqp.oauth.HttpTokenRequester;
-import com.rabbitmq.client.amqp.oauth.TokenParser;
-import com.rabbitmq.client.amqp.oauth.TokenRequester;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.OutputStream;
+import java.security.KeyStore;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import java.util.stream.IntStream;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@AmqpTestInfrastructure
 @DisabledIfOauth2AuthBackendNotEnabled
 public class Oauth2Test {
 
   Environment environment;
   HttpServer server;
 
+  @BeforeEach
+  void init() {
+    environment = TestUtils.environmentBuilder().build();
+  }
+
   @AfterEach
   void tearDown() {
+    environment.close();
     if (this.server != null) {
       server.stop(0);
     }
@@ -133,7 +136,7 @@ public class Oauth2Test {
     String uri = "http://localhost:" + port + contextPath;
 
     this.server =
-        startHttpServer(
+        HttpTestUtils.startServer(
             port,
             contextPath,
             oauthTokenHttpHandler(() -> currentTimeMillis() - ofMinutes(60).toMillis()));
@@ -169,7 +172,7 @@ public class Oauth2Test {
               refreshCount.incrementAndGet();
               tokenRequestSync.down();
             });
-    this.server = startHttpServer(port, contextPath, httpHandler);
+    this.server = HttpTestUtils.startServer(port, contextPath, httpHandler);
 
     String uri = "http://localhost:" + port + contextPath;
     try (Environment env =
@@ -222,7 +225,7 @@ public class Oauth2Test {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
     HttpHandler httpHandler = oauthTokenHttpHandler(() -> currentTimeMillis() + 2_000);
-    this.server = startHttpServer(port, contextPath, httpHandler);
+    this.server = HttpTestUtils.startServer(port, contextPath, httpHandler);
 
     String uri = "http://localhost:" + port + contextPath;
     try (Environment env =
@@ -259,6 +262,59 @@ public class Oauth2Test {
     }
   }
 
+  @Test
+  void gettingTokenOnHttpsShouldWork(TestInfo info) throws Exception {
+    KeyStore keyStore = HttpTestUtils.generateKeyPair();
+
+    Sync tokenRefreshedSync = sync(3);
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
+    HttpHandler httpHandler =
+        oauthTokenHttpHandler(() -> currentTimeMillis() + 2_000, tokenRefreshedSync::down);
+    this.server = HttpTestUtils.startServer(port, contextPath, keyStore, httpHandler);
+
+    SSLContext sslContext = SSLContext.getInstance("TLS");
+    TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+    tmf.init(keyStore);
+    sslContext.init(null, tmf.getTrustManagers(), null);
+
+    String uri = "https://localhost:" + port + contextPath;
+    Connection c =
+        environment
+            .connectionBuilder()
+            .oauth()
+            .tokenEndpointUri(uri)
+            .clientId("rabbitmq")
+            .clientSecret("rabbitmq")
+            .tls()
+            .sslContext(sslContext)
+            .oauth()
+            .connection()
+            .build();
+
+    String q = name(info);
+    c.management().queue(q).exclusive(true).declare();
+    Publisher publisher = c.publisherBuilder().queue(q).build();
+    Sync consumeSync = sync();
+    c.consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
+        .build();
+
+    publisher.publish(publisher.message(), ctx -> {});
+    assertThat(consumeSync).completes();
+
+    assertThat(tokenRefreshedSync).completes();
+
+    consumeSync.reset();
+    publisher.publish(publisher.message(), ctx -> {});
+    assertThat(consumeSync).completes();
+  }
+
   private static HttpHandler oauthTokenHttpHandler(LongSupplier expirationTimeSupplier) {
     return oauthTokenHttpHandler(expirationTimeSupplier, () -> {});
   }
@@ -279,11 +335,5 @@ public class Oauth2Test {
       responseBody.close();
       requestCallback.run();
     };
-  }
-
-  private static TokenRequester httpTokenRequester(String uri) {
-    TokenParser parser = new GsonTokenParser();
-    return new HttpTokenRequester(
-        uri, "", "", "", Collections.emptyMap(), null, null, null, null, parser);
   }
 }

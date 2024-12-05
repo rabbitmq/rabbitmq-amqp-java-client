@@ -17,40 +17,65 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth;
 
-import static com.rabbitmq.client.amqp.impl.HttpTestUtils.startHttpServer;
 import static com.rabbitmq.client.amqp.impl.TestUtils.randomNetworkPort;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.rabbitmq.client.amqp.impl.HttpTestUtils;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.http.HttpClient;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class HttpTokenRequesterTest {
 
   HttpServer server;
   int port;
+  String contextPath = "/uaa/oauth/token";
 
   @BeforeEach
   void init() throws IOException {
     this.port = randomNetworkPort();
   }
 
-  @Test
-  void requestToken() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void requestToken(boolean tls) throws Exception {
+    String protocol;
+    KeyStore keyStore;
+    Consumer<HttpClient.Builder> clientBuilderConsumer;
+    if (tls) {
+      protocol = "https";
+      keyStore = HttpTestUtils.generateKeyPair();
+      SSLContext sslContext = SSLContext.getInstance("TLS");
+      TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+      tmf.init(keyStore);
+      sslContext.init(null, tmf.getTrustManagers(), null);
+      clientBuilderConsumer = b -> b.sslContext(sslContext);
+    } else {
+      protocol = "http";
+      keyStore = null;
+      clientBuilderConsumer = b -> {};
+    }
+    String uri = String.format("%s://localhost:%d%s", protocol, port, contextPath);
     AtomicReference<String> httpMethod = new AtomicReference<>();
     AtomicReference<String> contentType = new AtomicReference<>();
     AtomicReference<String> authorization = new AtomicReference<>();
@@ -60,11 +85,11 @@ public class HttpTokenRequesterTest {
     String accessToken = UUID.randomUUID().toString();
 
     Duration expiresIn = Duration.ofSeconds(60);
-    String contextPath = "/uaa/oauth/token";
     server =
-        startHttpServer(
+        HttpTestUtils.startServer(
             port,
             contextPath,
+            keyStore,
             exchange -> {
               Headers headers = exchange.getRequestHeaders();
               httpMethod.set(exchange.getRequestMethod());
@@ -91,14 +116,12 @@ public class HttpTokenRequesterTest {
 
     TokenRequester requester =
         new HttpTokenRequester(
-            "http://localhost:" + port + contextPath,
+            uri,
             "rabbit_client",
             "rabbit_secret",
             "password",
             Map.of("username", "rabbit_username", "password", "rabbit_password"),
-            null,
-            null,
-            null,
+            clientBuilderConsumer,
             null,
             StringToken::new);
 

@@ -224,7 +224,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     this.affinity.copyTo(copy.affinity);
 
     if (this.oAuthSettings.enabled()) {
-      this.oAuthSettings.copyTo((DefaultOAuthSettings<?>) copy.oauth());
+      this.oAuthSettings.copyTo(copy.oauth());
     }
   }
 
@@ -502,6 +502,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   static class DefaultOAuthSettings<T> implements OAuthSettings<T> {
 
     private final DefaultConnectionSettings<T> connectionSettings;
+    private final DefaultOAuthTlsSettings<T> tls = new DefaultOAuthTlsSettings<>(this);
     private final Map<String, String> parameters = new HashMap<>();
     private String tokenEndpointUri;
     private String clientId;
@@ -555,6 +556,12 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     @Override
+    public DefaultOAuthTlsSettings<? extends T> tls() {
+      this.tls.enable();
+      return this.tls;
+    }
+
+    @Override
     public T connection() {
       return this.connectionSettings.toReturn();
     }
@@ -566,6 +573,9 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       copy.grantType(this.grantType);
       copy.shared(this.shared);
       this.parameters.forEach(copy::parameter);
+      if (this.tls.enabled()) {
+        this.tls.copyTo(copy.tls());
+      }
     }
 
     String tokenEndpointUri() {
@@ -594,6 +604,49 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     boolean enabled() {
       return this.tokenEndpointUri != null;
+    }
+
+    boolean tlsEnabled() {
+      return this.tls.enabled();
+    }
+  }
+
+  static class DefaultOAuthTlsSettings<T> implements OAuthSettings.TlsSettings<T> {
+
+    private final OAuthSettings<T> oAuthSettings;
+    private SSLContext sslContext;
+    private boolean enabled = false;
+
+    DefaultOAuthTlsSettings(OAuthSettings<T> oAuthSettings) {
+      this.oAuthSettings = oAuthSettings;
+    }
+
+    @Override
+    public OAuthSettings.TlsSettings<T> sslContext(SSLContext sslContext) {
+      this.sslContext = sslContext;
+      return this;
+    }
+
+    @Override
+    public OAuthSettings<T> oauth() {
+      return this.oAuthSettings;
+    }
+
+    void enable() {
+      this.enabled = true;
+    }
+
+    boolean enabled() {
+      return this.enabled;
+    }
+
+    SSLContext sslContext() {
+      return this.sslContext;
+    }
+
+    void copyTo(DefaultOAuthTlsSettings<?> copy) {
+      copy.enabled = this.enabled;
+      copy.sslContext(this.sslContext);
     }
   }
 }
