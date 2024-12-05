@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import javax.net.ssl.SSLContext;
+
 public interface OAuthSettings<T> {
 
   OAuthSettings<T> tokenEndpointUri(String uri);
@@ -31,5 +33,14 @@ public interface OAuthSettings<T> {
 
   OAuthSettings<T> shared(boolean shared);
 
+  TlsSettings<? extends T> tls();
+
   T connection();
+
+  interface TlsSettings<T> {
+
+    TlsSettings<T> sslContext(SSLContext sslContext);
+
+    OAuthSettings<T> oauth();
+  }
 }
