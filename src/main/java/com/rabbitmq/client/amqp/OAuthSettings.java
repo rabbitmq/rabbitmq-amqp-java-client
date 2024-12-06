@@ -19,14 +19,53 @@ package com.rabbitmq.client.amqp;
 
 import javax.net.ssl.SSLContext;
 
+/**
+ * Configuration to retrieve a token using the <a
+ * href="https://tools.ietf.org/html/rfc6749#section-4.4">OAuth 2 Client Credentials flow</a>.
+ *
+ * @param <T> the type of object returned by methods, usually the object itself
+ */
 public interface OAuthSettings<T> {
 
+  /**
+   * Set the URI to access to get the token.
+   *
+   * <p>TLS is supported by providing a <code>HTTPS</code> URI and setting a {@link SSLContext}. See
+   * {@link #tls()} for more information. <em>Applications in production should always use HTTPS to
+   * retrieve tokens.</em>
+   *
+   * @param uri access URI
+   * @return OAuth settings
+   */
   OAuthSettings<T> tokenEndpointUri(String uri);
 
+  /**
+   * Set the OAuth 2 client ID
+   *
+   * <p>The client ID usually identifies the application that requests a token.
+   *
+   * @param clientId client ID
+   * @return OAuth settings
+   */
   OAuthSettings<T> clientId(String clientId);
 
+  /**
+   * Set the secret (password) to use to get a token.
+   *
+   * @param clientSecret client secret
+   * @return OAuth settings
+   */
   OAuthSettings<T> clientSecret(String clientSecret);
 
+  /**
+   * Set the grant type to use when requesting the token.
+   *
+   * <p>The default is <code>client_credentials</code>, but some OAuth 2 servers can use
+   * non-standard grant types to request tokens with extra-information.
+   *
+   * @param grantType grant type
+   * @return OAuth settings
+   */
   OAuthSettings<T> grantType(String grantType);
 
   OAuthSettings<T> parameter(String name, String value);
