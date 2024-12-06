@@ -28,13 +28,11 @@ interface Credentials {
     void connect(AuthenticationCallback callback);
 
     void unregister();
-
   }
 
   interface AuthenticationCallback {
 
     void authenticate(String username, String password);
-
   }
 
   class NoOpCredentials implements Credentials {

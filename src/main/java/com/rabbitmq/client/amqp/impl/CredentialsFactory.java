@@ -92,6 +92,7 @@ final class CredentialsFactory {
             clientBuilderConsumer,
             null,
             new GsonTokenParser());
-    return new TokenCredentials(tokenRequester, environment.scheduledExecutorService());
+    return new TokenCredentials(
+        tokenRequester, environment.scheduledExecutorService(), settings.refreshDelayStrategy());
   }
 }

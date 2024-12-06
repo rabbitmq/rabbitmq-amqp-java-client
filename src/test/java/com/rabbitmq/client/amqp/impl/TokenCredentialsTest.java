@@ -20,6 +20,8 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static com.rabbitmq.client.amqp.impl.TokenCredentials.DEFAULT_REFRESH_DELAY_STRATEGY;
+import static com.rabbitmq.client.amqp.impl.Tuples.pair;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
@@ -72,7 +74,8 @@ public class TokenCredentialsTest {
               return token("ok", Instant.now().plus(tokenExpiry));
             });
     TokenCredentials credentials =
-        new TokenCredentials(this.requester, this.scheduledExecutorService);
+        new TokenCredentials(
+            this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
     int expectedRefreshCount = 3;
     AtomicInteger refreshCount = new AtomicInteger();
     Sync refreshSync = sync(expectedRefreshCount);
@@ -103,7 +106,8 @@ public class TokenCredentialsTest {
     when(this.requester.request())
         .thenAnswer(ignored -> token("ok", Instant.now().plus(tokenExpiry)));
     TokenCredentials credentials =
-        new TokenCredentials(this.requester, this.scheduledExecutorService);
+        new TokenCredentials(
+            this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
     int expectedRefreshCountPerConnection = 3;
     int connectionCount = 10;
     AtomicInteger totalRefreshCount = new AtomicInteger();
@@ -119,7 +123,7 @@ public class TokenCredentialsTest {
                             totalRefreshCount.incrementAndGet();
                             sync.down();
                           });
-                  return Tuples.pair(r, sync);
+                  return pair(r, sync);
                 })
             .collect(toList());
 
