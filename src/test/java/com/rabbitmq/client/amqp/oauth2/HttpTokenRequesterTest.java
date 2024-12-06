@@ -15,7 +15,7 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.oauth;
+package com.rabbitmq.client.amqp.oauth2;
 
 import static com.rabbitmq.client.amqp.impl.TestUtils.randomNetworkPort;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -104,7 +104,7 @@ public class HttpTokenRequesterTest {
                       .collect(Collectors.toMap(p -> p[0], p -> p[1]));
               httpParameters.set(parameters);
 
-              byte[] data = OAuthTestUtils.sampleJsonToken(accessToken, expiresIn).getBytes(UTF_8);
+              byte[] data = OAuth2TestUtils.sampleJsonToken(accessToken, expiresIn).getBytes(UTF_8);
 
               Headers responseHeaders = exchange.getResponseHeaders();
               responseHeaders.set("content-type", "application/json");

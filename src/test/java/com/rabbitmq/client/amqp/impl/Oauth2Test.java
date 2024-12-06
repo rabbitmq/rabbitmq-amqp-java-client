@@ -25,7 +25,7 @@ import static com.rabbitmq.client.amqp.impl.JwtTestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static com.rabbitmq.client.amqp.impl.TokenCredentials.ratioRefreshDelayStrategy;
-import static com.rabbitmq.client.amqp.oauth.OAuthTestUtils.sampleJsonToken;
+import static com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.sampleJsonToken;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.*;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder.EnvironmentConnectionSettings;
-import com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DefaultOAuthSettings;
+import com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DefaultOAuth2Settings;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfOauth2AuthBackendNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
@@ -144,13 +144,13 @@ public class Oauth2Test {
         startServer(
             port,
             contextPath,
-            oauthTokenHttpHandler(() -> currentTimeMillis() - ofMinutes(60).toMillis()));
+            oAuth2TokenHttpHandler(() -> currentTimeMillis() - ofMinutes(60).toMillis()));
 
     assertThatThrownBy(
             () ->
                 environment
                     .connectionBuilder()
-                    .oauth()
+                    .oauth2()
                     .tokenEndpointUri(uri)
                     .clientId("rabbitmq")
                     .clientSecret("rabbitmq")
@@ -171,7 +171,7 @@ public class Oauth2Test {
     Sync tokenRequestSync = sync(expectedRefreshCount);
     AtomicInteger refreshCount = new AtomicInteger();
     HttpHandler httpHandler =
-        oauthTokenHttpHandler(
+        oAuth2TokenHttpHandler(
             () -> currentTimeMillis() + 3_000,
             () -> {
               refreshCount.incrementAndGet();
@@ -181,13 +181,13 @@ public class Oauth2Test {
 
     String uri = "http://localhost:" + port + contextPath;
     AmqpEnvironmentBuilder envBuilder = new AmqpEnvironmentBuilder();
-    DefaultOAuthSettings<? extends EnvironmentConnectionSettings> oauth =
-        (DefaultOAuthSettings<? extends EnvironmentConnectionSettings>)
-            envBuilder.connectionSettings().oauth();
+    DefaultOAuth2Settings<? extends EnvironmentConnectionSettings> oauth2 =
+        (DefaultOAuth2Settings<? extends EnvironmentConnectionSettings>)
+            envBuilder.connectionSettings().oauth2();
     // the broker works at the second level for expiration
     // we have to make sure to renew fast enough for short-lived tokens
-    oauth.refreshDelayStrategy(ratioRefreshDelayStrategy(0.4f));
-    oauth
+    oauth2.refreshDelayStrategy(ratioRefreshDelayStrategy(0.4f));
+    oauth2
         .tokenEndpointUri(uri)
         .clientId("rabbitmq")
         .clientSecret("rabbitmq")
@@ -237,7 +237,7 @@ public class Oauth2Test {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
     HttpHandler httpHandler =
-        oauthTokenHttpHandler(() -> currentTimeMillis() + 3_000, tokenRefreshedSync::down);
+        oAuth2TokenHttpHandler(() -> currentTimeMillis() + 3_000, tokenRefreshedSync::down);
     this.server = startServer(port, contextPath, keyStore, httpHandler);
 
     SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -246,20 +246,20 @@ public class Oauth2Test {
     sslContext.init(null, tmf.getTrustManagers(), null);
 
     String uri = "https://localhost:" + port + contextPath;
-    OAuthSettings<? extends ConnectionBuilder> oauth =
+    OAuth2Settings<? extends ConnectionBuilder> oauth2 =
         environment
             .connectionBuilder()
-            .oauth()
+            .oauth2()
             .tokenEndpointUri(uri)
             .clientId("rabbitmq")
             .clientSecret("rabbitmq")
             .tls()
             .sslContext(sslContext)
-            .oauth();
+            .oauth2();
     // the broker works at the second level for expiration
     // we have to make sure to renew fast enough for short-lived tokens
-    ((DefaultOAuthSettings<?>) oauth).refreshDelayStrategy(ratioRefreshDelayStrategy(0.4f));
-    Connection c = oauth.connection().build();
+    ((DefaultOAuth2Settings<?>) oauth2).refreshDelayStrategy(ratioRefreshDelayStrategy(0.4f));
+    Connection c = oauth2.connection().build();
 
     String q = name(info);
     c.management().queue(q).exclusive(true).declare();
@@ -288,14 +288,14 @@ public class Oauth2Test {
   void oauthConfigurationShouldUsePlainSaslMechanism() throws Exception {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
-    HttpHandler httpHandler = oauthTokenHttpHandler(() -> currentTimeMillis() + 3_000);
+    HttpHandler httpHandler = oAuth2TokenHttpHandler(() -> currentTimeMillis() + 3_000);
     this.server = startServer(port, contextPath, httpHandler);
 
     String uri = "http://localhost:" + port + contextPath;
     try (Environment env =
         new AmqpEnvironmentBuilder()
             .connectionSettings()
-            .oauth()
+            .oauth2()
             .tokenEndpointUri(uri)
             .clientId("rabbitmq")
             .clientSecret("rabbitmq")
@@ -306,7 +306,7 @@ public class Oauth2Test {
       Connection c1 = env.connectionBuilder().build();
       Connection c2 =
           env.connectionBuilder()
-              .oauth()
+              .oauth2()
               .tokenEndpointUri(uri)
               .clientId("rabbitmq")
               .clientSecret("rabbitmq")
@@ -326,11 +326,11 @@ public class Oauth2Test {
     }
   }
 
-  private static HttpHandler oauthTokenHttpHandler(LongSupplier expirationTimeSupplier) {
-    return oauthTokenHttpHandler(expirationTimeSupplier, () -> {});
+  private static HttpHandler oAuth2TokenHttpHandler(LongSupplier expirationTimeSupplier) {
+    return oAuth2TokenHttpHandler(expirationTimeSupplier, () -> {});
   }
 
-  private static HttpHandler oauthTokenHttpHandler(
+  private static HttpHandler oAuth2TokenHttpHandler(
       LongSupplier expirationTimeSupplier, Runnable requestCallback) {
     return exchange -> {
       long expirationTime = expirationTimeSupplier.getAsLong();

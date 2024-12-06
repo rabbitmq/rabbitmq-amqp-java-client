@@ -15,7 +15,7 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.oauth;
+package com.rabbitmq.client.amqp.oauth2;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -46,7 +46,7 @@ public final class HttpTokenRequester implements TokenRequester {
   private final HttpClient client;
   private final Consumer<HttpRequest.Builder> requestBuilderConsumer;
 
-  private TokenParser parser;
+  private final TokenParser parser;
 
   public HttpTokenRequester(
       String tokenEndpointUri,
@@ -114,10 +114,10 @@ public final class HttpTokenRequester implements TokenRequester {
       checkContentType(response.headers().firstValue("content-type").orElse(null));
       return this.parser.parse(response.body());
     } catch (IOException e) {
-      throw new OAuthException("Error while retrieving OAuth 2 token", e);
+      throw new OAuth2Exception("Error while retrieving OAuth 2 token", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new OAuthException("Error while retrieving OAuth 2 token", e);
+      throw new OAuth2Exception("Error while retrieving OAuth 2 token", e);
     }
   }
 
@@ -144,13 +144,13 @@ public final class HttpTokenRequester implements TokenRequester {
 
   private static void checkContentType(String contentType) {
     if (contentType == null || !contentType.toLowerCase().contains("json")) {
-      throw new OAuthException("HTTP request for token retrieval is not JSON: " + contentType);
+      throw new OAuth2Exception("HTTP request for token retrieval is not JSON: " + contentType);
     }
   }
 
   private static void checkStatusCode(int statusCode) {
     if (statusCode != 200) {
-      throw new OAuthException(
+      throw new OAuth2Exception(
           "HTTP request for token retrieval did not " + "return 200 status code: " + statusCode);
     }
   }
