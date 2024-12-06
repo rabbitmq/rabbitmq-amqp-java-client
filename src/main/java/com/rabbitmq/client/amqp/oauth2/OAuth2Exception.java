@@ -15,24 +15,15 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.oauth;
+package com.rabbitmq.client.amqp.oauth2;
 
-import java.time.Duration;
+public class OAuth2Exception extends RuntimeException {
 
-public final class OAuthTestUtils {
+  public OAuth2Exception(String message) {
+    super(message);
+  }
 
-  private OAuthTestUtils() {}
-
-  public static String sampleJsonToken(String accessToken, Duration expiresIn) {
-    String json =
-        "{\n"
-            + "  \"access_token\" : \"{accessToken}\",\n"
-            + "  \"token_type\" : \"bearer\",\n"
-            + "  \"expires_in\" : {expiresIn},\n"
-            + "  \"scope\" : \"clients.read emails.write scim.userids password.write idps.write notifications.write oauth.login scim.write critical_notifications.write\",\n"
-            + "  \"jti\" : \"18c1b1dfdda04382a8bcc14d077b71dd\"\n"
-            + "}";
-    return json.replace("{accessToken}", accessToken)
-        .replace("{expiresIn}", expiresIn.toSeconds() + "");
+  public OAuth2Exception(String message, Throwable cause) {
+    super(message, cause);
   }
 }

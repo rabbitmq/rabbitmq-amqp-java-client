@@ -15,15 +15,9 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.oauth;
+package com.rabbitmq.client.amqp.oauth2;
 
-public class OAuthException extends RuntimeException {
+public interface TokenRequester {
 
-  public OAuthException(String message) {
-    super(message);
-  }
-
-  public OAuthException(String message, Throwable cause) {
-    super(message, cause);
-  }
+  Token request();
 }

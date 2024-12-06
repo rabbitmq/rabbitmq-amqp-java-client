@@ -30,8 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import com.rabbitmq.client.amqp.oauth.Token;
-import com.rabbitmq.client.amqp.oauth.TokenRequester;
+import com.rabbitmq.client.amqp.oauth2.Token;
+import com.rabbitmq.client.amqp.oauth2.TokenRequester;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
