@@ -17,8 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.oauth.Token;
-import com.rabbitmq.client.amqp.oauth.TokenRequester;
+import com.rabbitmq.client.amqp.oauth2.Token;
+import com.rabbitmq.client.amqp.oauth2.TokenRequester;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;

@@ -19,7 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import com.rabbitmq.client.amqp.oauth.Token;
+import com.rabbitmq.client.amqp.oauth2.Token;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;

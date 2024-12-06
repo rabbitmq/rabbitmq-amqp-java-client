@@ -15,9 +15,9 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.oauth;
+package com.rabbitmq.client.amqp.oauth2;
 
-import static com.rabbitmq.client.amqp.oauth.OAuthTestUtils.sampleJsonToken;
+import static com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.sampleJsonToken;
 import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;

@@ -105,8 +105,8 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
-  public OAuthSettings<? extends ConnectionBuilder> oauth() {
-    return this.connectionSettings.oauth();
+  public OAuth2Settings<? extends ConnectionBuilder> oauth2() {
+    return this.connectionSettings.oauth2();
   }
 
   @Override

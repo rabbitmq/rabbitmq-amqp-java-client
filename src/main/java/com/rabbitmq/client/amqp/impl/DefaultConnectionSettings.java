@@ -74,7 +74,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private String saslMechanism = ConnectionSettings.SASL_MECHANISM_ANONYMOUS;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
   private final DefaultAffinity<T> affinity = new DefaultAffinity<>(this);
-  private final DefaultOAuthSettings<T> oAuthSettings = new DefaultOAuthSettings<>(this);
+  private final DefaultOAuth2Settings<T> oAuth2Settings = new DefaultOAuth2Settings<>(this);
 
   @Override
   public T uri(String uriString) {
@@ -225,8 +225,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     this.affinity.copyTo(copy.affinity);
 
-    if (this.oAuthSettings.enabled()) {
-      this.oAuthSettings.copyTo(copy.oauth());
+    if (this.oAuth2Settings.enabled()) {
+      this.oAuth2Settings.copyTo(copy.oauth2());
     }
   }
 
@@ -301,8 +301,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   }
 
   @Override
-  public DefaultOAuthSettings<? extends T> oauth() {
-    return this.oAuthSettings;
+  public DefaultOAuth2Settings<? extends T> oauth2() {
+    return this.oAuth2Settings;
   }
 
   static DefaultConnectionSettings<?> instance() {
@@ -501,7 +501,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
   }
 
-  static class DefaultOAuthSettings<T> implements OAuthSettings<T> {
+  static class DefaultOAuth2Settings<T> implements OAuth2Settings<T> {
 
     private final DefaultConnectionSettings<T> connectionSettings;
     private final DefaultOAuthTlsSettings<T> tls = new DefaultOAuthTlsSettings<>(this);
@@ -514,37 +514,37 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private Function<Instant, Duration> refreshDelayStrategy =
         TokenCredentials.DEFAULT_REFRESH_DELAY_STRATEGY;
 
-    DefaultOAuthSettings(DefaultConnectionSettings<T> connectionSettings) {
+    DefaultOAuth2Settings(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;
     }
 
     @Override
-    public OAuthSettings<T> tokenEndpointUri(String uri) {
+    public OAuth2Settings<T> tokenEndpointUri(String uri) {
       this.connectionSettings.saslMechanism(SASL_MECHANISM_PLAIN);
       this.tokenEndpointUri = uri;
       return this;
     }
 
     @Override
-    public OAuthSettings<T> clientId(String clientId) {
+    public OAuth2Settings<T> clientId(String clientId) {
       this.clientId = clientId;
       return this;
     }
 
     @Override
-    public OAuthSettings<T> clientSecret(String clientSecret) {
+    public OAuth2Settings<T> clientSecret(String clientSecret) {
       this.clientSecret = clientSecret;
       return this;
     }
 
     @Override
-    public OAuthSettings<T> grantType(String grantType) {
+    public OAuth2Settings<T> grantType(String grantType) {
       this.grantType = grantType;
       return this;
     }
 
     @Override
-    public OAuthSettings<T> parameter(String name, String value) {
+    public OAuth2Settings<T> parameter(String name, String value) {
       if (value == null) {
         this.parameters.remove(name);
       } else {
@@ -554,12 +554,13 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     @Override
-    public OAuthSettings<T> shared(boolean shared) {
+    public OAuth2Settings<T> shared(boolean shared) {
       this.shared = shared;
       return this;
     }
 
-    DefaultOAuthSettings<T> refreshDelayStrategy(Function<Instant, Duration> refreshDelayStrategy) {
+    DefaultOAuth2Settings<T> refreshDelayStrategy(
+        Function<Instant, Duration> refreshDelayStrategy) {
       this.refreshDelayStrategy = refreshDelayStrategy;
       return this;
     }
@@ -579,7 +580,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       return this.connectionSettings.toReturn();
     }
 
-    void copyTo(DefaultOAuthSettings<?> copy) {
+    void copyTo(DefaultOAuth2Settings<?> copy) {
       copy.tokenEndpointUri(this.tokenEndpointUri);
       copy.clientId(this.clientId);
       copy.clientSecret(this.clientSecret);
@@ -625,25 +626,25 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
   }
 
-  static class DefaultOAuthTlsSettings<T> implements OAuthSettings.TlsSettings<T> {
+  static class DefaultOAuthTlsSettings<T> implements OAuth2Settings.TlsSettings<T> {
 
-    private final OAuthSettings<T> oAuthSettings;
+    private final OAuth2Settings<T> oAuth2Settings;
     private SSLContext sslContext;
     private boolean enabled = false;
 
-    DefaultOAuthTlsSettings(OAuthSettings<T> oAuthSettings) {
-      this.oAuthSettings = oAuthSettings;
+    DefaultOAuthTlsSettings(OAuth2Settings<T> oAuth2Settings) {
+      this.oAuth2Settings = oAuth2Settings;
     }
 
     @Override
-    public OAuthSettings.TlsSettings<T> sslContext(SSLContext sslContext) {
+    public OAuth2Settings.TlsSettings<T> sslContext(SSLContext sslContext) {
       this.sslContext = sslContext;
       return this;
     }
 
     @Override
-    public OAuthSettings<T> oauth() {
-      return this.oAuthSettings;
+    public OAuth2Settings<T> oauth2() {
+      return this.oAuth2Settings;
     }
 
     void enable() {

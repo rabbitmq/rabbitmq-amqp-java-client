@@ -25,7 +25,7 @@ import javax.net.ssl.SSLContext;
  *
  * @param <T> the type of object returned by methods, usually the object itself
  */
-public interface OAuthSettings<T> {
+public interface OAuth2Settings<T> {
 
   /**
    * Set the URI to access to get the token.
@@ -35,9 +35,11 @@ public interface OAuthSettings<T> {
    * retrieve tokens.</em>
    *
    * @param uri access URI
-   * @return OAuth settings
+   * @return OAuth 2 settings
+   * @see #tls()
+   * @see TlsSettings#sslContext(SSLContext)
    */
-  OAuthSettings<T> tokenEndpointUri(String uri);
+  OAuth2Settings<T> tokenEndpointUri(String uri);
 
   /**
    * Set the OAuth 2 client ID
@@ -45,17 +47,17 @@ public interface OAuthSettings<T> {
    * <p>The client ID usually identifies the application that requests a token.
    *
    * @param clientId client ID
-   * @return OAuth settings
+   * @return OAuth 2 settings
    */
-  OAuthSettings<T> clientId(String clientId);
+  OAuth2Settings<T> clientId(String clientId);
 
   /**
    * Set the secret (password) to use to get a token.
    *
    * @param clientSecret client secret
-   * @return OAuth settings
+   * @return OAuth 2 settings
    */
-  OAuthSettings<T> clientSecret(String clientSecret);
+  OAuth2Settings<T> clientSecret(String clientSecret);
 
   /**
    * Set the grant type to use when requesting the token.
@@ -64,9 +66,9 @@ public interface OAuthSettings<T> {
    * non-standard grant types to request tokens with extra-information.
    *
    * @param grantType grant type
-   * @return OAuth settings
+   * @return OAuth 2 settings
    */
-  OAuthSettings<T> grantType(String grantType);
+  OAuth2Settings<T> grantType(String grantType);
 
   /**
    * Set a parameter to pass in the request.
@@ -75,9 +77,9 @@ public interface OAuthSettings<T> {
    *
    * @param name name of the parameter
    * @param value value of the parameter
-   * @return OAuth settings
+   * @return OAuth 2 settings
    */
-  OAuthSettings<T> parameter(String name, String value);
+  OAuth2Settings<T> parameter(String name, String value);
 
   /**
    * Whether to share the same token between connections.
@@ -85,9 +87,9 @@ public interface OAuthSettings<T> {
    * <p>Default is <true>true</true> (the token is shared between connections).
    *
    * @param shared flag to share the token between connections
-   * @return OAuth settings
+   * @return OAuth 2 settings
    */
-  OAuthSettings<T> shared(boolean shared);
+  OAuth2Settings<T> shared(boolean shared);
 
   /**
    * TLS configuration for requesting the token.
@@ -121,8 +123,8 @@ public interface OAuthSettings<T> {
     /**
      * Go back to the general OAuth 2 settings.
      *
-     * @return OAuth settings
+     * @return OAuth 2 settings
      */
-    OAuthSettings<T> oauth();
+    OAuth2Settings<T> oauth2();
   }
 }
