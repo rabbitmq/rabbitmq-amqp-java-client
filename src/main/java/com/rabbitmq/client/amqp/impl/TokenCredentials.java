@@ -23,6 +23,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,11 +35,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class TokenCredentials implements Credentials {
 
+  static Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =
+      ratioRefreshDelayStrategy(0.8f);
   private static final Logger LOGGER = LoggerFactory.getLogger(TokenCredentials.class);
 
   private final TokenRequester requester;
@@ -51,10 +55,13 @@ final class TokenCredentials implements Credentials {
   private final Function<Instant, Duration> refreshDelayStrategy;
   private volatile ScheduledFuture<?> refreshTask;
 
-  TokenCredentials(TokenRequester requester, ScheduledExecutorService scheduledExecutorService) {
+  TokenCredentials(
+      TokenRequester requester,
+      ScheduledExecutorService scheduledExecutorService,
+      Function<Instant, Duration> refreshDelayStrategy) {
     this.requester = requester;
     this.scheduledExecutorService = scheduledExecutorService;
-    this.refreshDelayStrategy = new RatioRefreshDelayStrategy(0.8f);
+    this.refreshDelayStrategy = refreshDelayStrategy;
   }
 
   private void lock() {
@@ -70,14 +77,18 @@ final class TokenCredentials implements Credentials {
   }
 
   private Token getToken() {
-    LOGGER.debug("Requesting new token...");
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug(
+          "Requesting new token ({})...", registrationSummary(this.registrations.values()));
+    }
     Utils.StopWatch stopWatch = new Utils.StopWatch();
     Token token = requester.request();
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug(
-          "Got new token in {} ms, token expires on {}",
+          "Got new token in {} ms, token expires on {} ({})",
           stopWatch.stop().toMillis(),
-          format(token.expirationTime()));
+          format(token.expirationTime()),
+          registrationSummary(this.registrations.values()));
     }
     return token;
   }
@@ -110,6 +121,17 @@ final class TokenCredentials implements Credentials {
                 }
                 registration.registrationToken = this.token;
                 refreshedCount++;
+              } else {
+                if (LOGGER.isDebugEnabled()) {
+                  LOGGER.debug(
+                      "Not updating registration {} (closed or already has the new token)",
+                      registration.name());
+                }
+              }
+            } else {
+              if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                    "Not updating registration {} (the token has changed)", registration.name());
               }
             }
           }
@@ -136,7 +158,12 @@ final class TokenCredentials implements Credentials {
       }
       Duration delay = this.refreshDelayStrategy.apply(t.expirationTime());
       if (!this.registrations.isEmpty()) {
-        LOGGER.debug("Scheduling token retrieval in {}", delay);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug(
+              "Scheduling token retrieval in {} ({})",
+              delay,
+              registrationSummary(this.registrations.values()));
+        }
         this.refreshTask =
             this.scheduledExecutorService.schedule(
                 () -> {
@@ -253,6 +280,11 @@ final class TokenCredentials implements Credentials {
     public int hashCode() {
       return Objects.hashCode(id);
     }
+
+    @Override
+    public String toString() {
+      return this.name();
+    }
   }
 
   static Function<Instant, Duration> ratioRefreshDelayStrategy(float ratio) {
@@ -282,5 +314,9 @@ final class TokenCredentials implements Credentials {
       }
       return delay;
     }
+  }
+
+  private static String registrationSummary(Collection<? extends Registration> registrations) {
+    return registrations.stream().map(Registration::toString).collect(Collectors.joining(", "));
   }
 }

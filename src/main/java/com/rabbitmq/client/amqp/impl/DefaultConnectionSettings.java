@@ -28,8 +28,10 @@ import java.net.URLDecoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -509,6 +511,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private String clientSecret;
     private String grantType = "client_credentials";
     private boolean shared = true;
+    private Function<Instant, Duration> refreshDelayStrategy =
+        TokenCredentials.DEFAULT_REFRESH_DELAY_STRATEGY;
 
     DefaultOAuthSettings(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;
@@ -555,6 +559,15 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       return this;
     }
 
+    DefaultOAuthSettings<T> refreshDelayStrategy(Function<Instant, Duration> refreshDelayStrategy) {
+      this.refreshDelayStrategy = refreshDelayStrategy;
+      return this;
+    }
+
+    Function<Instant, Duration> refreshDelayStrategy() {
+      return this.refreshDelayStrategy;
+    }
+
     @Override
     public DefaultOAuthTlsSettings<? extends T> tls() {
       this.tls.enable();
@@ -576,6 +589,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       if (this.tls.enabled()) {
         this.tls.copyTo(copy.tls());
       }
+      copy.refreshDelayStrategy(this.refreshDelayStrategy);
     }
 
     String tokenEndpointUri() {

@@ -319,4 +319,10 @@ final class Utils {
       return this.name;
     }
   }
+
+  @FunctionalInterface
+  interface RunnableWithException {
+
+    void run() throws Exception;
+  }
 }
