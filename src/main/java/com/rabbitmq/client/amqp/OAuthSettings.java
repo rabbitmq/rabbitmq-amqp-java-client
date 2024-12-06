@@ -68,18 +68,61 @@ public interface OAuthSettings<T> {
    */
   OAuthSettings<T> grantType(String grantType);
 
+  /**
+   * Set a parameter to pass in the request.
+   *
+   * <p>The OAuth 2 server may require extra parameters to narrow down the identity of the user.
+   *
+   * @param name name of the parameter
+   * @param value value of the parameter
+   * @return OAuth settings
+   */
   OAuthSettings<T> parameter(String name, String value);
 
+  /**
+   * Whether to share the same token between connections.
+   *
+   * <p>Default is <true>true</true> (the token is shared between connections).
+   *
+   * @param shared flag to share the token between connections
+   * @return OAuth settings
+   */
   OAuthSettings<T> shared(boolean shared);
 
+  /**
+   * TLS configuration for requesting the token.
+   *
+   * @return TLS configuration
+   */
   TlsSettings<? extends T> tls();
 
+  /**
+   * Connection settings.
+   *
+   * @return connections settings
+   */
   T connection();
 
+  /**
+   * TLS settings to request the OAuth 2 token.
+   *
+   * @param <T> the type of object returned by methods, usually the object itself
+   */
   interface TlsSettings<T> {
 
+    /**
+     * {@link SSLContext} for HTTPS requests.
+     *
+     * @param sslContext the SSL context
+     * @return TLS settings
+     */
     TlsSettings<T> sslContext(SSLContext sslContext);
 
+    /**
+     * Go back to the general OAuth 2 settings.
+     *
+     * @return OAuth settings
+     */
     OAuthSettings<T> oauth();
   }
 }
