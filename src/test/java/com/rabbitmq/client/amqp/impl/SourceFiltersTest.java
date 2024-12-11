@@ -314,7 +314,7 @@ public class SourceFiltersTest {
     msgs = consume(messageCount * 3, options -> options.property("foo", "bar"));
     msgs.forEach(m -> assertThat(m).hasProperty("foo", "bar"));
 
-    msgs = consume(messageCount * 4, options -> options.property("foo", "$p:b"));
+    msgs = consume(messageCount * 4, options -> options.property("foo", "&p:b"));
     assertThat(msgs).allMatch(m -> m.property("foo").toString().startsWith("b"));
 
     msgs = consume(messageCount, options -> options.propertySymbol("foo", "symbol"));
@@ -457,10 +457,10 @@ public class SourceFiltersTest {
     publish(1, m -> m.subject("foo bar"));
     publish(1, m -> m.subject("ab 12"));
 
-    List<Message> msgs = consume(2, m -> m.subject("$p:ab"));
+    List<Message> msgs = consume(2, m -> m.subject("&p:ab"));
     msgs.forEach(m -> assertThat(m.subject()).startsWith("ab"));
 
-    msgs = consume(1, m -> m.subject("$s:bar"));
+    msgs = consume(1, m -> m.subject("&s:bar"));
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
   }
 
