@@ -105,6 +105,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public OAuth2Settings<? extends ConnectionBuilder> oauth2() {
+    return this.connectionSettings.oauth2();
+  }
+
+  @Override
   public ConnectionBuilder listeners(Resource.StateListener... listeners) {
     if (listeners == null || listeners.length == 0) {
       this.listeners.clear();
@@ -155,6 +160,10 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
   AmqpEnvironment environment() {
     return environment;
+  }
+
+  Credentials credentials() {
+    return environment().credentialsFactory().credentials(this.connectionSettings);
   }
 
   AmqpRecoveryConfiguration recoveryConfiguration() {
