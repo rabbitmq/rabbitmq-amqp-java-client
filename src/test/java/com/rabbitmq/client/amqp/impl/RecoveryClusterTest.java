@@ -17,13 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.BackOffDelayPolicy.fixedWithInitialDelay;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.lang.String.format;
-import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,7 +55,10 @@ public class RecoveryClusterTest {
   static final Duration TIMEOUT = Duration.ofSeconds(20);
   static final String[] URIS =
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
-  static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofSeconds(3));
+  static final Duration RECOVERY_INITIAL_DELAY = Duration.ofSeconds(10);
+  static final Duration RECOVERY_DELAY = Duration.ofSeconds(3);
+  static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY =
+      fixedWithInitialDelay(RECOVERY_INITIAL_DELAY, RECOVERY_DELAY);
   static List<String> nodes;
   Environment environment;
   AmqpConnection connection;
