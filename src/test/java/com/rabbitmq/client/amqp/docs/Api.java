@@ -26,6 +26,8 @@ import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
+import javax.net.ssl.SSLContext;
+
 class Api {
 
   void connectionSettings() {
@@ -92,6 +94,23 @@ class Api {
             .registry(observationRegistry).build())  // <2>
         .build();
     // end::micrometer-observation[]
+  }
+
+  void oauth2() {
+    SSLContext sslContext = null;
+    // tag::oauth2[]
+    Environment environment = new AmqpEnvironmentBuilder()
+        .connectionSettings().oauth2()  // <1>
+        .tokenEndpointUri("https://localhost:8443/uaa/oauth/token/")  // <2>
+        .clientId("rabbitmq").clientSecret("rabbitmq")  // <3>
+        .grantType("password")  // <4>
+        .parameter("username", "rabbit_super")  // <5>
+        .parameter("password", "rabbit_super")  // <5>
+        .tls().sslContext(sslContext).oauth2()  // <6>
+        .shared(true)  // <7>
+        .connection()
+        .environmentBuilder().build();
+    // end::oauth2[]
   }
 
 }
