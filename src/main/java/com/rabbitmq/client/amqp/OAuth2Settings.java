@@ -23,6 +23,8 @@ import javax.net.ssl.SSLContext;
  * Configuration to retrieve a token using the <a
  * href="https://tools.ietf.org/html/rfc6749#section-4.4">OAuth 2 Client Credentials flow</a>.
  *
+ * <p>OAuth 2 requires RabbitMQ 4.1 or more.
+ *
  * @param <T> the type of object returned by methods, usually the object itself
  */
 public interface OAuth2Settings<T> {
