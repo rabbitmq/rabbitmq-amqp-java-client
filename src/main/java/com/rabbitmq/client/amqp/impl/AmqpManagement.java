@@ -461,12 +461,22 @@ class AmqpManagement implements Management {
       if (responseCode == CODE_404) {
         throw new AmqpException.AmqpEntityDoesNotExistException("Entity does not exist");
       } else {
-        throw new AmqpException(
-            "Unexpected response code: %d instead of %s",
-            responseCode,
-            IntStream.of(expectedResponseCodes)
-                .mapToObj(String::valueOf)
-                .collect(Collectors.joining(", ")));
+        String message =
+            String.format(
+                "Unexpected response code: %d instead of %s",
+                responseCode,
+                IntStream.of(expectedResponseCodes)
+                    .mapToObj(String::valueOf)
+                    .collect(Collectors.joining(", ")));
+        try {
+          LOGGER.info(
+              "Management request failed: '{}'. Response body: '{}'",
+              message,
+              request.responseMessage().body());
+        } catch (Exception e) {
+          LOGGER.info("Could not get management request body: {}", e.getMessage());
+        }
+        throw new AmqpException(message);
       }
     }
   }
