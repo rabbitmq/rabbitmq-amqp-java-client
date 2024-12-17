@@ -54,6 +54,7 @@ public class AmqpConsumerTest {
 
   @AfterEach
   void tearDown() {
+    waitAtMost(Duration.ofSeconds(5), () -> ((ResourceBase) connection).state() == OPEN);
     connection.management().queueDeletion().delete(this.q);
   }
 

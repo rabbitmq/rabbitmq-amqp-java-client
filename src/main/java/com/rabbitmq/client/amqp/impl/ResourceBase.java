@@ -43,7 +43,7 @@ abstract class ResourceBase implements Resource {
       throw new AmqpException.AmqpResourceClosedException("Resource is closed");
     } else if (state != OPEN) {
       throw new AmqpException.AmqpResourceInvalidStateException(
-          "Resource is not open, current state is %s", this.state.get().name());
+          "Resource is not open, current state is %s", state.name());
     }
   }
 
