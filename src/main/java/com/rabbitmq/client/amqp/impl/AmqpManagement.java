@@ -233,7 +233,7 @@ class AmqpManagement implements Management {
           if (!this.initializing && this.state() != OPEN) {
             this.initializing = true;
             LOGGER.debug("Initializing management ({}).", this);
-            this.state(UNAVAILABLE);
+            this.markUnavailable();
             try {
               if (this.receiveLoop != null) {
                 this.receiveLoop.cancel(true);
@@ -313,7 +313,7 @@ class AmqpManagement implements Management {
       } catch (ClientConnectionRemotelyClosedException | ClientLinkRemotelyClosedException e) {
         // receiver is closed
       } catch (ClientSessionRemotelyClosedException e) {
-        this.state(UNAVAILABLE);
+        this.markUnavailable();
         LOGGER.info("Management session closed in receive loop: {} ({})", e.getMessage(), this);
         AmqpException exception = ExceptionUtils.convert(e);
         this.failRequests(exception);

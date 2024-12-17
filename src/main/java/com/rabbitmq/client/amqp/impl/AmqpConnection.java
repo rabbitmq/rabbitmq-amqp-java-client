@@ -47,8 +47,24 @@ import org.slf4j.LoggerFactory;
 
 final class AmqpConnection extends ResourceBase implements Connection {
 
+  /** Connection-related issues */
+  private static final Predicate<Exception> CONNECTION_EXCEPTION_PREDICATE =
+      e -> e instanceof AmqpException.AmqpConnectionException;
+
+  /**
+   * Issues related to underlying resources.
+   *
+   * <p>E.g. the connection used for enforcing affinity gets closed, the management is marked as
+   * unavailable and throws an invalid state exception when it is called. The recovery process
+   * should restart.
+   */
+  private static final Predicate<Exception> RESOURCE_INVALID_STATE_PREDICATE =
+      e ->
+          e instanceof AmqpException.AmqpResourceInvalidStateException
+              && !(e instanceof AmqpException.AmqpResourceClosedException);
+
   private static final Predicate<Exception> RECOVERY_PREDICATE =
-      t -> t instanceof AmqpException.AmqpConnectionException;
+      CONNECTION_EXCEPTION_PREDICATE.or(RESOURCE_INVALID_STATE_PREDICATE);
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
@@ -399,7 +415,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                     ex.getMessage());
                 if (RECOVERY_PREDICATE.test(ex)) {
                   LOGGER.debug(
-                      "Error during topology recoverable, queueing recovery task for '{}', error is {}",
+                      "Error during topology recovery, queueing recovery task for '{}', error is {}",
                       this.name(),
                       ex.getMessage());
                   this.environment
