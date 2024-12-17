@@ -759,21 +759,43 @@ final class AmqpConnection extends ResourceBase implements Connection {
       for (AmqpConsumer consumer : this.consumers) {
         consumer.close(cause);
       }
+      boolean locked = false;
       try {
-        this.dispatchingExecutorService.shutdownNow();
-      } catch (Exception e) {
-        LOGGER.info(
-            "Error while shutting down dispatching executor service for connection '{}': {}",
-            this.name(),
-            e.getMessage());
+        locked = this.instanceLock.tryLock(1, TimeUnit.SECONDS);
+        if (!locked) {
+          LOGGER.info("Could not acquire connection lock during closing");
+        }
+      } catch (InterruptedException e) {
+        LOGGER.info("Interrupted while waiting for connection lock");
       }
       try {
-        org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;
-        if (nc != null) {
-          nc.close();
+        ExecutorService es = this.dispatchingExecutorService;
+        if (es != null) {
+          try {
+            es.shutdownNow();
+          } catch (Exception e) {
+            LOGGER.info(
+                "Error while shutting down dispatching executor service for connection '{}': {}",
+                this.name(),
+                e.getMessage());
+          }
         }
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing native connection", e);
+        try {
+          org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;
+          if (nc != null) {
+            nc.close();
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Error while closing native connection", e);
+        }
+      } finally {
+        if (locked) {
+          try {
+            this.instanceLock.unlock();
+          } catch (Exception e) {
+            LOGGER.debug("Error while releasing connection lock: {}", e.getMessage());
+          }
+        }
       }
       this.state(CLOSED, cause);
       this.environment.metricsCollector().closeConnection();
