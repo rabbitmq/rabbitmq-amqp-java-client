@@ -11,11 +11,11 @@
     <logger name="org.apache.qpid" level="error" />
     <logger name="com.rabbitmq.client.amqp.perf" level="info" />
     <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="warn" />
-    <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="warn" />
+    <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="debug" />
     <logger name="com.rabbitmq.client.amqp.impl.RecoveryClusterTest" level="info" />
     <logger name="com.rabbitmq.client.amqp.impl.RecordingTopologyListener" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="warn" />
-    <logger name="com.rabbitmq.client.amqp.impl.AsyncRetry" level="warn" />
+    <logger name="com.rabbitmq.client.amqp.impl.AsyncRetry" level="debug" />
     <logger name="com.rabbitmq.client.amqp.impl.EntityRecovery" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.EventLoop" level="warn" />
     <logger name="com.rabbitmq.client.amqp.impl.AmqpManagement" level="info" />

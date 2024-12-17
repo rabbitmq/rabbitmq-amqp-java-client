@@ -475,7 +475,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                       }
                     },
                     connectionName))
-        .description("Trying to create native connection for '%s'.", connectionName)
+        .description("Trying to recover native connection for '%s'.", connectionName)
         .delayPolicy(recoveryConfiguration.backOffDelayPolicy())
         .retry(RECOVERY_PREDICATE)
         .scheduler(this.scheduledExecutorService())
