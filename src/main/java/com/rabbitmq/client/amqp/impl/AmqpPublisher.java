@@ -252,4 +252,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   String address() {
     return this.address;
   }
+
+  @Override
+  public String toString() {
+    return "AmqpPublisher{" + "id=" + id + ", address='" + address + '\'' + '}';
+  }
 }

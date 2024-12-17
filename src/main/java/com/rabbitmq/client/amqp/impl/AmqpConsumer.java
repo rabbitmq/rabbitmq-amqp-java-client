@@ -533,6 +533,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
+  @Override
+  public String toString() {
+    return "AmqpConsumer{" + "id=" + id + ", queue='" + queue + '\'' + '}';
+  }
+
   private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
     return ExceptionUtils.maybeCloseConsumerOnException(consumer::close, ex);
   }
