@@ -46,6 +46,35 @@ include::{test-examples}/Api.java[tag=subscription-listener]
 <4> Get the message offset
 <5> Store the offset in the external store after processing
 
+=== OAuth 2 Support
+
+The client can authenticate against an OAuth 2 server like https://github.com/cloudfoundry/uaa[UAA].
+It uses the https://tools.ietf.org/html/rfc6749#section-4.4[OAuth 2 Client Credentials flow].
+The https://www.rabbitmq.com/docs/oauth2[OAuth 2 plugin] must be enabled on the server side and configured to use the same OAuth 2 server as the client.
+
+How to retrieve the OAuth 2 token can be globally configured at the environment level:
+
+.Configuring OAuth 2 token retrieval
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=oauth2]
+--------
+<1> Access the OAuth 2 configuration
+<2> Set the token endpoint URI
+<3> Authenticate the client application
+<4> Set the grant type
+<5> Set optional parameters (depends on the OAuth 2 server)
+<6> Set the SSL context (e.g. to verify and trust the identity of the OAuth 2 server)
+<7> The token can be shared across the environment connections
+
+The environment retrieves tokens and uses them to create AMQP connections.
+It also takes care of refreshing the tokens before they expire and of re-authenticating existing connections so the broker does not close them when their token expires.
+
+The environment uses the same token for all the connections it maintains by default, but this can be changed by setting the `shared` flag to `false`.
+With `shared = false`, each connection will have its own OAuth 2 token.
+
+The OAuth 2 configuration can be set at the environment level but also at the connection level.
+
 === Metrics Collection
 
 The library provides the {javadoc-url}/com/rabbitmq/client/amqp/metrics/MetricsCollector.html[`MetricsCollector`] abstraction to collect metrics.

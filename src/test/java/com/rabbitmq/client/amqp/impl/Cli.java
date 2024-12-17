@@ -214,7 +214,7 @@ abstract class Cli {
   }
 
   private static void closeConnection(ConnectionInfo ci) {
-    rabbitmqctl("close_connection '" + ci.getPid() + "' 'Closed via rabbitmqctl'");
+    rabbitmqctl("close_connection '" + ci.pid() + "' 'Closed via rabbitmqctl'");
   }
 
   static boolean exchangeExists(String exchange) {
@@ -300,7 +300,8 @@ abstract class Cli {
   }
 
   static List<ConnectionInfo> listConnections() {
-    String output = rabbitmqctl("list_connections -q pid peer_port client_properties").output();
+    String output =
+        rabbitmqctl("list_connections -q pid peer_port client_properties auth_mechanism").output();
     // output (header line presence depends on broker version):
     // pid	peer_port
     // <rabbit@mercurio.1.11491.0>	58713
@@ -312,11 +313,13 @@ abstract class Cli {
         String[] columns = line.split("\t");
         // can be also header line, so ignoring NumberFormatException
         try {
-          int peerPort = Integer.valueOf(columns[1]);
+          int peerPort = Integer.parseInt(columns[1]);
           String clientProperties = columns[2];
           String clientProvidedName = extractConnectionName(clientProperties);
+          String authMechanism = columns[3];
           result.add(
-              new ConnectionInfo(columns[0], peerPort, clientProperties, clientProvidedName));
+              new ConnectionInfo(
+                  columns[0], peerPort, clientProperties, clientProvidedName, authMechanism));
         } catch (NumberFormatException e) {
           // OK
         }
@@ -327,8 +330,7 @@ abstract class Cli {
 
   private static ConnectionInfo findConnectionInfoFor(
       List<ConnectionInfo> xs, String clientProvidedName) {
-    Predicate<ConnectionInfo> predicate =
-        ci -> clientProvidedName.equals(ci.getClientProvidedName());
+    Predicate<ConnectionInfo> predicate = ci -> clientProvidedName.equals(ci.clientProvidedName());
     return xs.stream().filter(predicate).findFirst().orElse(null);
   }
 
@@ -404,33 +406,44 @@ abstract class Cli {
     rabbitmqctl("eval 'rabbit_alarm:clear_alarm({resource_limit, " + source + ", node()}).'");
   }
 
-  private static class ConnectionInfo {
+  static class ConnectionInfo {
     private final String pid;
     private final int peerPort;
     private final String clientProperties;
     private final String clientProvidedName;
+    private final String authMechanism;
 
-    ConnectionInfo(String pid, int peerPort, String clientProperties, String clientProvidedName) {
+    ConnectionInfo(
+        String pid,
+        int peerPort,
+        String clientProperties,
+        String clientProvidedName,
+        String authMechanism) {
       this.pid = pid;
       this.peerPort = peerPort;
       this.clientProperties = clientProperties;
       this.clientProvidedName = clientProvidedName;
+      this.authMechanism = authMechanism;
     }
 
-    String getPid() {
+    String pid() {
       return pid;
     }
 
-    int getPeerPort() {
+    int peerPort() {
       return peerPort;
     }
 
-    String getClientProperties() {
+    String clientProperties() {
       return clientProperties;
     }
 
-    String getClientProvidedName() {
+    String clientProvidedName() {
       return clientProvidedName;
+    }
+
+    String authMechanism() {
+      return authMechanism;
     }
 
     @Override
@@ -446,6 +459,9 @@ abstract class Cli {
           + '\''
           + ", clientProvidedName='"
           + clientProvidedName
+          + '\''
+          + ", authMechanism='"
+          + authMechanism
           + '\''
           + '}';
     }
@@ -508,7 +524,7 @@ abstract class Cli {
       String line;
       while (true) {
         try {
-          if (!((line = reader.readLine()) != null)) break;
+          if ((line = reader.readLine()) == null) break;
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
