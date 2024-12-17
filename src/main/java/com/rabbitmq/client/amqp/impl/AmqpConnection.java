@@ -537,6 +537,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
           publisher.state(OPEN);
           LOGGER.debug(
               "Recovered publisher {} (address '{}')", publisher.id(), publisher.address());
+        } catch (AmqpException.AmqpConnectionException ex) {
+          LOGGER.warn(
+              "Connection error while trying to recover publisher {} (address '{}'), restarting recovery",
+              publisher.id(),
+              publisher.address(),
+              ex);
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover publisher {} (address '{}')",
