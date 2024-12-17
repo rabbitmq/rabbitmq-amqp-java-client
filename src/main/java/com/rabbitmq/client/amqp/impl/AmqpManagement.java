@@ -226,13 +226,18 @@ class AmqpManagement implements Management {
   }
 
   void init() {
-    if (this.state() != OPEN) {
+    String cName = this.connection.name();
+    LOGGER.debug("Trying to initialize management for connection {}", cName);
+    State state = this.state();
+    if (state != OPEN) {
       if (!this.initializing) {
         try {
           initializationLock.lock();
-          if (!this.initializing && this.state() != OPEN) {
+          boolean initInProgress = this.initializing;
+          state = this.state();
+          if (!initInProgress && state != OPEN) {
             this.initializing = true;
-            LOGGER.debug("Initializing management ({}).", this);
+            LOGGER.debug("Initializing management for connection {} ({}).", cName, this);
             this.markUnavailable();
             try {
               if (this.receiveLoop != null) {
@@ -267,15 +272,27 @@ class AmqpManagement implements Management {
               this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
               LOGGER.debug("Management receiver created ({}).", this);
               this.state(OPEN);
-              this.initializing = false;
             } catch (Exception e) {
+              LOGGER.info("Error during management {} initialization: {}", cName, e.getMessage());
               throw new AmqpException(e);
+            } finally {
+              this.initializing = false;
             }
+          } else {
+            LOGGER.debug(
+                "Not initializing management {}: init in progress {}, state {}",
+                cName,
+                initInProgress,
+                state);
           }
         } finally {
           initializationLock.unlock();
         }
+      } else {
+        LOGGER.debug("Not initializing management {} because it is already initializing", cName);
       }
+    } else {
+      LOGGER.debug("Not initializing management {} because state is {}", cName, state);
     }
   }
 
