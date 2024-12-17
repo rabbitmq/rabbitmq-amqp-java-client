@@ -122,7 +122,9 @@ class AmqpManagement implements Management {
       Map<String, Object> queueInfo = get(queueLocation(name)).responseBodyAsMap();
       return new DefaultQueueInfo(queueInfo);
     } catch (ClientException e) {
-      throw new AmqpException("Error while fetching queue '%s' information", name);
+      String message = String.format("Error while fetching information for queue '%s'", name);
+      LOGGER.debug(message, e);
+      throw ExceptionUtils.convert(e, message);
     }
   }
 
