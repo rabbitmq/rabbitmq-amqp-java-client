@@ -276,7 +276,7 @@ class AmqpManagement implements Management {
               this.state(OPEN);
             } catch (Exception e) {
               LOGGER.info("Error during management {} initialization: {}", cName, e.getMessage());
-              throw new AmqpException(e);
+              throw ExceptionUtils.convert(e);
             } finally {
               this.initializing = false;
             }

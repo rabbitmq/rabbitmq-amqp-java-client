@@ -48,6 +48,14 @@ abstract class ExceptionUtils {
     }
   }
 
+  static AmqpException convert(Exception e) {
+    if (e instanceof ClientException) {
+      return convert((ClientException) e);
+    } else {
+      return new AmqpException(e);
+    }
+  }
+
   static AmqpException convert(ClientException e) {
     return convert(e, null);
   }

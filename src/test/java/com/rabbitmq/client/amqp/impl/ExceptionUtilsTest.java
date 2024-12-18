@@ -52,6 +52,8 @@ public class ExceptionUtilsTest {
         .isInstanceOf(AmqpException.AmqpConnectionException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("connection refused")))
         .isInstanceOf(AmqpException.AmqpConnectionException.class);
+    assertThat(convert(new ClientConnectionRemotelyClosedException("connection forced")))
+        .isInstanceOf(AmqpException.AmqpConnectionException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("", new RuntimeException())))
         .isInstanceOf(AmqpException.AmqpConnectionException.class)
         .hasCauseInstanceOf(ClientConnectionRemotelyClosedException.class);
