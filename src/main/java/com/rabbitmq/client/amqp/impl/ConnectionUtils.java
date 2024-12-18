@@ -60,6 +60,7 @@ final class ConnectionUtils {
       // no affinity asked, we create a connection and return it
       return retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
     }
+    AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
     try {
       AmqpConnection.NativeConnectionWrapper pickedConnection = null;
       int attemptCount = 0;
@@ -68,7 +69,7 @@ final class ConnectionUtils {
       Management.QueueInfo info = affinityCache.queueInfo(context.queue());
       while (pickedConnection == null) {
         attemptCount++;
-        AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
+        connectionWrapper = null;
         if (info == null) {
           connectionWrapper = retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
           info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
@@ -147,6 +148,23 @@ final class ConnectionUtils {
         }
       }
       return pickedConnection;
+    } catch (AmqpException.AmqpConnectionException e) {
+      management.releaseResources();
+      try {
+        if (connectionWrapper != null) {
+          connectionWrapper.connection().close();
+        }
+      } catch (Exception ex) {
+        LOGGER.debug(
+            "Error while closing native connection while enforcing affinity: {}", ex.getMessage());
+      }
+      management.markUnavailable();
+      LOGGER.warn(
+          "Cannot enforce affinity {} of '{}' because connection has been closed",
+          context,
+          connectionName,
+          e);
+      throw e;
     } catch (RuntimeException e) {
       LOGGER.warn(
           "Cannot enforce affinity {} of '{}' error when looking up queue",

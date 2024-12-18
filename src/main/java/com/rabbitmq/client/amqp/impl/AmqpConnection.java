@@ -468,7 +468,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
                       public <T> T maybeRetry(Supplier<T> task) {
                         return RetryUtils.callAndMaybeRetry(
                             task::get,
-                            e -> true,
+                            // no need to retry if the connection is closed
+                            // the affinity task will fail and AsyncRetry will take care
+                            // of retrying later
+                            e -> RECOVERY_PREDICATE.negate().test(e),
                             Duration.ofMillis(10),
                             5,
                             "Connection affinity operation");
