@@ -258,12 +258,14 @@ public class RecoveryClusterTest {
             try {
               Management.QueueInfo queueInfo = management.queueInfo(q);
               System.out.printf(
-                  "Queue '%s': leader '%s', followers '%s'%n",
+                  "Queue '%s': leader '%s', followers '%s', consumer(s) %d, message(s) %d%n",
                   q,
                   queueInfo.leader(),
                   queueInfo.members().stream()
                       .filter(n -> !n.equals(queueInfo.leader()))
-                      .collect(toList()));
+                      .collect(toList()),
+                  queueInfo.consumerCount(),
+                  queueInfo.messageCount());
             } catch (Exception ex) {
               LOGGER.info(
                   "Error while retrieving queue information for '{}': {}", q, ex.getMessage());
