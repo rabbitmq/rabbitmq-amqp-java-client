@@ -61,37 +61,50 @@ abstract class ExceptionUtils {
   }
 
   static AmqpException convert(ClientException e, String format, Object... args) {
+    return convert(e, true, format, args);
+  }
+
+  private static AmqpException convert(
+      ClientException e, boolean checkCause, String format, Object... args) {
     String message = format != null ? String.format(format, args) : null;
+    AmqpException result;
     if (e.getCause() instanceof SSLException) {
-      return new AmqpException.AmqpSecurityException(message, e.getCause());
+      result = new AmqpException.AmqpSecurityException(message, e.getCause());
     } else if (e instanceof ClientConnectionSecurityException) {
-      return new AmqpException.AmqpSecurityException(message, e);
+      result = new AmqpException.AmqpSecurityException(message, e);
     } else if (isNetworkError(e)) {
-      return new AmqpException.AmqpConnectionException(e.getMessage(), e);
+      result = new AmqpException.AmqpConnectionException(e.getMessage(), e);
     } else if (e instanceof ClientSessionRemotelyClosedException
         || e instanceof ClientLinkRemotelyClosedException) {
       ErrorCondition errorCondition =
           ((ClientResourceRemotelyClosedException) e).getErrorCondition();
       if (isUnauthorizedAccess(errorCondition)) {
-        return new AmqpException.AmqpSecurityException(e.getMessage(), e);
+        result = new AmqpException.AmqpSecurityException(e.getMessage(), e);
       } else if (isNotFound(errorCondition)) {
-        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
+        result = new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else if (isResourceDeleted(errorCondition)) {
-        return new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
+        result = new AmqpException.AmqpEntityDoesNotExistException(e.getMessage(), e);
       } else {
-        return new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
+        result = new AmqpException.AmqpResourceClosedException(e.getMessage(), e);
       }
     } else if (e instanceof ClientConnectionRemotelyClosedException) {
       ErrorCondition errorCondition =
           ((ClientConnectionRemotelyClosedException) e).getErrorCondition();
       if (isNetworkError(e) || !isUnauthorizedAccess(errorCondition)) {
-        return new AmqpException.AmqpConnectionException(e.getMessage(), e);
+        result = new AmqpException.AmqpConnectionException(e.getMessage(), e);
       } else {
-        return new AmqpException(e.getMessage(), e);
+        result = new AmqpException(e.getMessage(), e);
       }
     } else {
-      return new AmqpException(message, e);
+      result = new AmqpException(message, e);
     }
+    if (checkCause
+        && AmqpException.class.getName().equals(result.getClass().getName())
+        && e.getCause() instanceof ClientException) {
+      // we end up with a generic exception, we try to narrow down with the cause
+      result = convert((ClientException) e.getCause(), false, format, args);
+    }
+    return result;
   }
 
   static boolean resourceDeleted(ClientResourceRemotelyClosedException e) {
@@ -135,7 +148,7 @@ abstract class ExceptionUtils {
     return false;
   }
 
-  static boolean maybeCloseConsumerOnException(Consumer<Throwable> closing, Exception ex) {
+  static boolean maybeCloseOnException(Consumer<Throwable> closing, Exception ex) {
     if (ex instanceof ClientLinkRemotelyClosedException
         || ex instanceof ClientSessionRemotelyClosedException) {
       ClientResourceRemotelyClosedException e = (ClientResourceRemotelyClosedException) ex;

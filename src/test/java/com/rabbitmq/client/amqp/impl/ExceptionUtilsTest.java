@@ -23,10 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.AmqpException;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
-import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
-import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.*;
 import org.junit.jupiter.api.Test;
 
 public class ExceptionUtilsTest {
@@ -64,6 +61,15 @@ public class ExceptionUtilsTest {
     assertThat(convert(new ClientException("")))
         .isInstanceOf(AmqpException.class)
         .hasCauseInstanceOf(ClientException.class);
+
+    assertThat(
+            convert(
+                new ClientIllegalStateException(
+                    "The Sender was explicitly closed",
+                    new ClientLinkRemotelyClosedException(
+                        "", errorCondition(ERROR_RESOURCE_DELETED)))))
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .hasCauseInstanceOf(ClientLinkRemotelyClosedException.class);
   }
 
   ErrorCondition errorCondition(String condition) {
