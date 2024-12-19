@@ -129,6 +129,17 @@ abstract class ExceptionUtils {
     return isUnauthorizedAccess(e.getErrorCondition());
   }
 
+  static boolean noRunningStreamMemberOnNode(AmqpException e) {
+    if (e instanceof AmqpException.AmqpResourceClosedException) {
+      String message = e.getMessage();
+      return message != null
+          && message.contains("stream queue")
+          && message.contains("does not have a running replica on the local node");
+    } else {
+      return false;
+    }
+  }
+
   private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {
     return errorConditionEquals(errorCondition, ERROR_UNAUTHORIZED_ACCESS);
   }

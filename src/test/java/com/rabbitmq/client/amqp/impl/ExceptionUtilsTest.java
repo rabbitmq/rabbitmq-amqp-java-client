@@ -21,6 +21,8 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpConnectionException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.*;
@@ -39,7 +41,7 @@ public class ExceptionUtilsTest {
             convert(new ClientSessionRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(convert(new ClientSessionRemotelyClosedException("")))
-        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+        .isInstanceOf(AmqpResourceClosedException.class);
     assertThat(convert(new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND))))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(
@@ -47,15 +49,15 @@ public class ExceptionUtilsTest {
                 new ClientLinkRemotelyClosedException("", errorCondition(ERROR_RESOURCE_DELETED))))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
     assertThat(convert(new ClientLinkRemotelyClosedException("")))
-        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+        .isInstanceOf(AmqpResourceClosedException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("connection reset")))
-        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+        .isInstanceOf(AmqpConnectionException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("connection refused")))
-        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+        .isInstanceOf(AmqpConnectionException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("connection forced")))
-        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+        .isInstanceOf(AmqpConnectionException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("", new RuntimeException())))
-        .isInstanceOf(AmqpException.AmqpConnectionException.class)
+        .isInstanceOf(AmqpConnectionException.class)
         .hasCauseInstanceOf(ClientConnectionRemotelyClosedException.class);
     assertThat(convert(new ClientConnectionRemotelyClosedException("", new SSLException(""))))
         .isInstanceOf(AmqpException.AmqpSecurityException.class)
@@ -72,6 +74,17 @@ public class ExceptionUtilsTest {
                         "", errorCondition(ERROR_RESOURCE_DELETED)))))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
         .hasCauseInstanceOf(ClientLinkRemotelyClosedException.class);
+  }
+
+  @Test
+  void testNoRunningStreamMemberOnNode() {
+    assertThat(
+            noRunningStreamMemberOnNode(
+                new AmqpResourceClosedException(
+                    "stream queue 'stream-RecoveryClusterTest_clusterRestart-a69d-db752afee52a' in vhost '/' does not have a running replica on the local node [condition = amqp:internal-error]")))
+        .isTrue();
+    assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("foo"))).isFalse();
+    assertThat(noRunningStreamMemberOnNode(new AmqpConnectionException("foo", null))).isFalse();
   }
 
   ErrorCondition errorCondition(String condition) {

@@ -512,6 +512,24 @@ final class AmqpConnection extends ResourceBase implements Connection {
               consumer.queue(),
               ex);
           throw ex;
+        } catch (AmqpException.AmqpResourceClosedException ex) {
+          if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
+            LOGGER.warn(
+                "Could not recover consumer {} (queue '{}') because there is "
+                    + "running stream member on the node, restarting recovery",
+                consumer.id(),
+                consumer.queue(),
+                ex);
+            throw new AmqpException.AmqpConnectionException(
+                "No running stream member on the node", ex);
+          } else {
+            LOGGER.warn(
+                "Error while trying to recover consumer {} (queue '{}')",
+                consumer.id(),
+                consumer.queue(),
+                ex);
+            failedConsumers.add(consumer);
+          }
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover consumer {} (queue '{}')",

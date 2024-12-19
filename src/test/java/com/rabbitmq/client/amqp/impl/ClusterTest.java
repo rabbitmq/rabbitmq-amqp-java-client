@@ -20,22 +20,26 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
+import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -440,7 +444,7 @@ public class ClusterTest {
     List<String> names = range(0, URIS.length).mapToObj(ignored -> name(info)).collect(toList());
     try {
       List<Connection> connections =
-          Arrays.stream(URIS)
+          stream(URIS)
               .map(
                   uri ->
                       connection(
@@ -479,6 +483,57 @@ public class ClusterTest {
     }
   }
 
+  @Test
+  void consumerOnNodeWithoutStreamMemberShouldThrow() {
+    List<AmqpConnection> connections = List.of();
+    try {
+      int memberCount = URIS.length - 1;
+      this.management.queue(this.name).stream().initialMemberCount(memberCount).queue().declare();
+      waitAtMost(() -> this.management.queueInfo(this.name).members().size() == memberCount);
+
+      List<String> members = this.management.queueInfo(this.name).members();
+
+      connections =
+          stream(URIS)
+              .map(uri -> (AmqpConnection) this.environment.connectionBuilder().uri(uri).build())
+              .collect(toList());
+
+      Connection cWithMember =
+          connections.stream()
+              .filter(c -> members.contains(c.connectionNodename()))
+              .findAny()
+              .get();
+      cWithMember
+          .consumerBuilder()
+          .queue(this.name)
+          .messageHandler((ctx, msg) -> ctx.accept())
+          .build();
+
+      Connection cWithNoMember =
+          connections.stream()
+              .filter(c -> !members.contains(c.connectionNodename()))
+              .findAny()
+              .get();
+
+      assertThatThrownBy(
+              () ->
+                  cWithNoMember
+                      .consumerBuilder()
+                      .queue(this.name)
+                      .messageHandler((ctx, msg) -> ctx.accept())
+                      .build())
+          .isInstanceOf(AmqpResourceClosedException.class)
+          .is(
+              new Condition<>(
+                  e -> noRunningStreamMemberOnNode((AmqpException) e),
+                  "detected as a no-running-stream-member-on-connection-node exception"));
+
+    } finally {
+      this.connection.management().queueDeletion().delete(this.name);
+      connections.forEach(Connection::close);
+    }
+  }
+
   String moveQqLeader() {
     String initialLeader = deleteQqLeader();
     addQqMember(initialLeader);
@@ -489,10 +544,6 @@ public class ClusterTest {
 
   String deleteQqLeader() {
     return deleteLeader(this::deleteQqMember);
-  }
-
-  String deleteStreamLeader() {
-    return deleteLeader(leader -> Cli.deleteStreamMember(q, leader));
   }
 
   String deleteLeader(Consumer<String> deleteMemberOperation) {
