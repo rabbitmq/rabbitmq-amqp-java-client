@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.impl.Utils.maybeClose;
 
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
@@ -209,19 +210,17 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     if (this.closed.compareAndSet(false, true)) {
       this.state(State.CLOSING, cause);
       this.connection.removePublisher(this);
-      try {
-        this.sender.close();
-        this.sessionHandler.close();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing sender", e);
-      }
+      maybeClose(this.sender, e -> LOGGER.info("Error while closing sender", e));
+      maybeClose(
+          this.sessionHandler,
+          e -> LOGGER.info("Error while closing publisher session handler", e));
       this.state(State.CLOSED, cause);
       this.metricsCollector.closePublisher();
     }
   }
 
   private static boolean maybeCloseConsumerOnException(AmqpPublisher publisher, Exception ex) {
-    return ExceptionUtils.maybeCloseConsumerOnException(publisher::close, ex);
+    return ExceptionUtils.maybeCloseOnException(publisher::close, ex);
   }
 
   private static class DefaultContext implements Publisher.Context {
@@ -251,5 +250,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
   String address() {
     return this.address;
+  }
+
+  @Override
+  public String toString() {
+    return "AmqpPublisher{" + "id=" + id + ", address='" + address + '\'' + '}';
   }
 }

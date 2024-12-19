@@ -106,6 +106,9 @@ public class RecoveryClusterTest {
 
   @Test
   void clusterRestart() {
+    LOGGER.info("Cluster restart test...");
+    LOGGER.info("Available processors: {}", Runtime.getRuntime().availableProcessors());
+    LOGGER.info("Java version: {}", System.getProperty("java.version"));
     int queueCount = 10;
     List<Management.QueueType> queueTypes =
         List.of(
@@ -234,41 +237,63 @@ public class RecoveryClusterTest {
 
       assertThat(publisherStates).allMatch(s -> s.state() == OPEN);
       assertThat(consumerStates).allMatch(s -> s.state() == OPEN);
-
-      System.out.println("Queues:");
-      queueNames.forEach(
-          q -> {
-            Management.QueueInfo queueInfo = management.queueInfo(q);
-            System.out.printf(
-                "Queue '%s': leader '%s', followers '%s'%n",
-                q,
-                queueInfo.leader(),
-                queueInfo.members().stream()
-                    .filter(n -> !n.equals(queueInfo.leader()))
-                    .collect(toList()));
-          });
-
-      System.out.println("Publishers:");
-      publisherStates.forEach(
-          p -> System.out.printf("  queue %s, is on leader? %s%n", p.queue, p.isOnLeader()));
-
-      System.out.println("Consumers:");
-      consumerStates.forEach(
-          p -> System.out.printf("  queue %s, is on member? %s%n", p.queue, p.isOnMember()));
     } catch (Throwable e) {
       LOGGER.info("Test failed with {}", e.getMessage(), e);
       BiConsumer<AmqpConnection, ResourceBase> log =
           (c, r) -> {
             LOGGER.info("Connection {}: {}", c.name(), c.state());
             if (r != null) {
-              LOGGER.info("Resource: {}", r.state());
+              LOGGER.info("{}: {}", r, r.state());
             }
           };
       log.accept(this.connection, null);
       publisherStates.forEach(s -> log.accept(s.connection, s.publisher));
       consumerStates.forEach(s -> log.accept(s.connection, s.consumer));
+
       throw e;
     } finally {
+      System.out.println("Queues:");
+      queueNames.forEach(
+          q -> {
+            try {
+              Management.QueueInfo queueInfo = management.queueInfo(q);
+              System.out.printf(
+                  "Queue '%s': leader '%s', followers '%s', consumer(s) %d, message(s) %d%n",
+                  q,
+                  queueInfo.leader(),
+                  queueInfo.members().stream()
+                      .filter(n -> !n.equals(queueInfo.leader()))
+                      .collect(toList()),
+                  queueInfo.consumerCount(),
+                  queueInfo.messageCount());
+            } catch (Exception ex) {
+              LOGGER.info(
+                  "Error while retrieving queue information for '{}': {}", q, ex.getMessage());
+            }
+          });
+
+      System.out.println("Publishers:");
+      publisherStates.forEach(
+          p -> {
+            try {
+              System.out.printf("  queue %s, is on leader? %s%n", p.queue, p.isOnLeader());
+            } catch (Exception ex) {
+              LOGGER.info(
+                  "Error while checking publisher '{}' is on leader node: {}", p, ex.getMessage());
+            }
+          });
+
+      System.out.println("Consumers:");
+      consumerStates.forEach(
+          p -> {
+            try {
+              System.out.printf("  queue %s, is on member? %s%n", p.queue, p.isOnMember());
+            } catch (Exception ex) {
+              LOGGER.info(
+                  "Error while checking consumer '{}' is on a member node: {}", p, ex.getMessage());
+            }
+          });
+
       publisherStates.forEach(PublisherState::close);
       consumerStates.forEach(ConsumerState::close);
       queueConfigurations.stream()

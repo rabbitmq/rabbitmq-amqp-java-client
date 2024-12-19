@@ -258,6 +258,17 @@ final class Utils {
     }
   }
 
+  static void maybeClose(
+      AutoCloseable closeable, java.util.function.Consumer<Exception> exceptionCallback) {
+    if (closeable != null) {
+      try {
+        closeable.close();
+      } catch (Exception e) {
+        exceptionCallback.accept(e);
+      }
+    }
+  }
+
   static final ObservationCollector NO_OP_OBSERVATION_COLLECTOR = new NoOpObservationCollector();
 
   private static final class NoOpObservationCollector implements ObservationCollector {

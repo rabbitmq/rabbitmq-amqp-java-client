@@ -56,11 +56,16 @@ class AsyncRetry<V> {
                 return;
               }
               try {
+                LOGGER.debug("Running task '{}'", description);
                 V result = task.call();
                 LOGGER.debug("Task '{}' succeeded, completing future", description);
                 completableFuture.complete(result);
               } catch (Exception e) {
                 int attemptCount = attempts.getAndIncrement();
+                LOGGER.debug(
+                    "Attempt {} for task '{}' failed, checking retry policy",
+                    attemptCount,
+                    description);
                 if (retry.test(e)) {
                   if (delayPolicy.delay(attemptCount).equals(BackOffDelayPolicy.TIMEOUT)) {
                     LOGGER.debug(

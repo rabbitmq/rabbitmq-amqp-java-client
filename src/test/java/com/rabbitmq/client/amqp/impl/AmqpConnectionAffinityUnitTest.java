@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
@@ -201,6 +202,16 @@ public class AmqpConnectionAffinityUnitTest {
         .hasMapping(LEADER_NODENAME, LEADER_ADDRESS);
   }
 
+  @Test
+  void connectionClosedExceptionDuringQueueInfoLookupShouldMarkManagementAsUnavailable() {
+    when(management.queueInfo(Q)).thenThrow(new AmqpException.AmqpConnectionException("", null));
+    when(cf.apply(null)).thenReturn(follower1Connection());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(), cache))
+        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+    verify(management, times(1)).markUnavailable();
+    verify(nativeConnection, times(1)).close();
+  }
+
   AmqpConnection.NativeConnectionWrapper leaderConnection() {
     return new AmqpConnection.NativeConnectionWrapper(
         this.nativeConnection, LEADER_NODENAME, LEADER_ADDRESS);
@@ -214,11 +225,6 @@ public class AmqpConnectionAffinityUnitTest {
   AmqpConnection.NativeConnectionWrapper follower2Connection() {
     return new AmqpConnection.NativeConnectionWrapper(
         this.nativeConnection, FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
-  }
-
-  AmqpConnection.NativeConnectionWrapper connection(String nodename) {
-    return new AmqpConnection.NativeConnectionWrapper(
-        this.nativeConnection, nodename, NODES.get(nodename));
   }
 
   static ConnectionUtils.AffinityContext affinity() {
