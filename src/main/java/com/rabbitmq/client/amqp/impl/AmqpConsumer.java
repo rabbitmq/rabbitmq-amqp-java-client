@@ -307,11 +307,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.nativeHandler,
                     this.nativeCloseHandler),
             e -> {
-              boolean shouldRetry =
-                  e instanceof AmqpException.AmqpResourceClosedException
-                      && e.getMessage().contains("stream queue")
-                      && e.getMessage()
-                          .contains("does not have a running replica on the local node");
+              boolean shouldRetry = ExceptionUtils.noRunningStreamMemberOnNode(e);
               LOGGER.debug("Retrying receiver creation on consumer recovery: {}", shouldRetry);
               return shouldRetry;
             },
