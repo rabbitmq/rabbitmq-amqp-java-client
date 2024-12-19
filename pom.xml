@@ -48,7 +48,7 @@
         <micrometer.version>1.14.2</micrometer.version>
         <logback.version>1.2.13</logback.version>
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
-        <assertj.version>3.26.3</assertj.version>
+        <assertj.version>3.27.0</assertj.version>
         <mockito.version>5.14.2</mockito.version>
         <jqwik.version>1.9.2</jqwik.version>
         <amqp-client.version>5.22.0</amqp-client.version>
