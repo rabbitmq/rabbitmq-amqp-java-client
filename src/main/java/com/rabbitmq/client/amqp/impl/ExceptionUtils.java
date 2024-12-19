@@ -132,10 +132,13 @@ abstract class ExceptionUtils {
   static boolean noRunningStreamMemberOnNode(Exception e) {
     if (e instanceof AmqpException.AmqpResourceClosedException) {
       String message = e.getMessage();
-      return message != null
-          && message.contains("stream queue")
-          && message.contains("does not have a running replica on the local node")
-          && message.contains("noproc");
+      if (message == null) {
+        return false;
+      } else {
+        return (message.contains("stream queue")
+                && message.contains("does not have a running replica on the local node"))
+            || message.contains("noproc");
+      }
     } else {
       return false;
     }

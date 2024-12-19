@@ -83,6 +83,7 @@ public class ExceptionUtilsTest {
                 new AmqpResourceClosedException(
                     "stream queue 'stream-RecoveryClusterTest_clusterRestart-a69d-db752afee52a' in vhost '/' does not have a running replica on the local node [condition = amqp:internal-error]")))
         .isTrue();
+    assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("noproc"))).isTrue();
     assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("foo"))).isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpConnectionException("foo", null))).isFalse();
   }
