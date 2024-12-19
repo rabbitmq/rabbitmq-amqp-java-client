@@ -115,7 +115,7 @@ final class ConnectionUtils {
                 pickedConnection = connectionWrapper;
               } else {
                 LOGGER.debug("Affinity no longer valid, retrying.");
-                management.releaseResources();
+                management.releaseResources(null);
                 connectionWrapper.connection().close();
               }
             }
@@ -143,13 +143,13 @@ final class ConnectionUtils {
               queueInfoRefreshed = true;
             }
           }
-          management.releaseResources();
+          management.releaseResources(null);
           connectionWrapper.connection().close();
         }
       }
       return pickedConnection;
     } catch (AmqpException.AmqpConnectionException e) {
-      management.releaseResources();
+      management.releaseResources(e);
       try {
         if (connectionWrapper != null) {
           connectionWrapper.connection().close();

@@ -202,7 +202,7 @@ class AmqpManagement implements Management {
     }
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSED);
-      this.releaseResources();
+      this.releaseResources(null);
       if (this.receiver != null) {
         try {
           this.receiver.close();
@@ -361,12 +361,13 @@ class AmqpManagement implements Management {
     }
   }
 
-  void releaseResources() {
+  void releaseResources(AmqpException e) {
     this.markUnavailable();
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
       this.receiveLoop = null;
     }
+    this.failRequests(e);
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {
@@ -599,6 +600,7 @@ class AmqpManagement implements Management {
 
     void block() {
       boolean completed;
+      long start = System.nanoTime();
       try {
         completed = this.latch.await(timeout.toMillis(), MILLISECONDS);
       } catch (InterruptedException e) {
@@ -609,7 +611,8 @@ class AmqpManagement implements Management {
         throw this.exception.get();
       }
       if (!completed) {
-        throw new AmqpException("Could not get management response in %d ms", timeout.toMillis());
+        Duration duration = Duration.ofNanos(System.nanoTime() - start);
+        throw new AmqpException("Could not get management response in %d ms", duration.toMillis());
       }
     }
 
