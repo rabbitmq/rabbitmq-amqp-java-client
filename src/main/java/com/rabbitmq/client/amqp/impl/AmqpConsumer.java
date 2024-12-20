@@ -55,7 +55,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private volatile ClientReceiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final int initialCredits;
-  private final MessageHandler messageHandler;
   private final Long id;
   private final String address;
   private final String queue;
@@ -84,7 +83,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
-    this.messageHandler =
+    MessageHandler messageHandler =
         builder
             .connection()
             .observationCollector()
@@ -257,43 +256,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     };
   }
 
-  private Runnable createReceiveTask(Receiver receiver, MessageHandler messageHandler) {
-    return () -> {
-      try {
-        receiver.addCredit(this.initialCredits);
-        while (!Thread.currentThread().isInterrupted()) {
-          Delivery delivery = receiver.receive(100, TimeUnit.MILLISECONDS);
-          if (delivery != null) {
-            this.unsettledMessageCount.incrementAndGet();
-            this.metricsCollector.consume();
-            AmqpMessage message = new AmqpMessage(delivery.message());
-            Consumer.Context context =
-                new DeliveryContext(
-                    delivery,
-                    this.protonExecutor,
-                    this.metricsCollector,
-                    this.unsettledMessageCount,
-                    this.replenishCreditOperation,
-                    this);
-            messageHandler.handle(context, message);
-          }
-        }
-      } catch (ClientLinkRemotelyClosedException | ClientSessionRemotelyClosedException e) {
-        if (notFound(e) || resourceDeleted(e) || unauthorizedAccess(e)) {
-          this.close(ExceptionUtils.convert(e));
-        }
-      } catch (ClientConnectionRemotelyClosedException e) {
-        // receiver is closed
-      } catch (ClientException e) {
-        java.util.function.Consumer<String> log =
-            this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.warn(m, e);
-        log.accept("Error while polling AMQP receiver");
-      } catch (Exception e) {
-        LOGGER.warn("Unexpected error in consumer loop", e);
-      }
-    };
-  }
-
   void recoverAfterConnectionFailure() {
     this.nativeReceiver =
         RetryUtils.callAndMaybeRetry(
@@ -329,7 +291,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       this.state(CLOSING, cause);
       this.connection.removeConsumer(this);
       try {
-        this.nativeReceiver.close();
+        if (this.nativeReceiver != null) {
+          this.nativeReceiver.close();
+        }
         this.sessionHandler.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing receiver", e);

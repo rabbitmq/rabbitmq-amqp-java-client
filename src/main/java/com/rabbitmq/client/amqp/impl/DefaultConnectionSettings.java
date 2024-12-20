@@ -21,6 +21,7 @@ import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.*;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -28,10 +29,10 @@ import java.net.URLDecoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.time.Instant;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -74,6 +75,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private String saslMechanism = ConnectionSettings.SASL_MECHANISM_ANONYMOUS;
   private final DefaultTlsSettings<T> tlsSettings = new DefaultTlsSettings<>(this);
   private final DefaultAffinity<T> affinity = new DefaultAffinity<>(this);
+  private final DefaultOAuth2Settings<T> oAuth2Settings = new DefaultOAuth2Settings<>(this);
 
   @Override
   public T uri(String uriString) {
@@ -223,6 +225,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     }
 
     this.affinity.copyTo(copy.affinity);
+
+    if (this.oAuth2Settings.enabled()) {
+      this.oAuth2Settings.copyTo(copy.oauth2());
+    }
   }
 
   DefaultConnectionSettings<?> consolidate() {
@@ -293,6 +299,11 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   @Override
   public DefaultAffinity<? extends T> affinity() {
     return this.affinity;
+  }
+
+  @Override
+  public DefaultOAuth2Settings<? extends T> oauth2() {
+    return this.oAuth2Settings;
   }
 
   static DefaultConnectionSettings<?> instance() {
@@ -488,6 +499,170 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       if (this.queue == null || this.queue.isBlank()) {
         throw new IllegalArgumentException("Connection affinity requires a queue value");
       }
+    }
+  }
+
+  static class DefaultOAuth2Settings<T> implements OAuth2Settings<T> {
+
+    private final DefaultConnectionSettings<T> connectionSettings;
+    private final DefaultOAuthTlsSettings<T> tls = new DefaultOAuthTlsSettings<>(this);
+    private final Map<String, String> parameters = new HashMap<>();
+    private String tokenEndpointUri;
+    private String clientId;
+    private String clientSecret;
+    private String grantType = "client_credentials";
+    private boolean shared = true;
+    private Function<Instant, Duration> refreshDelayStrategy =
+        TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
+
+    DefaultOAuth2Settings(DefaultConnectionSettings<T> connectionSettings) {
+      this.connectionSettings = connectionSettings;
+    }
+
+    @Override
+    public OAuth2Settings<T> tokenEndpointUri(String uri) {
+      this.connectionSettings.saslMechanism(SASL_MECHANISM_PLAIN);
+      this.tokenEndpointUri = uri;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> clientId(String clientId) {
+      this.clientId = clientId;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> clientSecret(String clientSecret) {
+      this.clientSecret = clientSecret;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> grantType(String grantType) {
+      this.grantType = grantType;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> parameter(String name, String value) {
+      if (value == null) {
+        this.parameters.remove(name);
+      } else {
+        this.parameters.put(name, value);
+      }
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> shared(boolean shared) {
+      this.shared = shared;
+      return this;
+    }
+
+    DefaultOAuth2Settings<T> refreshDelayStrategy(
+        Function<Instant, Duration> refreshDelayStrategy) {
+      this.refreshDelayStrategy = refreshDelayStrategy;
+      return this;
+    }
+
+    Function<Instant, Duration> refreshDelayStrategy() {
+      return this.refreshDelayStrategy;
+    }
+
+    @Override
+    public DefaultOAuthTlsSettings<? extends T> tls() {
+      this.tls.enable();
+      return this.tls;
+    }
+
+    @Override
+    public T connection() {
+      return this.connectionSettings.toReturn();
+    }
+
+    void copyTo(DefaultOAuth2Settings<?> copy) {
+      copy.tokenEndpointUri(this.tokenEndpointUri);
+      copy.clientId(this.clientId);
+      copy.clientSecret(this.clientSecret);
+      copy.grantType(this.grantType);
+      copy.shared(this.shared);
+      this.parameters.forEach(copy::parameter);
+      if (this.tls.enabled()) {
+        this.tls.copyTo(copy.tls());
+      }
+      copy.refreshDelayStrategy(this.refreshDelayStrategy);
+    }
+
+    String tokenEndpointUri() {
+      return this.tokenEndpointUri;
+    }
+
+    String clientId() {
+      return this.clientId;
+    }
+
+    String clientSecret() {
+      return this.clientSecret;
+    }
+
+    String grantType() {
+      return this.grantType;
+    }
+
+    Map<String, String> parameters() {
+      return Map.copyOf(this.parameters);
+    }
+
+    boolean shared() {
+      return this.shared;
+    }
+
+    boolean enabled() {
+      return this.tokenEndpointUri != null;
+    }
+
+    boolean tlsEnabled() {
+      return this.tls.enabled();
+    }
+  }
+
+  static class DefaultOAuthTlsSettings<T> implements OAuth2Settings.TlsSettings<T> {
+
+    private final OAuth2Settings<T> oAuth2Settings;
+    private SSLContext sslContext;
+    private boolean enabled = false;
+
+    DefaultOAuthTlsSettings(OAuth2Settings<T> oAuth2Settings) {
+      this.oAuth2Settings = oAuth2Settings;
+    }
+
+    @Override
+    public OAuth2Settings.TlsSettings<T> sslContext(SSLContext sslContext) {
+      this.sslContext = sslContext;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings<T> oauth2() {
+      return this.oAuth2Settings;
+    }
+
+    void enable() {
+      this.enabled = true;
+    }
+
+    boolean enabled() {
+      return this.enabled;
+    }
+
+    SSLContext sslContext() {
+      return this.sslContext;
+    }
+
+    void copyTo(DefaultOAuthTlsSettings<?> copy) {
+      copy.enabled = this.enabled;
+      copy.sslContext(this.sslContext);
     }
   }
 }

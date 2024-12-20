@@ -26,9 +26,12 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.qpid.protonj2.client.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class AmqpEnvironment implements Environment {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
   private final Client client;
@@ -51,6 +54,8 @@ class AmqpEnvironment implements Environment {
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
   private final ExecutorService recoveryEventLoopExecutorService;
+  private final CredentialsManagerFactory credentialsManagerFactory =
+      new CredentialsManagerFactory(this);
 
   AmqpEnvironment(
       ExecutorService executorService,
@@ -120,9 +125,14 @@ class AmqpEnvironment implements Environment {
     return this.clock;
   }
 
+  CredentialsManagerFactory credentialsManagerFactory() {
+    return this.credentialsManagerFactory;
+  }
+
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
+      LOGGER.debug("Closing environment {}", this);
       this.connectionManager.close();
       this.client.close();
       this.recoveryEventLoop.close();
@@ -140,6 +150,7 @@ class AmqpEnvironment implements Environment {
         this.clockRefreshFuture.cancel(false);
       }
       this.scheduledExecutorService.shutdownNow();
+      LOGGER.debug("Environment {} has been closed", this);
     }
   }
 

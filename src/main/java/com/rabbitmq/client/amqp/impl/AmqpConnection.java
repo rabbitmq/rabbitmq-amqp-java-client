@@ -18,13 +18,18 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.*;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.Utils.supportFilterExpressions;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSetToken;
+import static java.lang.System.nanoTime;
+import static java.time.Duration.ofNanos;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.ObservationCollector;
+import com.rabbitmq.client.amqp.impl.Utils.RunnableWithException;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -92,12 +97,14 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ExecutorService dispatchingExecutorService;
+  private final CredentialsManager.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
-    this.name = builder.name();
     this.environment = builder.environment();
+    this.name =
+        builder.name() == null ? this.environment.toString() + "-" + this.id : builder.name();
     this.connectionSettings = builder.connectionSettings().consolidate();
     this.sessionHandlerSupplier =
         builder.isolateResources()
@@ -110,12 +117,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.topologyListener = createTopologyListener(builder);
 
     if (recoveryConfiguration.activated()) {
-      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, builder.name());
+      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, this.name());
     } else {
       disconnectHandler =
           (c, e) -> {
-            AmqpException failureCause =
-                ExceptionUtils.convert(e.failureCause(), "Connection disconnected");
+            AmqpException failureCause = convert(e.failureCause(), "Connection disconnected");
             this.close(failureCause);
           };
     }
@@ -130,12 +136,33 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.affinityStrategy = null;
     }
     this.management = createManagement();
+    CredentialsManager credentialsManager = builder.credentialsManager();
+    this.credentialsRegistration =
+        credentialsManager.register(
+            this.name(),
+            (username, password) -> {
+              State state = this.state();
+              if (state == OPEN) {
+                LOGGER.debug("Setting new token for connection {}", this.name);
+                long start = nanoTime();
+                ((AmqpManagement) management()).setToken(password);
+                LOGGER.debug(
+                    "Set new token for connection {} in {} ms",
+                    this.name,
+                    ofNanos(nanoTime() - start).toMillis());
+              } else {
+                LOGGER.debug(
+                    "Could not set new token for connection {} because its state is {}",
+                    this.name(),
+                    state);
+              }
+            });
     LOGGER.debug("Opening native connection for connection '{}'...", this.name());
     NativeConnectionWrapper ncw =
         ConnectionUtils.enforceAffinity(
             addrs -> {
               NativeConnectionWrapper wrapper =
-                  connect(this.connectionSettings, builder.name(), disconnectHandler, addrs);
+                  connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
               this.nativeConnection = wrapper.connection();
               return wrapper;
             },
@@ -206,12 +233,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
-    if (connectionSettings.credentialsProvider() instanceof UsernamePasswordCredentialsProvider) {
-      UsernamePasswordCredentialsProvider credentialsProvider =
-          (UsernamePasswordCredentialsProvider) connectionSettings.credentialsProvider();
-      connectionOptions.user(credentialsProvider.getUsername());
-      connectionOptions.password(credentialsProvider.getPassword());
-    }
+    credentialsRegistration.connect(new TokenConnectionCallback(connectionOptions));
     connectionOptions.virtualHost("vhost:" + connectionSettings.virtualHost());
     connectionOptions.saslOptions().addAllowedMechanism(connectionSettings.saslMechanism());
     connectionOptions.idleTimeout(
@@ -244,7 +266,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       checkBrokerVersion(connection);
       return new NativeConnectionWrapper(connection, extractNode(connection), address);
     } catch (ClientException e) {
-      throw ExceptionUtils.convert(e);
+      throw convert(e);
     } finally {
       LOGGER.debug("Connection attempt for '{}' took {}", this.name(), stopWatch.stop());
     }
@@ -271,7 +293,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     try {
       return (String) connection.properties().get("version");
     } catch (ClientException e) {
-      throw ExceptionUtils.convert(e);
+      throw convert(e);
     }
   }
 
@@ -311,11 +333,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
-          ClientIOException ioex = event.failureCause();
+          ClientIOException failureCause = event.failureCause();
           LOGGER.debug(
               "Disconnect handler of '{}', error is the following: {}",
               this.name(),
-              ioex.getMessage());
+              failureCause.getMessage());
           if (this.state() == OPENING) {
             LOGGER.debug("Connection is still opening, disconnect handler skipped");
             // the broker is not available when opening the connection
@@ -352,8 +374,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
             LOGGER.debug(
                 "Not recovering connection '{}' for error {}",
                 this.name(),
-                event.failureCause().getMessage());
-            close(ExceptionUtils.convert(ioex));
+                failureCause.getMessage());
+            close(exception);
           }
         };
 
@@ -429,7 +451,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                             if (!this.recoveringConnection.get()) {
                               recoverAfterConnectionFailure(
                                   recoveryConfiguration,
-                                  name,
+                                  this.name(),
                                   amqpException,
                                   disconnectedHandlerReference);
                             }
@@ -624,7 +646,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     try {
       return connection.openSession();
     } catch (ClientException e) {
-      throw ExceptionUtils.convert(e, "Error while opening session");
+      throw convert(e, "Error while opening session");
     }
   }
 
@@ -653,7 +675,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       if (this.dispatchingExecutorService == null) {
         this.dispatchingExecutorService =
             Executors.newSingleThreadExecutor(
-                Utils.threadFactory("dispatching-" + this.name + "-"));
+                Utils.threadFactory("dispatching-" + this.name() + "-"));
       }
       return this.dispatchingExecutorService;
     } finally {
@@ -773,26 +795,35 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
+      LOGGER.debug("Closing connection {}", this);
+      this.credentialsRegistration.close();
       this.environment.removeConnection(this);
+      BiConsumer<String, RunnableWithException> safeClose =
+          (label, action) -> {
+            try {
+              action.run();
+            } catch (Exception e) {
+              LOGGER.info(
+                  "Error during connection '{}' closing ({}): {}", this, label, e.getMessage());
+            }
+          };
       if (this.topologyListener instanceof AutoCloseable) {
-        try {
-          ((AutoCloseable) this.topologyListener).close();
-        } catch (Exception e) {
-          LOGGER.info("Error while closing topology listener", e);
-        }
+        safeClose.accept(
+            "topology listener", () -> ((AutoCloseable) this.topologyListener).close());
       }
-      this.closeManagement();
+      safeClose.accept("management", this::closeManagement);
+
       for (RpcClient rpcClient : this.rpcClients) {
-        rpcClient.close();
+        safeClose.accept("RPC client", rpcClient::close);
       }
       for (RpcServer rpcServer : this.rpcServers) {
-        rpcServer.close();
+        safeClose.accept("RPC server", rpcServer::close);
       }
       for (AmqpPublisher publisher : this.publishers) {
-        publisher.close(cause);
+        safeClose.accept("publisher", () -> publisher.close(cause));
       }
       for (AmqpConsumer consumer : this.consumers) {
-        consumer.close(cause);
+        safeClose.accept("consumer", () -> consumer.close(cause));
       }
       boolean locked = false;
       try {
@@ -834,12 +865,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
       }
       this.state(CLOSED, cause);
       this.environment.metricsCollector().closeConnection();
+      LOGGER.debug("Connection {} has been closed", this);
     }
   }
 
   @Override
   public String toString() {
-    return this.environment.toString() + "-" + this.id;
+    return this.name();
   }
 
   static class NativeConnectionWrapper {
@@ -879,5 +911,20 @@ final class AmqpConnection extends ResourceBase implements Connection {
   @Override
   public int hashCode() {
     return Objects.hashCode(id);
+  }
+
+  private static class TokenConnectionCallback
+      implements CredentialsManager.AuthenticationCallback {
+
+    private final ConnectionOptions options;
+
+    private TokenConnectionCallback(ConnectionOptions options) {
+      this.options = options;
+    }
+
+    @Override
+    public void authenticate(String username, String password) {
+      options.user(username).password(password);
+    }
   }
 }

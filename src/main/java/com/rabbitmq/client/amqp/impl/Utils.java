@@ -300,11 +300,9 @@ final class Utils {
   static class StopWatch {
 
     private final long start = System.nanoTime();
-    private Duration duration;
 
     Duration stop() {
-      this.duration = Duration.ofNanos(System.nanoTime() - start);
-      return this.duration;
+      return Duration.ofNanos(System.nanoTime() - start);
     }
   }
 
@@ -331,5 +329,11 @@ final class Utils {
     public String toString() {
       return this.name;
     }
+  }
+
+  @FunctionalInterface
+  interface RunnableWithException {
+
+    void run() throws Exception;
   }
 }

@@ -424,6 +424,7 @@ class AmqpManagement implements Management {
     this.outstandingRequests.put(requestId, outstandingRequest);
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
+    // FIXME use async callback for management responses
     Future<?> loop = this.receiveLoop;
     if (loop == null) {
       this.instanceLock.lock();

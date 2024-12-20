@@ -155,6 +155,17 @@ public interface ConnectionSettings<T> {
   Affinity<? extends T> affinity();
 
   /**
+   * OAuth 2 settings.
+   *
+   * <p>OAuth 2 requires RabbitMQ 4.1 or more.
+   *
+   * @return OAuth 2 settings
+   * @see OAuth2Settings
+   * @since 0.4.0
+   */
+  OAuth2Settings<? extends T> oauth2();
+
+  /**
    * TLS settings.
    *
    * @param <T>

@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,6 +106,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public OAuth2Settings<? extends ConnectionBuilder> oauth2() {
+    return this.connectionSettings.oauth2();
+  }
+
+  @Override
   public ConnectionBuilder listeners(Resource.StateListener... listeners) {
     if (listeners == null || listeners.length == 0) {
       this.listeners.clear();
@@ -155,6 +161,10 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
 
   AmqpEnvironment environment() {
     return environment;
+  }
+
+  CredentialsManager credentialsManager() {
+    return environment().credentialsManagerFactory().credentials(this.connectionSettings);
   }
 
   AmqpRecoveryConfiguration recoveryConfiguration() {
