@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.4.0-SNAPSHOT</span>
-<br><span id="revremark">(7595674)</span>
+<br><span id="revremark">(a74b948)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -676,6 +676,7 @@ pre.rouge {
 <ul class="sectlevel2">
 <li><a href="#connection-settings-at-the-environment-level">Connection Settings at the Environment Level</a></li>
 <li><a href="#subscription-listener">Subscription Listener</a></li>
+<li><a href="#oauth-2-support">OAuth 2 Support</a></li>
 <li><a href="#metrics-collection">Metrics Collection</a></li>
 <li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
 </ul>
@@ -962,6 +963,76 @@ The following code snippet shows how this can be done (note the interaction with
 <td>Store the offset in the external store after processing</td>
 </tr>
 </table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="oauth-2-support"><a class="anchor" href="#oauth-2-support"></a>OAuth 2 Support</h3>
+<div class="paragraph">
+<p>The client can authenticate against an OAuth 2 server like <a href="https://github.com/cloudfoundry/uaa">UAA</a>.
+It uses the <a href="https://tools.ietf.org/html/rfc6749#section-4.4">OAuth 2 Client Credentials flow</a>.
+The <a href="https://www.rabbitmq.com/docs/oauth2">OAuth 2 plugin</a> must be enabled on the server side and configured to use the same OAuth 2 server as the client.</p>
+</div>
+<div class="paragraph">
+<p>How to retrieve the OAuth 2 token can be globally configured at the environment level:</p>
+</div>
+<div class="listingblock">
+<div class="title">Configuring OAuth 2 token retrieval</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Environment</span> <span class="n">environment</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">AmqpEnvironmentBuilder</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">connectionSettings</span><span class="o">().</span><span class="na">oauth2</span><span class="o">()</span>  <i class="conum" data-value="1"></i><b>(1)</b>
+    <span class="o">.</span><span class="na">tokenEndpointUri</span><span class="o">(</span><span class="s">"https://localhost:8443/uaa/oauth/token/"</span><span class="o">)</span>  <i class="conum" data-value="2"></i><b>(2)</b>
+    <span class="o">.</span><span class="na">clientId</span><span class="o">(</span><span class="s">"rabbitmq"</span><span class="o">).</span><span class="na">clientSecret</span><span class="o">(</span><span class="s">"rabbitmq"</span><span class="o">)</span>  <i class="conum" data-value="3"></i><b>(3)</b>
+    <span class="o">.</span><span class="na">grantType</span><span class="o">(</span><span class="s">"password"</span><span class="o">)</span>  <i class="conum" data-value="4"></i><b>(4)</b>
+    <span class="o">.</span><span class="na">parameter</span><span class="o">(</span><span class="s">"username"</span><span class="o">,</span> <span class="s">"rabbit_super"</span><span class="o">)</span>  <i class="conum" data-value="5"></i><b>(5)</b>
+    <span class="o">.</span><span class="na">parameter</span><span class="o">(</span><span class="s">"password"</span><span class="o">,</span> <span class="s">"rabbit_super"</span><span class="o">)</span>  <i class="conum" data-value="5"></i><b>(5)</b>
+    <span class="o">.</span><span class="na">tls</span><span class="o">().</span><span class="na">sslContext</span><span class="o">(</span><span class="n">sslContext</span><span class="o">).</span><span class="na">oauth2</span><span class="o">()</span>  <i class="conum" data-value="6"></i><b>(6)</b>
+    <span class="o">.</span><span class="na">shared</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span>  <i class="conum" data-value="7"></i><b>(7)</b>
+    <span class="o">.</span><span class="na">connection</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">environmentBuilder</span><span class="o">().</span><span class="na">build</span><span class="o">();</span></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Access the OAuth 2 configuration</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Set the token endpoint URI</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Authenticate the client application</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Set the grant type</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>Set optional parameters (depends on the OAuth 2 server)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="6"></i><b>6</b></td>
+<td>Set the SSL context (e.g. to verify and trust the identity of the OAuth 2 server)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="7"></i><b>7</b></td>
+<td>The token can be shared across the environment connections</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The environment retrieves tokens and uses them to create AMQP connections.
+It also takes care of refreshing the tokens before they expire and of re-authenticating existing connections so the broker does not close them when their token expires.</p>
+</div>
+<div class="paragraph">
+<p>The environment uses the same token for all the connections it maintains by default, but this can be changed by setting the <code>shared</code> flag to <code>false</code>.
+With <code>shared = false</code>, each connection will have its own OAuth 2 token.</p>
+</div>
+<div class="paragraph">
+<p>The OAuth 2 configuration can be set at the environment level but also at the connection level.</p>
 </div>
 </div>
 <div class="sect2">
@@ -1688,7 +1759,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.4.0-SNAPSHOT<br>
-Last updated 2024-12-20 10:28:58 UTC
+Last updated 2024-12-20 14:26:06 UTC
 </div>
 </div>
 </body>

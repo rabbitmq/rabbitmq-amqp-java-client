@@ -1,4 +1,5 @@
 com.rabbitmq.client.amqp
 com.rabbitmq.client.amqp.impl
 com.rabbitmq.client.amqp.metrics
+com.rabbitmq.client.amqp.oauth2
 com.rabbitmq.client.amqp.observation.micrometer
