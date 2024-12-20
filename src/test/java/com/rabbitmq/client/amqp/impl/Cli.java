@@ -99,10 +99,6 @@ abstract class Cli {
     return executeCommand(rabbitmqStreamsCommand() + " " + command);
   }
 
-  static ProcessState rabbitmqUpgrade(String command) {
-    return executeCommand(rabbitmqUpgradeCommand() + " " + command);
-  }
-
   static ProcessState rabbitmqctlIgnoreError(String command) {
     return executeCommand(rabbitmqctlCommand() + " " + command, true);
   }

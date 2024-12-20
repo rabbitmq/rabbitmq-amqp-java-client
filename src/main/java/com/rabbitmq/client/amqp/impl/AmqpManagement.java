@@ -122,7 +122,9 @@ class AmqpManagement implements Management {
       Map<String, Object> queueInfo = get(queueLocation(name)).responseBodyAsMap();
       return new DefaultQueueInfo(queueInfo);
     } catch (ClientException e) {
-      throw new AmqpException("Error while fetching queue '%s' information", name);
+      String message = String.format("Error while fetching information for queue '%s'", name);
+      LOGGER.debug(message, e);
+      throw ExceptionUtils.convert(e, message);
     }
   }
 
@@ -200,7 +202,7 @@ class AmqpManagement implements Management {
     }
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSED);
-      this.releaseResources();
+      this.releaseResources(null);
       if (this.receiver != null) {
         try {
           this.receiver.close();
@@ -226,14 +228,19 @@ class AmqpManagement implements Management {
   }
 
   void init() {
-    if (this.state() != OPEN) {
+    String cName = this.connection.name();
+    LOGGER.debug("Trying to initialize management for connection {}", cName);
+    State state = this.state();
+    if (state != OPEN) {
       if (!this.initializing) {
         try {
           initializationLock.lock();
-          if (!this.initializing && this.state() != OPEN) {
+          boolean initInProgress = this.initializing;
+          state = this.state();
+          if (!initInProgress && state != OPEN) {
             this.initializing = true;
-            LOGGER.debug("Initializing management ({}).", this);
-            this.state(UNAVAILABLE);
+            LOGGER.debug("Initializing management for connection {} ({}).", cName, this);
+            this.markUnavailable();
             try {
               if (this.receiveLoop != null) {
                 this.receiveLoop.cancel(true);
@@ -267,15 +274,27 @@ class AmqpManagement implements Management {
               this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
               LOGGER.debug("Management receiver created ({}).", this);
               this.state(OPEN);
-              this.initializing = false;
             } catch (Exception e) {
-              throw new AmqpException(e);
+              LOGGER.info("Error during management {} initialization: {}", cName, e.getMessage());
+              throw ExceptionUtils.convert(e);
+            } finally {
+              this.initializing = false;
             }
+          } else {
+            LOGGER.debug(
+                "Not initializing management {}: init in progress {}, state {}",
+                cName,
+                initInProgress,
+                state);
           }
         } finally {
           initializationLock.unlock();
         }
+      } else {
+        LOGGER.debug("Not initializing management {} because it is already initializing", cName);
       }
+    } else {
+      LOGGER.debug("Not initializing management {} because state is {}", cName, state);
     }
   }
 
@@ -313,7 +332,7 @@ class AmqpManagement implements Management {
       } catch (ClientConnectionRemotelyClosedException | ClientLinkRemotelyClosedException e) {
         // receiver is closed
       } catch (ClientSessionRemotelyClosedException e) {
-        this.state(UNAVAILABLE);
+        this.markUnavailable();
         LOGGER.info("Management session closed in receive loop: {} ({})", e.getMessage(), this);
         AmqpException exception = ExceptionUtils.convert(e);
         this.failRequests(exception);
@@ -342,12 +361,13 @@ class AmqpManagement implements Management {
     }
   }
 
-  void releaseResources() {
+  void releaseResources(AmqpException e) {
     this.markUnavailable();
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
       this.receiveLoop = null;
     }
+    this.failRequests(e);
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {
@@ -461,12 +481,22 @@ class AmqpManagement implements Management {
       if (responseCode == CODE_404) {
         throw new AmqpException.AmqpEntityDoesNotExistException("Entity does not exist");
       } else {
-        throw new AmqpException(
-            "Unexpected response code: %d instead of %s",
-            responseCode,
-            IntStream.of(expectedResponseCodes)
-                .mapToObj(String::valueOf)
-                .collect(Collectors.joining(", ")));
+        String message =
+            String.format(
+                "Unexpected response code: %d instead of %s",
+                responseCode,
+                IntStream.of(expectedResponseCodes)
+                    .mapToObj(String::valueOf)
+                    .collect(Collectors.joining(", ")));
+        try {
+          LOGGER.info(
+              "Management request failed: '{}'. Response body: '{}'",
+              message,
+              request.responseMessage().body());
+        } catch (Exception e) {
+          LOGGER.info("Could not get management request body: {}", e.getMessage());
+        }
+        throw new AmqpException(message);
       }
     }
   }
@@ -570,6 +600,7 @@ class AmqpManagement implements Management {
 
     void block() {
       boolean completed;
+      long start = System.nanoTime();
       try {
         completed = this.latch.await(timeout.toMillis(), MILLISECONDS);
       } catch (InterruptedException e) {
@@ -580,7 +611,8 @@ class AmqpManagement implements Management {
         throw this.exception.get();
       }
       if (!completed) {
-        throw new AmqpException("Could not get management response in %d ms", timeout.toMillis());
+        Duration duration = Duration.ofNanos(System.nanoTime() - start);
+        throw new AmqpException("Could not get management response in %d ms", duration.toMillis());
       }
     }
 
