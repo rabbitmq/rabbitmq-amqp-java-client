@@ -29,6 +29,7 @@ import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.impl.Utils.RunnableWithException;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -96,7 +97,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ExecutorService dispatchingExecutorService;
-  private final Credentials.Registration credentialsRegistration;
+  private final CredentialsManager.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -135,9 +136,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.affinityStrategy = null;
     }
     this.management = createManagement();
-    Credentials credentials = builder.credentials();
+    CredentialsManager credentialsManager = builder.credentialsManager();
     this.credentialsRegistration =
-        credentials.register(
+        credentialsManager.register(
             this.name(),
             (username, password) -> {
               State state = this.state();
@@ -913,7 +914,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return Objects.hashCode(id);
   }
 
-  private static class TokenConnectionCallback implements Credentials.AuthenticationCallback {
+  private static class TokenConnectionCallback
+      implements CredentialsManager.AuthenticationCallback {
 
     private final ConnectionOptions options;
 

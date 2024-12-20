@@ -18,13 +18,14 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 
-final class UsernamePasswordCredentials implements Credentials {
+final class UsernamePasswordCredentialsManager implements CredentialsManager {
 
   private final UsernamePasswordCredentialsProvider provider;
   private final Registration registration;
 
-  UsernamePasswordCredentials(UsernamePasswordCredentialsProvider provider) {
+  UsernamePasswordCredentialsManager(UsernamePasswordCredentialsProvider provider) {
     this.provider = provider;
     this.registration = new RegistrationImpl(provider);
   }

@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -162,8 +163,8 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     return environment;
   }
 
-  Credentials credentials() {
-    return environment().credentialsFactory().credentials(this.connectionSettings);
+  CredentialsManager credentialsManager() {
+    return environment().credentialsManagerFactory().credentials(this.connectionSettings);
   }
 
   AmqpRecoveryConfiguration recoveryConfiguration() {

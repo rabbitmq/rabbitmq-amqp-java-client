@@ -15,11 +15,11 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.impl;
+package com.rabbitmq.client.amqp.oauth2;
 
-interface Credentials {
+public interface CredentialsManager {
 
-  Credentials NO_OP = new NoOpCredentials();
+  CredentialsManager NO_OP = new NoOpCredentialsManager();
 
   Registration register(String name, AuthenticationCallback updateCallback);
 
@@ -35,7 +35,7 @@ interface Credentials {
     void authenticate(String username, String password);
   }
 
-  class NoOpCredentials implements Credentials {
+  class NoOpCredentialsManager implements CredentialsManager {
 
     @Override
     public Registration register(String name, AuthenticationCallback updateCallback) {

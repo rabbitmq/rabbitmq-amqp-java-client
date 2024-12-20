@@ -520,7 +520,7 @@ public abstract class TestUtils {
     return sync(1);
   }
 
-  static Sync sync(int count) {
+  public static Sync sync(int count) {
     return new Sync(count, () -> {}, null);
   }
 
@@ -549,7 +549,7 @@ public abstract class TestUtils {
     }
   }
 
-  static class Sync {
+  public static class Sync {
 
     private final String description;
     private final AtomicReference<CountDownLatch> latch = new AtomicReference<>();
@@ -565,7 +565,7 @@ public abstract class TestUtils {
       this.doneCallback.set(doneCallback);
     }
 
-    void down() {
+    public void down() {
       this.latch.get().countDown();
     }
 

@@ -21,6 +21,7 @@ import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.*;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -512,7 +513,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private String grantType = "client_credentials";
     private boolean shared = true;
     private Function<Instant, Duration> refreshDelayStrategy =
-        TokenCredentials.DEFAULT_REFRESH_DELAY_STRATEGY;
+        TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
 
     DefaultOAuth2Settings(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;

@@ -15,13 +15,13 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.impl;
+package com.rabbitmq.client.amqp.oauth2;
 
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
-import static com.rabbitmq.client.amqp.impl.TokenCredentials.DEFAULT_REFRESH_DELAY_STRATEGY;
 import static com.rabbitmq.client.amqp.impl.Tuples.pair;
+import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
@@ -29,9 +29,10 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.rabbitmq.client.amqp.impl.Assertions;
+import com.rabbitmq.client.amqp.impl.TestUtils;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import com.rabbitmq.client.amqp.oauth2.Token;
-import com.rabbitmq.client.amqp.oauth2.TokenRequester;
+import com.rabbitmq.client.amqp.impl.Tuples;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -45,7 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-public class TokenCredentialsTest {
+public class TokenCredentialsManagerTest {
 
   ScheduledExecutorService scheduledExecutorService;
   AutoCloseable mocks;
@@ -73,13 +74,13 @@ public class TokenCredentialsTest {
               requestCount.incrementAndGet();
               return token("ok", Instant.now().plus(tokenExpiry));
             });
-    TokenCredentials credentials =
-        new TokenCredentials(
+    TokenCredentialsManager credentials =
+        new TokenCredentialsManager(
             this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
     int expectedRefreshCount = 3;
     AtomicInteger refreshCount = new AtomicInteger();
-    Sync refreshSync = sync(expectedRefreshCount);
-    Credentials.Registration registration =
+    Sync refreshSync = TestUtils.sync(expectedRefreshCount);
+    CredentialsManager.Registration registration =
         credentials.register(
             "",
             (u, p) -> {
@@ -88,7 +89,7 @@ public class TokenCredentialsTest {
             });
     registration.connect(connectionCallback(() -> {}));
     assertThat(requestCount).hasValue(1);
-    assertThat(refreshSync).completes();
+    Assertions.assertThat(refreshSync).completes();
     assertThat(requestCount).hasValue(expectedRefreshCount + 1);
     registration.unregister();
     assertThat(refreshCount).hasValue(expectedRefreshCount);
@@ -105,18 +106,18 @@ public class TokenCredentialsTest {
     Duration timeout = tokenExpiry.multipliedBy(20);
     when(this.requester.request())
         .thenAnswer(ignored -> token("ok", Instant.now().plus(tokenExpiry)));
-    TokenCredentials credentials =
-        new TokenCredentials(
+    TokenCredentialsManager credentials =
+        new TokenCredentialsManager(
             this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
     int expectedRefreshCountPerConnection = 3;
     int connectionCount = 10;
     AtomicInteger totalRefreshCount = new AtomicInteger();
-    List<Tuples.Pair<Credentials.Registration, Sync>> registrations =
+    List<Tuples.Pair<CredentialsManager.Registration, Sync>> registrations =
         range(0, connectionCount)
             .mapToObj(
                 ignored -> {
-                  Sync sync = sync(expectedRefreshCountPerConnection);
-                  Credentials.Registration r =
+                  Sync sync = TestUtils.sync(expectedRefreshCountPerConnection);
+                  CredentialsManager.Registration r =
                       credentials.register(
                           "",
                           (username, password) -> {
@@ -128,7 +129,7 @@ public class TokenCredentialsTest {
             .collect(toList());
 
     registrations.forEach(r -> r.v1().connect(connectionCallback(() -> {})));
-    registrations.forEach(r -> assertThat(r.v2()).completes());
+    registrations.forEach(r -> Assertions.assertThat(r.v2()).completes());
     // all connections have been refreshed once
     int refreshCountSnapshot = totalRefreshCount.get();
     assertThat(refreshCountSnapshot).isEqualTo(connectionCount * expectedRefreshCountPerConnection);
@@ -153,7 +154,7 @@ public class TokenCredentialsTest {
   @Test
   void refreshDelayStrategy() {
     Duration diff = ofMillis(100);
-    Function<Instant, Duration> strategy = TokenCredentials.ratioRefreshDelayStrategy(0.8f);
+    Function<Instant, Duration> strategy = TokenCredentialsManager.ratioRefreshDelayStrategy(0.8f);
     assertThat(strategy.apply(Instant.now().plusSeconds(10))).isCloseTo(ofSeconds(8), diff);
     assertThat(strategy.apply(Instant.now().minusSeconds(10))).isEqualTo(ofSeconds(1));
   }
@@ -172,7 +173,8 @@ public class TokenCredentialsTest {
     };
   }
 
-  private static Credentials.AuthenticationCallback connectionCallback(Runnable passwordCallback) {
+  private static CredentialsManager.AuthenticationCallback connectionCallback(
+      Runnable passwordCallback) {
     return (username, password) -> passwordCallback.run();
   }
 }

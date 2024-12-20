@@ -19,62 +19,66 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.CredentialsProvider;
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import com.rabbitmq.client.amqp.oauth2.GsonTokenParser;
 import com.rabbitmq.client.amqp.oauth2.HttpTokenRequester;
+import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
 import java.net.http.HttpClient;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-final class CredentialsFactory {
+final class CredentialsManagerFactory {
 
-  private volatile Credentials globalOAuth2Credentials;
+  private volatile CredentialsManager globalOAuth2CredentialsManager;
   private final Lock oauth2CredentialsLock = new ReentrantLock();
   private final AmqpEnvironment environment;
 
-  CredentialsFactory(AmqpEnvironment environment) {
+  CredentialsManagerFactory(AmqpEnvironment environment) {
     this.environment = environment;
   }
 
-  Credentials credentials(DefaultConnectionSettings<?> settings) {
+  CredentialsManager credentials(DefaultConnectionSettings<?> settings) {
     CredentialsProvider provider = settings.credentialsProvider();
-    Credentials credentials;
+    CredentialsManager credentialsManager;
     if (settings.oauth2().enabled()) {
       if (settings.oauth2().shared()) {
-        credentials = globalOAuth2Credentials(settings);
+        credentialsManager = globalOAuth2Credentials(settings);
       } else {
-        credentials = createOAuth2Credentials(settings);
+        credentialsManager = createOAuth2Credentials(settings);
       }
     } else {
       if (provider instanceof UsernamePasswordCredentialsProvider) {
         UsernamePasswordCredentialsProvider credentialsProvider =
             (UsernamePasswordCredentialsProvider) provider;
-        credentials = new UsernamePasswordCredentials(credentialsProvider);
+        credentialsManager = new UsernamePasswordCredentialsManager(credentialsProvider);
       } else {
-        credentials = Credentials.NO_OP;
+        credentialsManager = CredentialsManager.NO_OP;
       }
     }
-    return credentials;
+    return credentialsManager;
   }
 
-  private Credentials globalOAuth2Credentials(DefaultConnectionSettings<?> connectionSettings) {
-    Credentials result = this.globalOAuth2Credentials;
+  private CredentialsManager globalOAuth2Credentials(
+      DefaultConnectionSettings<?> connectionSettings) {
+    CredentialsManager result = this.globalOAuth2CredentialsManager;
     if (result != null) {
       return result;
     }
 
     this.oauth2CredentialsLock.lock();
     try {
-      if (this.globalOAuth2Credentials == null) {
-        this.globalOAuth2Credentials = createOAuth2Credentials(connectionSettings);
+      if (this.globalOAuth2CredentialsManager == null) {
+        this.globalOAuth2CredentialsManager = createOAuth2Credentials(connectionSettings);
       }
-      return this.globalOAuth2Credentials;
+      return this.globalOAuth2CredentialsManager;
     } finally {
       this.oauth2CredentialsLock.unlock();
     }
   }
 
-  private Credentials createOAuth2Credentials(DefaultConnectionSettings<?> connectionSettings) {
+  private CredentialsManager createOAuth2Credentials(
+      DefaultConnectionSettings<?> connectionSettings) {
     DefaultConnectionSettings.DefaultOAuth2Settings<?> settings = connectionSettings.oauth2();
     Consumer<HttpClient.Builder> clientBuilderConsumer;
     if (settings.tlsEnabled()) {
@@ -92,7 +96,7 @@ final class CredentialsFactory {
             clientBuilderConsumer,
             null,
             new GsonTokenParser());
-    return new TokenCredentials(
+    return new TokenCredentialsManager(
         tokenRequester, environment.scheduledExecutorService(), settings.refreshDelayStrategy());
   }
 }

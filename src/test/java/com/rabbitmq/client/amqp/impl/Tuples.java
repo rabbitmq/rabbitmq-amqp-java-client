@@ -17,15 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-final class Tuples {
+public final class Tuples {
 
   private Tuples() {}
 
-  static <A, B> Pair<A, B> pair(A v1, B v2) {
+  public static <A, B> Pair<A, B> pair(A v1, B v2) {
     return new Pair<>(v1, v2);
   }
 
-  static class Pair<A, B> {
+  public static class Pair<A, B> {
 
     private final A v1;
     private final B v2;
@@ -35,11 +35,11 @@ final class Tuples {
       this.v2 = v2;
     }
 
-    A v1() {
+    public A v1() {
       return this.v1;
     }
 
-    B v2() {
+    public B v2() {
       return this.v2;
     }
   }

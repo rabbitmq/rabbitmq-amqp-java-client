@@ -15,10 +15,8 @@
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
-package com.rabbitmq.client.amqp.impl;
+package com.rabbitmq.client.amqp.oauth2;
 
-import com.rabbitmq.client.amqp.oauth2.Token;
-import com.rabbitmq.client.amqp.oauth2.TokenRequester;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,11 +37,11 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class TokenCredentials implements Credentials {
+public final class TokenCredentialsManager implements CredentialsManager {
 
-  static Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =
+  public static Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =
       ratioRefreshDelayStrategy(0.8f);
-  private static final Logger LOGGER = LoggerFactory.getLogger(TokenCredentials.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(TokenCredentialsManager.class);
 
   private final TokenRequester requester;
   private final ScheduledExecutorService scheduledExecutorService;
@@ -55,7 +53,7 @@ final class TokenCredentials implements Credentials {
   private final Function<Instant, Duration> refreshDelayStrategy;
   private volatile ScheduledFuture<?> refreshTask;
 
-  TokenCredentials(
+  public TokenCredentialsManager(
       TokenRequester requester,
       ScheduledExecutorService scheduledExecutorService,
       Function<Instant, Duration> refreshDelayStrategy) {
@@ -81,12 +79,15 @@ final class TokenCredentials implements Credentials {
       LOGGER.debug(
           "Requesting new token ({})...", registrationSummary(this.registrations.values()));
     }
-    Utils.StopWatch stopWatch = new Utils.StopWatch();
+    long start = 0L;
+    if (LOGGER.isDebugEnabled()) {
+      start = System.nanoTime();
+    }
     Token token = requester.request();
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug(
           "Got new token in {} ms, token expires on {} ({})",
-          stopWatch.stop().toMillis(),
+          Duration.ofNanos(System.nanoTime() - start),
           format(token.expirationTime()),
           registrationSummary(this.registrations.values()));
     }
@@ -287,7 +288,7 @@ final class TokenCredentials implements Credentials {
     }
   }
 
-  static Function<Instant, Duration> ratioRefreshDelayStrategy(float ratio) {
+  public static Function<Instant, Duration> ratioRefreshDelayStrategy(float ratio) {
     return new RatioRefreshDelayStrategy(ratio);
   }
 

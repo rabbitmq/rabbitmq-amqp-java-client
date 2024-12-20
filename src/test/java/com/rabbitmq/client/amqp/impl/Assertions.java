@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.assertj.core.api.AbstractObjectAssert;
 
-final class Assertions {
+public final class Assertions {
 
   private Assertions() {}
 
@@ -42,7 +42,7 @@ final class Assertions {
     return new QueueInfoAssert(queueInfo);
   }
 
-  static SyncAssert assertThat(TestUtils.Sync sync) {
+  public static SyncAssert assertThat(TestUtils.Sync sync) {
     return new SyncAssert(sync);
   }
 
@@ -83,13 +83,13 @@ final class Assertions {
     }
   }
 
-  static class SyncAssert extends AbstractObjectAssert<SyncAssert, TestUtils.Sync> {
+  public static class SyncAssert extends AbstractObjectAssert<SyncAssert, TestUtils.Sync> {
 
     private SyncAssert(TestUtils.Sync sync) {
       super(sync, SyncAssert.class);
     }
 
-    SyncAssert completes() {
+    public SyncAssert completes() {
       return this.completes(TestUtils.DEFAULT_CONDITION_TIMEOUT);
     }
 
