@@ -37,6 +37,11 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Credentials manager implementation that requests and refreshes tokens.
+ *
+ * <p>It also keeps track of registration and update them with refreshed tokens when appropriate.
+ */
 public final class TokenCredentialsManager implements CredentialsManager {
 
   public static final Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =

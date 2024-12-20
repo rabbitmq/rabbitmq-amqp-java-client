@@ -26,6 +26,7 @@ import javax.net.ssl.SSLContext;
  * <p>OAuth 2 requires RabbitMQ 4.1 or more.
  *
  * @param <T> the type of object returned by methods, usually the object itself
+ * @since 0.4.0
  */
 public interface OAuth2Settings<T> {
 

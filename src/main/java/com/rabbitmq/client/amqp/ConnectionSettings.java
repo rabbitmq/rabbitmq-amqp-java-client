@@ -161,6 +161,7 @@ public interface ConnectionSettings<T> {
    *
    * @return OAuth 2 settings
    * @see OAuth2Settings
+   * @since 0.4.0
    */
   OAuth2Settings<? extends T> oauth2();
 
