@@ -31,6 +31,8 @@ import com.google.common.util.concurrent.RateLimiter;
 import com.rabbitmq.client.amqp.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadFactory;
@@ -221,7 +223,7 @@ public class RecoveryClusterTest {
       syncs.forEach(
           s -> {
             LOGGER.info("Publishing messages ('{}')", s);
-            assertThat(s).completes();
+            assertThat(s).completes(TIMEOUT);
             LOGGER.info("Messages published and settled ('{}')", s);
           });
       LOGGER.info("Checked publishers have recovered.");
@@ -230,7 +232,7 @@ public class RecoveryClusterTest {
       syncs.forEach(
           s -> {
             LOGGER.info("Waiting for new messages ('{}')", s);
-            assertThat(s).completes(Duration.ofSeconds(20));
+            assertThat(s).completes(TIMEOUT);
             LOGGER.info("Expected messages received ('{}')", s);
           });
       LOGGER.info("Checked consumers have recovered.");
@@ -276,7 +278,9 @@ public class RecoveryClusterTest {
       publisherStates.forEach(
           p -> {
             try {
-              System.out.printf("  queue %s, is on leader? %s%n", p.queue, p.isOnLeader());
+              System.out.printf(
+                  "  queue %s, is on leader? %s, last exception '%s', last failed status '%s'%n",
+                  p.queue, p.isOnLeader(), p.lastException(), p.lastFailedStatus());
             } catch (Exception ex) {
               LOGGER.info(
                   "Error while checking publisher '{}' is on leader node: {}", p, ex.getMessage());
@@ -346,6 +350,10 @@ public class RecoveryClusterTest {
     volatile Thread task;
     final RateLimiter limiter = RateLimiter.create(10);
     final AtomicReference<Runnable> postAccepted = new AtomicReference<>(() -> {});
+    final AtomicReference<Throwable> lastException = new AtomicReference<>();
+    final AtomicReference<Instant> lastExceptionInstant = new AtomicReference<>();
+    final AtomicReference<Publisher.Status> lastFailedStatus = new AtomicReference<>();
+    final AtomicReference<Instant> lastFailedStatusInstant = new AtomicReference<>();
 
     private PublisherState(String queue, boolean exclusive, AmqpConnection connection) {
       this.queue = queue;
@@ -362,6 +370,9 @@ public class RecoveryClusterTest {
             if (ctx.status() == Publisher.Status.ACCEPTED) {
               acceptedCount.incrementAndGet();
               postAccepted.get().run();
+            } else {
+              lastFailedStatus.set(ctx.status());
+              lastFailedStatusInstant.set(Instant.now());
             }
           };
       this.task =
@@ -373,7 +384,8 @@ public class RecoveryClusterTest {
                       this.limiter.acquire(1);
                       this.publisher.publish(publisher.message(BODY), callback);
                     } catch (Exception e) {
-
+                      this.lastException.set(e);
+                      this.lastExceptionInstant.set(Instant.now());
                     }
                   }
                 }
@@ -399,6 +411,26 @@ public class RecoveryClusterTest {
           .queueInfo(this.queue)
           .leader()
           .equals(this.connection.connectionNodename());
+    }
+
+    String lastException() {
+      if (this.lastException.get() == null) {
+        return "no exception";
+      } else {
+        return this.lastException.get().getMessage()
+            + " at "
+            + DateTimeFormatter.ISO_INSTANT.format(lastExceptionInstant.get());
+      }
+    }
+
+    String lastFailedStatus() {
+      if (this.lastFailedStatus.get() == null) {
+        return "no failed status";
+      } else {
+        return this.lastFailedStatus.get().name()
+            + " at "
+            + DateTimeFormatter.ISO_INSTANT.format(lastFailedStatusInstant.get());
+      }
     }
 
     @Override
