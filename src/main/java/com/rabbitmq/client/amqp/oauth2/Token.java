@@ -19,9 +19,20 @@ package com.rabbitmq.client.amqp.oauth2;
 
 import java.time.Instant;
 
+/** A token. */
 public interface Token {
 
+  /**
+   * The value of the token.
+   *
+   * @return the token value
+   */
   String value();
 
+  /**
+   * The expiration time of the token.
+   *
+   * @return the expiration time
+   */
   Instant expirationTime();
 }

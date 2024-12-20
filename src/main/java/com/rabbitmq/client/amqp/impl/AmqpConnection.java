@@ -796,7 +796,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       LOGGER.debug("Closing connection {}", this);
-      this.credentialsRegistration.unregister();
+      this.credentialsRegistration.close();
       this.environment.removeConnection(this);
       BiConsumer<String, RunnableWithException> safeClose =
           (label, action) -> {

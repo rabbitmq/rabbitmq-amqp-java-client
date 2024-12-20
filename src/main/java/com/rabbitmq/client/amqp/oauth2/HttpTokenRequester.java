@@ -31,6 +31,11 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.function.Consumer;
 
+/**
+ * Token requester using HTTP(S) to request an OAuth2 Access token.
+ *
+ * <p>Uses {@link HttpClient} for the HTTP operations.
+ */
 public final class HttpTokenRequester implements TokenRequester {
 
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);

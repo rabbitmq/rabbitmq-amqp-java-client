@@ -23,6 +23,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Token parser for <a href="https://www.rfc-editor.org/rfc/rfc6749#section-5.1">JSON OAuth 2 Access
+ * tokens</a>.
+ *
+ * <p>Uses <a href="https://github.com/google/gson">GSON</a> for the JSON parsing.
+ */
 public class GsonTokenParser implements TokenParser {
 
   private static final Gson GSON = new Gson();

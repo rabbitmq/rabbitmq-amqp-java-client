@@ -17,7 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
+/** Contract to request a token (usually on HTTP). */
 public interface TokenRequester {
 
+  /**
+   * Request a token.
+   *
+   * @return the token
+   */
   Token request();
 }

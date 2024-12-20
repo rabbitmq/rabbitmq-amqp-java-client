@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
+/** OAuth 2-related exception. */
 public class OAuth2Exception extends RuntimeException {
 
   public OAuth2Exception(String message) {

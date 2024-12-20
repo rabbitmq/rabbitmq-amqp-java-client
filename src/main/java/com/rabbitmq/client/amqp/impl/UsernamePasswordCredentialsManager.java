@@ -22,11 +22,9 @@ import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 
 final class UsernamePasswordCredentialsManager implements CredentialsManager {
 
-  private final UsernamePasswordCredentialsProvider provider;
   private final Registration registration;
 
   UsernamePasswordCredentialsManager(UsernamePasswordCredentialsProvider provider) {
-    this.provider = provider;
     this.registration = new RegistrationImpl(provider);
   }
 
@@ -49,6 +47,6 @@ final class UsernamePasswordCredentialsManager implements CredentialsManager {
     }
 
     @Override
-    public void unregister() {}
+    public void close() {}
   }
 }

@@ -17,7 +17,14 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
+/** Contract to parse a token from a string. */
 public interface TokenParser {
 
+  /**
+   * Parse the token.
+   *
+   * @param tokenAsString token as a string
+   * @return the token
+   */
   Token parse(String tokenAsString);
 }

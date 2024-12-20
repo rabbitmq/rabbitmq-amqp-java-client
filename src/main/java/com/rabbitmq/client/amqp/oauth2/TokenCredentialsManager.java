@@ -237,7 +237,7 @@ public final class TokenCredentialsManager implements CredentialsManager {
     }
 
     @Override
-    public void unregister() {
+    public void close() {
       if (this.closed.compareAndSet(false, true)) {
         registrations.remove(this.id);
         ScheduledFuture<?> task = refreshTask;

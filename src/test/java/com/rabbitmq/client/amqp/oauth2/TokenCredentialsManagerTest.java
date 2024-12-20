@@ -17,8 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
-import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.impl.Tuples.pair;
 import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
@@ -91,7 +89,7 @@ public class TokenCredentialsManagerTest {
     assertThat(requestCount).hasValue(1);
     Assertions.assertThat(refreshSync).completes();
     assertThat(requestCount).hasValue(expectedRefreshCount + 1);
-    registration.unregister();
+    registration.close();
     assertThat(refreshCount).hasValue(expectedRefreshCount);
     assertThat(requestCount).hasValue(expectedRefreshCount + 1);
     Thread.sleep(tokenExpiry.multipliedBy(2).toMillis());
@@ -136,7 +134,7 @@ public class TokenCredentialsManagerTest {
 
     // unregister half of the connections
     int splitCount = connectionCount / 2;
-    registrations.subList(0, splitCount).forEach(r -> r.v1().unregister());
+    registrations.subList(0, splitCount).forEach(r -> r.v1().close());
     // only the remaining connections should get refreshed again
     waitAtMost(
         timeout, waitTime, () -> totalRefreshCount.get() == refreshCountSnapshot + splitCount);
@@ -144,7 +142,7 @@ public class TokenCredentialsManagerTest {
     waitAtMost(
         timeout, waitTime, () -> totalRefreshCount.get() == refreshCountSnapshot + splitCount * 2);
     // unregister all connections
-    registrations.forEach(r -> r.v1().unregister());
+    registrations.forEach(r -> r.v1().close());
     // wait 2 expiry times
     Thread.sleep(tokenExpiry.multipliedBy(2).toMillis());
     // no new refresh

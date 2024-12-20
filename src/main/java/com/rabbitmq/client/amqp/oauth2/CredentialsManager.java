@@ -17,21 +17,57 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
+/**
+ * Contract to authenticate and possibly re-authenticate application components.
+ *
+ * <p>A typical "application component" is a connection.
+ */
 public interface CredentialsManager {
 
+  /** No-op credentials manager. */
   CredentialsManager NO_OP = new NoOpCredentialsManager();
 
+  /**
+   * Register a component for authentication.
+   *
+   * @param name component name (must be unique)
+   * @param updateCallback callback to update the component authentication
+   * @return the registration (must be closed when no longer necessary)
+   */
   Registration register(String name, AuthenticationCallback updateCallback);
 
-  interface Registration {
+  /** A component registration. */
+  interface Registration extends AutoCloseable {
 
+    /**
+     * Connection request from the component.
+     *
+     * <p>The component calls this method when it needs to authenticate. The underlying credentials
+     * manager implementation must take of providing the component with the appropriate credentials
+     * in the callback.
+     *
+     * @param callback client code to authenticate the component
+     */
     void connect(AuthenticationCallback callback);
 
-    void unregister();
+    /** Close the registration. */
+    void close();
   }
 
+  /**
+   * Component authentication callback.
+   *
+   * <p>The component provides the logic and the manager implementation calls it with the
+   * appropriate credentials.
+   */
   interface AuthenticationCallback {
 
+    /**
+     * Authentication logic.
+     *
+     * @param username username
+     * @param password password
+     */
     void authenticate(String username, String password);
   }
 
@@ -49,6 +85,6 @@ public interface CredentialsManager {
     public void connect(AuthenticationCallback callback) {}
 
     @Override
-    public void unregister() {}
+    public void close() {}
   }
 }
