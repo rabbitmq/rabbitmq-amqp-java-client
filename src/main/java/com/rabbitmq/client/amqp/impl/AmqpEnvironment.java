@@ -54,7 +54,8 @@ class AmqpEnvironment implements Environment {
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
   private final ExecutorService recoveryEventLoopExecutorService;
-  private final CredentialsManagerFactory credentialsManagerFactory = new CredentialsManagerFactory(this);
+  private final CredentialsManagerFactory credentialsManagerFactory =
+      new CredentialsManagerFactory(this);
 
   AmqpEnvironment(
       ExecutorService executorService,

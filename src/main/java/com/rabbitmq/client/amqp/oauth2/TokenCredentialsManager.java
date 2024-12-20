@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
 
 public final class TokenCredentialsManager implements CredentialsManager {
 
-  public static Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =
+  public static final Function<Instant, Duration> DEFAULT_REFRESH_DELAY_STRATEGY =
       ratioRefreshDelayStrategy(0.8f);
   private static final Logger LOGGER = LoggerFactory.getLogger(TokenCredentialsManager.class);
 

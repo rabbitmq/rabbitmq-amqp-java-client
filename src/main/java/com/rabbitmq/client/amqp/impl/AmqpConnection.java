@@ -453,7 +453,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
                                   recoveryConfiguration,
                                   this.name(),
                                   amqpException,
-
                                   disconnectedHandlerReference);
                             }
                           });
