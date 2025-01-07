@@ -261,7 +261,7 @@ public class ClientTest {
   @Test
   void queueDeletionImpactOnReceiver(TestInfo info) throws Exception {
     String queue = name(info);
-    try (Environment env = new AmqpEnvironmentBuilder().build();
+    try (Environment env = TestUtils.environmentBuilder().build();
         com.rabbitmq.client.amqp.Connection connection = env.connectionBuilder().build();
         Client client = client()) {
       connection.management().queue().name(queue).declare();
@@ -285,7 +285,7 @@ public class ClientTest {
   @Test
   void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
     String exchange = name(info);
-    try (Environment env = new AmqpEnvironmentBuilder().build();
+    try (Environment env = TestUtils.environmentBuilder().build();
         com.rabbitmq.client.amqp.Connection connection = env.connectionBuilder().build();
         Client client = client()) {
       connection.management().exchange().name(exchange).type(FANOUT).declare();

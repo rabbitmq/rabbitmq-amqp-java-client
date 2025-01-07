@@ -60,7 +60,7 @@ public class ClusterTest {
     this.q = name(info);
     this.name = name(info);
     environment =
-        new AmqpEnvironmentBuilder()
+        TestUtils.environmentBuilder()
             .connectionSettings()
             .addressSelector(new RoundRobinAddressSelector())
             .uris(URIS)

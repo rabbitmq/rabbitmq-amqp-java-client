@@ -21,8 +21,7 @@ import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
-import static com.rabbitmq.client.amqp.impl.TestUtils.name;
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.stream;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +48,7 @@ public class AmqpConnectionRecoveryTest {
   @BeforeAll
   static void initAll() {
     DefaultConnectionSettings<?> connectionSettings = DefaultConnectionSettings.instance();
+    maybeConfigureWebSocket(connectionSettings);
     connectionSettings.addressSelector(
         addresses -> {
           connectionAttemptCount.incrementAndGet();

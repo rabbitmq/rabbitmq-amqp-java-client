@@ -54,6 +54,8 @@ public abstract class TestUtils {
 
   static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
   static final Duration DEFAULT_WAIT_TIME = Duration.ofMillis(100);
+  private static final boolean USE_WEB_SOCKET =
+      Boolean.parseBoolean(System.getProperty("rabbitmq.use.web.socket", "false"));
 
   private TestUtils() {}
 
@@ -255,8 +257,11 @@ public abstract class TestUtils {
       connectionOptions.properties(singletonMap("connection_name", name));
     }
     optionsCallback.accept(connectionOptions);
+    if (useWebSocket()) {
+      connectionOptions.transportOptions().useWebSockets(true).webSocketPath("/ws");
+    }
     try {
-      return client.connect("localhost", 5672, connectionOptions);
+      return client.connect("localhost", TestUtils.defaultPort(), connectionOptions);
     } catch (ClientException e) {
       throw new RuntimeException(e);
     }
@@ -271,7 +276,7 @@ public abstract class TestUtils {
         client.createProxy(
             name,
             "localhost:" + proxyPort,
-            DefaultConnectionSettings.DEFAULT_HOST + ":" + DefaultConnectionSettings.DEFAULT_PORT);
+            DefaultConnectionSettings.DEFAULT_HOST + ":" + defaultPort());
     return proxy;
   }
 
@@ -288,7 +293,16 @@ public abstract class TestUtils {
   }
 
   public static AmqpEnvironmentBuilder environmentBuilder() {
-    return new AmqpEnvironmentBuilder();
+    AmqpEnvironmentBuilder builder = new AmqpEnvironmentBuilder();
+    maybeConfigureWebSocket((DefaultConnectionSettings<?>) builder.connectionSettings());
+    return builder;
+  }
+
+  static void maybeConfigureWebSocket(DefaultConnectionSettings<?> connectionSettings) {
+    if (useWebSocket()) {
+      connectionSettings.useWebSocket(true);
+      connectionSettings.port(DefaultConnectionSettings.DEFAULT_WEB_SOCKET_PORT);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -307,7 +321,9 @@ public abstract class TestUtils {
   }
 
   static boolean tlsAvailable() {
-    return Cli.rabbitmqctl("status").output().contains("amqp/ssl");
+    String status = Cli.rabbitmqctl("status").output();
+    String shouldContain = useWebSocket() ? "https/web-amqp" : "amqp/ssl";
+    return status.contains(shouldContain);
   }
 
   static boolean addressV1Permitted() {
@@ -319,6 +335,16 @@ public abstract class TestUtils {
 
   static boolean isCluster() {
     return !Cli.rabbitmqctl("eval 'nodes().'").output().replace("[", "").replace("]", "").isBlank();
+  }
+
+  static boolean useWebSocket() {
+    return USE_WEB_SOCKET;
+  }
+
+  static int defaultPort() {
+    return useWebSocket()
+        ? DefaultConnectionSettings.DEFAULT_WEB_SOCKET_PORT
+        : DefaultConnectionSettings.DEFAULT_PORT;
   }
 
   static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
