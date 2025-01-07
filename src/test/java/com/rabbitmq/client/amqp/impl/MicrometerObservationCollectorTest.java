@@ -51,7 +51,7 @@ public class MicrometerObservationCollectorTest {
     public SampleTestRunner.SampleTestRunnerConsumer yourCode() {
       return (buildingBlocks, meterRegistry) -> {
         try (Environment env =
-            new AmqpEnvironmentBuilder()
+            TestUtils.environmentBuilder()
                 .observationCollector(
                     new MicrometerObservationCollectorBuilder()
                         .registry(getObservationRegistry())
@@ -109,7 +109,7 @@ public class MicrometerObservationCollectorTest {
               .hasTag("messaging.message.id", messageId.toString())
               .hasTag("messaging.message.conversation_id", String.valueOf(correlationId))
               .hasTagWithKey("net.sock.peer.addr")
-              .hasTag("net.sock.peer.port", "5672")
+              .hasTag("net.sock.peer.port", String.valueOf(TestUtils.defaultPort()))
               .hasTag("net.protocol.name", "amqp")
               .hasTag("net.protocol.version", "1.0");
 

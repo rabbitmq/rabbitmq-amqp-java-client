@@ -52,10 +52,14 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   static final String DEFAULT_HOST = "localhost";
   static final int DEFAULT_PORT = 5672;
   static final int DEFAULT_TLS_PORT = 5671;
+  static final int DEFAULT_WEB_SOCKET_PORT = 15678;
+  static final int DEFAULT_WEB_SOCKET_TLS_PORT = 15677;
   static final String DEFAULT_VIRTUAL_HOST = "/";
 
   private String host = DEFAULT_HOST;
   private int port = DEFAULT_PORT;
+  private boolean useWebSocket = false;
+  private String webSocketPath = "/ws";
   private CredentialsProvider credentialsProvider;
   private String virtualHost = DEFAULT_VIRTUAL_HOST;
   private List<URI> uris = Collections.emptyList();
@@ -135,6 +139,11 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return toReturn();
   }
 
+  T useWebSocket(boolean useWebSocket) {
+    this.useWebSocket = useWebSocket;
+    return toReturn();
+  }
+
   @Override
   public T virtualHost(String virtualHost) {
     this.virtualHost = virtualHost;
@@ -176,6 +185,14 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return this.toReturn();
   }
 
+  boolean useWebSocket() {
+    return this.useWebSocket;
+  }
+
+  String webSocketPath() {
+    return this.webSocketPath;
+  }
+
   CredentialsProvider credentialsProvider() {
     return credentialsProvider;
   }
@@ -213,6 +230,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   void copyTo(DefaultConnectionSettings<?> copy) {
     copy.host(this.host);
     copy.port(this.port);
+    copy.useWebSocket(this.useWebSocket);
+    copy.webSocketPath = this.webSocketPath;
     copy.saslMechanism(this.saslMechanism);
     copy.credentialsProvider(this.credentialsProvider);
     copy.virtualHost(this.virtualHost);
@@ -234,8 +253,9 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   DefaultConnectionSettings<?> consolidate() {
     if (this.uris.isEmpty()) {
       int p = this.port;
-      if (this.tlsEnabled() && this.port == DEFAULT_PORT) {
-        p = DEFAULT_TLS_PORT;
+      if (this.tlsEnabled()
+          && (this.port == DEFAULT_PORT || this.port == DEFAULT_WEB_SOCKET_PORT)) {
+        p = this.useWebSocket ? DEFAULT_WEB_SOCKET_TLS_PORT : DEFAULT_TLS_PORT;
       }
       this.addresses.add(new Address(this.host, p));
     } else {
@@ -275,7 +295,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
           this.tlsEnabled()
               || this.uris.stream().anyMatch(u -> u.getScheme().equalsIgnoreCase("amqps"));
 
-      int defaultPort = tls ? DEFAULT_TLS_PORT : DEFAULT_PORT;
+      int defaultPort = tls ? defaultTlsPort() : defaultPort();
       List<Address> addrs =
           this.uris.stream()
               .map(
@@ -288,6 +308,14 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       this.addresses.addAll(addrs);
     }
     return this;
+  }
+
+  private int defaultPort() {
+    return this.useWebSocket ? DEFAULT_WEB_SOCKET_PORT : DEFAULT_PORT;
+  }
+
+  private int defaultTlsPort() {
+    return this.useWebSocket ? DEFAULT_WEB_SOCKET_TLS_PORT : DEFAULT_TLS_PORT;
   }
 
   @Override

@@ -180,7 +180,7 @@ public class Oauth2Test {
     this.server = startServer(port, contextPath, httpHandler);
 
     String uri = "http://localhost:" + port + contextPath;
-    AmqpEnvironmentBuilder envBuilder = new AmqpEnvironmentBuilder();
+    AmqpEnvironmentBuilder envBuilder = TestUtils.environmentBuilder();
     DefaultOAuth2Settings<? extends EnvironmentConnectionSettings> oauth2 =
         (DefaultOAuth2Settings<? extends EnvironmentConnectionSettings>)
             envBuilder.connectionSettings().oauth2();
@@ -293,7 +293,7 @@ public class Oauth2Test {
 
     String uri = "http://localhost:" + port + contextPath;
     try (Environment env =
-        new AmqpEnvironmentBuilder()
+        TestUtils.environmentBuilder()
             .connectionSettings()
             .oauth2()
             .tokenEndpointUri(uri)

@@ -255,6 +255,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
       sslOptions.verifyHost(tlsSettings.isHostnameVerification());
     }
     Address address = connectionSettings.selectAddress(addresses);
+    if (connectionSettings.useWebSocket()) {
+      LOGGER.trace("Using WebSocket for connection '{}'", this.name());
+      connectionOptions
+          .transportOptions()
+          .useWebSockets(true)
+          .webSocketPath(connectionSettings.webSocketPath());
+    }
     StopWatch stopWatch = new StopWatch();
     try {
       LOGGER.trace("Connecting '{}' to {}...", this.name(), address);
