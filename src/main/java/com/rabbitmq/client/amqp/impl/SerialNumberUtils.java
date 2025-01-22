@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 
@@ -86,7 +87,9 @@ final class SerialNumberUtils {
     throw new IllegalArgumentException("Cannot compare serial numbers " + s1 + " and " + s2);
   }
 
-  private static class SerialNumberComparator implements Comparator<Long> {
+  private static class SerialNumberComparator implements Comparator<Long>, Serializable {
+
+    private static final long serialVersionUID = -584535356973875111L;
 
     @Override
     public int compare(Long o1, Long o2) {
