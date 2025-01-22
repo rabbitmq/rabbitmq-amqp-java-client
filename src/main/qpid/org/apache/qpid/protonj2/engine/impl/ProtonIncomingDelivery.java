@@ -297,7 +297,8 @@ public class ProtonIncomingDelivery implements IncomingDelivery {
         return transferCount <= 1;
     }
 
-    long getDeliveryId() {
+    @Override
+    public long getDeliveryId() {
         return deliveryId;
     }
 

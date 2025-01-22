@@ -239,6 +239,17 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
         }
     }
 
+    public void disposition(DeliveryState state, long[] range) {
+        try {
+            sessionWindow.processDisposition(state, range);
+        } finally {
+            for (long i = range[0]; i < range[1]; i++) {
+                unsettled.remove((int) i);
+            }
+            // TODO release delivery tags
+        }
+    }
+
     void deliveryRead(ProtonIncomingDelivery delivery, int bytesRead) {
         if (areDeliveriesStillActive()) {
             sessionWindow.deliveryRead(delivery, bytesRead);

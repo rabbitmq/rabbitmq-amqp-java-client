@@ -134,5 +134,14 @@ public interface Consumer extends AutoCloseable, Resource {
      *     in RabbitMQ</a>
      */
     void requeue(Map<String, Object> annotations);
+
+    BatchContext batch();
+  }
+
+  interface BatchContext extends Context {
+
+    void add(Context context);
+
+    int size();
   }
 }
