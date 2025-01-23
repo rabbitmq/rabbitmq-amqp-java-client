@@ -17,9 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import java.io.Serializable;
 import java.util.*;
-import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
 final class SerialNumberUtils {
 
@@ -32,16 +31,18 @@ final class SerialNumberUtils {
   // 2 ^ (SERIAL_BITS - 1)
   private static final long COMPARE = 2_147_483_648L;
 
-  private static final Comparator<Long> COMPARATOR = new SerialNumberComparator();
-
   private SerialNumberUtils() {}
 
   static long inc(long s) {
     return (s + 1) % SERIAL_SPACE;
   }
 
-  static <T> List<T> sort(List<T> list, Function<T, Long> serialNumberExtractor) {
-    list.sort(Comparator.comparing(serialNumberExtractor, COMPARATOR));
+  static <T> List<T> sort(List<T> list, ToLongFunction<T> serialNumberExtractor) {
+    FastUtilArrays.quickSort(
+        0,
+        list.size(),
+        new SerialNumberComparator<>(list, serialNumberExtractor),
+        new ListSwapper<>(list));
     return list;
   }
 
@@ -55,17 +56,17 @@ final class SerialNumberUtils {
    * @return
    * @param <T>
    */
-  static <T> long[][] ranges(List<T> list, Function<T, Long> serialNumberExtractor) {
+  static <T> long[][] ranges(List<T> list, ToLongFunction<T> serialNumberExtractor) {
     if (list.isEmpty()) {
       return new long[0][0];
     }
     sort(list, serialNumberExtractor);
-    long s1 = serialNumberExtractor.apply(list.get(0));
+    long s1 = serialNumberExtractor.applyAsLong(list.get(0));
     long[] range = new long[] {s1, s1};
     List<long[]> ranges = new ArrayList<>();
     ranges.add(range);
     for (int i = 1; i < list.size(); i++) {
-      long v = serialNumberExtractor.apply(list.get(i));
+      long v = serialNumberExtractor.applyAsLong(list.get(i));
       if (v == inc(range[1])) {
         range[1] = v;
       } else {
@@ -87,13 +88,37 @@ final class SerialNumberUtils {
     throw new IllegalArgumentException("Cannot compare serial numbers " + s1 + " and " + s2);
   }
 
-  private static class SerialNumberComparator implements Comparator<Long>, Serializable {
+  private static class SerialNumberComparator<T> implements FastUtilIntComparator {
 
-    private static final long serialVersionUID = -584535356973875111L;
+    private final List<T> list;
+    private final ToLongFunction<T> serialNumberExtractor;
+
+    private SerialNumberComparator(List<T> list, ToLongFunction<T> serialNumberExtractor) {
+      this.list = list;
+      this.serialNumberExtractor = serialNumberExtractor;
+    }
 
     @Override
-    public int compare(Long o1, Long o2) {
-      return SerialNumberUtils.compare(o1, o2);
+    public int compare(int k1, int k2) {
+      return SerialNumberUtils.compare(
+          serialNumberExtractor.applyAsLong(list.get(k1)),
+          serialNumberExtractor.applyAsLong(list.get(k2)));
+    }
+  }
+
+  private static final class ListSwapper<T> implements FastUtilSwapper {
+
+    private final List<T> list;
+
+    private ListSwapper(List<T> list) {
+      this.list = list;
+    }
+
+    @Override
+    public void swap(int a, int b) {
+      T t = list.get(a);
+      list.set(a, list.get(b));
+      list.set(b, t);
     }
   }
 }

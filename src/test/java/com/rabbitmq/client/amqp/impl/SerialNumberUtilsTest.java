@@ -18,12 +18,12 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.*;
-import static java.util.function.Function.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.ToLongFunction;
 import org.junit.jupiter.api.Test;
 
 public class SerialNumberUtilsTest {
@@ -54,10 +54,13 @@ public class SerialNumberUtilsTest {
 
   @Test
   void testSort() {
-    assertThat(sort(sns(), identity())).isEmpty();
-    assertThat(sort(sns(3L), identity())).containsExactly(3L);
-    assertThat(sort(sns(3L), identity())).containsExactly(3L);
-    assertThat(sort(sns(4294967000L, 4294967293L, 4294967294L, 4294967295L, 0, 3, 4), identity()))
+    assertThat(sort(sns(), toLongPrimitive())).isEmpty();
+    assertThat(sort(sns(3L), toLongPrimitive())).containsExactly(3L);
+    assertThat(sort(sns(3L), toLongPrimitive())).containsExactly(3L);
+    assertThat(
+            sort(
+                sns(4294967000L, 4294967293L, 4294967294L, 4294967295L, 0, 3, 4),
+                toLongPrimitive()))
         .containsExactly(4294967000L, 4294967293L, 4294967294L, 4294967295L, 0L, 3L, 4L);
   }
 
@@ -92,7 +95,7 @@ public class SerialNumberUtilsTest {
   }
 
   private static void checkRanges(List<Long> serialNumbers, long[][] ranges) {
-    assertThat(ranges(serialNumbers, identity())).isDeepEqualTo(ranges);
+    assertThat(ranges(serialNumbers, toLongPrimitive())).isDeepEqualTo(ranges);
   }
 
   private static List<Long> sns(long... sns) {
@@ -116,5 +119,9 @@ public class SerialNumberUtilsTest {
       ranges[i] = new long[] {flatRanges[i * 2], flatRanges[i * 2 + 1]};
     }
     return ranges;
+  }
+
+  static ToLongFunction<Long> toLongPrimitive() {
+    return Long::longValue;
   }
 }
