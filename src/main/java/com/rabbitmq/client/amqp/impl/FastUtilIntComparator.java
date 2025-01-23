@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 
+import java.io.Serializable;
 import java.util.Comparator;
 
 /**
@@ -31,7 +32,7 @@ import java.util.Comparator;
  * @see Comparator
  */
 @FunctionalInterface
-interface FastUtilIntComparator {
+interface FastUtilIntComparator extends Serializable {
   /**
    * Compares its two primitive-type arguments for order. Returns a negative integer, zero, or a
    * positive integer as the first argument is less than, equal to, or greater than the second.

@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.*;
 import java.util.function.ToLongFunction;
 
@@ -90,7 +91,11 @@ final class SerialNumberUtils {
 
   private static class SerialNumberComparator<T> implements FastUtilIntComparator {
 
+    private static final long serialVersionUID = -1979133464402603205L;
+
     private final List<T> list;
+
+    @SuppressFBWarnings("SE_BAD_FIELD")
     private final ToLongFunction<T> serialNumberExtractor;
 
     private SerialNumberComparator(List<T> list, ToLongFunction<T> serialNumberExtractor) {
@@ -108,6 +113,7 @@ final class SerialNumberUtils {
 
   private static final class ListSwapper<T> implements FastUtilSwapper {
 
+    private static final long serialVersionUID = -4992779583870196665L;
     private final List<T> list;
 
     private ListSwapper(List<T> list) {

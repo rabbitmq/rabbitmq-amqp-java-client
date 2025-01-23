@@ -16,12 +16,14 @@
 
 package com.rabbitmq.client.amqp.impl;
 
+import java.io.Serializable;
+
 /** An object that can swap elements whose position is specified by integers.
  *
  * @see Arrays#quickSort(int, int, it.unimi.dsi.fastutil.ints.IntComparator, Swapper)
  */
 @FunctionalInterface
-interface FastUtilSwapper {
+interface FastUtilSwapper extends Serializable {
 
   /** Swaps the data at the given positions.
    *
