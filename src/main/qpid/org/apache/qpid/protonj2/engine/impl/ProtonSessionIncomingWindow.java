@@ -232,9 +232,7 @@ public class ProtonSessionIncomingWindow {
     }
 
     void processDisposition(DeliveryState state, long [] range) {
-        for (long i = range[0]; i < range[1]; i++) {
-            unsettled.remove((int) i);
-        }
+        unsettled.removeEach((int) range[0], (int) range[1], d -> { });
         cachedDisposition.reset();
         cachedDisposition.setFirst(range[0]);
         cachedDisposition.setLast(range[1]);
