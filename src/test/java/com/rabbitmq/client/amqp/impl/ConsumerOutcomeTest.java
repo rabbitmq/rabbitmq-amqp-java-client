@@ -34,6 +34,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
 public class ConsumerOutcomeTest {
@@ -108,8 +110,9 @@ public class ConsumerOutcomeTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
   }
 
-  @Test
-  void requeuedMessageWithAnnotationShouldContainAnnotationsOnRedelivery() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void requeuedMessageWithAnnotationShouldContainAnnotationsOnRedelivery(boolean batch) {
     this.management.queue().name(q).type(QUORUM).declare();
 
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
@@ -120,13 +123,18 @@ public class ConsumerOutcomeTest {
         .consumerBuilder()
         .queue(q)
         .messageHandler(
-            (context, message) -> {
+            (ctx, message) -> {
               deliveryCount.incrementAndGet();
               messages.offer(message);
               if (deliveryCount.get() == 1) {
-                context.requeue(ANNOTATIONS);
+                if (batch) {
+                  Consumer.BatchContext bc = ctx.batch();
+                  bc.add(ctx);
+                  ctx = bc;
+                }
+                ctx.requeue(ANNOTATIONS);
               } else {
-                context.accept();
+                ctx.accept();
                 redeliveredSync.down();
               }
             })
@@ -175,15 +183,24 @@ public class ConsumerOutcomeTest {
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
   }
 
-  @Test
-  void
-      discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured(
+      boolean batch) {
     declareDeadLetterTopology();
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler((ctx, msg) -> ctx.discard(ANNOTATIONS))
+        .messageHandler(
+            (ctx, msg) -> {
+              if (batch) {
+                Consumer.BatchContext bc = ctx.batch();
+                bc.add(ctx);
+                ctx = bc;
+              }
+              ctx.discard(ANNOTATIONS);
+            })
         .build();
 
     TestUtils.Sync deadLetteredSync = TestUtils.sync();
