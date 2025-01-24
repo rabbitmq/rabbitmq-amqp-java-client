@@ -68,6 +68,7 @@ class AmqpManagement implements Management {
   private static final int CODE_200 = 200;
   private static final int CODE_201 = 201;
   private static final int CODE_204 = 204;
+  private static final int CODE_400 = 400;
   private static final int CODE_404 = 404;
   private static final int CODE_409 = 409;
 
@@ -171,6 +172,14 @@ class AmqpManagement implements Management {
   public UnbindSpecification unbind() {
     checkAvailable();
     return new AmqpBindingManagement.AmqpUnbindSpecification(this);
+  }
+
+  @Override
+  public void queuePurge(String queue) {
+    Map<String, Object> responseBody = delete(queueLocation(queue) + "/messages", CODE_200);
+    if (!responseBody.containsKey("message_count")) {
+      throw new AmqpException("Response body should contain message_count");
+    }
   }
 
   void setToken(String token) {
@@ -477,18 +486,23 @@ class AmqpManagement implements Management {
     if (!requestId.equals(response.correlationId())) {
       throw new AmqpException("Unexpected correlation ID");
     }
-    int responseCode = request.mapResponse().code();
+    int responseCode = request.response().code();
+    String explanation =
+        request.response().body() instanceof String ? (String) request.response().body() : null;
     if (IntStream.of(expectedResponseCodes).noneMatch(c -> c == responseCode)) {
-      if (responseCode == CODE_404) {
-        throw new AmqpException.AmqpEntityDoesNotExistException("Entity does not exist");
+      if (responseCode == CODE_404
+          || (responseCode == CODE_400 && queueDoesNotExist(explanation))) {
+        explanation = explanation == null ? "Entity does not exist" : explanation;
+        throw new AmqpException.AmqpEntityDoesNotExistException(explanation);
       } else {
         String message =
             String.format(
-                "Unexpected response code: %d instead of %s",
+                "Unexpected response code: %d instead of %s%s",
                 responseCode,
                 IntStream.of(expectedResponseCodes)
                     .mapToObj(String::valueOf)
-                    .collect(Collectors.joining(", ")));
+                    .collect(Collectors.joining(", ")),
+                explanation != null ? " (message: '" + explanation : "')");
         try {
           LOGGER.info(
               "Management request failed: '{}'. Response body: '{}'",
@@ -500,6 +514,11 @@ class AmqpManagement implements Management {
         throw new AmqpException(message);
       }
     }
+  }
+
+  private static boolean queueDoesNotExist(String explanation) {
+    return explanation != null
+        && (explanation.contains("no queue '") && explanation.contains("in vhost '"));
   }
 
   void bind(Map<String, Object> body) {
@@ -635,6 +654,10 @@ class AmqpManagement implements Management {
     @SuppressWarnings("unchecked")
     private <K, V> Response<Map<K, V>> mapResponse() {
       return (Response<Map<K, V>>) this.response.get();
+    }
+
+    private Response<?> response() {
+      return this.response.get();
     }
 
     @SuppressWarnings("unchecked")

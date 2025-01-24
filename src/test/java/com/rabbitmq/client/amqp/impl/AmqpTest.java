@@ -707,6 +707,36 @@ public class AmqpTest {
     }
   }
 
+  @Test
+  void queuePurgeShouldRemoveAllMessages(TestInfo info) {
+    Management management = connection.management();
+    String q = TestUtils.name(info);
+    management.queue(q).exclusive(true).declare();
+    int messageCount = 100;
+    Sync publishSync = sync(messageCount);
+    Publisher.Callback callback =
+        context -> {
+          if (context.status() == Publisher.Status.ACCEPTED) {
+            publishSync.down();
+          }
+        };
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), callback));
+    assertThat(publishSync).completes();
+    assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
+    management.queuePurge(q);
+    assertThat(management.queueInfo(q)).isEmpty();
+  }
+
+  @Test
+  void queuePurgeOnNonExistingQueueShouldThrowException(TestInfo info) {
+    String q = TestUtils.name(info);
+    assertThatThrownBy(() -> connection.management().queuePurge(q))
+        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .hasMessageContaining(q);
+  }
+
   private static String uuid() {
     return UUID.randomUUID().toString();
   }

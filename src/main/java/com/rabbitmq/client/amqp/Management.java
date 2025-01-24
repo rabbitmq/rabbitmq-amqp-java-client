@@ -94,6 +94,8 @@ public interface Management extends AutoCloseable {
    */
   UnbindSpecification unbind();
 
+  void queuePurge(String queue);
+
   /** Close the management instance and release its resources. */
   @Override
   void close();
