@@ -266,6 +266,13 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-core</artifactId>
+            <version>4.2.29</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <dependencyManagement>
@@ -490,6 +497,7 @@
                 <configuration>
                     <java>
                         <excludes>
+                            <exclude>src/main/java/com/rabbitmq/client/amqp/impl/FastUtil*.java</exclude>
                             <exclude>src/test/java/com/rabbitmq/client/amqp/docs/*.java</exclude>
                             <exclude>src/test/java/SanityCheck.java</exclude>
                         </excludes>

@@ -109,6 +109,10 @@ public final class ClientDelivery extends ClientDeliverable<ClientDelivery, Clie
         }
     }
 
+    public long getDeliveryId() {
+        return this.delivery.getDeliveryId();
+    }
+
     //----- Internal API not meant to be used from outside the client package.
 
     void deliveryAnnotations(DeliveryAnnotations deliveryAnnotations) {

@@ -26,6 +26,21 @@ include::{test-examples}/Api.java[tag=connection-settings]
 <1> Use the `guest` user by default
 <2> Use the `admin` user for this connection
 
+=== Settling Messages in Batch
+
+.Settling messages in batch
+[source,java,indent=0]
+--------
+include::{test-examples}/Api.java[tag=settling-message-in-batch]
+--------
+<1> Declare batch context property
+<2> Create a new batch context instance
+<3> Add the current message context to the batch context if processing is successful
+<4> Settle the batch context once it contains 10 messages
+<5> Reset the batch context
+<6> Discard the current message context if processing fails
+
+
 === Subscription Listener
 
 The client provides a `SubscriptionListener` interface callback to add behavior before a subscription is created.

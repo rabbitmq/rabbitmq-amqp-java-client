@@ -511,7 +511,7 @@ public class AmqpTest {
   @Test
   void consumerGracefulShutdownExample() {
     connection.management().queue(name).exclusive(true).declare();
-    int messageCount = 100;
+    int messageCount = 1000;
     int initialCredits = messageCount / 10;
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     Sync publishSync = sync(messageCount);

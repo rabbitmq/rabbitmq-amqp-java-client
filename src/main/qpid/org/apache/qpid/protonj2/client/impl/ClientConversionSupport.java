@@ -37,7 +37,7 @@ import org.apache.qpid.protonj2.types.messaging.TerminusExpiryPolicy;
 /**
  * Utilities used by various classes in the Client core
  */
-abstract class ClientConversionSupport {
+public abstract class ClientConversionSupport {
 
     public static Symbol[] toSymbolArray(String[] stringArray) {
         Symbol[] result = null;
