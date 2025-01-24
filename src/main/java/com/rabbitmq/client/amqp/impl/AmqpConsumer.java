@@ -447,8 +447,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
-    public BatchContext batch() {
+    public BatchContext batch(int batchSizeHint) {
       return new BatchDeliveryContext(
+          batchSizeHint,
           protonExecutor,
           protonReceiver,
           metricsCollector,
@@ -481,7 +482,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     private static final org.apache.qpid.protonj2.types.transport.DeliveryState REJECTED =
         new Rejected();
-    private final List<DeliveryContext> contexts = new ArrayList<>();
+    private final List<DeliveryContext> contexts;
     private final AtomicBoolean settled = new AtomicBoolean(false);
     private final Scheduler protonExecutor;
     private final ProtonReceiver protonReceiver;
@@ -491,12 +492,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final AmqpConsumer consumer;
 
     private BatchDeliveryContext(
+        int batchSizeHint,
         Scheduler protonExecutor,
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
         Runnable replenishCreditOperation,
         AmqpConsumer consumer) {
+      this.contexts = new ArrayList<>(batchSizeHint);
       this.protonExecutor = protonExecutor;
       this.protonReceiver = protonReceiver;
       this.metricsCollector = metricsCollector;
@@ -563,7 +566,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
-    public BatchContext batch() {
+    public BatchContext batch(int batchSizeHint) {
       return this;
     }
 

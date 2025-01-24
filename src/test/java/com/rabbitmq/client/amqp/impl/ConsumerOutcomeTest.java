@@ -128,7 +128,7 @@ public class ConsumerOutcomeTest {
               messages.offer(message);
               if (deliveryCount.get() == 1) {
                 if (batch) {
-                  Consumer.BatchContext bc = ctx.batch();
+                  Consumer.BatchContext bc = ctx.batch(1);
                   bc.add(ctx);
                   ctx = bc;
                 }
@@ -195,7 +195,7 @@ public class ConsumerOutcomeTest {
         .messageHandler(
             (ctx, msg) -> {
               if (batch) {
-                Consumer.BatchContext bc = ctx.batch();
+                Consumer.BatchContext bc = ctx.batch(1);
                 bc.add(ctx);
                 ctx = bc;
               }
@@ -260,7 +260,7 @@ public class ConsumerOutcomeTest {
         .messageHandler(
             (ctx, msg) -> {
               if (batchContext.get() == null) {
-                batchContext.set(ctx.batch());
+                batchContext.set(ctx.batch(batchSize));
               }
               if (random.nextInt(10) == 0) {
                 ctx.discard();

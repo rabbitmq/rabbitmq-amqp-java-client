@@ -90,17 +90,18 @@ class Api {
     Connection connection = null;
 
     // tag::settling-message-in-batch[]
+    int batchSize = 10;
     Consumer.MessageHandler handler = new Consumer.MessageHandler() {
       volatile Consumer.BatchContext batch = null;  // <1>
       @Override
       public void handle(Consumer.Context context, Message message) {
         if (batch == null) {
-          batch = context.batch();  // <2>
+          batch = context.batch(batchSize);  // <2>
         }
         boolean success = process(message);
         if (success) {
           batch.add(context);  // <3>
-          if (batch.size() == 10) {
+          if (batch.size() == batchSize) {
             batch.accept();  // <4>
             batch = null;  // <5>
           }

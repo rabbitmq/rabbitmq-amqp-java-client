@@ -116,7 +116,7 @@ public class AmqpPerfTest {
             (context, message) -> {
               recordMessage.accept(message);
               if (batch.get() == null) {
-                batch.set(context.batch());
+                batch.set(context.batch(disposeEvery));
               }
               batch.get().add(context);
               if (batch.get().size() == disposeEvery) {

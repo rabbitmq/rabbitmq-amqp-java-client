@@ -27,8 +27,6 @@ final class SerialNumberUtils {
   // SERIAL_BITS = 32
   // 2 ^ SERIAL_BITS
   static final long SERIAL_SPACE = 0x100000000L;
-  // 2 ^ (SERIAL_BITS - 1) - 1
-  private static final long SERIAL_MAX_ADDEND = 0x7fffffffL;
   // 2 ^ (SERIAL_BITS - 1)
   private static final long COMPARE = 2_147_483_648L;
 

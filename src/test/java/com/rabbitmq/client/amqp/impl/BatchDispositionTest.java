@@ -59,7 +59,7 @@ public class BatchDispositionTest {
           @Override
           public void handle(Consumer.Context context, Message message) {
             if (batch == null) {
-              batch = context.batch();
+              batch = context.batch(batchSize);
             }
 
             boolean success = processMessage(message);
@@ -154,15 +154,19 @@ public class BatchDispositionTest {
     }
 
     @Override
-    public Consumer.BatchContext batch() {
-      return new TestBatchContext();
+    public Consumer.BatchContext batch(int batchSizeHint) {
+      return new TestBatchContext(batchSizeHint);
     }
   }
 
   static class TestBatchContext implements Consumer.BatchContext {
 
-    private final List<TestContext> contexts = new ArrayList<>(batchSize);
+    private final List<TestContext> contexts;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
+
+    public TestBatchContext(int batchSizeHint) {
+      this.contexts = new ArrayList<>(batchSizeHint);
+    }
 
     @Override
     public void add(Consumer.Context context) {
@@ -218,7 +222,7 @@ public class BatchDispositionTest {
     }
 
     @Override
-    public Consumer.BatchContext batch() {
+    public Consumer.BatchContext batch(int batchSizeHint) {
       return this;
     }
   }
