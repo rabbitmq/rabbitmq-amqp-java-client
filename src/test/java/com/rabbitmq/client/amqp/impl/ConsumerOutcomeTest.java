@@ -76,7 +76,7 @@ public class ConsumerOutcomeTest {
 
   @AfterEach
   void tearDown() {
-    this.connection.management().queueDeletion().delete(q);
+    this.connection.management().queueDelete(q);
   }
 
   @Test

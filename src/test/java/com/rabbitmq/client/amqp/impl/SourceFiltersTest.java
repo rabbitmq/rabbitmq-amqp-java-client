@@ -63,7 +63,7 @@ public class SourceFiltersTest {
 
   @AfterEach
   void tearDown() {
-    connection.management().queueDeletion().delete(this.name);
+    connection.management().queueDelete(this.name);
   }
 
   @Test

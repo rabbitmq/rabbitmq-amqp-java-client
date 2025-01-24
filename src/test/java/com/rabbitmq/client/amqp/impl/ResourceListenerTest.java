@@ -48,11 +48,11 @@ public class ResourceListenerTest {
     Consumer<PublisherBuilder> builderConfigurator;
     if (toExchange) {
       declare = () -> connection.management().exchange(entity).declare();
-      delete = () -> connection.management().exchangeDeletion().delete(entity);
+      delete = () -> connection.management().exchangeDelete(entity);
       builderConfigurator = b -> b.exchange(entity);
     } else {
       declare = () -> connection.management().queue(entity).declare();
-      delete = () -> connection.management().queueDeletion().delete(entity);
+      delete = () -> connection.management().queueDelete(entity);
       builderConfigurator = b -> b.queue(entity);
     }
     CountDownLatch closedLatch = new CountDownLatch(1);
@@ -128,7 +128,7 @@ public class ResourceListenerTest {
       com.rabbitmq.client.amqp.impl.Assertions.assertThat(consumeLatch).completes();
 
     } finally {
-      connection.management().queueDeletion().delete(q);
+      connection.management().queueDelete(q);
     }
     com.rabbitmq.client.amqp.impl.Assertions.assertThat(closedLatch).completes();
     Assertions.assertThat(closeCause.get()).isNotNull().isInstanceOf(AmqpException.class);

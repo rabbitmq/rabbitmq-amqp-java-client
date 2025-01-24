@@ -89,7 +89,7 @@ public class ClusterTest {
           .isNotEqualTo(info.leader());
       assertThat(Cli.listConnections()).hasSize(3);
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -117,7 +117,7 @@ public class ClusterTest {
       assertThat(recoveredSync).completes();
       assertThat(publishConnection.connectionNodename()).isEqualTo(newLeader);
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -161,7 +161,7 @@ public class ClusterTest {
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -218,7 +218,7 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
       consumeSync.reset();
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -277,7 +277,7 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
       consumeSync.reset();
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -351,7 +351,7 @@ public class ClusterTest {
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);
       }
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -391,7 +391,7 @@ public class ClusterTest {
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -435,7 +435,7 @@ public class ClusterTest {
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -479,7 +479,7 @@ public class ClusterTest {
                       .hasNodename(queueInfos.get(i).leader()));
 
     } finally {
-      names.forEach(n -> management.queueDeletion().delete(n));
+      names.forEach(n -> management.queueDelete(n));
     }
   }
 
@@ -529,7 +529,7 @@ public class ClusterTest {
                   "detected as a no-running-stream-member-on-connection-node exception"));
 
     } finally {
-      this.connection.management().queueDeletion().delete(this.name);
+      this.connection.management().queueDelete(this.name);
       connections.forEach(Connection::close);
     }
   }

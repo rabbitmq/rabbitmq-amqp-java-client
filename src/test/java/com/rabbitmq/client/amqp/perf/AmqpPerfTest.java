@@ -76,8 +76,8 @@ public class AmqpPerfTest {
             metrics.close();
             executorService.shutdownNow();
             shutdownLatch.countDown();
-            management.queueDeletion().delete(q);
-            management.exchangeDeletion().delete(e);
+            management.queueDelete(q);
+            management.exchangeDelete(e);
             management.close();
           }
         };

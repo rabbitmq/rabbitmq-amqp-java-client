@@ -59,7 +59,7 @@ public class AffinityTest {
       assertThat(c1.id()).isNotEqualTo(c2.id());
       assertThat(c3.id()).isIn(c1.id(), c2.id());
     } finally {
-      management.queueDeletion().delete(name);
+      management.queueDelete(name);
     }
   }
 

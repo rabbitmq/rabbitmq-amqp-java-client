@@ -149,7 +149,7 @@ public class ManagementTest {
       if (c != null) {
         c.close();
       }
-      this.connection.management().queueDeletion().delete(q);
+      this.connection.management().queueDelete(q);
       deleteUser(username);
     }
   }

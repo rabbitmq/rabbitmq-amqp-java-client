@@ -188,7 +188,7 @@ public class WebsiteDocumentation {
         .argument("x-delayed-type", "direct")
         .declare();
 
-    management.exchangeDeletion().delete("my-exchange");
+    management.exchangeDelete("my-exchange");
   }
 
   void managementQueues() {
@@ -222,7 +222,7 @@ public class WebsiteDocumentation {
     int consumerCount = info.consumerCount();
     String leaderNode = info.leader();
 
-    management.queueDeletion().delete("my-queue");
+    management.queueDelete("my-queue");
   }
 
   void binding() {
