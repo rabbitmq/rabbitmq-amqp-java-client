@@ -55,8 +55,24 @@ public interface Management extends AutoCloseable {
    * Delete a queue.
    *
    * @return the queue deletion
+   * @deprecated use {@link #queueDelete(String)} instead
    */
+  @Deprecated(forRemoval = true)
   QueueDeletion queueDeletion();
+
+  /**
+   * Delete a queue.
+   *
+   * @param name the name of the queue
+   */
+  void queueDelete(String name);
+
+  /**
+   * Purge (delete all messages) from a queue.
+   *
+   * @param queue queue to delete messages from
+   */
+  void queuePurge(String queue);
 
   /**
    * Start exchange specification.
@@ -77,8 +93,17 @@ public interface Management extends AutoCloseable {
    * Delete an exchange.
    *
    * @return the exchange deletion
+   * @deprecated use {@link #exchangeDelete(String)} instead
    */
+  @Deprecated(forRemoval = true)
   ExchangeDeletion exchangeDeletion();
+
+  /**
+   * Delete an exchange.
+   *
+   * @param name the name of the exchange
+   */
+  void exchangeDelete(String name);
 
   /**
    * Start binding specification.
@@ -93,8 +118,6 @@ public interface Management extends AutoCloseable {
    * @return the unbinding specification
    */
   UnbindSpecification unbind();
-
-  void queuePurge(String queue);
 
   /** Close the management instance and release its resources. */
   @Override
@@ -575,7 +598,12 @@ public interface Management extends AutoCloseable {
     }
   }
 
-  /** Queue deletion. */
+  /**
+   * Queue deletion.
+   *
+   * @deprecated use {@link #queueDelete(String)} instead
+   */
+  @Deprecated(forRemoval = true)
   interface QueueDeletion {
 
     /**
@@ -674,7 +702,12 @@ public interface Management extends AutoCloseable {
     HEADERS
   }
 
-  /** Exchange deletion. */
+  /**
+   * Exchange deletion.
+   *
+   * @deprecated use {@link #exchangeDelete(String)} instead
+   */
+  @Deprecated(forRemoval = true)
   interface ExchangeDeletion {
 
     /**

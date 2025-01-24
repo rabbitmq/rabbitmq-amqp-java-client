@@ -67,8 +67,8 @@ public class AddressFormatTest {
       publisher.publish(publisher.message(), ctx -> {});
       Assertions.assertThat(consumeLatch).completes();
     } finally {
-      management.queueDeletion().delete(q);
-      management.exchangeDeletion().delete(e);
+      management.queueDelete(q);
+      management.exchangeDelete(e);
     }
   }
 
@@ -108,8 +108,8 @@ public class AddressFormatTest {
       publisher.publish(publisher.message(), ctx -> {});
       Assertions.assertThat(consumeLatch).completes();
     } finally {
-      management.queueDeletion().delete(q);
-      management.exchangeDeletion().delete(e);
+      management.queueDelete(q);
+      management.exchangeDelete(e);
     }
   }
 
@@ -136,7 +136,7 @@ public class AddressFormatTest {
       publisher.publish(publisher.message(), ctx -> {});
       Assertions.assertThat(consumeLatch).completes();
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 
@@ -185,8 +185,8 @@ public class AddressFormatTest {
       publisher.publish(publisher.message().toAddress().queue(q).message(), ctx -> {});
       Assertions.assertThat(consumeLatch).completes();
     } finally {
-      management.queueDeletion().delete(q);
-      management.exchangeDeletion().delete(e);
+      management.queueDelete(q);
+      management.exchangeDelete(e);
     }
   }
 

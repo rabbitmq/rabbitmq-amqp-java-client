@@ -302,7 +302,7 @@ public class RecoveryClusterTest {
       consumerStates.forEach(ConsumerState::close);
       queueConfigurations.stream()
           .filter(c -> !c.exclusive)
-          .forEach(c -> management.queueDeletion().delete(c.name));
+          .forEach(c -> management.queueDelete(c.name));
     }
   }
 

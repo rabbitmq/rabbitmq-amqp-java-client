@@ -146,11 +146,11 @@ public class TopologyRecoveryTest {
       assertThat(events).contains("bindingDeleted");
       assertThat(eventCount).hasValue(6);
 
-      management.exchangeDeletion().delete(e);
+      management.exchangeDelete(e);
       assertThat(events).contains("exchangeDeleted");
       assertThat(eventCount).hasValue(7);
 
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
       assertThat(events).contains("queueDeleted");
       assertThat(eventCount).hasValue(8);
     }
@@ -352,8 +352,8 @@ public class TopologyRecoveryTest {
       assertThat(acceptedLatch).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty();
     } finally {
-      connection.management().queueDeletion().delete(q);
-      connection.management().exchangeDeletion().delete(e);
+      connection.management().queueDelete(q);
+      connection.management().exchangeDelete(e);
       connection.close();
     }
   }
@@ -408,9 +408,9 @@ public class TopologyRecoveryTest {
       assertThat(acceptedLatch).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty();
     } finally {
-      connection.management().queueDeletion().delete(q);
-      connection.management().exchangeDeletion().delete(e2);
-      connection.management().exchangeDeletion().delete(e1);
+      connection.management().queueDelete(q);
+      connection.management().exchangeDelete(e2);
+      connection.management().exchangeDelete(e1);
       connection.close();
     }
   }
@@ -422,7 +422,7 @@ public class TopologyRecoveryTest {
       assertThat(connectionAttemptCount).hasValue(1);
       connection.management().exchange(e).declare();
       Assertions.assertThat(Cli.exchangeExists(e)).isTrue();
-      connection.management().exchangeDeletion().delete(e);
+      connection.management().exchangeDelete(e);
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
       Assertions.assertThat(Cli.exchangeExists(e)).isFalse();
@@ -436,7 +436,7 @@ public class TopologyRecoveryTest {
       assertThat(connectionAttemptCount).hasValue(1);
       connection.management().queue(q).declare();
       assertThat(connection.management().queueInfo(q)).hasName(q);
-      connection.management().queueDeletion().delete(q);
+      connection.management().queueDelete(q);
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
       assertThatThrownBy(() -> connection.management().queueInfo(q))
@@ -460,7 +460,7 @@ public class TopologyRecoveryTest {
       assertThat(connectionAttemptCount).hasValue(2);
       TestUtils.waitAtMost(() -> connection.management().queueInfo(q).consumerCount() == 0);
     } finally {
-      connection.management().queueDeletion().delete(q);
+      connection.management().queueDelete(q);
       connection.close();
     }
   }
@@ -498,8 +498,8 @@ public class TopologyRecoveryTest {
       assertThat(consumeSync).completes();
       assertThat(connection.management().queueInfo(q)).isEmpty().hasConsumerCount(consumerCount);
     } finally {
-      connection.management().queueDeletion().delete(q);
-      connection.management().exchangeDeletion().delete(e);
+      connection.management().queueDelete(q);
+      connection.management().exchangeDelete(e);
       connection.close();
     }
   }
@@ -540,8 +540,8 @@ public class TopologyRecoveryTest {
               });
 
     } finally {
-      connection.management().queueDeletion().delete(q);
-      connection.management().exchangeDeletion().delete(e);
+      connection.management().queueDelete(q);
+      connection.management().exchangeDelete(e);
       connection.close();
     }
   }
@@ -593,7 +593,7 @@ public class TopologyRecoveryTest {
 
       TestUtils.waitAtMost(() -> connection.management().queueInfo(q).messageCount() == 0);
     } finally {
-      connection.management().queueDeletion().delete(q);
+      connection.management().queueDelete(q);
     }
   }
 

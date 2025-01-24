@@ -76,7 +76,7 @@ public class AmqpTest {
           .hasArgument("x-queue-type", "quorum");
 
     } finally {
-      management.queueDeletion().delete(name);
+      management.queueDelete(name);
     }
   }
 
@@ -131,7 +131,7 @@ public class AmqpTest {
       consumer.close();
       publisher.close();
     } finally {
-      connection.management().queueDeletion().delete(name);
+      connection.management().queueDelete(name);
     }
   }
 
@@ -215,9 +215,9 @@ public class AmqpTest {
           .key(rk)
           .arguments(bindingArguments)
           .unbind();
-      management.exchangeDeletion().delete(e2);
-      management.exchangeDeletion().delete(e1);
-      management.queueDeletion().delete(q);
+      management.exchangeDelete(e2);
+      management.exchangeDelete(e1);
+      management.queueDelete(q);
     }
   }
 
@@ -313,7 +313,7 @@ public class AmqpTest {
       publisher.publish(publisher.message(), acceptedCallback(sync));
       assertThat(sync).completes();
     } finally {
-      connection.management().exchangeDeletion().delete(name);
+      connection.management().exchangeDelete(name);
     }
     AtomicReference<Exception> exception = new AtomicReference<>();
     waitAtMost(
@@ -361,7 +361,7 @@ public class AmqpTest {
       publisher.publish(publisher.message(), acceptedCallback(sync));
       assertThat(sync).completes();
     } finally {
-      connection.management().queueDeletion().delete(name);
+      connection.management().queueDelete(name);
     }
     AtomicReference<Exception> exception = new AtomicReference<>();
     waitAtMost(
@@ -461,7 +461,7 @@ public class AmqpTest {
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     publisher.publish(publisher.message(), ctx -> {});
     assertThat(consumeSync).completes();
-    connection.management().queueDeletion().delete(name);
+    connection.management().queueDelete(name);
     assertThat(closedSync).completes();
     org.assertj.core.api.Assertions.assertThat(exception.get())
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
@@ -642,7 +642,7 @@ public class AmqpTest {
     } catch (AmqpException e) {
       // OK
     } finally {
-      management.queueDeletion().delete(name);
+      management.queueDelete(name);
     }
   }
 
@@ -657,7 +657,7 @@ public class AmqpTest {
       org.assertj.core.api.Assertions.assertThat(e).hasMessageContaining("409");
       // OK
     } finally {
-      management.exchangeDeletion().delete(name);
+      management.exchangeDelete(name);
     }
   }
 
@@ -703,7 +703,7 @@ public class AmqpTest {
           .forEach(ignored -> publisher.publish(publisher.message(), callback));
       assertThat(rejectedLatch).completes();
     } finally {
-      management.queueDeletion().delete(q);
+      management.queueDelete(q);
     }
   }
 

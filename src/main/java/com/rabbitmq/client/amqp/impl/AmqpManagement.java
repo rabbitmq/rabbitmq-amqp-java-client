@@ -130,15 +130,19 @@ class AmqpManagement implements Management {
   }
 
   @Override
+  @SuppressWarnings("removal")
   public QueueDeletion queueDeletion() {
+    return this::queueDelete;
+  }
+
+  @Override
+  public void queueDelete(String name) {
     checkAvailable();
-    return name -> {
-      Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
-      this.topologyListener.queueDeleted(name);
-      if (!responseBody.containsKey("message_count")) {
-        throw new AmqpException("Response body should contain message_count");
-      }
-    };
+    Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
+    this.topologyListener.queueDeleted(name);
+    if (!responseBody.containsKey("message_count")) {
+      throw new AmqpException("Response body should contain message_count");
+    }
   }
 
   @Override
@@ -154,12 +158,16 @@ class AmqpManagement implements Management {
   }
 
   @Override
+  @SuppressWarnings("removal")
   public ExchangeDeletion exchangeDeletion() {
+    return this::exchangeDelete;
+  }
+
+  @Override
+  public void exchangeDelete(String name) {
     checkAvailable();
-    return name -> {
-      this.delete(exchangeLocation(name), CODE_204);
-      this.topologyListener.exchangeDeleted(name);
-    };
+    this.delete(exchangeLocation(name), CODE_204);
+    this.topologyListener.exchangeDeleted(name);
   }
 
   @Override

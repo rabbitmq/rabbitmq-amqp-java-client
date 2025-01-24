@@ -68,7 +68,7 @@ public class ClientTest {
 
   @AfterEach
   void tearDown() {
-    management.queueDeletion().delete(q);
+    management.queueDelete(q);
   }
 
   @AfterAll
@@ -272,7 +272,7 @@ public class ClientTest {
       receiver.openFuture().get();
       Delivery delivery = receiver.tryReceive();
       assertThat(delivery).isNull();
-      connection.management().queueDeletion().delete(queue);
+      connection.management().queueDelete(queue);
       try {
         receiver.receive(10, SECONDS);
         fail("Receiver should have been closed after queue deletion");
@@ -306,7 +306,7 @@ public class ClientTest {
       tracker.awaitSettlement(10, SECONDS);
       assertThat(tracker.remoteState()).isEqualTo(DeliveryState.accepted());
 
-      connection.management().exchangeDeletion().delete(exchange);
+      connection.management().exchangeDelete(exchange);
       try {
         int count = 0;
         while (count++ < 10) {

@@ -268,7 +268,7 @@ public class RpcTest {
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
     } finally {
-      serverConnection.management().queueDeletion().delete(requestQueue);
+      serverConnection.management().queueDelete(requestQueue);
       serverConnection.close();
     }
   }

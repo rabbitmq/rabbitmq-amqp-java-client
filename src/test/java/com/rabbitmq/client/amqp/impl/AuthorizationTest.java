@@ -87,7 +87,7 @@ public class AuthorizationTest {
       waitAtMost(
           () -> {
             try {
-              c.management().queueDeletion().delete(authorizedName);
+              c.management().queueDelete(authorizedName);
               return true;
             } catch (AmqpException e) {
               return false;
@@ -121,7 +121,7 @@ public class AuthorizationTest {
             .hasMessageContaining("access")
             .hasMessageContaining(this.name);
       } finally {
-        gc.management().exchangeDeletion().delete(this.name);
+        gc.management().exchangeDelete(this.name);
       }
     }
   }
@@ -136,7 +136,7 @@ public class AuthorizationTest {
             .isInstanceOf(AmqpException.AmqpSecurityException.class)
             .hasMessageContaining("access");
       } finally {
-        gc.management().queueDeletion().delete(this.name);
+        gc.management().queueDelete(this.name);
       }
     }
   }
@@ -165,7 +165,7 @@ public class AuthorizationTest {
             .hasMessageContaining("access")
             .hasMessageContaining(this.name);
       } finally {
-        gc.management().exchangeDeletion().delete(this.name);
+        gc.management().exchangeDelete(this.name);
       }
     }
   }
@@ -183,7 +183,7 @@ public class AuthorizationTest {
             .hasMessageContaining("access")
             .hasMessageContaining(this.name);
       } finally {
-        gc.management().queueDeletion().delete(this.name);
+        gc.management().queueDelete(this.name);
       }
     }
   }
