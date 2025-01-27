@@ -20,24 +20,22 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Management;
-import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.Publisher;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.UUID;
+import com.rabbitmq.client.amqp.*;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
 public class ConsumerOutcomeTest {
@@ -112,8 +110,9 @@ public class ConsumerOutcomeTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
   }
 
-  @Test
-  void requeuedMessageWithAnnotationShouldContainAnnotationsOnRedelivery() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void requeuedMessageWithAnnotationShouldContainAnnotationsOnRedelivery(boolean batch) {
     this.management.queue().name(q).type(QUORUM).declare();
 
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
@@ -124,13 +123,18 @@ public class ConsumerOutcomeTest {
         .consumerBuilder()
         .queue(q)
         .messageHandler(
-            (context, message) -> {
+            (ctx, message) -> {
               deliveryCount.incrementAndGet();
               messages.offer(message);
               if (deliveryCount.get() == 1) {
-                context.requeue(ANNOTATIONS);
+                if (batch) {
+                  Consumer.BatchContext bc = ctx.batch(1);
+                  bc.add(ctx);
+                  ctx = bc;
+                }
+                ctx.requeue(ANNOTATIONS);
               } else {
-                context.accept();
+                ctx.accept();
                 redeliveredSync.down();
               }
             })
@@ -179,15 +183,24 @@ public class ConsumerOutcomeTest {
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
   }
 
-  @Test
-  void
-      discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void discardedMessageWithAnnotationsShouldBeDeadLeadLetteredAndContainAnnotationsWhenConfigured(
+      boolean batch) {
     declareDeadLetterTopology();
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler((ctx, msg) -> ctx.discard(ANNOTATIONS))
+        .messageHandler(
+            (ctx, msg) -> {
+              if (batch) {
+                Consumer.BatchContext bc = ctx.batch(1);
+                bc.add(ctx);
+                ctx = bc;
+              }
+              ctx.discard(ANNOTATIONS);
+            })
         .build();
 
     TestUtils.Sync deadLetteredSync = TestUtils.sync();
@@ -215,6 +228,61 @@ public class ConsumerOutcomeTest {
         .hasAnnotation(ANNOTATION_KEY_MAP, ANNOTATION_VALUE_MAP);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
+  }
+
+  @Test
+  void batchAcceptShouldSettleMessages() {
+    declareDeadLetterTopology();
+    Management management = connection.management();
+    int messageCount = 1000;
+    TestUtils.Sync confirmSync = sync(messageCount);
+    Publisher.Callback callback =
+        context -> {
+          if (context.status() == Publisher.Status.ACCEPTED) {
+            confirmSync.down();
+          }
+        };
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), callback));
+    Assertions.assertThat(confirmSync).completes();
+    publisher.close();
+
+    int batchSize = messageCount / 100;
+    AtomicReference<com.rabbitmq.client.amqp.Consumer.BatchContext> batchContext =
+        new AtomicReference<>();
+    Random random = new Random();
+    TestUtils.Sync receivedSync = sync(messageCount);
+    AtomicInteger discardedCount = new AtomicInteger();
+    connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (ctx, msg) -> {
+              if (batchContext.get() == null) {
+                batchContext.set(ctx.batch(batchSize));
+              }
+              if (random.nextInt(10) == 0) {
+                ctx.discard();
+                discardedCount.incrementAndGet();
+              } else {
+                batchContext.get().add(ctx);
+                if (batchContext.get().size() == batchSize) {
+                  batchContext.get().accept();
+                  batchContext.set(null);
+                }
+              }
+              receivedSync.down();
+            })
+        .build();
+
+    Assertions.assertThat(receivedSync).completes();
+    Consumer.BatchContext bctx = batchContext.get();
+    if (bctx != null && bctx.size() != 0 && bctx.size() < batchSize) {
+      bctx.accept();
+    }
+    waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
+    waitAtMost(() -> management.queueInfo(dlq).messageCount() == discardedCount.get());
   }
 
   private void declareDeadLetterTopology() {

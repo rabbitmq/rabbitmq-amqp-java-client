@@ -35,6 +35,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,6 +89,43 @@ public class AmqpPerfTest {
       management.queue().name(q).type(QUORUM).declare();
       management.binding().sourceExchange(e).destinationQueue(q).key(rk).bind();
 
+      java.util.function.Consumer<Message> recordMessage =
+          msg -> {
+            try {
+              long time = readLong(msg.body());
+              metrics.latency(System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
+            } catch (Exception ex) {
+              // not able to read the body, maybe not a message from the
+              // tool
+            }
+          };
+
+      int initialCredits = 1000;
+      Consumer.MessageHandler handler;
+      int disposeEvery = 1;
+
+      if (disposeEvery <= 1) {
+        handler =
+            (context, message) -> {
+              recordMessage.accept(message);
+              context.accept();
+            };
+      } else {
+        AtomicReference<Consumer.BatchContext> batch = new AtomicReference<>();
+        handler =
+            (context, message) -> {
+              recordMessage.accept(message);
+              if (batch.get() == null) {
+                batch.set(context.batch(disposeEvery));
+              }
+              batch.get().add(context);
+              if (batch.get().size() == disposeEvery) {
+                batch.get().accept();
+                batch.set(null);
+              }
+            };
+      }
+
       connection
           .consumerBuilder()
           .listeners(
@@ -97,18 +135,8 @@ public class AmqpPerfTest {
                 }
               })
           .queue(q)
-          .initialCredits(1000)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                try {
-                  long time = readLong(message.body());
-                  metrics.latency(System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
-                } catch (Exception ex) {
-                  // not able to read the body, maybe not a message from the
-                  // tool
-                }
-              })
+          .initialCredits(initialCredits)
+          .messageHandler(handler)
           .build();
 
       executorService.submit(

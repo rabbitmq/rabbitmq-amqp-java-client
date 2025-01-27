@@ -134,5 +134,45 @@ public interface Consumer extends AutoCloseable, Resource {
      *     in RabbitMQ</a>
      */
     void requeue(Map<String, Object> annotations);
+
+    /**
+     * Create a batch context to accumulate message contexts and settle them at once.
+     *
+     * <p>The message context the batch context is created from is <b>not</b> added to the batch
+     * context.
+     *
+     * @return the created batch context
+     */
+    BatchContext batch(int batchSizeHint);
+  }
+
+  /**
+   * Context to accumulate message contexts and settle them at once.
+   *
+   * <p>A {@link BatchContext} is also a {@link Context}: the same methods are available to settle
+   * the messages.
+   *
+   * <p>Only "simple" (not batch) message contexts can be added to a batch context. Calling {@link
+   * Context#batch()} on a batch context returns the instance itself.
+   *
+   * @see <a
+   *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-transport-v1.0-os.html#type-disposition">AMQP
+   *     1.0 Disposition performative</a>
+   */
+  interface BatchContext extends Context {
+
+    /**
+     * Add a message context to the batch context.
+     *
+     * @param context the message context to add
+     */
+    void add(Context context);
+
+    /**
+     * Get the current number of message contexts in the batch context.
+     *
+     * @return current number of message contexts in the batch
+     */
+    int size();
   }
 }

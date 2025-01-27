@@ -155,6 +155,8 @@ public interface IncomingDelivery {
      */
     DeliveryTag getTag();
 
+    long getDeliveryId();
+
     /**
      * @return the {@link DeliveryState} at the local side of this Delivery.
      */

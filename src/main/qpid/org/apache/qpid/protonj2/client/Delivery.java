@@ -200,4 +200,6 @@ public interface Delivery {
      */
     int messageFormat() throws ClientException;
 
+    long getDeliveryId();
+
 }
