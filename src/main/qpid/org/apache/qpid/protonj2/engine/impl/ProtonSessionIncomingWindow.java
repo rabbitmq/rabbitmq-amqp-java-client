@@ -21,7 +21,12 @@ import org.apache.qpid.protonj2.engine.exceptions.ProtocolViolationException;
 import org.apache.qpid.protonj2.engine.util.SequenceNumber;
 import org.apache.qpid.protonj2.engine.util.UnsettledMap;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
-import org.apache.qpid.protonj2.types.transport.*;
+import org.apache.qpid.protonj2.types.transport.Begin;
+import org.apache.qpid.protonj2.types.transport.Disposition;
+import org.apache.qpid.protonj2.types.transport.Flow;
+import org.apache.qpid.protonj2.types.transport.Role;
+import org.apache.qpid.protonj2.types.transport.Transfer;
+import org.apache.qpid.protonj2.types.transport.DeliveryState;
 
 /**
  * Tracks the incoming window and provides management of that window in relation to receiver links.
