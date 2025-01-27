@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.4.0-SNAPSHOT</span>
-<br><span id="revremark">(a2b1e37)</span>
+<br><span id="revremark">(06e34cc)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -675,6 +675,7 @@ pre.rouge {
 <li><a href="#advanced-usage">Advanced Usage</a>
 <ul class="sectlevel2">
 <li><a href="#connection-settings-at-the-environment-level">Connection Settings at the Environment Level</a></li>
+<li><a href="#settling-messages-in-batch">Settling Messages in Batch</a></li>
 <li><a href="#subscription-listener">Subscription Listener</a></li>
 <li><a href="#oauth-2-support">OAuth 2 Support</a></li>
 <li><a href="#metrics-collection">Metrics Collection</a></li>
@@ -907,6 +908,66 @@ It is possible to override the environment connection settings for a given conne
 <tr>
 <td><i class="conum" data-value="2"></i><b>2</b></td>
 <td>Use the <code>admin</code> user for this connection</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="settling-messages-in-batch"><a class="anchor" href="#settling-messages-in-batch"></a>Settling Messages in Batch</h3>
+<div class="listingblock">
+<div class="title">Settling messages in batch</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="kt">int</span> <span class="n">batchSize</span> <span class="o">=</span> <span class="mi">10</span><span class="o">;</span>
+<span class="nc">Consumer</span><span class="o">.</span><span class="na">MessageHandler</span> <span class="n">handler</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Consumer</span><span class="o">.</span><span class="na">MessageHandler</span><span class="o">()</span> <span class="o">{</span>
+  <span class="kd">volatile</span> <span class="nc">Consumer</span><span class="o">.</span><span class="na">BatchContext</span> <span class="n">batch</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>  <i class="conum" data-value="1"></i><b>(1)</b>
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">handle</span><span class="o">(</span><span class="nc">Consumer</span><span class="o">.</span><span class="na">Context</span> <span class="n">context</span><span class="o">,</span> <span class="nc">Message</span> <span class="n">message</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">batch</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">batch</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="na">batch</span><span class="o">(</span><span class="n">batchSize</span><span class="o">);</span>  <i class="conum" data-value="2"></i><b>(2)</b>
+    <span class="o">}</span>
+    <span class="kt">boolean</span> <span class="n">success</span> <span class="o">=</span> <span class="n">process</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">success</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">batch</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>  <i class="conum" data-value="3"></i><b>(3)</b>
+      <span class="k">if</span> <span class="o">(</span><span class="n">batch</span><span class="o">.</span><span class="na">size</span><span class="o">()</span> <span class="o">==</span> <span class="n">batchSize</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">batch</span><span class="o">.</span><span class="na">accept</span><span class="o">();</span>  <i class="conum" data-value="4"></i><b>(4)</b>
+        <span class="n">batch</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>  <i class="conum" data-value="5"></i><b>(5)</b>
+      <span class="o">}</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+      <span class="n">context</span><span class="o">.</span><span class="na">discard</span><span class="o">();</span>  <i class="conum" data-value="6"></i><b>(6)</b>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">};</span>
+<span class="nc">Consumer</span> <span class="n">consumer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">consumerBuilder</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">queue</span><span class="o">(</span><span class="s">"some-queue"</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">messageHandler</span><span class="o">(</span><span class="n">handler</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Declare batch context property</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Create a new batch context instance</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Add the current message context to the batch context if processing is successful</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Settle the batch context once it contains 10 messages</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>Reset the batch context</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="6"></i><b>6</b></td>
+<td>Discard the current message context if processing fails</td>
 </tr>
 </table>
 </div>
@@ -1759,7 +1820,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.4.0-SNAPSHOT<br>
-Last updated 2025-01-24 14:34:02 UTC
+Last updated 2025-01-27 14:31:20 UTC
 </div>
 </div>
 </body>
