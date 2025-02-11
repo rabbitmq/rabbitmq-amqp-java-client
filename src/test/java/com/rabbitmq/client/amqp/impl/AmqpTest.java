@@ -737,6 +737,37 @@ public class AmqpTest {
         .hasMessageContaining(q);
   }
 
+  @Test
+  void types(TestInfo info) {
+    Management management = connection.management();
+    String q = TestUtils.name(info);
+    management.queue(q).exclusive(true).declare();
+    Sync publishSync = sync();
+    Publisher.Callback callback =
+        context -> {
+          if (context.status() == Publisher.Status.ACCEPTED) {
+            publishSync.down();
+          }
+        };
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+    publisher.publish(publisher.message().property("key1", -1L), callback);
+    assertThat(publishSync).completes();
+    AtomicReference<Message> message = new AtomicReference<>();
+    Sync consumeSync = sync();
+    connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (ctx, msg) -> {
+              message.set(msg);
+              ctx.accept();
+              consumeSync.down();
+            })
+        .build();
+    assertThat(consumeSync).completes();
+    assertThat(message.get()).hasProperty("key1", -1L);
+  }
+
   private static String uuid() {
     return UUID.randomUUID().toString();
   }
