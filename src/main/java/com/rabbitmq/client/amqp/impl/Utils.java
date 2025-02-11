@@ -222,11 +222,21 @@ final class Utils {
   }
 
   static boolean is4_0_OrMore(String brokerVersion) {
-    return versionCompare(currentVersion(brokerVersion), "4.0.0") >= 0;
+    try {
+      return versionCompare(currentVersion(brokerVersion), "4.0.0") >= 0;
+    } catch (Exception e) {
+      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
+      return true;
+    }
   }
 
   static boolean is4_1_OrMore(String brokerVersion) {
-    return versionCompare(currentVersion(brokerVersion), "4.1.0") >= 0;
+    try {
+      return versionCompare(currentVersion(brokerVersion), "4.1.0") >= 0;
+    } catch (Exception e) {
+      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
+      return true;
+    }
   }
 
   static boolean supportFilterExpressions(String brokerVersion) {
