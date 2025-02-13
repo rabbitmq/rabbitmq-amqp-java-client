@@ -270,6 +270,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       LOGGER.debug("Created native connection instance for '{}'", this.name());
       ExceptionUtils.wrapGet(connection.openFuture());
       LOGGER.debug("Connection attempt '{}' succeeded", this.name());
+      checkBroker(connection);
       checkBrokerVersion(connection);
       return new NativeConnectionWrapper(connection, extractNode(connection), address);
     } catch (ClientException e) {
@@ -283,6 +284,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.connectionAddress = wrapper.address();
     this.connectionNodename = wrapper.nodename();
     this.nativeConnection = wrapper.connection();
+  }
+
+  private static void checkBroker(org.apache.qpid.protonj2.client.Connection connection) throws ClientException {
+    String broker = (String) connection.properties().get("product");
+    if (!"rabbitmq".equalsIgnoreCase(broker)) {
+      LOGGER.warn("Connected to another broker than RabbitMQ ('{}'), the library may not behave as expected", broker);
+    }
   }
 
   private static void checkBrokerVersion(org.apache.qpid.protonj2.client.Connection connection)
