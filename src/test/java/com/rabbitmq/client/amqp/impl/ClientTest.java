@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -399,6 +401,7 @@ public class ClientTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void dynamicReceiver() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c1 = connection(client);
