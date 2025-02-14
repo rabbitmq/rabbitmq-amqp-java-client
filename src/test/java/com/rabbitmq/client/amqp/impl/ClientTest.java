@@ -397,4 +397,27 @@ public class ClientTest {
       c.close();
     }
   }
+
+  @Test
+  void dynamicReceiver() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c1 = connection(client);
+      Session s1 = c1.openSession();
+      ReceiverOptions receiverOptions = new ReceiverOptions();
+      receiverOptions.sourceOptions().capabilities("temporary-queue");
+      Receiver receiver = s1.openDynamicReceiver(receiverOptions);
+      receiver.openFuture().get();
+      assertThat(receiver.address()).isNotNull();
+
+      org.apache.qpid.protonj2.client.Connection c2 = connection(client);
+      Session s2 = c2.openSession();
+      Sender sender = s2.openSender(receiver.address());
+      String body = UUID.randomUUID().toString();
+      sender.send(Message.create(body));
+
+      Delivery delivery = receiver.receive(10, SECONDS);
+      assertThat(delivery).isNotNull();
+      assertThat(delivery.message().body()).isEqualTo(body);
+    }
+  }
 }

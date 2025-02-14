@@ -286,10 +286,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.nativeConnection = wrapper.connection();
   }
 
-  private static void checkBroker(org.apache.qpid.protonj2.client.Connection connection) throws ClientException {
+  private static void checkBroker(org.apache.qpid.protonj2.client.Connection connection)
+      throws ClientException {
     String broker = (String) connection.properties().get("product");
     if (!"rabbitmq".equalsIgnoreCase(broker)) {
-      LOGGER.warn("Connected to another broker than RabbitMQ ('{}'), the library may not behave as expected", broker);
+      LOGGER.warn(
+          "Connected to another broker than RabbitMQ ('{}'), the library may not behave as expected",
+          broker);
     }
   }
 
