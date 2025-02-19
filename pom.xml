@@ -63,7 +63,7 @@
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
-        <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
+        <maven-clean-plugin.version>3.4.1</maven-clean-plugin.version>
         <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <spotless.version>2.44.2</spotless.version>
         <google-java-format.version>1.25.2</google-java-format.version>
