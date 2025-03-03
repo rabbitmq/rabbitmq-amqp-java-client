@@ -153,7 +153,7 @@ public interface Consumer extends AutoCloseable, Resource {
    * the messages.
    *
    * <p>Only "simple" (not batch) message contexts can be added to a batch context. Calling {@link
-   * Context#batch()} on a batch context returns the instance itself.
+   * Context#batch(int)} on a batch context returns the instance itself.
    *
    * @see <a
    *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-transport-v1.0-os.html#type-disposition">AMQP

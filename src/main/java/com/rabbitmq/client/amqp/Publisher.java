@@ -92,6 +92,13 @@ public interface Publisher extends AutoCloseable, Resource {
      * @see <a href="https://www.rabbitmq.com/docs/amqp#outcomes">AMQP Outcomes</a>
      */
     Status status();
+
+    /**
+     * Failure cause (null, unless for some cases of {@link Status#REJECTED}).
+     *
+     * @return failure cause, null if no cause for failure
+     */
+    Throwable failureCause();
   }
 
   /**

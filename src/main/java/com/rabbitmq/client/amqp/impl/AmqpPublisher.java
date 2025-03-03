@@ -131,7 +131,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
               } else {
                 status = Status.REJECTED;
               }
-              DefaultContext defaultContext = new DefaultContext(message, status);
+              DefaultContext defaultContext = new DefaultContext(message, status, ex);
               this.metricsCollector.publishDisposition(mapToPublishDisposition(status));
               callback.handle(defaultContext);
               return null;
@@ -227,10 +227,12 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
     private final Message message;
     private final Status status;
+    private final Throwable failureCause;
 
-    private DefaultContext(Message message, Status status) {
+    private DefaultContext(Message message, Status status, Throwable failureCause) {
       this.message = message;
       this.status = status;
+      this.failureCause = failureCause;
     }
 
     @Override
@@ -241,6 +243,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     @Override
     public Status status() {
       return this.status;
+    }
+
+    @Override
+    public Throwable failureCause() {
+      return this.failureCause;
     }
   }
 
