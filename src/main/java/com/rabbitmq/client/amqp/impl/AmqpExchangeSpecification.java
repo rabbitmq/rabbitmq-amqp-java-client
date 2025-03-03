@@ -74,6 +74,14 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
   }
 
   @Override
+  public Management.ExchangeSpecification arguments(Map<String, Object> arguments) {
+    Assert.notNull(arguments, "Arguments");
+    this.arguments.clear();
+    this.arguments.putAll(arguments);
+    return this;
+  }
+
+  @Override
   public void declare() {
     // TODO check name is specified (server-named entities not allowed)
     Map<String, Object> body = new LinkedHashMap<>();

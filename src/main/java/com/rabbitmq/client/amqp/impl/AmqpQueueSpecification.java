@@ -184,6 +184,14 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   }
 
   @Override
+  public Management.QueueSpecification arguments(Map<String, Object> arguments) {
+    Assert.notNull(arguments, "Arguments");
+    this.arguments.clear();
+    this.arguments.putAll(arguments);
+    return this;
+  }
+
+  @Override
   public Management.QueueInfo declare() {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("durable", DURABLE);

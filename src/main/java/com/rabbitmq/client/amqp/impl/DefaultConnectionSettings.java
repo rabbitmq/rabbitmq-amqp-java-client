@@ -486,7 +486,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     @Override
     public Affinity<T> strategy(AffinityStrategy strategy) {
-      Assert.notNull(strategy, "Affinity strategy cannot be null");
+      Assert.notNull(strategy, "Affinity strategy");
       this.strategy = strategy;
       return this;
     }

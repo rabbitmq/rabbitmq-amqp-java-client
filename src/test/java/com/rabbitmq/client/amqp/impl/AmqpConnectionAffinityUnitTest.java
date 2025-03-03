@@ -316,7 +316,7 @@ public class AmqpConnectionAffinityUnitTest {
     }
 
     AffinityCacheAssert doesNotContainInfoFor(String queue) {
-      Assert.notNull(queue, "Queue argument cannot be null");
+      Assert.notNull(queue, "Queue argument");
       isNotNull();
 
       Management.QueueInfo queueInfo = actual.queueInfo(queue);

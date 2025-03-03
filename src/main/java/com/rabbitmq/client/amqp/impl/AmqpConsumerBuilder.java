@@ -152,19 +152,19 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
     @Override
     public StreamOptions offset(Instant timestamp) {
-      notNull(timestamp, "Timestamp offset cannot be null");
+      notNull(timestamp, "Timestamp offset");
       return this.offsetSpecification(Date.from(timestamp));
     }
 
     @Override
     public StreamOptions offset(StreamOffsetSpecification specification) {
-      notNull(specification, "Offset specification cannot be null");
+      notNull(specification, "Offset specification");
       return this.offsetSpecification(specification.name().toLowerCase(Locale.ENGLISH));
     }
 
     @Override
     public StreamOptions offset(String interval) {
-      notNull(interval, "Interval offset cannot be null");
+      notNull(interval, "Interval offset");
       if (!Utils.validateMaxAge(interval)) {
         throw new IllegalArgumentException(
             "Invalid value for interval: "

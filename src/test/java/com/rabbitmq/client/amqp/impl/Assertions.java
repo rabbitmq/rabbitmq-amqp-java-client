@@ -161,7 +161,7 @@ public final class Assertions {
     }
 
     QueueInfoAssert hasLeader(String leader) {
-      Assert.notNull(leader, "Expected leader cannot be null");
+      Assert.notNull(leader, "Expected leader");
       isNotNull();
       if (!leader.equals(actual.leader())) {
         fail("Queue leader should be '%s' but is '%s'", leader, actual.leader());
@@ -170,7 +170,7 @@ public final class Assertions {
     }
 
     QueueInfoAssert doesNotHaveLeader(String leader) {
-      Assert.notNull(leader, "Leader cannot be null");
+      Assert.notNull(leader, "Leader");
       isNotNull();
       if (leader.equals(actual.leader())) {
         fail("Queue leader should not be '%s'", leader);
@@ -368,7 +368,7 @@ public final class Assertions {
     }
 
     ConnectionAssert hasNodename(String nodename) {
-      Assert.notNull(nodename, "Expected nodename cannot be null");
+      Assert.notNull(nodename, "Expected nodename");
       isNotNull();
       if (!actual.connectionNodename().equals(nodename)) {
         fail(
@@ -379,7 +379,7 @@ public final class Assertions {
     }
 
     ConnectionAssert isOnLeader(Management.QueueInfo info) {
-      Assert.notNull(info, "Queue info cannot be null");
+      Assert.notNull(info, "Queue info");
       String actualLeader = info.leader();
       if (!actualLeader.equals(actual.connectionNodename())) {
         fail(
@@ -390,7 +390,7 @@ public final class Assertions {
     }
 
     ConnectionAssert isOnFollower(Management.QueueInfo info) {
-      Assert.notNull(info, "Queue info cannot be null");
+      Assert.notNull(info, "Queue info");
       List<String> followers =
           info.members().stream()
               .filter(n -> !n.equals(info.leader()))

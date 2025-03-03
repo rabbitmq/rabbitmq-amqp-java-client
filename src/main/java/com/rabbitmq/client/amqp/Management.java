@@ -297,6 +297,16 @@ public interface Management extends AutoCloseable {
     QueueSpecification argument(String key, Object value);
 
     /**
+     * Set the queue arguments.
+     *
+     * <p>The argument map will replace any existing arguments.
+     *
+     * @param arguments arguments
+     * @return the queue specification
+     */
+    QueueSpecification arguments(Map<String, Object> arguments);
+
+    /**
      * Declare the queue.
      *
      * @return information on the queue
@@ -662,6 +672,16 @@ public interface Management extends AutoCloseable {
      */
     ExchangeSpecification argument(String key, Object value);
 
+    /**
+     * Set the exchange arguments.
+     *
+     * <p>The argument map will replace any existing arguments.
+     *
+     * @param arguments arguments
+     * @return the exchange specification
+     */
+    ExchangeSpecification arguments(Map<String, Object> arguments);
+
     /** Declare the exchange. */
     void declare();
   }
@@ -769,7 +789,9 @@ public interface Management extends AutoCloseable {
     BindingSpecification argument(String key, Object value);
 
     /**
-     * Binding arguments.
+     * Set the binding arguments.
+     *
+     * <p>The argument map will replace any existing arguments.
      *
      * @param arguments arguments
      * @return the binding specification
@@ -826,7 +848,9 @@ public interface Management extends AutoCloseable {
     UnbindSpecification argument(String key, Object value);
 
     /**
-     * Binding arguments.
+     * Set the binding arguments.
+     *
+     * <p>The argument map will replace any existing arguments.
      *
      * @param arguments arguments
      * @return the unbind specification

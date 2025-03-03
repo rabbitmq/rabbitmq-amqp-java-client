@@ -240,7 +240,7 @@ abstract class Cli {
 
   static void pauseNode(String node) {
     String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
-    Assert.notNull(containerId, "No container for node " + node);
+    Assert.notNull(containerId, "Container ID for node " + node);
     executeCommand("docker pause " + containerId);
   }
 
@@ -291,7 +291,7 @@ abstract class Cli {
 
   private static String nodeToDockerContainer(String node) {
     String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
-    Assert.notNull(containerId, "No container for node " + node);
+    Assert.notNull(containerId, "Container ID for node " + node);
     return containerId;
   }
 

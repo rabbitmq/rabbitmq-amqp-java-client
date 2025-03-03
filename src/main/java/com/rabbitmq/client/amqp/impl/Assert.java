@@ -21,9 +21,9 @@ abstract class Assert {
 
   private Assert() {}
 
-  static void notNull(Object object, String message) {
+  static void notNull(Object object, String label) {
     if (object == null) {
-      throw new IllegalArgumentException(message);
+      throw new IllegalArgumentException(label + " cannot be null");
     }
   }
 }

@@ -101,6 +101,7 @@ abstract class AmqpBindingManagement {
 
     @Override
     public Management.BindingSpecification arguments(Map<String, Object> arguments) {
+      Assert.notNull(arguments, "Arguments");
       this.state.arguments.clear();
       this.state.arguments.putAll(arguments);
       return this;
@@ -169,6 +170,7 @@ abstract class AmqpBindingManagement {
 
     @Override
     public Management.UnbindSpecification arguments(Map<String, Object> arguments) {
+      Assert.notNull(arguments, "Arguments");
       this.state.arguments.clear();
       this.state.arguments.putAll(arguments);
       return this;
