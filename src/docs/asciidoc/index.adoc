@@ -8,6 +8,8 @@ ifndef::sourcedir[:sourcedir: ../../main/java]
 
 The RabbitMQ AMQP 1.0 Java Client is a library to communicate with RabbitMQ using https://www.rabbitmq.com/docs/amqp[AMQP 1.0].
 
+It is **for RabbitMQ only**, it does not support other brokers.
+
 == Pre-requisites
 
 This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.

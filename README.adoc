@@ -7,6 +7,8 @@ It targets RabbitMQ 4.0 and requires at least Java 11 (Java 21 or more is recomm
 
 Please refer to the https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/[documentation] to find out more.
 
+This library is **for RabbitMQ only**, it does not support other brokers.
+
 == Project Maturity
 
 The project is in development and stabilization phase.
@@ -23,7 +25,7 @@ See the https://www.rabbitmq.com/client-libraries/java-versions[RabbitMQ Java li
 
 === Pre-requisites
 
-This library requires at least Java 11, but Java 21 or more is recommended.
+This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
 
 === Dependencies
 
