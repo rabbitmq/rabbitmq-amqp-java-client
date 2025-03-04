@@ -17,7 +17,9 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.Cli.*;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
+import static com.rabbitmq.client.amqp.impl.TlsTestUtils.*;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,9 +47,7 @@ public class TlsTest {
             environment
                 .connectionBuilder()
                 .tls()
-                .sslContext(
-                    TlsTestUtils.sslContext(
-                        TlsTestUtils.trustManagerFactory(TlsTestUtils.caCertificate())))
+                .sslContext(sslContext(trustManagerFactory(caCertificate())))
                 .connection()
                 .build();
         Connection consumingConnection =
@@ -106,9 +106,7 @@ public class TlsTest {
               () ->
                   env.connectionBuilder()
                       .tls()
-                      .sslContext(
-                          TlsTestUtils.sslContext(
-                              TlsTestUtils.trustManagerFactory(TlsTestUtils.clientCertificate())))
+                      .sslContext(sslContext(trustManagerFactory(TlsTestUtils.clientCertificate())))
                       .connection()
                       .build())
           .isInstanceOf(AmqpException.AmqpSecurityException.class)
@@ -135,16 +133,14 @@ public class TlsTest {
 
   @Test
   void verifiedConnectionWithCorrectServerCertificate() throws Exception {
-    SSLContext sslContext =
-        TlsTestUtils.sslContext(TlsTestUtils.trustManagerFactory(TlsTestUtils.caCertificate()));
+    SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
     try (Connection ignored =
         environment.connectionBuilder().tls().sslContext(sslContext).connection().build()) {}
   }
 
   @Test
   void verifiedConnectionWithWrongServerCertificate() throws Exception {
-    SSLContext sslContext =
-        TlsTestUtils.sslContext(TlsTestUtils.trustManagerFactory(TlsTestUtils.clientCertificate()));
+    SSLContext sslContext = sslContext(trustManagerFactory(TlsTestUtils.clientCertificate()));
     assertThatThrownBy(
             () -> environment.connectionBuilder().tls().sslContext(sslContext).connection().build())
         .isInstanceOf(AmqpException.AmqpSecurityException.class)
@@ -156,9 +152,9 @@ public class TlsTest {
   void saslExternalShouldSucceedWithUserForClientCertificate() throws Exception {
     X509Certificate clientCertificate = TlsTestUtils.clientCertificate();
     SSLContext sslContext =
-        TlsTestUtils.sslContext(
+        sslContext(
             TlsTestUtils.keyManagerFactory(TlsTestUtils.clientKey(), clientCertificate),
-            TlsTestUtils.trustManagerFactory(TlsTestUtils.caCertificate()));
+            trustManagerFactory(caCertificate()));
     String username = clientCertificate.getSubjectX500Principal().getName();
     Cli.rabbitmqctlIgnoreError(format("delete_user %s", username));
     Cli.rabbitmqctl(format("add_user %s foo", username));
@@ -175,6 +171,65 @@ public class TlsTest {
               .build()) {}
     } finally {
       Cli.rabbitmqctl(format("delete_user %s", username));
+    }
+  }
+
+  @Test
+  void hostnameVerificationShouldFailWhenSettingHostToLoopbackInterface() throws Exception {
+    SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
+    assertThatThrownBy(
+            () ->
+                environment
+                    .connectionBuilder()
+                    .host("127.0.0.1")
+                    .tls()
+                    .sslContext(sslContext)
+                    .connection()
+                    .build())
+        .isInstanceOf(AmqpException.AmqpSecurityException.class)
+        .cause()
+        .isInstanceOf(SSLHandshakeException.class)
+        .hasMessageContaining("subject alternative names");
+  }
+
+  @Test
+  void connectToLoopbackInterfaceShouldWorkIfNoHostnameVerification() throws Exception {
+    SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
+    try (Connection ignored =
+        environment
+            .connectionBuilder()
+            .host("127.0.01")
+            .tls()
+            .sslContext(sslContext)
+            .hostnameVerification(false)
+            .connection()
+            .build()) {}
+  }
+
+  @Test
+  void connectToNonDefaultVirtualHostShouldSucceed() throws Exception {
+    String vhost = "test_tls";
+    String username = "tls";
+    String password = "tls";
+    try {
+      addVhost(vhost);
+      addUser(username, password);
+      setPermissions(username, vhost, ".*");
+
+      SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
+      try (Connection ignored =
+          environment
+              .connectionBuilder()
+              .username(username)
+              .password(password)
+              .virtualHost(vhost)
+              .tls()
+              .sslContext(sslContext)
+              .connection()
+              .build()) {}
+    } finally {
+      deleteUser(username);
+      deleteVhost(vhost);
     }
   }
 }

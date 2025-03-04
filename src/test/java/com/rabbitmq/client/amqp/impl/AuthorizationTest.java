@@ -60,6 +60,18 @@ public class AuthorizationTest {
   }
 
   @Test
+  void connectToLoopbackAndVirtualHostShouldSucceed() {
+    try (Connection ignored =
+        environment
+            .connectionBuilder()
+            .host("127.0.0.1")
+            .username(USERNAME)
+            .password(PASSWORD)
+            .virtualHost(VH)
+            .build()) {}
+  }
+
+  @Test
   void connectionWithInvalidCredentialsShouldThrow() {
     assertThatThrownBy(
             () -> environment.connectionBuilder().username("foo").password("bar").build())
