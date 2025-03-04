@@ -20,7 +20,6 @@ package com.rabbitmq.client.amqp.observation.micrometer;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.function.Function;
@@ -31,7 +30,6 @@ class MicrometerObservationCollector implements ObservationCollector {
   private final PublishObservationConvention customPublishConvention, defaultPublishConvention;
   private final DeliverObservationConvention customProcessConvention, defaultProcessConvention;
 
-  @SuppressFBWarnings("EI_EXPOSE_REP2")
   MicrometerObservationCollector(
       ObservationRegistry registry,
       PublishObservationConvention customPublishConvention,
