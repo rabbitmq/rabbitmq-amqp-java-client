@@ -725,7 +725,8 @@ public class AmqpTest {
         .forEach(ignored -> publisher.publish(publisher.message(), callback));
     assertThat(publishSync).completes();
     assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
-    management.queuePurge(q);
+    Management.PurgeStatus purgeStatus = management.queuePurge(q);
+    org.assertj.core.api.Assertions.assertThat(purgeStatus.messageCount()).isEqualTo(messageCount);
     assertThat(management.queueInfo(q)).isEmpty();
   }
 

@@ -183,11 +183,13 @@ class AmqpManagement implements Management {
   }
 
   @Override
-  public void queuePurge(String queue) {
+  public PurgeStatus queuePurge(String queue) {
     Map<String, Object> responseBody = delete(queueLocation(queue) + "/messages", CODE_200);
-    if (!responseBody.containsKey("message_count")) {
+    if (!responseBody.containsKey("message_count")
+        && !(responseBody.get("message_count") instanceof Number)) {
       throw new AmqpException("Response body should contain message_count");
     }
+    return new DefaultPurgeStatus(((Number) responseBody.get("message_count")).longValue());
   }
 
   void setToken(String token) {
@@ -855,5 +857,19 @@ class AmqpManagement implements Management {
     OPEN,
     UNAVAILABLE,
     CLOSED
+  }
+
+  private static final class DefaultPurgeStatus implements PurgeStatus {
+
+    private final long messageCount;
+
+    private DefaultPurgeStatus(long messageCount) {
+      this.messageCount = messageCount;
+    }
+
+    @Override
+    public long messageCount() {
+      return this.messageCount;
+    }
   }
 }

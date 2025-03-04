@@ -71,8 +71,9 @@ public interface Management extends AutoCloseable {
    * Purge (delete all messages) from a queue.
    *
    * @param queue queue to delete messages from
+   * @return the status of the purge operation
    */
-  void queuePurge(String queue);
+  PurgeStatus queuePurge(String queue);
 
   /**
    * Start exchange specification.
@@ -947,5 +948,15 @@ public interface Management extends AutoCloseable {
      * @return the queue consumer count
      */
     int consumerCount();
+  }
+
+  interface PurgeStatus {
+
+    /**
+     * The number of messages purged from the queue.
+     *
+     * @return the number of messages purged
+     */
+    long messageCount();
   }
 }
