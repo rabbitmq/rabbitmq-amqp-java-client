@@ -20,11 +20,11 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.Cli.*;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 import static com.rabbitmq.client.amqp.impl.TlsTestUtils.*;
-import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException.AmqpSecurityException;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAuthMechanismSslNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfTlsNotEnabled;
 import java.security.cert.X509Certificate;
@@ -33,10 +33,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 import javax.net.ssl.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisabledIfTlsNotEnabled
 @AmqpTestInfrastructure
 public class TlsTest {
+
+  private static final String VH = "test_tls";
+  private static final String USERNAME = "tls";
+  private static final String PASSWORD = "tls";
 
   static Environment environment;
 
@@ -106,10 +112,10 @@ public class TlsTest {
               () ->
                   env.connectionBuilder()
                       .tls()
-                      .sslContext(sslContext(trustManagerFactory(TlsTestUtils.clientCertificate())))
+                      .sslContext(sslContext(trustManagerFactory(clientCertificate())))
                       .connection()
                       .build())
-          .isInstanceOf(AmqpException.AmqpSecurityException.class)
+          .isInstanceOf(AmqpSecurityException.class)
           .hasCauseInstanceOf(SSLHandshakeException.class);
     }
   }
@@ -140,37 +146,52 @@ public class TlsTest {
 
   @Test
   void verifiedConnectionWithWrongServerCertificate() throws Exception {
-    SSLContext sslContext = sslContext(trustManagerFactory(TlsTestUtils.clientCertificate()));
+    SSLContext sslContext = sslContext(trustManagerFactory(clientCertificate()));
     assertThatThrownBy(
             () -> environment.connectionBuilder().tls().sslContext(sslContext).connection().build())
-        .isInstanceOf(AmqpException.AmqpSecurityException.class)
+        .isInstanceOf(AmqpSecurityException.class)
         .hasCauseInstanceOf(SSLHandshakeException.class);
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = {DefaultConnectionSettings.DEFAULT_VIRTUAL_HOST, VH})
   @DisabledIfAuthMechanismSslNotEnabled
-  void saslExternalShouldSucceedWithUserForClientCertificate() throws Exception {
-    X509Certificate clientCertificate = TlsTestUtils.clientCertificate();
+  void saslExternalShouldSucceedWithUserForClientCertificate(String vh) throws Exception {
+    X509Certificate clientCertificate = clientCertificate();
     SSLContext sslContext =
         sslContext(
-            TlsTestUtils.keyManagerFactory(TlsTestUtils.clientKey(), clientCertificate),
+            keyManagerFactory(clientKey(), clientCertificate),
             trustManagerFactory(caCertificate()));
     String username = clientCertificate.getSubjectX500Principal().getName();
-    Cli.rabbitmqctlIgnoreError(format("delete_user %s", username));
-    Cli.rabbitmqctl(format("add_user %s foo", username));
+    Runnable connect =
+        () -> {
+          try (Connection ignored =
+              environment
+                  .connectionBuilder()
+                  .username(UUID.randomUUID().toString())
+                  .virtualHost(vh)
+                  .saslMechanism(ConnectionSettings.SASL_MECHANISM_EXTERNAL)
+                  .tls()
+                  .sslContext(sslContext)
+                  .connection()
+                  .build()) {}
+        };
+    // there is no user with the client certificate's subject DN
+    assertThatThrownBy(connect::run).isInstanceOf(AmqpSecurityException.class);
     try {
-      Cli.rabbitmqctl(format("set_permissions %s '.*' '.*' '.*'", username));
+      setUpVirtualHost(vh, username, username);
       try (Connection ignored =
           environment
               .connectionBuilder()
               .username(UUID.randomUUID().toString())
+              .virtualHost(vh)
               .saslMechanism(ConnectionSettings.SASL_MECHANISM_EXTERNAL)
               .tls()
               .sslContext(sslContext)
               .connection()
               .build()) {}
     } finally {
-      Cli.rabbitmqctl(format("delete_user %s", username));
+      tearDownVirtualHost(vh, username);
     }
   }
 
@@ -186,7 +207,7 @@ public class TlsTest {
                     .sslContext(sslContext)
                     .connection()
                     .build())
-        .isInstanceOf(AmqpException.AmqpSecurityException.class)
+        .isInstanceOf(AmqpSecurityException.class)
         .cause()
         .isInstanceOf(SSLHandshakeException.class)
         .hasMessageContaining("subject alternative names");
@@ -208,28 +229,41 @@ public class TlsTest {
 
   @Test
   void connectToNonDefaultVirtualHostShouldSucceed() throws Exception {
-    String vhost = "test_tls";
-    String username = "tls";
-    String password = "tls";
     try {
-      addVhost(vhost);
-      addUser(username, password);
-      setPermissions(username, vhost, ".*");
+      setUpVirtualHost(VH, USERNAME, PASSWORD);
 
       SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
       try (Connection ignored =
           environment
               .connectionBuilder()
-              .username(username)
-              .password(password)
-              .virtualHost(vhost)
+              .username(USERNAME)
+              .password(PASSWORD)
+              .virtualHost(VH)
               .tls()
               .sslContext(sslContext)
               .connection()
               .build()) {}
     } finally {
-      deleteUser(username);
-      deleteVhost(vhost);
+      tearDownVirtualHost(VH, USERNAME);
     }
+  }
+
+  private static void setUpVirtualHost(String vh, String username, String password) {
+    if (!isDefaultVirtualHost(vh)) {
+      addVhost(vh);
+    }
+    addUser(username, password);
+    setPermissions(username, vh, ".*");
+  }
+
+  private static void tearDownVirtualHost(String vh, String username) {
+    deleteUser(username);
+    if (!isDefaultVirtualHost(vh)) {
+      deleteVhost(vh);
+    }
+  }
+
+  private static boolean isDefaultVirtualHost(String vh) {
+    return DefaultConnectionSettings.DEFAULT_VIRTUAL_HOST.equals(vh);
   }
 }
