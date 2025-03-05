@@ -105,7 +105,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
 
-    this.dispatchingExecutorService = connection.dispatchingExecutorService();
+    this.dispatchingExecutorService =
+        builder.dispatchingExecutorService() == null
+            ? connection.dispatchingExecutorService()
+            : builder.dispatchingExecutorService();
     this.nativeHandler = createNativeHandler(messageHandler);
     this.nativeCloseHandler =
         e ->
