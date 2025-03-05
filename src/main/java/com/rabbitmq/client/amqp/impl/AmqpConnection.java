@@ -97,6 +97,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ExecutorService dispatchingExecutorService;
+  private final boolean privateDispatchingExecutorService;
   private final CredentialsManager.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -115,6 +116,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
         builder.recoveryConfiguration();
 
     this.topologyListener = createTopologyListener(builder);
+
+    if (builder.dispatchingExecutorService() == null) {
+      this.privateDispatchingExecutorService = true;
+    } else {
+      this.privateDispatchingExecutorService = false;
+      this.dispatchingExecutorService = builder.dispatchingExecutorService();
+    }
 
     if (recoveryConfiguration.activated()) {
       disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, this.name());
@@ -853,15 +861,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
         LOGGER.info("Interrupted while waiting for connection lock");
       }
       try {
-        ExecutorService es = this.dispatchingExecutorService;
-        if (es != null) {
-          try {
-            es.shutdownNow();
-          } catch (Exception e) {
-            LOGGER.info(
-                "Error while shutting down dispatching executor service for connection '{}': {}",
-                this.name(),
-                e.getMessage());
+        if (this.privateDispatchingExecutorService) {
+          ExecutorService es = this.dispatchingExecutorService;
+          if (es != null) {
+            try {
+              es.shutdownNow();
+            } catch (Exception e) {
+              LOGGER.info(
+                  "Error while shutting down dispatching executor service for connection '{}': {}",
+                  this.name(),
+                  e.getMessage());
+            }
           }
         }
         try {
