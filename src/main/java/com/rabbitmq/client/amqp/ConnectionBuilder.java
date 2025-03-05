@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.util.concurrent.ExecutorService;
+
 /** Builder for {@link Connection} instances. */
 public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder> {
 
@@ -34,6 +36,22 @@ public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder>
    * @return this builder instance
    */
   ConnectionBuilder listeners(Resource.StateListener... listeners);
+
+  /**
+   * Set the executor service to use for incoming message delivery.
+   *
+   * <p>The executor service is shared between the connection consumers, unless a consumer sets its
+   * own executor service with {@link ConsumerBuilder#dispatchingExecutorService(ExecutorService)}.
+   *
+   * <p>By default, a new single-threaded executor is created.
+   *
+   * <p>It is the developer's responsibility to shut down the executor when it is no longer needed.
+   *
+   * @param executorService executor service for incoming message delivery
+   * @return this builder instance
+   * @see ConsumerBuilder#dispatchingExecutorService(ExecutorService)
+   */
+  ConnectionBuilder dispatchingExecutorService(ExecutorService executorService);
 
   /**
    * Create the connection instance.
