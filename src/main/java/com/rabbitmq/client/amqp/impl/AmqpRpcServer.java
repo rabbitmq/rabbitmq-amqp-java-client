@@ -96,7 +96,7 @@ class AmqpRpcServer implements RpcServer {
                   }
                   Object correlationId = correlationIdExtractor.apply(msg);
                   reply = replyPostProcessor.apply(reply, correlationId);
-                  if (reply != null) {
+                  if (reply != null && reply.to() != null) {
                     sendReply(reply);
                   }
                 })
