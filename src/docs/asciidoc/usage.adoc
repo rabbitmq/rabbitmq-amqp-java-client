@@ -220,6 +220,12 @@ include::{test-examples}/RpcApi.java[tag=rpc-client-request]
 The `RpcClient#publish(Message)` method returns a `CompletableFuture<Message>` that holds the reply message.
 It is then possible to wait for the reply asynchronously or synchronously.
 
+The RPC server has the following behavior:
+
+* when receiving a message request, it calls the processing logic (handler), extracts the correlation ID, calls a reply post-processor if defined, and sends the reply message.
+* if all these operations succeed, the server accepts the request message (settles it with the `ACCEPTED` outcome).
+* if any of these operations throws an exception, the server discards the request message (the message is removed from the request queue and is https://www.rabbitmq.com/client-libraries/amqp-client-libraries#message-processing-result-outcome[dead-lettered] if configured).
+
 The RPC server uses the following defaults:
 
 * it uses the _request_ https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties[`message-id` property] for the correlation ID.
