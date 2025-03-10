@@ -17,13 +17,18 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.util.Random;
 import java.util.UUID;
@@ -75,7 +80,7 @@ public class RpcTest {
       serverConnection.rpcServerBuilder().requestQueue(requestQueue).handler(HANDLER).build();
 
       int requestCount = 100;
-      CountDownLatch latch = new CountDownLatch(requestCount);
+      Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
           .forEach(
               ignored ->
@@ -86,10 +91,10 @@ public class RpcTest {
                             rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
-                        latch.countDown();
+                        sync.down();
                         return null;
                       }));
-      Assertions.assertThat(latch).completes();
+      assertThat(sync).completes();
     }
   }
 
@@ -136,7 +141,7 @@ public class RpcTest {
           .build();
 
       int requestCount = 100;
-      CountDownLatch latch = new CountDownLatch(requestCount);
+      Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
           .forEach(
               ignored ->
@@ -146,11 +151,13 @@ public class RpcTest {
                         CompletableFuture<Message> responseFuture =
                             rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
-                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
-                        latch.countDown();
+                        org.assertj.core.api.Assertions.assertThat(response.body())
+                            .asString(UTF_8)
+                            .isEqualTo(process(request));
+                        sync.down();
                         return null;
                       }));
-      Assertions.assertThat(latch).completes();
+      assertThat(sync).completes();
     }
   }
 
@@ -184,7 +191,7 @@ public class RpcTest {
           .build();
 
       int requestCount = 100;
-      CountDownLatch latch = new CountDownLatch(requestCount);
+      Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
           .forEach(
               ignored ->
@@ -195,10 +202,10 @@ public class RpcTest {
                             rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
-                        latch.countDown();
+                        sync.down();
                         return null;
                       }));
-      Assertions.assertThat(latch).completes();
+      assertThat(sync).completes();
     }
   }
 
@@ -207,16 +214,16 @@ public class RpcTest {
   void rpcShouldRecoverAfterConnectionIsClosed(boolean isolateResources)
       throws ExecutionException, InterruptedException, TimeoutException {
     String clientConnectionName = UUID.randomUUID().toString();
-    CountDownLatch clientConnectionLatch = new CountDownLatch(1);
+    Sync clientConnectionSync = sync();
     String serverConnectionName = UUID.randomUUID().toString();
-    CountDownLatch serverConnectionLatch = new CountDownLatch(1);
+    Sync serverConnectionSync = sync();
 
     BackOffDelayPolicy backOffDelayPolicy = BackOffDelayPolicy.fixed(ofMillis(100));
     Connection serverConnection =
         connectionBuilder()
             .name(serverConnectionName)
             .isolateResources(isolateResources)
-            .listeners(recoveredListener(serverConnectionLatch))
+            .listeners(recoveredListener(serverConnectionSync))
             .recovery()
             .backOffDelayPolicy(backOffDelayPolicy)
             .connectionBuilder()
@@ -226,7 +233,7 @@ public class RpcTest {
         connectionBuilder()
             .name(clientConnectionName)
             .isolateResources(isolateResources)
-            .listeners(recoveredListener(clientConnectionLatch))
+            .listeners(recoveredListener(clientConnectionSync))
             .recovery()
             .backOffDelayPolicy(backOffDelayPolicy)
             .connectionBuilder()
@@ -254,7 +261,7 @@ public class RpcTest {
       } catch (AmqpException e) {
         // OK
       }
-      Assertions.assertThat(clientConnectionLatch).completes();
+      assertThat(clientConnectionSync).completes();
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
@@ -263,7 +270,7 @@ public class RpcTest {
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
-      Assertions.assertThat(serverConnectionLatch).completes();
+      assertThat(serverConnectionSync).completes();
       requestBody = request(UUID.randomUUID().toString());
       response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
@@ -308,7 +315,7 @@ public class RpcTest {
       int requestCount = 100;
       AtomicInteger expectedPoisonCount = new AtomicInteger();
       AtomicInteger timedOutRequestCount = new AtomicInteger();
-      CountDownLatch latch = new CountDownLatch(requestCount);
+      Sync sync = sync(requestCount);
       Random random = new Random();
       IntStream.range(0, requestCount)
           .forEach(
@@ -330,18 +337,18 @@ public class RpcTest {
                             if (ex != null) {
                               timedOutRequestCount.incrementAndGet();
                             }
-                            latch.countDown();
+                            sync.down();
                             return null;
                           });
                     });
               });
-      Assertions.assertThat(latch).completes();
+      assertThat(sync).completes();
       assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
     }
   }
 
   @Test
-  void outstandingRequestsShouldCompleteExceptionallyOnRpcClientClosing() throws Exception {
+  void outstandingRequestsShouldCompleteExceptionallyOnRpcClientClosing() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
@@ -375,7 +382,7 @@ public class RpcTest {
       AtomicInteger timedOutRequestCount = new AtomicInteger();
       AtomicInteger completedRequestCount = new AtomicInteger();
       Random random = new Random();
-      CountDownLatch allRequestSubmitted = new CountDownLatch(requestCount);
+      Sync allRequestSubmitted = sync(requestCount);
       IntStream.range(0, requestCount)
           .forEach(
               ignored -> {
@@ -401,13 +408,71 @@ public class RpcTest {
                             return null;
                           });
                     });
-                allRequestSubmitted.countDown();
+                allRequestSubmitted.down();
               });
-      Assertions.assertThat(allRequestSubmitted).completes();
+      assertThat(allRequestSubmitted).completes();
       waitAtMost(() -> completedRequestCount.get() == requestCount - expectedPoisonCount.get());
       assertThat(timedOutRequestCount).hasValue(0);
       rpcClient.close();
       assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
+    }
+  }
+
+  @Test
+  void errorDuringProcessingShouldDiscardMessageAndDeadLetterIfSet(TestInfo info)
+      throws ExecutionException, InterruptedException, TimeoutException {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String dlx = name(info);
+      String dlq = name(info);
+      Management management = serverConnection.management();
+      management.exchange(dlx).type(FANOUT).autoDelete(true).declare();
+      management.queue(dlq).exclusive(true).declare();
+      management.binding().sourceExchange(dlx).destinationQueue(dlq).bind();
+
+      String requestQueue =
+          management.queue().exclusive(true).deadLetterExchange(dlx).declare().name();
+
+      Duration requestTimeout = Duration.ofSeconds(1);
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestTimeout(requestTimeout)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      serverConnection
+          .rpcServerBuilder()
+          .requestQueue(requestQueue)
+          .handler(
+              (ctx, request) -> {
+                String body = new String(request.body(), UTF_8);
+                if (body.contains("poison")) {
+                  throw new RuntimeException("Poison message");
+                }
+                return HANDLER.handle(ctx, request);
+              })
+          .build();
+
+      String request = UUID.randomUUID().toString();
+      CompletableFuture<Message> responseFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      Message response = responseFuture.get(10, TimeUnit.SECONDS);
+      assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+
+      assertThat(management.queueInfo(dlq)).isEmpty();
+
+      request = "poison";
+      CompletableFuture<Message> poisonFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      waitAtMost(() -> management.queueInfo(dlq).messageCount() == 1);
+      assertThatThrownBy(
+              () -> poisonFuture.get(requestTimeout.multipliedBy(3).toMillis(), MILLISECONDS))
+          .isInstanceOf(ExecutionException.class)
+          .hasCauseInstanceOf(AmqpException.class);
     }
   }
 
@@ -427,11 +492,11 @@ public class RpcTest {
     return process(new String(in, UTF_8)).getBytes(UTF_8);
   }
 
-  private static Resource.StateListener recoveredListener(CountDownLatch latch) {
+  private static Resource.StateListener recoveredListener(Sync sync) {
     return context -> {
       if (context.previousState() == Resource.State.RECOVERING
           && context.currentState() == Resource.State.OPEN) {
-        latch.countDown();
+        sync.down();
       }
     };
   }

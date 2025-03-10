@@ -89,15 +89,24 @@ class AmqpRpcServer implements RpcServer {
             .queue(builder.requestQueue())
             .messageHandler(
                 (ctx, msg) -> {
-                  ctx.accept();
-                  Message reply = handler.handle(context, msg);
-                  if (reply != null && msg.replyTo() != null) {
-                    reply.to(msg.replyTo());
-                  }
-                  Object correlationId = correlationIdExtractor.apply(msg);
-                  reply = replyPostProcessor.apply(reply, correlationId);
-                  if (reply != null && reply.to() != null) {
-                    sendReply(reply);
+                  Object correlationId = null;
+                  try {
+                    Message reply = handler.handle(context, msg);
+                    if (reply != null && msg.replyTo() != null) {
+                      reply.to(msg.replyTo());
+                    }
+                    correlationId = correlationIdExtractor.apply(msg);
+                    reply = replyPostProcessor.apply(reply, correlationId);
+                    if (reply != null && reply.to() != null) {
+                      sendReply(reply);
+                    }
+                    ctx.accept();
+                  } catch (Exception e) {
+                    LOGGER.info(
+                        "Error while processing RPC request (correlation ID {}): {}",
+                        correlationId,
+                        e.getMessage());
+                    ctx.discard();
                   }
                 })
             .build();
