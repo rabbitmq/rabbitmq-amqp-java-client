@@ -51,9 +51,11 @@ class AmqpRpcServer implements RpcServer {
   private final Function<Message, Object> correlationIdExtractor;
   private final BiFunction<Message, Object, Message> replyPostProcessor;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final Duration closeTimeout;
 
   AmqpRpcServer(RpcSupport.AmqpRpcServerBuilder builder) {
     this.connection = builder.connection();
+    this.closeTimeout = builder.closeTimeout();
     Handler handler = builder.handler();
 
     this.publisher = this.connection.publisherBuilder().build();
@@ -117,6 +119,15 @@ class AmqpRpcServer implements RpcServer {
     if (this.closed.compareAndSet(false, true)) {
       this.connection.removeRpcServer(this);
       try {
+        this.maybeWaitForUnsettledMessages();
+      } catch (Exception e) {
+        LOGGER.warn("Error while waiting for unsettled messages in RPC server: {}", e.getMessage());
+      }
+      try {
+        long unsettledMessageCount = this.consumer.unsettledMessageCount();
+        if (unsettledMessageCount > 0) {
+          LOGGER.info("Closing RPC server with {} unsettled message(s)", unsettledMessageCount);
+        }
         this.consumer.close();
       } catch (Exception e) {
         LOGGER.warn("Error while closing RPC server consumer: {}", e.getMessage());
@@ -141,6 +152,22 @@ class AmqpRpcServer implements RpcServer {
           "RPC Server Response");
     } catch (Exception e) {
       LOGGER.info("Error while processing RPC request: {}", e.getMessage());
+    }
+  }
+
+  private void maybeWaitForUnsettledMessages() {
+    if (this.closeTimeout.toNanos() > 0) {
+      Duration waited = Duration.ZERO;
+      Duration waitStep = Duration.ofMillis(10);
+      while (this.consumer.unsettledMessageCount() > 0 && waited.compareTo(this.closeTimeout) < 0) {
+        try {
+          Thread.sleep(100);
+          waited = waited.plus(waitStep);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
     }
   }
 }

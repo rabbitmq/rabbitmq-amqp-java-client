@@ -476,6 +476,98 @@ public class RpcTest {
     }
   }
 
+  @Test
+  void rpcServerShouldWaitForAllOutstandingMessagesToBeProcessedBeforeClosingInternalConsumer()
+      throws ExecutionException, InterruptedException, TimeoutException {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      Sync receivedSync = sync();
+      RpcServer rpcServer =
+          serverConnection
+              .rpcServerBuilder()
+              .requestQueue(requestQueue)
+              .handler(
+                  (ctx, request) -> {
+                    receivedSync.down();
+                    try {
+                      Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                      throw new RuntimeException(e);
+                    }
+                    return HANDLER.handle(ctx, request);
+                  })
+              .build();
+
+      String request = UUID.randomUUID().toString();
+      CompletableFuture<Message> responseFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      assertThat(receivedSync).completes();
+      rpcServer.close();
+      Message response = responseFuture.get(10, TimeUnit.SECONDS);
+      assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+    }
+  }
+
+  @Test
+  void outstandingRequestShouldTimeOutWhenRpcServerDoesNotCloseConsumerGracefully()
+      throws ExecutionException, InterruptedException, TimeoutException {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      Duration requestTimeout = Duration.ofSeconds(1);
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestTimeout(requestTimeout)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      Sync receivedSync = sync();
+      RpcServer rpcServer =
+          serverConnection
+              .rpcServerBuilder()
+              .closeTimeout(Duration.ZERO) // close the consumer immediately
+              .requestQueue(requestQueue)
+              .handler(
+                  (ctx, request) -> {
+                    receivedSync.down();
+                    try {
+                      Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                      throw new RuntimeException(e);
+                    }
+                    return HANDLER.handle(ctx, request);
+                  })
+              .build();
+
+      String request = UUID.randomUUID().toString();
+      CompletableFuture<Message> responseFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      assertThat(receivedSync).completes();
+      rpcServer.close();
+      assertThatThrownBy(
+              () -> responseFuture.get(requestTimeout.multipliedBy(3).toMillis(), MILLISECONDS))
+          .isInstanceOf(ExecutionException.class)
+          .hasCauseInstanceOf(AmqpException.class);
+      waitAtMost(() -> serverConnection.management().queueInfo(requestQueue).messageCount() == 1);
+    }
+  }
+
   private static AmqpConnectionBuilder connectionBuilder() {
     return (AmqpConnectionBuilder) environment.connectionBuilder();
   }

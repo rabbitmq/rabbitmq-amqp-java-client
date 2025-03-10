@@ -149,6 +149,7 @@ abstract class RpcSupport {
     private RpcServer.Handler handler;
     private Function<Message, Object> correlationIdExtractor;
     private BiFunction<Message, Object, Message> replyPostProcessor;
+    private Duration closeTimeout = Duration.ofSeconds(60);
 
     AmqpRpcServerBuilder(AmqpConnection connection) {
       this.connection = connection;
@@ -181,6 +182,12 @@ abstract class RpcSupport {
     }
 
     @Override
+    public RpcServerBuilder closeTimeout(Duration closeTimeout) {
+      this.closeTimeout = closeTimeout;
+      return this;
+    }
+
+    @Override
     public RpcServer build() {
       return this.connection.createRpcServer(this);
     }
@@ -203,6 +210,10 @@ abstract class RpcSupport {
 
     BiFunction<Message, Object, Message> replyPostProcessor() {
       return this.replyPostProcessor;
+    }
+
+    Duration closeTimeout() {
+      return this.closeTimeout;
     }
   }
 }

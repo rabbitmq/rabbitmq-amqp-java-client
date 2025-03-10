@@ -17,6 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -61,6 +62,18 @@ public interface RpcServerBuilder {
    * @return this builder instance
    */
   RpcServerBuilder replyPostProcessor(BiFunction<Message, Object, Message> replyPostProcessor);
+
+  /**
+   * The time the server waits for all outstanding requests to be processed before closing.
+   *
+   * <p>Default is 60 seconds.
+   *
+   * <p>Set the duration to {@link Duration#ZERO} to close immediately.
+   *
+   * @param closeTimeout close timeout
+   * @return this builder instance
+   */
+  RpcServerBuilder closeTimeout(Duration closeTimeout);
 
   /**
    * Create the configured instance.
