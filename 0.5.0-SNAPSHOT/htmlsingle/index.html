@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.5.0-SNAPSHOT</span>
-<br><span id="revremark">(d72a2f0)</span>
+<br><span id="revremark">(56f29b9)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -1344,6 +1344,22 @@ It can be an exchange or a queue, like in the example above.</p>
 It is then possible to wait for the reply asynchronously or synchronously.</p>
 </div>
 <div class="paragraph">
+<p>The RPC server has the following behavior:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>when receiving a message request, it calls the processing logic (handler), extracts the correlation ID, calls a reply post-processor if defined, and sends the reply message.</p>
+</li>
+<li>
+<p>if all these operations succeed, the server accepts the request message (settles it with the <code>ACCEPTED</code> outcome).</p>
+</li>
+<li>
+<p>if any of these operations throws an exception, the server discards the request message (the message is removed from the request queue and is <a href="https://www.rabbitmq.com/client-libraries/amqp-client-libraries#message-processing-result-outcome">dead-lettered</a> if configured).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
 <p>The RPC server uses the following defaults:</p>
 </div>
 <div class="ulist">
@@ -1823,7 +1839,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.5.0-SNAPSHOT<br>
-Last updated 2025-03-05 16:54:52 UTC
+Last updated 2025-03-10 14:16:35 UTC
 </div>
 </div>
 </body>
