@@ -656,7 +656,6 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       publisher.publish(publisher.message(), ctx -> {});
       assertThat(consumeSync).completes();
-      System.out.println("done");
       management.queueInfo(queueInfo.name());
     }
   }
