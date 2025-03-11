@@ -27,6 +27,7 @@ import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.AmqpException.AmqpSecurityException;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAuthMechanismSslNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfTlsNotEnabled;
+import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfWebSocket;
 import java.security.cert.X509Certificate;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -214,12 +215,13 @@ public class TlsTest {
   }
 
   @Test
+  @DisabledIfWebSocket
   void connectToLoopbackInterfaceShouldWorkIfNoHostnameVerification() throws Exception {
     SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
     try (Connection ignored =
         environment
             .connectionBuilder()
-            .host("127.0.01")
+            .host("127.0.0.1")
             .tls()
             .sslContext(sslContext)
             .hostnameVerification(false)

@@ -359,6 +359,18 @@ public abstract class TestUtils {
     }
   }
 
+  static class DisabledIfWebSocketCondition implements ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      if (useWebSocket()) {
+        return ConditionEvaluationResult.disabled("Testing against WebSocket");
+      } else {
+        return ConditionEvaluationResult.enabled("Not testing against WebSocket");
+      }
+    }
+  }
+
   static class DisabledIfAddressV1PermittedCondition implements ExecutionCondition {
 
     private static final String KEY = "addressV1Permitted";
@@ -499,6 +511,12 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledIfTlsNotEnabledCondition.class)
   public @interface DisabledIfTlsNotEnabled {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(DisabledIfWebSocketCondition.class)
+  public @interface DisabledIfWebSocket {}
 
   @Target({ElementType.TYPE, ElementType.METHOD})
   @Retention(RetentionPolicy.RUNTIME)
