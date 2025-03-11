@@ -43,6 +43,7 @@ class AmqpEnvironment implements Environment {
   private final boolean internalPublisherExecutor;
   private final ExecutorService executorService;
   private final ScheduledExecutorService scheduledExecutorService;
+  private final ExecutorService dispatchingExecutorService;
   private final ExecutorService publisherExecutorService;
   private final ConnectionManager connectionManager = new ConnectionManager(this);
   private final long id;
@@ -60,6 +61,7 @@ class AmqpEnvironment implements Environment {
   AmqpEnvironment(
       ExecutorService executorService,
       ScheduledExecutorService scheduledExecutorService,
+      ExecutorService dispatchingExecutorService,
       ExecutorService publisherExecutorService,
       DefaultConnectionSettings<?> connectionSettings,
       MetricsCollector metricsCollector,
@@ -86,6 +88,7 @@ class AmqpEnvironment implements Environment {
       this.scheduledExecutorService = scheduledExecutorService;
       this.internalScheduledExecutor = false;
     }
+    this.dispatchingExecutorService = dispatchingExecutorService;
     if (publisherExecutorService == null) {
       this.publisherExecutorService = Utils.executorService(threadPrefix);
       this.internalPublisherExecutor = true;
@@ -161,6 +164,10 @@ class AmqpEnvironment implements Environment {
 
   ExecutorService executorService() {
     return this.executorService;
+  }
+
+  ExecutorService dispatchingExecutorService() {
+    return this.dispatchingExecutorService;
   }
 
   ExecutorService publisherExecutorService() {

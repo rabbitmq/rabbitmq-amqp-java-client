@@ -75,9 +75,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
   private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
-  private final ExecutorService dispatchingExecutorService;
   private final java.util.function.Consumer<Delivery> nativeHandler;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
+  private final ConsumerWorkService consumerWorkService;
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private volatile Scheduler protonExecutor;
@@ -104,19 +104,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ofNullable(builder.subscriptionListener()).orElse(NO_OP_SUBSCRIPTION_LISTENER);
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
-
-    this.dispatchingExecutorService =
-        builder.dispatchingExecutorService() == null
-            ? connection.dispatchingExecutorService()
-            : builder.dispatchingExecutorService();
     this.nativeHandler = createNativeHandler(messageHandler);
     this.nativeCloseHandler =
-        e ->
-            this.dispatchingExecutorService.submit(
-                () -> {
-                  // get result to make spotbugs happy
-                  boolean ignored = maybeCloseConsumerOnException(this, e);
-                });
+        e -> {
+          this.connection
+              .consumerWorkService()
+              .dispatch(
+                  () -> {
+                    // get result to make spotbugs happy
+                    boolean ignored = maybeCloseConsumerOnException(this, e);
+                  });
+        };
+    this.consumerWorkService = connection.consumerWorkService();
+    this.consumerWorkService.register(this);
     this.nativeReceiver =
         this.createNativeReceiver(
             this.sessionHandler.session(),
@@ -236,33 +236,36 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private java.util.function.Consumer<Delivery> createNativeHandler(MessageHandler handler) {
     return delivery -> {
-      this.unsettledMessageCount.incrementAndGet();
-      this.metricsCollector.consume();
-      this.dispatchingExecutorService.submit(
-          () -> {
-            AmqpMessage message;
-            try {
-              message = new AmqpMessage(delivery.message());
-            } catch (ClientException e) {
-              LOGGER.warn("Error while decoding message: {}", e.getMessage());
+      if (this.state() == OPEN) {
+        this.unsettledMessageCount.incrementAndGet();
+        this.metricsCollector.consume();
+        this.consumerWorkService.dispatch(
+            this,
+            () -> {
+              AmqpMessage message;
               try {
-                delivery.disposition(DeliveryState.rejected("", ""), true);
-              } catch (ClientException ex) {
-                LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
+                message = new AmqpMessage(delivery.message());
+              } catch (ClientException e) {
+                LOGGER.warn("Error while decoding message: {}", e.getMessage());
+                try {
+                  delivery.disposition(DeliveryState.rejected("", ""), true);
+                } catch (ClientException ex) {
+                  LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
+                }
+                return;
               }
-              return;
-            }
-            Consumer.Context context =
-                new DeliveryContext(
-                    delivery,
-                    this.protonExecutor,
-                    this.protonReceiver,
-                    this.metricsCollector,
-                    this.unsettledMessageCount,
-                    this.replenishCreditOperation,
-                    this);
-            handler.handle(context, message);
-          });
+              Consumer.Context context =
+                  new DeliveryContext(
+                      delivery,
+                      this.protonExecutor,
+                      this.protonReceiver,
+                      this.metricsCollector,
+                      this.unsettledMessageCount,
+                      this.replenishCreditOperation,
+                      this);
+              handler.handle(context, message);
+            });
+      }
     };
   }
 
@@ -299,6 +302,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
+      if (this.consumerWorkService != null) {
+        this.consumerWorkService.unregister(this);
+      }
       this.connection.removeConsumer(this);
       try {
         if (this.nativeReceiver != null) {

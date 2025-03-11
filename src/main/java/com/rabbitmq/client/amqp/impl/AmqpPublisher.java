@@ -55,7 +55,6 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final Duration publishTimeout;
   private final SessionHandler sessionHandler;
   private volatile ObservationCollector.ConnectionInfo connectionInfo;
-  private final ExecutorService dispatchingExecutorService;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
@@ -67,14 +66,16 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.connection = builder.connection();
     this.publishTimeout = builder.publishTimeout();
     this.sessionHandler = this.connection.createSessionHandler();
-    this.dispatchingExecutorService = connection.dispatchingExecutorService();
     this.nativeCloseHandler =
-        e ->
-            this.dispatchingExecutorService.submit(
-                () -> {
-                  // get result to make spotbugs happy
-                  boolean ignored = maybeCloseConsumerOnException(this, e);
-                });
+        e -> {
+          this.connection
+              .consumerWorkService()
+              .dispatch(
+                  () -> {
+                    // get result to make spotbugs happy
+                    boolean ignored = maybeCloseConsumerOnException(this, e);
+                  });
+        };
     this.sender =
         this.createSender(
             sessionHandler.session(), this.address, this.publishTimeout, this.nativeCloseHandler);

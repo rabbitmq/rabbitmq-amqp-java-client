@@ -59,6 +59,7 @@ public class AmqpConnectionRecoveryTest {
             null,
             null,
             null,
+            null,
             connectionSettings,
             NoOpMetricsCollector.INSTANCE,
             Utils.NO_OP_OBSERVATION_COLLECTOR);

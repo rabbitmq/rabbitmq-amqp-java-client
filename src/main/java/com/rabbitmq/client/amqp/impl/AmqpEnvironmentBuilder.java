@@ -17,10 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.ConnectionSettings;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.EnvironmentBuilder;
-import com.rabbitmq.client.amqp.ObservationCollector;
+import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -34,6 +31,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
   private ScheduledExecutorService scheduledExecutorService;
+  private ExecutorService dispatchingExecutorService;
   private ExecutorService publisherExecutorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
   private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
@@ -50,6 +48,11 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
    */
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
+    return this;
+  }
+
+  public AmqpEnvironmentBuilder dispatchingExecutorService(ExecutorService executorService) {
+    this.dispatchingExecutorService = executorService;
     return this;
   }
 
@@ -145,6 +148,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return new AmqpEnvironment(
         executorService,
         scheduledExecutorService,
+        dispatchingExecutorService,
         publisherExecutorService,
         connectionSettings,
         metricsCollector,

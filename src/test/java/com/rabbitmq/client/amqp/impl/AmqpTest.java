@@ -24,9 +24,11 @@ import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_0_3;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
+import static com.rabbitmq.client.amqp.impl.Utils.threadFactory;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.of;
 import static org.assertj.core.api.Assertions.*;
@@ -38,8 +40,10 @@ import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
@@ -52,6 +56,28 @@ public class AmqpTest {
 
   Connection connection;
   String name;
+
+  private static String uuid() {
+    return UUID.randomUUID().toString();
+  }
+
+  private static Resource.StateListener closedListener(
+      Sync sync, Consumer<Resource.Context> callback) {
+    return context -> {
+      if (context.currentState() == Resource.State.CLOSED) {
+        callback.accept(context);
+        sync.down();
+      }
+    };
+  }
+
+  private static Publisher.Callback acceptedCallback(Sync sync) {
+    return ctx -> {
+      if (ctx.status() == Publisher.Status.ACCEPTED) {
+        sync.down();
+      }
+    };
+  }
 
   @BeforeEach
   void init(TestInfo info) {
@@ -769,25 +795,44 @@ public class AmqpTest {
     assertThat(message.get()).hasProperty("key1", -1L);
   }
 
-  private static String uuid() {
-    return UUID.randomUUID().toString();
-  }
+  @Test
+  void messagesAreDispatchedToEnvironmentConnectionExecutorService() {
+    String envPrefix = "env-";
+    String connPrefix = "conn-";
+    ExecutorService envExecutor = newSingleThreadExecutor(threadFactory(envPrefix));
+    ExecutorService connExecutor = newSingleThreadExecutor(threadFactory(connPrefix));
+    Environment env =
+        TestUtils.environmentBuilder().dispatchingExecutorService(envExecutor).build();
+    try {
+      BiConsumer<Connection, String> operation =
+          (c, prefix) -> {
+            String q = c.management().queue().exclusive(true).declare().name();
+            Publisher p = c.publisherBuilder().queue(q).build();
+            p.publish(p.message(), ctx -> {});
+            Sync sync = sync();
+            AtomicReference<String> threadName = new AtomicReference<>();
+            c.consumerBuilder()
+                .queue(q)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      threadName.set(Thread.currentThread().getName());
+                      sync.down();
+                    })
+                .build();
+            assertThat(sync).completes();
+            org.assertj.core.api.Assertions.assertThat(threadName.get()).startsWith(prefix);
+          };
 
-  private static Resource.StateListener closedListener(
-      Sync sync, Consumer<Resource.Context> callback) {
-    return context -> {
-      if (context.currentState() == Resource.State.CLOSED) {
-        callback.accept(context);
-        sync.down();
-      }
-    };
-  }
+      Connection c1 = env.connectionBuilder().build();
+      Connection c2 = env.connectionBuilder().dispatchingExecutorService(connExecutor).build();
 
-  private static Publisher.Callback acceptedCallback(Sync sync) {
-    return ctx -> {
-      if (ctx.status() == Publisher.Status.ACCEPTED) {
-        sync.down();
-      }
-    };
+      operation.accept(c1, envPrefix);
+      operation.accept(c2, connPrefix);
+    } finally {
+      env.close();
+      envExecutor.shutdown();
+      connExecutor.shutdown();
+    }
   }
 }

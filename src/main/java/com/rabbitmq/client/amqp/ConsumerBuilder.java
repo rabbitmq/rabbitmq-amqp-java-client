@@ -20,7 +20,6 @@ package com.rabbitmq.client.amqp;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import org.apache.qpid.protonj2.types.*;
 
 /** API to configure and create a {@link Consumer}. */
@@ -68,19 +67,6 @@ public interface ConsumerBuilder {
    * @return this builder instance
    */
   ConsumerBuilder listeners(Resource.StateListener... listeners);
-
-  /**
-   * Set the executor service to use for incoming message delivery for this consumer.
-   *
-   * <p>The consumer uses the connection's executor service by default.
-   *
-   * <p>It is the developer's responsibility to shut down the executor when it is no longer needed.
-   *
-   * @param executorService executor service for incoming message delivery
-   * @return this builder instance
-   * @see ConnectionBuilder#dispatchingExecutorService(ExecutorService)
-   */
-  ConsumerBuilder dispatchingExecutorService(ExecutorService executorService);
 
   /**
    * Options for a consumer consuming from a stream.

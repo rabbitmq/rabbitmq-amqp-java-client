@@ -52,6 +52,8 @@ import org.slf4j.LoggerFactory;
 
 final class AmqpConnection extends ResourceBase implements Connection {
 
+  private static final int DEFAULT_NUM_THREADS = Math.max(1, Utils.AVAILABLE_PROCESSORS);
+
   /** Connection-related issues */
   private static final Predicate<Exception> CONNECTION_EXCEPTION_PREDICATE =
       e -> e instanceof AmqpException.AmqpConnectionException;
@@ -96,6 +98,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final String name;
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
+  private volatile ConsumerWorkService consumerWorkService;
   private volatile ExecutorService dispatchingExecutorService;
   private final boolean privateDispatchingExecutorService;
   private final CredentialsManager.Registration credentialsRegistration;
@@ -117,11 +120,16 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
     this.topologyListener = createTopologyListener(builder);
 
-    if (builder.dispatchingExecutorService() == null) {
+    ExecutorService des =
+        builder.dispatchingExecutorService() == null
+            ? environment.dispatchingExecutorService()
+            : builder.dispatchingExecutorService();
+
+    if (des == null) {
       this.privateDispatchingExecutorService = true;
     } else {
       this.privateDispatchingExecutorService = false;
-      this.dispatchingExecutorService = builder.dispatchingExecutorService();
+      this.dispatchingExecutorService = des;
     }
 
     if (recoveryConfiguration.activated()) {
@@ -688,22 +696,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.scheduledExecutorService();
   }
 
-  ExecutorService dispatchingExecutorService() {
+  ConsumerWorkService consumerWorkService() {
     checkOpen();
 
-    ExecutorService result = this.dispatchingExecutorService;
+    ConsumerWorkService result = this.consumerWorkService;
     if (result != null) {
       return result;
     }
 
     this.instanceLock.lock();
     try {
-      if (this.dispatchingExecutorService == null) {
-        this.dispatchingExecutorService =
-            Executors.newSingleThreadExecutor(
-                Utils.threadFactory("dispatching-" + this.name() + "-"));
+      if (this.consumerWorkService == null) {
+        if (this.privateDispatchingExecutorService) {
+          this.dispatchingExecutorService =
+              Executors.newFixedThreadPool(
+                  DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
+        }
+        this.consumerWorkService =
+            new WorkPoolConsumerWorkService(this.dispatchingExecutorService, Duration.ZERO);
       }
-      return this.dispatchingExecutorService;
+      return this.consumerWorkService;
     } finally {
       this.instanceLock.unlock();
     }
@@ -859,6 +871,16 @@ final class AmqpConnection extends ResourceBase implements Connection {
         }
       } catch (InterruptedException e) {
         LOGGER.info("Interrupted while waiting for connection lock");
+      }
+      if (this.consumerWorkService != null) {
+        try {
+          this.consumerWorkService.close();
+        } catch (Exception e) {
+          LOGGER.info(
+              "Error while closing consumer work service for connection '{}': {}",
+              this.name(),
+              e.getMessage());
+        }
       }
       try {
         if (this.privateDispatchingExecutorService) {

@@ -25,7 +25,6 @@ import com.rabbitmq.client.amqp.Resource;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
 import org.apache.qpid.protonj2.types.*;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
@@ -37,7 +36,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 100;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
-  private ExecutorService dispatchingExecutorService;
   private final Map<String, DescribedType> filters = new LinkedHashMap<>();
   private final Map<String, Object> properties = new LinkedHashMap<>();
   private final StreamOptions streamOptions = new DefaultStreamOptions(this, this.filters);
@@ -82,12 +80,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   }
 
   @Override
-  public ConsumerBuilder dispatchingExecutorService(ExecutorService executorService) {
-    this.dispatchingExecutorService = executorService;
-    return this;
-  }
-
-  @Override
   public StreamOptions stream() {
     return this.streamOptions;
   }
@@ -124,10 +116,6 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   List<Resource.StateListener> listeners() {
     return listeners;
-  }
-
-  ExecutorService dispatchingExecutorService() {
-    return this.dispatchingExecutorService;
   }
 
   Map<String, DescribedType> filters() {
