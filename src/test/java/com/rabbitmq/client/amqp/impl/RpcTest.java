@@ -23,15 +23,16 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -520,8 +521,7 @@ public class RpcTest {
   }
 
   @Test
-  void outstandingRequestShouldTimeOutWhenRpcServerDoesNotCloseConsumerGracefully()
-      throws ExecutionException, InterruptedException, TimeoutException {
+  void outstandingRequestShouldTimeOutWhenRpcServerDoesNotCloseConsumerGracefully() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
@@ -568,6 +568,67 @@ public class RpcTest {
     }
   }
 
+  @Test
+  void pauseUnpauseServer() throws ExecutionException, InterruptedException, TimeoutException {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      Duration requestTimeout = Duration.ofSeconds(1);
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestTimeout(requestTimeout)
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      RpcServer rpcServer =
+          serverConnection
+              .rpcServerBuilder()
+              .closeTimeout(Duration.ZERO) // close the consumer immediately
+              .requestQueue(requestQueue)
+              .handler(HANDLER)
+              .build();
+
+      Set<String> expectedReplies = new HashSet<>();
+      List<CompletableFuture<Message>> futures = new ArrayList<>();
+
+      Runnable sendRequest =
+          () -> {
+            String request = UUID.randomUUID().toString();
+            expectedReplies.add(process(request));
+            CompletableFuture<Message> responseFuture =
+                rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+            futures.add(responseFuture);
+          };
+
+      sendRequest.run();
+      Message response = futures.get(0).get(10, SECONDS);
+      assertThat(response.body()).asString(UTF_8).isEqualTo(expectedReplies.iterator().next());
+
+      expectedReplies.clear();
+      futures.clear();
+
+      rpcServer.pause();
+      int requestCount = 10;
+      IntStream.range(0, requestCount).forEach(ignored -> sendRequest.run());
+      waitAtMost(
+          () ->
+              serverConnection.management().queueInfo(requestQueue).messageCount() == requestCount);
+
+      futures.forEach(f -> assertThat(f).isNotCompleted());
+
+      rpcServer.unpause();
+
+      futures.forEach(f -> assertThat(getAndExtract(f)).isIn(expectedReplies));
+
+      assertThat(futures).hasSameSizeAs(expectedReplies).hasSize(requestCount);
+    }
+  }
+
   private static AmqpConnectionBuilder connectionBuilder() {
     return (AmqpConnectionBuilder) environment.connectionBuilder();
   }
@@ -591,5 +652,13 @@ public class RpcTest {
         sync.down();
       }
     };
+  }
+
+  private String getAndExtract(Future<Message> f) {
+    try {
+      return new String(f.get().body(), StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

@@ -63,6 +63,16 @@ public interface RpcServer extends AutoCloseable {
     Message message(byte[] body);
   }
 
+  /**
+   * Pause the server to stop receiving messages.
+   *
+   * <p>Outstanding requests will still be processed.
+   */
+  void pause();
+
+  /** Request to receive messages again. */
+  void unpause();
+
   /** Close the RPC server and its resources. */
   @Override
   void close();

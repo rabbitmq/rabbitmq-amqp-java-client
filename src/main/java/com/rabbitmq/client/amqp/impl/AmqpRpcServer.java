@@ -115,6 +115,18 @@ class AmqpRpcServer implements RpcServer {
   }
 
   @Override
+  public void pause() {
+    checkOpen();
+    this.consumer.pause();
+  }
+
+  @Override
+  public void unpause() {
+    checkOpen();
+    this.consumer.unpause();
+  }
+
+  @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
       this.connection.removeRpcServer(this);
@@ -168,6 +180,12 @@ class AmqpRpcServer implements RpcServer {
           break;
         }
       }
+    }
+  }
+
+  private void checkOpen() {
+    if (this.closed.get()) {
+      throw new AmqpException.AmqpResourceClosedException("RPC server is closed");
     }
   }
 }
