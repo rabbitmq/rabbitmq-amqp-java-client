@@ -40,16 +40,17 @@ public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder>
   /**
    * Set the executor service to use for incoming message delivery.
    *
-   * <p>The executor service is shared between the connection consumers, unless a consumer sets its
-   * own executor service with {@link ConsumerBuilder#dispatchingExecutorService(ExecutorService)}.
+   * <p>The executor service is shared between the connection consumers.
    *
-   * <p>By default, a new single-threaded executor is created.
+   * <p>By default, an executor service with {@link Runtime#availableProcessors()} thread(s) is
+   * created for the connection.
    *
    * <p>It is the developer's responsibility to shut down the executor when it is no longer needed.
    *
    * @param executorService executor service for incoming message delivery
    * @return this builder instance
-   * @see ConsumerBuilder#dispatchingExecutorService(ExecutorService)
+   * @see
+   *     com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder#dispatchingExecutorService(ExecutorService)
    */
   ConnectionBuilder dispatchingExecutorService(ExecutorService executorService);
 

@@ -51,6 +51,19 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return this;
   }
 
+  /**
+   * Set the shared executor service to use for incoming message delivery in this environment
+   * instance connections.
+   *
+   * <p>There is no shared executor service by default, each connection uses its own, see {@link
+   * ConnectionBuilder#dispatchingExecutorService(ExecutorService)}.
+   *
+   * <p>It is the developer's responsibility to shut down the executor when it is no longer needed.
+   *
+   * @param executorService the executor service for incoming message delivery
+   * @return this builder instance
+   * @see ConnectionBuilder#dispatchingExecutorService(ExecutorService)
+   */
   public AmqpEnvironmentBuilder dispatchingExecutorService(ExecutorService executorService) {
     this.dispatchingExecutorService = executorService;
     return this;
