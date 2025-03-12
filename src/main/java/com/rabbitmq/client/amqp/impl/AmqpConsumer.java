@@ -314,9 +314,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       } catch (Exception e) {
         LOGGER.warn("Error while closing receiver", e);
       }
-
       this.state(CLOSED, cause);
-      this.metricsCollector.closeConsumer();
+      MetricsCollector mc = this.metricsCollector;
+      if (mc != null) {
+        mc.closeConsumer();
+      }
     }
   }
 

@@ -22,7 +22,7 @@ import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 class AmqpConnectionBuilder implements ConnectionBuilder {
 
@@ -32,7 +32,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   private final DefaultConnectionSettings<AmqpConnectionBuilder> connectionSettings =
       new AmqpConnectionBuilderConnectionSettings(this);
   private final List<Resource.StateListener> listeners = new ArrayList<>();
-  private ExecutorService dispatchingExecutorService;
+  private Executor dispatchingExecutor;
   private String name;
   private TopologyListener topologyListener;
   private boolean isolateResources = false;
@@ -123,8 +123,8 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
-  public ConnectionBuilder dispatchingExecutorService(ExecutorService executorService) {
-    this.dispatchingExecutorService = executorService;
+  public ConnectionBuilder dispatchingExecutor(Executor executor) {
+    this.dispatchingExecutor = executor;
     return this;
   }
 
@@ -143,8 +143,8 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     return isolateResources;
   }
 
-  ExecutorService dispatchingExecutorService() {
-    return this.dispatchingExecutorService;
+  Executor dispatchingExecutor() {
+    return this.dispatchingExecutor;
   }
 
   @Override
@@ -159,7 +159,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     copy.name(this.name);
     copy.topologyListener(this.topologyListener);
     copy.isolateResources(this.isolateResources);
-    copy.dispatchingExecutorService(this.dispatchingExecutorService);
+    copy.dispatchingExecutor(this.dispatchingExecutor);
   }
 
   AmqpConnectionBuilder name(String name) {

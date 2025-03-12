@@ -801,8 +801,7 @@ public class AmqpTest {
     String connPrefix = "conn-";
     ExecutorService envExecutor = newSingleThreadExecutor(threadFactory(envPrefix));
     ExecutorService connExecutor = newSingleThreadExecutor(threadFactory(connPrefix));
-    Environment env =
-        TestUtils.environmentBuilder().dispatchingExecutorService(envExecutor).build();
+    Environment env = TestUtils.environmentBuilder().dispatchingExecutor(envExecutor).build();
     try {
       BiConsumer<Connection, String> operation =
           (c, prefix) -> {
@@ -825,7 +824,7 @@ public class AmqpTest {
           };
 
       Connection c1 = env.connectionBuilder().build();
-      Connection c2 = env.connectionBuilder().dispatchingExecutorService(connExecutor).build();
+      Connection c2 = env.connectionBuilder().dispatchingExecutor(connExecutor).build();
 
       operation.accept(c1, envPrefix);
       operation.accept(c2, connPrefix);

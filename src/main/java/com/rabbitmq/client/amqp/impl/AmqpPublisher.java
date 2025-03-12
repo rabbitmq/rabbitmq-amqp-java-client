@@ -216,7 +216,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
           this.sessionHandler,
           e -> LOGGER.info("Error while closing publisher session handler", e));
       this.state(State.CLOSED, cause);
-      this.metricsCollector.closePublisher();
+      MetricsCollector mc = this.metricsCollector;
+      if (mc != null) {
+        mc.closePublisher();
+      }
     }
   }
 

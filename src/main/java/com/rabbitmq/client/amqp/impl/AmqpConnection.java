@@ -99,8 +99,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
   private volatile ConsumerWorkService consumerWorkService;
-  private volatile ExecutorService dispatchingExecutorService;
-  private final boolean privateDispatchingExecutorService;
+  private volatile Executor dispatchingExecutor;
+  private final boolean privateDispatchingExecutor;
   private final CredentialsManager.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -120,16 +120,16 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
     this.topologyListener = createTopologyListener(builder);
 
-    ExecutorService des =
-        builder.dispatchingExecutorService() == null
+    Executor de =
+        builder.dispatchingExecutor() == null
             ? environment.dispatchingExecutorService()
-            : builder.dispatchingExecutorService();
+            : builder.dispatchingExecutor();
 
-    if (des == null) {
-      this.privateDispatchingExecutorService = true;
+    if (de == null) {
+      this.privateDispatchingExecutor = true;
     } else {
-      this.privateDispatchingExecutorService = false;
-      this.dispatchingExecutorService = des;
+      this.privateDispatchingExecutor = false;
+      this.dispatchingExecutor = de;
     }
 
     if (recoveryConfiguration.activated()) {
@@ -707,13 +707,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.instanceLock.lock();
     try {
       if (this.consumerWorkService == null) {
-        if (this.privateDispatchingExecutorService) {
-          this.dispatchingExecutorService =
+        if (this.privateDispatchingExecutor) {
+          this.dispatchingExecutor =
               Executors.newFixedThreadPool(
                   DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
         }
         this.consumerWorkService =
-            new WorkPoolConsumerWorkService(this.dispatchingExecutorService, Duration.ZERO);
+            new WorkPoolConsumerWorkService(this.dispatchingExecutor, Duration.ZERO);
       }
       return this.consumerWorkService;
     } finally {
@@ -883,11 +883,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
         }
       }
       try {
-        if (this.privateDispatchingExecutorService) {
-          ExecutorService es = this.dispatchingExecutorService;
+        if (this.privateDispatchingExecutor) {
+          Executor es = this.dispatchingExecutor;
           if (es != null) {
             try {
-              es.shutdownNow();
+              ((ExecutorService) es).shutdownNow();
             } catch (Exception e) {
               LOGGER.info(
                   "Error while shutting down dispatching executor service for connection '{}': {}",

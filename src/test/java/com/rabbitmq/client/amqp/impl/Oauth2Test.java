@@ -230,6 +230,7 @@ public class Oauth2Test {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void tokenOnHttpsShouldBeRefreshed(TestInfo info) throws Exception {
     KeyStore keyStore = generateKeyPair();
 

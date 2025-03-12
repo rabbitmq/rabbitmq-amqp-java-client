@@ -82,7 +82,7 @@ public class RecoveryClusterTest {
         Executors.newSingleThreadExecutor(Utils.threadFactory("env-dispatching-executor-service-"));
     environment =
         new AmqpEnvironmentBuilder()
-            .dispatchingExecutorService(dispatchingExecutorService)
+            .dispatchingExecutor(dispatchingExecutorService)
             .connectionSettings()
             .uris(URIS)
             .environmentBuilder()
