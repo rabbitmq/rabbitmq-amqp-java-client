@@ -85,8 +85,47 @@ public class Oauth2Test {
   }
 
   @Test
-  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void connectionShouldBeClosedWhenTokenExpires(TestInfo info) {
+    String q = name(info);
+    long expiry = currentTimeMillis() + ofSeconds(2).toMillis();
+    String token = token(expiry);
+    Sync connectionClosedSync = sync();
+    Connection c =
+        environment
+            .connectionBuilder()
+            .username("")
+            .password(token)
+            .listeners(closedOnSecurityExceptionListener(connectionClosedSync))
+            .build();
+    c.management().queue(q).exclusive(true).declare();
+    Sync publisherClosedSync = sync();
+    Publisher p =
+        c.publisherBuilder()
+            .queue(q)
+            .listeners(closedOnSecurityExceptionListener(publisherClosedSync))
+            .build();
+    Sync consumeSync = sync();
+    Sync consumerClosedSync = sync();
+    c.consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
+        .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
+        .build();
+    p.publish(p.message(), ctx -> {});
+    assertThat(consumeSync).completes();
+    waitAtMost(() -> currentTimeMillis() > expiry + ofMillis(500).toMillis());
+    assertThat(connectionClosedSync).completes();
+    assertThat(publisherClosedSync).completes();
+    assertThat(consumerClosedSync).completes();
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void connectionShouldBeClosedWhenRefreshedTokenExpires(TestInfo info) {
     String q = name(info);
     long expiry = currentTimeMillis() + ofSeconds(2).toMillis();
     String token = token(expiry);
@@ -170,9 +209,10 @@ public class Oauth2Test {
     int expectedRefreshCount = shared ? refreshRounds : refreshRounds * connectionCount;
     Sync tokenRequestSync = sync(expectedRefreshCount);
     AtomicInteger refreshCount = new AtomicInteger();
+    Duration tokenLifetime = ofSeconds(3);
     HttpHandler httpHandler =
         oAuth2TokenHttpHandler(
-            () -> currentTimeMillis() + 3_000,
+            () -> currentTimeMillis() + tokenLifetime.toMillis(),
             () -> {
               refreshCount.incrementAndGet();
               tokenRequestSync.down();
@@ -223,6 +263,7 @@ public class Oauth2Test {
       expectMessages.run();
 
       assertThat(tokenRequestSync).completes();
+      Thread.sleep(tokenLifetime.toMillis());
 
       publish.run();
       expectMessages.run();
@@ -230,14 +271,17 @@ public class Oauth2Test {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void tokenOnHttpsShouldBeRefreshed(TestInfo info) throws Exception {
     KeyStore keyStore = generateKeyPair();
 
     Sync tokenRefreshedSync = sync(3);
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
+    Duration tokenLifetime = ofSeconds(3);
     HttpHandler httpHandler =
-        oAuth2TokenHttpHandler(() -> currentTimeMillis() + 3_000, tokenRefreshedSync::down);
+        oAuth2TokenHttpHandler(
+            () -> currentTimeMillis() + tokenLifetime.toMillis(), tokenRefreshedSync::down);
     this.server = startServer(port, contextPath, keyStore, httpHandler);
 
     SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -278,8 +322,10 @@ public class Oauth2Test {
     assertThat(consumeSync).completes();
 
     assertThat(tokenRefreshedSync).completes();
+    Thread.sleep(tokenLifetime.toMillis());
 
     consumeSync.reset();
+
     publisher.publish(publisher.message(), ctx -> {});
     assertThat(consumeSync).completes();
   }
