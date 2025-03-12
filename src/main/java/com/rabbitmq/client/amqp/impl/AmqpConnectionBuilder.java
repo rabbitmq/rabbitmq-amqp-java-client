@@ -22,6 +22,7 @@ import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 class AmqpConnectionBuilder implements ConnectionBuilder {
 
@@ -31,6 +32,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   private final DefaultConnectionSettings<AmqpConnectionBuilder> connectionSettings =
       new AmqpConnectionBuilderConnectionSettings(this);
   private final List<Resource.StateListener> listeners = new ArrayList<>();
+  private Executor dispatchingExecutor;
   private String name;
   private TopologyListener topologyListener;
   private boolean isolateResources = false;
@@ -121,6 +123,12 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public ConnectionBuilder dispatchingExecutor(Executor executor) {
+    this.dispatchingExecutor = executor;
+    return this;
+  }
+
+  @Override
   public RecoveryConfiguration recovery() {
     this.recoveryConfiguration.activated(true);
     return this.recoveryConfiguration;
@@ -135,6 +143,10 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     return isolateResources;
   }
 
+  Executor dispatchingExecutor() {
+    return this.dispatchingExecutor;
+  }
+
   @Override
   public Connection build() {
     return this.environment.connection(this);
@@ -147,6 +159,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     copy.name(this.name);
     copy.topologyListener(this.topologyListener);
     copy.isolateResources(this.isolateResources);
+    copy.dispatchingExecutor(this.dispatchingExecutor);
   }
 
   AmqpConnectionBuilder name(String name) {

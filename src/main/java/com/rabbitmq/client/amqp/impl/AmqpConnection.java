@@ -52,6 +52,8 @@ import org.slf4j.LoggerFactory;
 
 final class AmqpConnection extends ResourceBase implements Connection {
 
+  private static final int DEFAULT_NUM_THREADS = Math.max(1, Utils.AVAILABLE_PROCESSORS);
+
   /** Connection-related issues */
   private static final Predicate<Exception> CONNECTION_EXCEPTION_PREDICATE =
       e -> e instanceof AmqpException.AmqpConnectionException;
@@ -96,7 +98,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final String name;
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported, setTokenSupported;
-  private volatile ExecutorService dispatchingExecutorService;
+  private volatile ConsumerWorkService consumerWorkService;
+  private volatile Executor dispatchingExecutor;
+  private final boolean privateDispatchingExecutor;
   private final CredentialsManager.Registration credentialsRegistration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -115,6 +119,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
         builder.recoveryConfiguration();
 
     this.topologyListener = createTopologyListener(builder);
+
+    Executor de =
+        builder.dispatchingExecutor() == null
+            ? environment.dispatchingExecutorService()
+            : builder.dispatchingExecutor();
+
+    if (de == null) {
+      this.privateDispatchingExecutor = true;
+    } else {
+      this.privateDispatchingExecutor = false;
+      this.dispatchingExecutor = de;
+    }
 
     if (recoveryConfiguration.activated()) {
       disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, this.name());
@@ -680,22 +696,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.environment.scheduledExecutorService();
   }
 
-  ExecutorService dispatchingExecutorService() {
+  ConsumerWorkService consumerWorkService() {
     checkOpen();
 
-    ExecutorService result = this.dispatchingExecutorService;
+    ConsumerWorkService result = this.consumerWorkService;
     if (result != null) {
       return result;
     }
 
     this.instanceLock.lock();
     try {
-      if (this.dispatchingExecutorService == null) {
-        this.dispatchingExecutorService =
-            Executors.newSingleThreadExecutor(
-                Utils.threadFactory("dispatching-" + this.name() + "-"));
+      if (this.consumerWorkService == null) {
+        if (this.privateDispatchingExecutor) {
+          this.dispatchingExecutor =
+              Executors.newFixedThreadPool(
+                  DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
+        }
+        this.consumerWorkService =
+            new WorkPoolConsumerWorkService(this.dispatchingExecutor, Duration.ZERO);
       }
-      return this.dispatchingExecutorService;
+      return this.consumerWorkService;
     } finally {
       this.instanceLock.unlock();
     }
@@ -852,16 +872,28 @@ final class AmqpConnection extends ResourceBase implements Connection {
       } catch (InterruptedException e) {
         LOGGER.info("Interrupted while waiting for connection lock");
       }
+      if (this.consumerWorkService != null) {
+        try {
+          this.consumerWorkService.close();
+        } catch (Exception e) {
+          LOGGER.info(
+              "Error while closing consumer work service for connection '{}': {}",
+              this.name(),
+              e.getMessage());
+        }
+      }
       try {
-        ExecutorService es = this.dispatchingExecutorService;
-        if (es != null) {
-          try {
-            es.shutdownNow();
-          } catch (Exception e) {
-            LOGGER.info(
-                "Error while shutting down dispatching executor service for connection '{}': {}",
-                this.name(),
-                e.getMessage());
+        if (this.privateDispatchingExecutor) {
+          Executor es = this.dispatchingExecutor;
+          if (es != null) {
+            try {
+              ((ExecutorService) es).shutdownNow();
+            } catch (Exception e) {
+              LOGGER.info(
+                  "Error while shutting down dispatching executor service for connection '{}': {}",
+                  this.name(),
+                  e.getMessage());
+            }
           }
         }
         try {

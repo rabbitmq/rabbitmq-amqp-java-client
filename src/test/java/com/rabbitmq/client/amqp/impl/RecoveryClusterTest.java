@@ -35,6 +35,8 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -62,6 +64,7 @@ public class RecoveryClusterTest {
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY =
       fixedWithInitialDelay(RECOVERY_INITIAL_DELAY, RECOVERY_DELAY);
   static List<String> nodes;
+  ExecutorService dispatchingExecutorService;
   Environment environment;
   AmqpConnection connection;
   Management management;
@@ -75,8 +78,15 @@ public class RecoveryClusterTest {
 
   @BeforeEach
   void init(TestInfo info) {
+    dispatchingExecutorService =
+        Executors.newSingleThreadExecutor(Utils.threadFactory("env-dispatching-executor-service-"));
     environment =
-        new AmqpEnvironmentBuilder().connectionSettings().uris(URIS).environmentBuilder().build();
+        new AmqpEnvironmentBuilder()
+            .dispatchingExecutor(dispatchingExecutorService)
+            .connectionSettings()
+            .uris(URIS)
+            .environmentBuilder()
+            .build();
     this.connection = connection(b -> b.name("c-management").recovery().connectionBuilder());
     this.management = connection.management();
     this.testInfo = info;
@@ -85,6 +95,7 @@ public class RecoveryClusterTest {
   @AfterEach
   void tearDown() {
     environment.close();
+    dispatchingExecutorService.shutdown();
   }
 
   private static class QueueConfiguration {

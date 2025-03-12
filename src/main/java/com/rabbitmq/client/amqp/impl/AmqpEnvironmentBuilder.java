@@ -17,13 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.ConnectionSettings;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.EnvironmentBuilder;
-import com.rabbitmq.client.amqp.ObservationCollector;
+import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -34,6 +32,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
       new DefaultEnvironmentConnectionSettings(this);
   private ExecutorService executorService;
   private ScheduledExecutorService scheduledExecutorService;
+  private Executor dispatchingExecutor;
   private ExecutorService publisherExecutorService;
   private MetricsCollector metricsCollector = NoOpMetricsCollector.INSTANCE;
   private ObservationCollector observationCollector = Utils.NO_OP_OBSERVATION_COLLECTOR;
@@ -50,6 +49,24 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
    */
   public AmqpEnvironmentBuilder executorService(ExecutorService executorService) {
     this.executorService = executorService;
+    return this;
+  }
+
+  /**
+   * Set the shared executor to use for incoming message delivery in this environment instance
+   * connections.
+   *
+   * <p>There is no shared executor by default, each connection uses its own, see {@link
+   * ConnectionBuilder#dispatchingExecutor(Executor)}.
+   *
+   * <p>It is the developer's responsibility to shut down the executor when it is no longer needed.
+   *
+   * @param executor the executor for incoming message delivery
+   * @return this builder instance
+   * @see ConnectionBuilder#dispatchingExecutor(Executor)
+   */
+  public AmqpEnvironmentBuilder dispatchingExecutor(Executor executor) {
+    this.dispatchingExecutor = executor;
     return this;
   }
 
@@ -145,6 +162,7 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
     return new AmqpEnvironment(
         executorService,
         scheduledExecutorService,
+        dispatchingExecutor,
         publisherExecutorService,
         connectionSettings,
         metricsCollector,

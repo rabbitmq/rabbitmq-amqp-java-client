@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
 
 final class Utils {
 
+  static final int AVAILABLE_PROCESSORS = Runtime.getRuntime().availableProcessors();
+
   static final Supplier<String> NAME_SUPPLIER = new NameSupplier("client.gen-");
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
