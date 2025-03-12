@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
@@ -35,6 +36,7 @@ import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
+import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -44,16 +46,20 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @TestUtils.DisabledIfRabbitMqCtlNotSet
 @AmqpTestInfrastructure
 public class TopologyRecoveryTest {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(TopologyRecoveryTest.class);
+
   static final BackOffDelayPolicy BACK_OFF_DELAY_POLICY = BackOffDelayPolicy.fixed(ofMillis(100));
   static Environment environment;
   TestInfo testInfo;
   String connectionName;
-  TestUtils.Sync recoveredSync;
+  Sync recoveredSync;
   AtomicInteger connectionAttemptCount;
 
   @BeforeEach
@@ -247,7 +253,7 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).autoDelete(true).exclusive(true).declare();
       connection.management().binding().sourceExchange(e).key("foo").destinationQueue(q).bind();
 
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e).key("foo").build();
       connection
           .consumerBuilder()
@@ -288,7 +294,7 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       connection
           .consumerBuilder()
@@ -326,7 +332,7 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e).build();
       Consumer consumer =
           connection
@@ -382,7 +388,7 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
       connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
 
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e1).build();
       Consumer consumer =
           connection
@@ -486,7 +492,7 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).declare();
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
       int consumerCount = 60;
-      TestUtils.Sync consumeSync = TestUtils.sync(consumerCount);
+      Sync consumeSync = TestUtils.sync(consumerCount);
       Consumer.MessageHandler handler =
           (ctx, m) -> {
             consumeSync.down();
@@ -526,7 +532,7 @@ public class TopologyRecoveryTest {
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
       Publisher publisher = connection.publisherBuilder().exchange(e).build();
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       connection
           .consumerBuilder()
           .queue(q)
@@ -614,7 +620,7 @@ public class TopologyRecoveryTest {
 
       String queueName = queueInfo.name();
 
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().queue(queueName).build();
       connection
           .consumerBuilder()
@@ -638,20 +644,31 @@ public class TopologyRecoveryTest {
   }
 
   @Test
-  void shouldRecoverEvenIfManagementIsClosed() {
+  void shouldRecoverEvenIfManagementIsClosed(TestInfo info) {
     try (Connection connection = connection()) {
       Management management = connection.management();
       Management.QueueInfo queueInfo = management.queue().exclusive(true).declare();
       Publisher publisher = connection.publisherBuilder().queue(queueInfo.name()).build();
-      publisher.publish(publisher.message(), ctx -> {});
-      TestUtils.Sync consumeSync = TestUtils.sync();
+      Sync publishSync = TestUtils.sync();
+      Publisher.Callback callback =
+          ctx -> {
+            if (ctx.status() == ACCEPTED) {
+              publishSync.down();
+            } else {
+              LOGGER.warn(
+                  "Unexpected status: {} ({})", ctx.status(), info.getTestMethod().get().getName());
+            }
+          };
+      publisher.publish(publisher.message(), callback);
+      assertThat(publishSync).completes();
+      Sync consumeSync = TestUtils.sync();
       connection
           .consumerBuilder()
           .queue(queueInfo.name())
           .messageHandler(
               (ctx, message) -> {
-                ctx.accept();
                 consumeSync.down();
+                ctx.accept();
               })
           .build();
 
@@ -659,10 +676,11 @@ public class TopologyRecoveryTest {
       waitAtMost(() -> management.queueInfo(queueInfo.name()).messageCount() == 0);
       management.close();
 
+      publishSync.reset();
       consumeSync.reset();
 
       closeConnectionAndWaitForRecovery();
-      publisher.publish(publisher.message(), ctx -> {});
+      publisher.publish(publisher.message(), callback);
       assertThat(consumeSync).completes();
       assertThatThrownBy(() -> management.queueInfo(queueInfo.name()))
           .isInstanceOf(AmqpResourceClosedException.class);
@@ -710,7 +728,7 @@ public class TopologyRecoveryTest {
   Connection connection(
       String name,
       boolean isolateResources,
-      TestUtils.Sync recoveredSync,
+      Sync recoveredSync,
       java.util.function.Consumer<AmqpConnectionBuilder> builderCallback) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
     builder
