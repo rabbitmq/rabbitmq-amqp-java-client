@@ -18,8 +18,8 @@
 package com.rabbitmq.client.amqp.oauth2;
 
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
-import static com.rabbitmq.client.amqp.impl.Tuples.pair;
 import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
+import static com.rabbitmq.client.amqp.oauth2.Tuples.pair;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 import com.rabbitmq.client.amqp.impl.Assertions;
 import com.rabbitmq.client.amqp.impl.TestUtils;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
-import com.rabbitmq.client.amqp.impl.Tuples;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;

@@ -17,15 +17,33 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.Resource.State.*;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
+import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.Resource.State.OPENING;
+import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
+import static com.rabbitmq.client.amqp.impl.Tuples.pair;
 import static com.rabbitmq.client.amqp.impl.Utils.supportFilterExpressions;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSetToken;
 import static java.lang.System.nanoTime;
 import static java.time.Duration.ofNanos;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConnectionSettings;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
+import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.ObservationCollector;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.PublisherBuilder;
+import com.rabbitmq.client.amqp.RpcClient;
+import com.rabbitmq.client.amqp.RpcClientBuilder;
+import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.RpcServerBuilder;
+import com.rabbitmq.client.amqp.impl.Tuples.Pair;
 import com.rabbitmq.client.amqp.impl.Utils.RunnableWithException;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
@@ -89,7 +107,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final List<RpcClient> rpcClients = new CopyOnWriteArrayList<>();
   private final List<RpcServer> rpcServers = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
-  private volatile EntityRecovery entityRecovery;
+  private final EntityRecovery entityRecovery;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
   private final DefaultConnectionSettings<?> connectionSettings;
   private final Supplier<SessionHandler> sessionHandlerSupplier;
@@ -118,7 +136,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
     AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
         builder.recoveryConfiguration();
 
-    this.topologyListener = createTopologyListener(builder);
+    Pair<TopologyListener, EntityRecovery> topologyInfra = createTopologyInfrastructure(builder);
+    this.topologyListener = topologyInfra.v1();
+    this.entityRecovery = topologyInfra.v2();
 
     Executor de =
         builder.dispatchingExecutor() == null
@@ -344,20 +364,25 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return node;
   }
 
-  TopologyListener createTopologyListener(AmqpConnectionBuilder builder) {
+  Pair<TopologyListener, EntityRecovery> createTopologyInfrastructure(
+      AmqpConnectionBuilder builder) {
     TopologyListener topologyListener;
+    EntityRecovery entityRecovery;
     if (builder.recoveryConfiguration().topology()) {
       RecordingTopologyListener rtl =
           new RecordingTopologyListener(
               "topology-listener-connection-" + this.name(), this.environment.recoveryEventLoop());
-      this.entityRecovery = new EntityRecovery(this, rtl);
+      entityRecovery = new EntityRecovery(this, rtl);
       topologyListener = rtl;
     } else {
       topologyListener = TopologyListener.NO_OP;
+      entityRecovery = null;
     }
-    return builder.topologyListener() == null
-        ? topologyListener
-        : TopologyListener.compose(List.of(builder.topologyListener(), topologyListener));
+    topologyListener =
+        builder.topologyListener() == null
+            ? topologyListener
+            : TopologyListener.compose(List.of(builder.topologyListener(), topologyListener));
+    return pair(topologyListener, entityRecovery);
   }
 
   private BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
@@ -455,12 +480,21 @@ final class AmqpConnection extends ResourceBase implements Connection {
               LOGGER.debug("Reconnected '{}' to {}", this.name(), this.currentConnectionLabel());
               try {
                 if (recoveryConfiguration.topology()) {
+                  boolean managementPreviouslyClosed = this.management.isClosed();
                   this.management.init();
                   LOGGER.debug("Recovering topology of connection '{}'...", this.name());
                   this.recoverTopology();
                   this.recoverConsumers();
                   this.recoverPublishers();
                   LOGGER.debug("Recovered topology of connection '{}'.", this.name());
+                  if (managementPreviouslyClosed) {
+                    LOGGER.debug("Management was closed before recovery, closing it again");
+                    try {
+                      this.closeManagement();
+                    } catch (Exception e) {
+                      LOGGER.info("Error while (re)closing management after recovery");
+                    }
+                  }
                 }
                 LOGGER.info(
                     "Recovered connection '{}' to {}", this.name(), this.currentConnectionLabel());
@@ -922,6 +956,22 @@ final class AmqpConnection extends ResourceBase implements Connection {
   @Override
   public String toString() {
     return this.name();
+  }
+
+  private void authenticate(String username, String password) {
+    State state = this.state();
+    if (state == OPEN) {
+      LOGGER.debug("Setting new token for connection {}", this.name);
+      long start = nanoTime();
+      ((AmqpManagement) management()).setToken(password);
+      LOGGER.debug(
+          "Set new token for connection {} in {} ms",
+          this.name,
+          ofNanos(nanoTime() - start).toMillis());
+    } else {
+      LOGGER.debug(
+          "Could not set new token for connection {} because its state is {}", this.name(), state);
+    }
   }
 
   static class NativeConnectionWrapper {

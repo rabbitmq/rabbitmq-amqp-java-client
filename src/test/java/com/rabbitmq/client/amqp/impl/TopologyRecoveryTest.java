@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -656,7 +657,26 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       publisher.publish(publisher.message(), ctx -> {});
       assertThat(consumeSync).completes();
-      management.queueInfo(queueInfo.name());
+      assertThatThrownBy(() -> management.queueInfo(queueInfo.name()))
+          .isInstanceOf(AmqpResourceClosedException.class);
+      assertThat(connection.management().queueInfo(queueInfo.name())).isEmpty();
+    }
+  }
+
+  @Test
+  void managementShouldStayClosedAfterRecoveryIfClosedBefore() {
+    try (Connection connection = connection()) {
+      AmqpManagement management = (AmqpManagement) connection.management();
+
+      String q = management.queue().exclusive(true).declare().name();
+
+      management.close();
+
+      closeConnectionAndWaitForRecovery();
+      assertThat(management.isClosed()).isTrue();
+      assertThatThrownBy(() -> management.queueInfo(q))
+          .isInstanceOf(AmqpResourceClosedException.class);
+      assertThat(connection.management().queueInfo(q)).isEmpty();
     }
   }
 

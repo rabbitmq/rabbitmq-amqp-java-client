@@ -17,7 +17,7 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-public final class Tuples {
+final class Tuples {
 
   private Tuples() {}
 
