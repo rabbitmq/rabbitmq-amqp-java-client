@@ -648,7 +648,8 @@ public class TopologyRecoveryTest {
     try (Connection connection = connection()) {
       Management management = connection.management();
       Management.QueueInfo queueInfo = management.queue().exclusive(true).declare();
-      Publisher publisher = connection.publisherBuilder().queue(queueInfo.name()).build();
+      String q = queueInfo.name();
+      Publisher publisher = connection.publisherBuilder().queue(q).build();
       Sync publishSync = TestUtils.sync();
       Publisher.Callback callback =
           ctx -> {
@@ -661,10 +662,13 @@ public class TopologyRecoveryTest {
           };
       publisher.publish(publisher.message(), callback);
       assertThat(publishSync).completes();
+
+      waitAtMost(() -> management.queueInfo(q).messageCount() == 1);
+
       Sync consumeSync = TestUtils.sync();
       connection
           .consumerBuilder()
-          .queue(queueInfo.name())
+          .queue(q)
           .messageHandler(
               (ctx, message) -> {
                 consumeSync.down();
@@ -673,7 +677,7 @@ public class TopologyRecoveryTest {
           .build();
 
       assertThat(consumeSync).completes();
-      waitAtMost(() -> management.queueInfo(queueInfo.name()).messageCount() == 0);
+      waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
       management.close();
 
       publishSync.reset();
@@ -682,9 +686,9 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       publisher.publish(publisher.message(), callback);
       assertThat(consumeSync).completes();
-      assertThatThrownBy(() -> management.queueInfo(queueInfo.name()))
+      assertThatThrownBy(() -> management.queueInfo(q))
           .isInstanceOf(AmqpResourceClosedException.class);
-      assertThat(connection.management().queueInfo(queueInfo.name())).isEmpty();
+      assertThat(connection.management().queueInfo(q)).isEmpty();
     }
   }
 
