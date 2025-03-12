@@ -17,7 +17,13 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AddressSelector;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConnectionBuilder;
+import com.rabbitmq.client.amqp.CredentialsProvider;
+import com.rabbitmq.client.amqp.OAuth2Settings;
+import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;

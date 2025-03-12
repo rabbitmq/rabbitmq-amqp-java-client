@@ -21,7 +21,11 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.Resource;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.*;
 

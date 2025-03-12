@@ -30,8 +30,17 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AddressSelector;
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.List;
 import java.util.Set;
@@ -587,7 +596,7 @@ public class ClusterTest {
     return this.management.queueInfo(q);
   }
 
-  AmqpConnection connection(Consumer<AmqpConnectionBuilder> operation) {
+  AmqpConnection connection(java.util.function.Consumer<AmqpConnectionBuilder> operation) {
     AmqpConnectionBuilder builder = (AmqpConnectionBuilder) environment.connectionBuilder();
     builder
         .recovery()

@@ -17,7 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.RpcClient;
+import com.rabbitmq.client.amqp.RpcClientBuilder;
+import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.RpcServerBuilder;
 import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;

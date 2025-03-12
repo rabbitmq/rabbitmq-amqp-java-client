@@ -382,7 +382,7 @@ public final class ClientStreamDelivery extends ClientDeliverable<ClientStreamDe
                     // Split off all buffers that come before the portion the read offset
                     // is located within and close them to ensure any pooled buffers are
                     // returned to the pool and the rest are discarded.
-                    buffer.splitComponentsFloor(buffer.getReadOffset()).close();;
+                    buffer.splitComponentsFloor(buffer.getReadOffset()).close();
                 } catch (Exception e) {
                 }
             }

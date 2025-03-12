@@ -21,7 +21,13 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.TestUtils.environmentBuilder;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector;

@@ -33,7 +33,13 @@ import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.of;
 import static org.assertj.core.api.Assertions.*;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
@@ -44,7 +50,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,7 +67,7 @@ public class AmqpTest {
   }
 
   private static Resource.StateListener closedListener(
-      Sync sync, Consumer<Resource.Context> callback) {
+      Sync sync, java.util.function.Consumer<Resource.Context> callback) {
     return context -> {
       if (context.currentState() == Resource.State.CLOSED) {
         callback.accept(context);
@@ -202,7 +207,7 @@ public class AmqpTest {
       int messageCount = 1;
       Sync confirmSync = sync(messageCount * 2);
 
-      Consumer<Publisher> publish =
+      java.util.function.Consumer<Publisher> publish =
           publisher ->
               publisher.publish(
                   publisher.message("hello".getBytes(UTF_8)), acceptedCallback(confirmSync));
@@ -690,7 +695,7 @@ public class AmqpTest {
   @Test
   void declareQueueWithUnsupportedArgument() {
     Management management = connection.management();
-    List<Consumer<Management>> operations =
+    List<java.util.function.Consumer<Management>> operations =
         List.of(
             m -> m.queue(name).type(CLASSIC).argument("x-max-age", "1000s").declare(),
             m -> m.queue(name).type(QUORUM).argument("x-max-age", "1000s").declare(),

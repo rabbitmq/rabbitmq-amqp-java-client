@@ -22,7 +22,11 @@ import static com.rabbitmq.client.amqp.Publisher.Status.RELEASED;
 import static org.assertj.core.api.Assertions.anyOf;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.PublisherBuilder;
+import com.rabbitmq.client.amqp.Resource;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;

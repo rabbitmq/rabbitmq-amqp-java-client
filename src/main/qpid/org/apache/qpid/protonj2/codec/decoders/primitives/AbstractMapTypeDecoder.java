@@ -114,7 +114,7 @@ public abstract class AbstractMapTypeDecoder extends AbstractPrimitiveTypeDecode
                     buffer.advanceReadOffset(keySize);
                     // No match on the key means we need to skip the value so we are positioned
                     // on the next key or the buffer is consumed.
-                    decoder.readNextTypeDecoder(buffer, state).skipValue(buffer, state);;
+                    decoder.readNextTypeDecoder(buffer, state).skipValue(buffer, state);
                 }
             }
 
@@ -189,7 +189,7 @@ public abstract class AbstractMapTypeDecoder extends AbstractPrimitiveTypeDecode
                     ProtonStreamUtils.skipBytes(stream, keySize);
                     // No match on the key means we need to skip the value so we are positioned
                     // on the next key or the buffer is consumed.
-                    decoder.readNextTypeDecoder(stream, state).skipValue(stream, state);;
+                    decoder.readNextTypeDecoder(stream, state).skipValue(stream, state);
                 }
             }
         } finally {

@@ -1,6 +1,14 @@
 package com.rabbitmq.client.amqp.docs;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.ByteCapacity;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder;
 
 import java.nio.charset.StandardCharsets;

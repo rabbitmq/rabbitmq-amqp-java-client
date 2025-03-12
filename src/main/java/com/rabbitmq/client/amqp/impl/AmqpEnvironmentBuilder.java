@@ -17,7 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.ConnectionBuilder;
+import com.rabbitmq.client.amqp.ConnectionSettings;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.EnvironmentBuilder;
+import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;

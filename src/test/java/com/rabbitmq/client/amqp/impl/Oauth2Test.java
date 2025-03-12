@@ -33,7 +33,12 @@ import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConnectionBuilder;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.OAuth2Settings;
+import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder.EnvironmentConnectionSettings;
 import com.rabbitmq.client.amqp.impl.DefaultConnectionSettings.DefaultOAuth2Settings;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;

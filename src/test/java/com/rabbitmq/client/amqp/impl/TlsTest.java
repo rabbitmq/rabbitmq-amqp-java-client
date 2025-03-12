@@ -23,8 +23,12 @@ import static com.rabbitmq.client.amqp.impl.TlsTestUtils.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.rabbitmq.client.amqp.*;
 import com.rabbitmq.client.amqp.AmqpException.AmqpSecurityException;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConnectionSettings;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAuthMechanismSslNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfTlsNotEnabled;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfWebSocket;

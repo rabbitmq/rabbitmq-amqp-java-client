@@ -17,7 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.ObservationCollector;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

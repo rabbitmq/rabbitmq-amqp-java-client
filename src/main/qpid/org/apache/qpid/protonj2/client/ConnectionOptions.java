@@ -389,7 +389,7 @@ public class ConnectionOptions implements Cloneable {
      * @return this {@link ConnectionOptions} instance.
      */
     public ConnectionOptions idleTimeout(long timeout, TimeUnit units) {
-        this.idleTimeout = UnsignedInteger.valueOf(units.toMillis(timeout)).longValue();;
+        this.idleTimeout = UnsignedInteger.valueOf(units.toMillis(timeout)).longValue();
         return this;
     }
 

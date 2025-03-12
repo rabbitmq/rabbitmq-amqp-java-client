@@ -28,7 +28,12 @@ import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.common.util.concurrent.RateLimiter;
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.PublisherBuilder;
+import com.rabbitmq.client.amqp.Resource;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;

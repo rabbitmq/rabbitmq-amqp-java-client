@@ -25,7 +25,14 @@ import static com.rabbitmq.client.amqp.impl.Cli.closeConnection;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static org.assertj.core.api.Assertions.*;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Publisher;
+import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;

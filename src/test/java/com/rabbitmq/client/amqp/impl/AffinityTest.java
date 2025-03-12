@@ -19,7 +19,11 @@ package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConnectionBuilder;
+import com.rabbitmq.client.amqp.ConnectionSettings;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

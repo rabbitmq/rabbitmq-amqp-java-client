@@ -28,7 +28,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Resource;
+import com.rabbitmq.client.amqp.RpcClient;
+import com.rabbitmq.client.amqp.RpcServer;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

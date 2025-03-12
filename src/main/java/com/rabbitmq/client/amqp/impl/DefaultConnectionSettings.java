@@ -20,7 +20,14 @@ package com.rabbitmq.client.amqp.impl;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.*;
 
-import com.rabbitmq.client.amqp.*;
+import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AddressSelector;
+import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.ConnectionSettings;
+import com.rabbitmq.client.amqp.CredentialsProvider;
+import com.rabbitmq.client.amqp.DefaultUsernamePasswordCredentialsProvider;
+import com.rabbitmq.client.amqp.OAuth2Settings;
+import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
 import java.io.IOException;
 import java.net.URI;
