@@ -220,8 +220,7 @@ class AmqpManagement implements Management {
           "Management is initializing, retry closing later.");
     }
     if (this.closed.compareAndSet(false, true)) {
-      this.state(CLOSED);
-      this.releaseResources(null);
+      this.releaseResources(null, CLOSED);
       if (this.receiver != null) {
         try {
           this.receiver.close();
@@ -293,6 +292,7 @@ class AmqpManagement implements Management {
               this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
               LOGGER.debug("Management receiver created ({}).", this);
               this.state(OPEN);
+              this.closed.set(false);
             } catch (Exception e) {
               LOGGER.info("Error during management {} initialization: {}", cName, e.getMessage());
               throw ExceptionUtils.convert(e);
@@ -381,7 +381,15 @@ class AmqpManagement implements Management {
   }
 
   void releaseResources(AmqpException e) {
-    this.markUnavailable();
+    this.releaseResources(e, null);
+  }
+
+  void releaseResources(AmqpException e, State state) {
+    if (state == null) {
+      this.markUnavailable();
+    } else {
+      this.state(state);
+    }
     if (this.receiveLoop != null) {
       this.receiveLoop.cancel(true);
       this.receiveLoop = null;
@@ -871,5 +879,9 @@ class AmqpManagement implements Management {
     public long messageCount() {
       return this.messageCount;
     }
+  }
+
+  boolean isClosed() {
+    return this.closed.get();
   }
 }

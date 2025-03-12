@@ -17,7 +17,9 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.Resource.State.*;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
+import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.AmqpConsumerBuilder.*;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.*;
 import static java.time.Duration.ofSeconds;

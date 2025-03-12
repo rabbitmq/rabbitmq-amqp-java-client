@@ -97,6 +97,22 @@ public class ManagementTest {
     assertThat(management.queueInfo(info2.name())).hasName(info2.name());
   }
 
+  @Test
+  void getManagementFromConnectionAfterManagementHasBeenClosed() {
+    AmqpManagement m1 = (AmqpManagement) connection.management();
+    String q = m1.queue().exclusive(true).declare().name();
+    assertThat(m1.queueInfo(q)).isEmpty();
+    assertThat(m1.isClosed()).isFalse();
+    m1.close();
+    assertThat(m1.isClosed()).isTrue();
+    assertThatThrownBy(() -> m1.queueInfo(q))
+        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+    AmqpManagement m2 = (AmqpManagement) connection.management();
+    assertThat(m2.isClosed()).isFalse();
+    assertThat(m2.queueInfo(q)).isEmpty();
+    assertThat(m2).isSameAs(m1);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
