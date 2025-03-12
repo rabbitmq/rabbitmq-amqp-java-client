@@ -813,6 +813,7 @@ public class AmqpTest {
             String q = c.management().queue().exclusive(true).declare().name();
             Publisher p = c.publisherBuilder().queue(q).build();
             p.publish(p.message(), ctx -> {});
+            waitAtMost(() -> c.management().queueInfo(q).messageCount() == 1);
             Sync sync = sync();
             AtomicReference<String> threadName = new AtomicReference<>();
             c.consumerBuilder()
