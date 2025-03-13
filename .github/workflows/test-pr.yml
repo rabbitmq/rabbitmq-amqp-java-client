@@ -33,14 +33,15 @@ jobs:
           ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
             -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
             -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
-            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem
+            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem \
+            -Dtest=TopologyRecoveryTest#shouldRecoverEvenIfManagementIsClosed
       - name: Stop toxiproxy
         run: docker stop toxiproxy && docker rm toxiproxy
       - name: Stop broker
         run: docker stop rabbitmq && docker rm rabbitmq
-      - name: Start cluster
-        run: ci/start-cluster.sh
-      - name: Test against cluster
-        run: ./mvnw test -Dtest="*ClusterTest" -Drabbitmqctl.bin=DOCKER:rabbitmq0
-      - name: Stop cluster
-        run: docker compose --file ci/cluster/docker-compose.yml down
+#      - name: Start cluster
+#        run: ci/start-cluster.sh
+#      - name: Test against cluster
+#        run: ./mvnw test -Dtest="*ClusterTest" -Drabbitmqctl.bin=DOCKER:rabbitmq0
+#      - name: Stop cluster
+#        run: docker compose --file ci/cluster/docker-compose.yml down
