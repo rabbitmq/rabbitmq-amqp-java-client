@@ -39,11 +39,18 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -649,6 +656,24 @@ public class TopologyRecoveryTest {
       Management management = connection.management();
       Management.QueueInfo queueInfo = management.queue().exclusive(true).declare();
       String q = queueInfo.name();
+
+      Sync consumeSync = TestUtils.sync();
+      connection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler(
+              (ctx, message) -> {
+                consumeSync.down();
+                ctx.accept();
+              })
+          .build();
+
+      waitAtMost(() -> management.queueInfo(q).consumerCount() == 1);
+
+      management.close();
+
+      closeConnectionAndWaitForRecovery();
+
       Publisher publisher = connection.publisherBuilder().queue(q).build();
       Sync publishSync = TestUtils.sync();
       Publisher.Callback callback =
@@ -663,29 +688,8 @@ public class TopologyRecoveryTest {
       publisher.publish(publisher.message(), callback);
       assertThat(publishSync).completes();
 
-      waitAtMost(() -> management.queueInfo(q).messageCount() == 1);
-
-      Sync consumeSync = TestUtils.sync();
-      connection
-          .consumerBuilder()
-          .queue(q)
-          .messageHandler(
-              (ctx, message) -> {
-                consumeSync.down();
-                ctx.accept();
-              })
-          .build();
-
       assertThat(consumeSync).completes();
-      waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
-      management.close();
 
-      publishSync.reset();
-      consumeSync.reset();
-
-      closeConnectionAndWaitForRecovery();
-      publisher.publish(publisher.message(), callback);
-      assertThat(consumeSync).completes();
       assertThatThrownBy(() -> management.queueInfo(q))
           .isInstanceOf(AmqpResourceClosedException.class);
       assertThat(connection.management().queueInfo(q)).isEmpty();
