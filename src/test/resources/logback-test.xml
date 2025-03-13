@@ -11,7 +11,7 @@
     <logger name="org.apache.qpid" level="error" />
     <logger name="com.rabbitmq.client.amqp.perf" level="info" />
 <!--    <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="debug" />-->
-    <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="debug" />
+<!--    <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="debug" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.RecoveryClusterTest" level="info" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.RecordingTopologyListener" level="warn" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="warn" />-->
@@ -19,8 +19,8 @@
 <!--    <logger name="com.rabbitmq.client.amqp.impl.EntityRecovery" level="warn" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.EventLoop" level="warn" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.AmqpManagement" level="debug" />-->
-    <logger name="com.rabbitmq.client.amqp.impl.AmqpPublisher" level="debug" />
-    <logger name="com.rabbitmq.client.amqp.impl.AmqpConsumer" level="debug" />
+<!--    <logger name="com.rabbitmq.client.amqp.impl.AmqpPublisher" level="debug" />-->
+<!--    <logger name="com.rabbitmq.client.amqp.impl.AmqpConsumer" level="debug" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.RetryUtils" level="debug" />-->
 
     <root level="warn">
