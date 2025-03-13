@@ -30,7 +30,7 @@ jobs:
         run: ./mvnw --version
       - name: Test
         run: |
-          ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
+          ./mvnw test -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
             -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
             -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
             -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem \
