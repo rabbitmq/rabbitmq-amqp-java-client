@@ -78,7 +78,7 @@ public class RecoveryClusterTest {
   @BeforeAll
   static void initAll() {
     nodes = Cli.nodes();
-    LOGGER.info("Available processor(s): {}", Runtime.getRuntime().availableProcessors());
+    LOGGER.info("Available processor(s): {}", Utils.AVAILABLE_PROCESSORS);
   }
 
   @BeforeEach
@@ -127,7 +127,7 @@ public class RecoveryClusterTest {
     LOGGER.info("Cluster restart test...");
     LOGGER.info("Available processors: {}", Runtime.getRuntime().availableProcessors());
     LOGGER.info("Java version: {}", System.getProperty("java.version"));
-    int queueCount = 10;
+    int queueCount = Utils.AVAILABLE_PROCESSORS;
     List<Management.QueueType> queueTypes =
         List.of(
             Management.QueueType.STREAM,
