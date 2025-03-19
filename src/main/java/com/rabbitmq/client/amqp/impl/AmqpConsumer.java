@@ -130,6 +130,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.nativeCloseHandler);
     this.initStateFromNativeReceiver(this.nativeReceiver);
     this.metricsCollector = this.connection.metricsCollector();
+    this.state(OPEN);
     try {
       this.nativeReceiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
@@ -137,7 +138,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       this.close(ex);
       throw ex;
     }
-    this.state(OPEN);
     this.metricsCollector.openConsumer();
   }
 
