@@ -168,7 +168,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     copy.dispatchingExecutor(this.dispatchingExecutor);
   }
 
-  AmqpConnectionBuilder name(String name) {
+  public AmqpConnectionBuilder name(String name) {
     this.name = name;
     return this;
   }
