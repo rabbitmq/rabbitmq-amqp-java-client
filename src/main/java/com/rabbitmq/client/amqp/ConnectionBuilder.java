@@ -50,7 +50,8 @@ public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder>
    *
    * @param executor executor for incoming message delivery
    * @return this builder instance
-   * @see com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder#dispatchingExecutor(ExecutorService)
+   * @see
+   *     com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder#dispatchingExecutor(java.util.concurrent.Executor)
    */
   ConnectionBuilder dispatchingExecutor(Executor executor);
 
