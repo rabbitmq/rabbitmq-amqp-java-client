@@ -31,7 +31,8 @@ import static java.util.Collections.singletonMap;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.of;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Fail.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
@@ -138,7 +139,7 @@ public class AmqpTest {
       assertThat(queueInfo).hasName(name).hasNoConsumers().hasMessageCount(messageCount);
 
       AtomicReference<String> receivedSubject = new AtomicReference<>();
-      Sync consumeSync = TestUtils.sync(messageCount);
+      Sync consumeSync = sync(messageCount);
       com.rabbitmq.client.amqp.Consumer consumer =
           connection
               .consumerBuilder()
@@ -839,5 +840,70 @@ public class AmqpTest {
       envExecutor.shutdown();
       connExecutor.shutdown();
     }
+  }
+
+  @Test
+  void messageAnnotationsSupportListMapArray() {
+    String q = connection.management().queue().exclusive(true).declare().name();
+    Publisher publisher = connection.publisherBuilder().queue(q).build();
+
+    Message message =
+        publisher
+            .message()
+            .annotation(
+                "x-list",
+                List.of("1", "2", 3, List.of("1"), Map.of("k1", "v1"), new String[] {"1"}))
+            .annotation(
+                "x-map",
+                Map.of(
+                    "k1",
+                    "v1",
+                    "k2",
+                    List.of("v2"),
+                    "k3",
+                    Map.of("k1", "v1"),
+                    "k4",
+                    new String[] {"1"}))
+            .annotation("x-arrayString", new String[] {"1", "2", "3"})
+            .annotation("x-arrayInteger", new Integer[] {1, 2, 3})
+            .annotation("x-arrayInt", new Integer[] {4, 5, 6});
+
+    publisher.publish(message, ctx -> {});
+    Sync consumeSync = sync();
+    AtomicReference<Message> inMessage = new AtomicReference<>();
+    connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (context, m) -> {
+              inMessage.set(m);
+              context.accept();
+              consumeSync.down();
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    Message m = inMessage.get();
+    List<?> list = (List<?>) m.annotation("x-list");
+    org.assertj.core.api.Assertions.assertThat(list.get(0)).isEqualTo("1");
+    org.assertj.core.api.Assertions.assertThat(list.get(1)).isEqualTo("2");
+    org.assertj.core.api.Assertions.assertThat(list.get(2)).isEqualTo(3);
+    org.assertj.core.api.Assertions.assertThat(list.get(3)).isEqualTo(List.of("1"));
+    org.assertj.core.api.Assertions.assertThat(list.get(4)).isEqualTo(Map.of("k1", "v1"));
+    org.assertj.core.api.Assertions.assertThat(list.get(5)).isEqualTo(new String[] {"1"});
+
+    Map<?, ?> map = (Map<?, ?>) m.annotation("x-map");
+    org.assertj.core.api.Assertions.assertThat(map.get("k1")).isEqualTo("v1");
+    org.assertj.core.api.Assertions.assertThat(map.get("k2")).isEqualTo(List.of("v2"));
+    org.assertj.core.api.Assertions.assertThat(map.get("k3")).isEqualTo(Map.of("k1", "v1"));
+    org.assertj.core.api.Assertions.assertThat(map.get("k4")).isEqualTo(new String[] {"1"});
+
+    Object[] arrayString = (Object[]) m.annotation("x-arrayString");
+    org.assertj.core.api.Assertions.assertThat(arrayString).containsExactly("1", "2", "3");
+
+    int[] ints = (int[]) m.annotation("x-arrayInteger");
+    org.assertj.core.api.Assertions.assertThat(ints).containsExactly(1, 2, 3);
+    ints = (int[]) m.annotation("x-arrayInt");
+    org.assertj.core.api.Assertions.assertThat(ints).containsExactly(4, 5, 6);
   }
 }
