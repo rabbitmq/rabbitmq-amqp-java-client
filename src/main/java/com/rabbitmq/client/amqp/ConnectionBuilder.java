@@ -24,6 +24,16 @@ import java.util.concurrent.ExecutorService;
 public interface ConnectionBuilder extends ConnectionSettings<ConnectionBuilder> {
 
   /**
+   * Set the name of the connection.
+   *
+   * <p>The name of the connection will be displayed in the management UI.
+   *
+   * @param name client-provided connection name
+   * @return this builder instance
+   */
+  ConnectionBuilder name(String name);
+
+  /**
    * Configuration for recovery.
    *
    * @return recovery configuration
