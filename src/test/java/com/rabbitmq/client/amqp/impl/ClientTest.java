@@ -402,7 +402,6 @@ public class ClientTest {
 
   @Test
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  @Disabled
   void dynamicReceiver() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c1 = connection(client);
