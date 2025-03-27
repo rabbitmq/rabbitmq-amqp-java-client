@@ -21,7 +21,6 @@ import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
 import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.AmqpConsumerBuilder.*;
-import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.*;
 import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 
@@ -38,7 +37,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.exceptions.*;
-import org.apache.qpid.protonj2.client.impl.ClientConversionSupport;
 import org.apache.qpid.protonj2.client.impl.ClientReceiver;
 import org.apache.qpid.protonj2.client.util.DeliveryQueue;
 import org.apache.qpid.protonj2.engine.EventHandler;
@@ -47,14 +45,10 @@ import org.apache.qpid.protonj2.engine.impl.ProtonLinkCreditState;
 import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.engine.impl.ProtonSessionIncomingWindow;
 import org.apache.qpid.protonj2.types.DescribedType;
-import org.apache.qpid.protonj2.types.messaging.Accepted;
-import org.apache.qpid.protonj2.types.messaging.Modified;
-import org.apache.qpid.protonj2.types.messaging.Rejected;
-import org.apache.qpid.protonj2.types.messaging.Released;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class AmqpConsumer extends ResourceBase implements Consumer {
+final class AmqpConsumer extends ResourceBase implements Consumer, ConsumerUtils.CloseableConsumer {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
 
@@ -120,7 +114,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               .dispatch(
                   () -> {
                     // get result to make spotbugs happy
-                    boolean ignored = maybeCloseConsumerOnException(this, e);
+                    boolean ignored = ConsumerUtils.maybeCloseConsumerOnException(this, e);
                   });
         };
     this.consumerWorkService = connection.consumerWorkService();
@@ -339,7 +333,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  void close(Throwable cause) {
+  public void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       this.state(CLOSING, cause);
       if (this.consumerWorkService != null) {
@@ -400,7 +394,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         throw new AmqpException("Could not initialize consumer internal state");
       }
     } catch (InterruptedException e) {
-      throw new RuntimeException(e);
+      Thread.currentThread().interrupt();
+      throw new AmqpException(e);
     }
   }
 
@@ -438,17 +433,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     PAUSED
   }
 
-  private static class DeliveryContext implements Consumer.Context {
+  private static class DeliveryContext extends ConsumerUtils.DeliveryContextBase {
 
-    private static final DeliveryState REJECTED = DeliveryState.rejected(null, null);
-    private final AtomicBoolean settled = new AtomicBoolean(false);
-    private final Delivery delivery;
     private final Scheduler protonExecutor;
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
     private final Runnable replenishCreditOperation;
-    private final AmqpConsumer consumer;
 
     private DeliveryContext(
         Delivery delivery,
@@ -458,48 +449,17 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         AtomicLong unsettledMessageCount,
         Runnable replenishCreditOperation,
         AmqpConsumer consumer) {
-      this.delivery = delivery;
+      super(delivery, consumer);
       this.protonExecutor = protonExecutor;
       this.protonReceiver = protonReceiver;
       this.metricsCollector = metricsCollector;
       this.unsettledMessageCount = unsettledMessageCount;
       this.replenishCreditOperation = replenishCreditOperation;
-      this.consumer = consumer;
     }
 
     @Override
-    public void accept() {
-      this.settle(DeliveryState.accepted(), ACCEPTED, "accept");
-    }
-
-    @Override
-    public void discard() {
-      settle(REJECTED, DISCARDED, "discard");
-    }
-
-    @Override
-    public void discard(Map<String, Object> annotations) {
-      annotations = annotations == null ? Collections.emptyMap() : annotations;
-      Utils.checkMessageAnnotations(annotations);
-      this.settle(DeliveryState.modified(true, true, annotations), DISCARDED, "discard (modified)");
-    }
-
-    @Override
-    public void requeue() {
-      settle(DeliveryState.released(), REQUEUED, "requeue");
-    }
-
-    @Override
-    public void requeue(Map<String, Object> annotations) {
-      annotations = annotations == null ? Collections.emptyMap() : annotations;
-      Utils.checkMessageAnnotations(annotations);
-      this.settle(
-          DeliveryState.modified(false, false, annotations), REQUEUED, "requeue (modified)");
-    }
-
-    @Override
-    public BatchContext batch(int batchSizeHint) {
-      return new BatchDeliveryContext(
+    public Consumer.BatchContext batch(int batchSizeHint) {
+      return new BatchContext(
           batchSizeHint,
           protonExecutor,
           protonReceiver,
@@ -509,18 +469,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           consumer);
     }
 
-    private void settle(
-        DeliveryState state, MetricsCollector.ConsumeDisposition disposition, String label) {
-      if (settled.compareAndSet(false, true)) {
-        try {
-          protonExecutor.execute(replenishCreditOperation);
-          delivery.disposition(state, true);
-          unsettledMessageCount.decrementAndGet();
-          metricsCollector.consumeDisposition(disposition);
-        } catch (Exception e) {
-          handleContextException(this.consumer, e, label);
-        }
-      }
+    @Override
+    protected void doSettle(DeliveryState state, MetricsCollector.ConsumeDisposition disposition)
+        throws Exception {
+      protonExecutor.execute(replenishCreditOperation);
+      delivery.disposition(state, true);
+      unsettledMessageCount.decrementAndGet();
+      metricsCollector.consumeDisposition(disposition);
     }
   }
 
@@ -533,142 +488,50 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     return "AmqpConsumer{" + "id=" + id + ", queue='" + queue + '\'' + '}';
   }
 
-  private static final class BatchDeliveryContext implements BatchContext {
+  private static final class BatchContext extends ConsumerUtils.BatchContextBase {
 
-    private static final org.apache.qpid.protonj2.types.transport.DeliveryState REJECTED =
-        new Rejected();
-    private final List<DeliveryContext> contexts;
-    private final AtomicBoolean settled = new AtomicBoolean(false);
     private final Scheduler protonExecutor;
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
     private final Runnable replenishCreditOperation;
-    private final AmqpConsumer consumer;
 
-    private BatchDeliveryContext(
+    private BatchContext(
         int batchSizeHint,
         Scheduler protonExecutor,
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
         Runnable replenishCreditOperation,
-        AmqpConsumer consumer) {
-      this.contexts = new ArrayList<>(batchSizeHint);
+        ConsumerUtils.CloseableConsumer consumer) {
+      super(batchSizeHint, consumer);
       this.protonExecutor = protonExecutor;
       this.protonReceiver = protonReceiver;
       this.metricsCollector = metricsCollector;
       this.unsettledMessageCount = unsettledMessageCount;
       this.replenishCreditOperation = replenishCreditOperation;
-      this.consumer = consumer;
     }
 
     @Override
-    public void add(Consumer.Context context) {
-      if (this.settled.get()) {
-        throw new IllegalStateException("Batch is closed");
-      } else {
-        if (context instanceof DeliveryContext) {
-          DeliveryContext dctx = (DeliveryContext) context;
-          // marking the context as settled avoids operation on it and deduplicates as well
-          if (dctx.settled.compareAndSet(false, true)) {
-            this.contexts.add(dctx);
-          } else {
-            throw new IllegalStateException("Message already settled");
-          }
-        } else {
-          throw new IllegalArgumentException("Context type not supported: " + context);
-        }
-      }
-    }
-
-    @Override
-    public int size() {
-      return this.contexts.size();
-    }
-
-    @Override
-    public void accept() {
-      this.settle(Accepted.getInstance(), ACCEPTED, "accept");
-    }
-
-    @Override
-    public void discard() {
-      this.settle(REJECTED, DISCARDED, "discard");
-    }
-
-    @Override
-    public void discard(Map<String, Object> annotations) {
-      annotations = annotations == null ? Collections.emptyMap() : annotations;
-      Utils.checkMessageAnnotations(annotations);
-      Modified state =
-          new Modified(false, true, ClientConversionSupport.toSymbolKeyedMap(annotations));
-      this.settle(state, DISCARDED, "discard (modified)");
-    }
-
-    @Override
-    public void requeue() {
-      this.settle(Released.getInstance(), REQUEUED, "requeue");
-    }
-
-    @Override
-    public void requeue(Map<String, Object> annotations) {
-      annotations = annotations == null ? Collections.emptyMap() : annotations;
-      Utils.checkMessageAnnotations(annotations);
-      Modified state =
-          new Modified(false, false, ClientConversionSupport.toSymbolKeyedMap(annotations));
-      this.settle(state, REQUEUED, "requeue (modified)");
-    }
-
-    @Override
-    public BatchContext batch(int batchSizeHint) {
-      return this;
-    }
-
-    private void settle(
+    protected void doSettle(
         org.apache.qpid.protonj2.types.transport.DeliveryState state,
-        MetricsCollector.ConsumeDisposition disposition,
-        String label) {
-      if (settled.compareAndSet(false, true)) {
-        int batchSize = this.contexts.size();
-        try {
-          protonExecutor.execute(replenishCreditOperation);
-          long[][] ranges =
-              SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
-          this.protonExecutor.execute(
-              () -> {
-                for (long[] range : ranges) {
-                  this.protonReceiver.disposition(state, range);
-                }
+        MetricsCollector.ConsumeDisposition disposition) {
+      int batchSize = this.size();
+      protonExecutor.execute(replenishCreditOperation);
+      long[][] ranges =
+          SerialNumberUtils.ranges(this.contexts(), ctx -> ctx.delivery.getDeliveryId());
+      this.protonExecutor.execute(
+          () -> {
+            for (long[] range : ranges) {
+              this.protonReceiver.disposition(state, range);
+            }
+          });
+      unsettledMessageCount.addAndGet(-batchSize);
+      IntStream.range(0, batchSize)
+          .forEach(
+              ignored -> {
+                metricsCollector.consumeDisposition(disposition);
               });
-          unsettledMessageCount.addAndGet(-batchSize);
-          IntStream.range(0, batchSize)
-              .forEach(
-                  ignored -> {
-                    metricsCollector.consumeDisposition(disposition);
-                  });
-        } catch (Exception e) {
-          handleContextException(this.consumer, e, label);
-        }
-      }
     }
-  }
-
-  private static void handleContextException(
-      AmqpConsumer consumer, Exception ex, String operation) {
-    if (maybeCloseConsumerOnException(consumer, ex)) {
-      return;
-    }
-    if (ex instanceof ClientIllegalStateException
-        || ex instanceof RejectedExecutionException
-        || ex instanceof ClientIOException) {
-      LOGGER.debug("message {} failed: {}", operation, ex.getMessage());
-    } else if (ex instanceof ClientException) {
-      throw ExceptionUtils.convert((ClientException) ex);
-    }
-  }
-
-  private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
-    return ExceptionUtils.maybeCloseOnException(consumer::close, ex);
   }
 }

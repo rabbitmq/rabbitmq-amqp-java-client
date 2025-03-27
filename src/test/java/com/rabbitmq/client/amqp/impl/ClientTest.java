@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITM
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_MOST_ONCE;
@@ -37,17 +38,25 @@ import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.*;
 import org.apache.qpid.protonj2.client.Message;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.impl.ClientReceiver;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.junit.jupiter.api.*;
 
@@ -540,6 +549,102 @@ public class ClientTest {
       response = delivery.message();
       assertThat(response.correlationId()).isEqualTo(corrId);
       assertThat(response.body()).isEqualTo("*** " + body + " ***");
+    }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void asynchronousGet() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c1 = connection(client, o -> o.traceFrames(true));
+      Session s1 = c1.openSession();
+      ReceiverOptions receiverOptions =
+          new ReceiverOptions().deliveryMode(AT_LEAST_ONCE).autoAccept(false).creditWindow(0);
+      receiverOptions.sourceOptions().capabilities("temporary-queue");
+      ClientReceiver receiver = (ClientReceiver) s1.openDynamicReceiver(receiverOptions);
+      receiver.openFuture().get();
+      assertThat(receiver.address()).isNotNull();
+
+      org.apache.qpid.protonj2.client.Connection c2 = connection(client);
+      Session s2 = c2.openSession();
+      Sender sender = s2.openSender(receiver.address());
+      String body = UUID.randomUUID().toString();
+      sender.send(Message.create(body));
+
+      IntConsumer send =
+          count -> {
+            for (int i = 0; i < count; i++) {
+              try {
+                sender.send(Message.create("test"));
+              } catch (ClientException e) {
+                throw new RuntimeException(e);
+              }
+            }
+          };
+
+      Consumer<Delivery> accept =
+          delivery -> {
+            try {
+              delivery.disposition(DeliveryState.accepted(), true);
+            } catch (ClientException e) {
+              throw new RuntimeException(e);
+            }
+          };
+
+      Duration timeout = Duration.ofMillis(100L);
+      Function<Integer, List<Delivery>> receive =
+          messageCount -> {
+            try {
+              List<Delivery> messages = new ArrayList<>(messageCount);
+              receiver.addCredit(messageCount);
+              Delivery delivery = null;
+              while ((delivery = receiver.receive(timeout.toMillis(), MILLISECONDS)) != null) {
+                messages.add(delivery);
+              }
+              receiver.drain().get(timeout.toMillis(), MILLISECONDS);
+              delivery = receiver.tryReceive();
+              if (delivery != null) {
+                messages.add(delivery);
+              }
+              return messages;
+            } catch (ClientException
+                | InterruptedException
+                | ExecutionException
+                | TimeoutException e) {
+              throw new RuntimeException(e);
+            }
+          };
+
+      List<Delivery> deliveries = receive.apply(1);
+      assertThat(deliveries).hasSize(1);
+      assertThat(deliveries.get(0).message().body()).isEqualTo(body);
+      accept.accept(deliveries.get(0));
+
+      deliveries = receive.apply(1);
+      assertThat(deliveries).isEmpty();
+
+      int messageCount = 10;
+      send.accept(messageCount);
+      deliveries = receive.apply(messageCount);
+      assertThat(deliveries).hasSize(messageCount);
+      deliveries.forEach(accept);
+
+      send.accept(messageCount);
+      deliveries = receive.apply(messageCount + 2);
+      assertThat(deliveries).hasSize(messageCount);
+      deliveries.forEach(accept);
+
+      send.accept(messageCount * 2);
+      deliveries = receive.apply(messageCount);
+      assertThat(deliveries).hasSize(messageCount);
+      deliveries.forEach(accept);
+
+      deliveries = receive.apply(messageCount);
+      assertThat(deliveries).hasSize(messageCount);
+      deliveries.forEach(accept);
+
+      deliveries = receive.apply(messageCount);
+      assertThat(deliveries).isEmpty();
     }
   }
 
