@@ -18,6 +18,8 @@ package org.apache.qpid.protonj2.client.transport.netty4;
 
 import java.util.concurrent.ThreadFactory;
 
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.kqueue.KQueueIoHandler;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.kqueue.KQueue;
-import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.kqueue.KQueueSocketChannel;
 
 public final class KQueueSupport {
@@ -44,7 +45,7 @@ public final class KQueueSupport {
     }
 
     public static EventLoopGroup createGroup(int nThreads, ThreadFactory ioThreadFactory) {
-        return new KQueueEventLoopGroup(nThreads, ioThreadFactory);
+        return new MultiThreadIoEventLoopGroup(nThreads, KQueueIoHandler.newFactory());
     }
 
     public static Class<? extends Channel> getChannelClass() {

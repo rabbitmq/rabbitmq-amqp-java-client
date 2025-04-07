@@ -125,7 +125,6 @@ public final class SslSupport {
 
             sslEngine = createJdkSslEngine(host, port, sslContext, options);
         }
-
         return new SslHandler(sslEngine);
     }
 
@@ -220,6 +219,8 @@ public final class SslSupport {
             TrustManagerFactory trustManagerFactory = loadTrustManagerFactory(options);
             SslContextBuilder builder = SslContextBuilder.forClient().sslProvider(SslProvider.OPENSSL);
 
+            builder.endpointIdentificationAlgorithm(options.verifyHost() ? "HTTPS" : null);
+
             // TODO - There is oddly no way in Netty right now to get the set of supported protocols
             //        when creating the SslContext or really even when creating the SSLEngine.  Seems
             //        like an oversight, for now we call it with TLSv1.2 so it looks like we did something.
@@ -273,12 +274,6 @@ public final class SslSupport {
         engine.setEnabledProtocols(buildEnabledProtocols(engine, options));
         engine.setEnabledCipherSuites(buildEnabledCipherSuites(engine, options));
         engine.setUseClientMode(true);
-
-        if (options.verifyHost()) {
-            SSLParameters sslParameters = engine.getSSLParameters();
-            sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
-            engine.setSSLParameters(sslParameters);
-        }
 
         return engine;
     }
