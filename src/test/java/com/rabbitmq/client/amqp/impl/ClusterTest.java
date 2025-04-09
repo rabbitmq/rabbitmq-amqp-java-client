@@ -266,6 +266,7 @@ public class ClusterTest {
       String initialLeader = queueInfo().leader();
 
       deleteQqMember(initialLeader);
+      waitAtMost(() -> !initialLeader.equals(queueInfo().leader()));
       assertThat(queueInfo()).doesNotHaveLeader(initialLeader);
 
       publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
@@ -343,6 +344,7 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
       consumeSync.reset();
 
+      waitAtMost(() -> initialFollowers.contains(mgmt.queueInfo(q).leader()));
       assertThat(initialFollowers).contains(mgmt.queueInfo(q).leader());
 
       Cli.unpauseNode(initialLeader);
