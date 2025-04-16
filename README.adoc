@@ -3,7 +3,7 @@
 image:https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml/badge.svg["Build Status", link="https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml"]
 
 This library is part of the https://www.rabbitmq.com/client-libraries/amqp-client-libraries[RabbitMQ AMQP 1.0 client libraries].
-It targets RabbitMQ 4.0 and requires at least Java 11 (Java 21 or more is recommended).
+It targets RabbitMQ 4.0+ and requires at least Java 11 (Java 21 or more is recommended).
 
 Please refer to the https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/[documentation] to find out more.
 
@@ -73,7 +73,7 @@ To build the JAR file:
 Start the broker:
 
 ----
-docker run -it --rm --name rabbitmq -p 5672:5672 rabbitmq:4.0
+docker run -it --rm --name rabbitmq -p 5672:5672 rabbitmq:4.1
 ----
 
 ----

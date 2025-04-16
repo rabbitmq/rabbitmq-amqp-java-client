@@ -1,4 +1,4 @@
-name: Test against RabbitMQ 4.0 (PR)
+name: Test against RabbitMQ 4.1 (PR)
 
 on:
   pull_request:
