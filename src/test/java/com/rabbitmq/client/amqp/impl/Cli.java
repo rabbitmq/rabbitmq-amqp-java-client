@@ -52,7 +52,6 @@ abstract class Cli {
     if (rabbitmqCtl == null) {
       rabbitmqCtl = "DOCKER:rabbitmq";
     }
-    rabbitmqCtl = "DOCKER:rabbitmq";
     if (rabbitmqCtl.startsWith(DOCKER_PREFIX)) {
       String containerId = rabbitmqCtl.split(":")[1];
       return "docker exec " + containerId + " rabbitmqctl";
