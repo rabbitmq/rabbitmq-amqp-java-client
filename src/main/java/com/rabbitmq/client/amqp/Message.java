@@ -592,6 +592,19 @@ public interface Message {
   byte[] body();
 
   /**
+   * Mark the message as durable or not.
+   *
+   * <p>Messages are durable by default, use <code>false</code> to make them explicitly non-durable.
+   *
+   * <p>Durability depends also on the queue messages end up in (e.g. quorum queues and streams
+   * always store messages durably).
+   *
+   * @param durable true for a durable message, false for a non-durable message
+   * @return the message
+   */
+  Message durable(boolean durable);
+
+  /**
    * Whether the message is durable.
    *
    * @return true if durable, false otherwise

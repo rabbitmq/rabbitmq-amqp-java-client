@@ -86,9 +86,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.publishCall =
         msg -> {
           try {
-            org.apache.qpid.protonj2.client.Message<?> nativeMessage =
-                ((AmqpMessage) msg).nativeMessage();
-            return this.sender.send(nativeMessage.durable(true));
+            return this.doSend((AmqpMessage) msg);
           } catch (ClientIllegalStateException e) {
             // the link is closed
             LOGGER.debug("Error while publishing: '{}'. Closing publisher.", e.getMessage());
@@ -152,6 +150,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
       LOGGER.warn("Delivery state not supported: " + in.getType());
       throw new IllegalStateException("This delivery state is not supported: " + in.getType());
     }
+  }
+
+  private Tracker doSend(AmqpMessage msg) throws ClientException {
+    msg.enforceDurability();
+    return this.sender.send(msg.nativeMessage());
   }
 
   private static MetricsCollector.PublishDisposition mapToPublishDisposition(Status status) {
