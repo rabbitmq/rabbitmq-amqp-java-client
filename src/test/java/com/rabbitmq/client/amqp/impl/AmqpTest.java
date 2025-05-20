@@ -23,6 +23,7 @@ import static com.rabbitmq.client.amqp.Management.QueueType.*;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_0_3;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static com.rabbitmq.client.amqp.impl.Utils.threadFactory;
 import static java.nio.charset.StandardCharsets.*;
@@ -918,6 +919,7 @@ public class AmqpTest {
     "STREAM,true",
     "STREAM,false"
   })
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void explicitDurabilityShouldBeEnforced(Management.QueueType type, boolean durable) {
     try {
       connection.management().queue(this.name).type(type).declare();
