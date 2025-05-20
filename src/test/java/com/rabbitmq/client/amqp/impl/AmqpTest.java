@@ -36,6 +36,7 @@ import static org.assertj.core.api.Fail.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
@@ -55,6 +56,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
@@ -905,5 +907,76 @@ public class AmqpTest {
     org.assertj.core.api.Assertions.assertThat(ints).containsExactly(1, 2, 3);
     ints = (int[]) m.annotation("x-arrayInt");
     org.assertj.core.api.Assertions.assertThat(ints).containsExactly(4, 5, 6);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "CLASSIC,true",
+    "CLASSIC,false",
+    "QUORUM,true",
+    "QUORUM,false",
+    "STREAM,true",
+    "STREAM,false"
+  })
+  void explicitDurabilityShouldBeEnforced(Management.QueueType type, boolean durable) {
+    try {
+      connection.management().queue(this.name).type(type).declare();
+      Publisher p = connection.publisherBuilder().queue(this.name).build();
+      p.publish(p.message().durable(durable), ctx -> {});
+
+      Sync consumeSync = sync();
+      AtomicReference<Message> messageRef = new AtomicReference<>();
+      ConsumerBuilder builder =
+          connection
+              .consumerBuilder()
+              .queue(this.name)
+              .messageHandler(
+                  (context, message) -> {
+                    messageRef.set(message);
+                    context.accept();
+                    consumeSync.down();
+                  });
+      if (type == STREAM) {
+        builder.stream().offset(ConsumerBuilder.StreamOffsetSpecification.FIRST);
+      }
+      builder.build();
+      assertThat(consumeSync).completes();
+      Message message = messageRef.get();
+      assertThat(message).isDurable(durable);
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(Management.QueueType.class)
+  void durableByDefault(Management.QueueType type) {
+    try {
+      connection.management().queue(this.name).type(type).declare();
+      Publisher p = connection.publisherBuilder().queue(this.name).build();
+      p.publish(p.message(), ctx -> {});
+
+      Sync consumeSync = sync();
+      AtomicReference<Message> messageRef = new AtomicReference<>();
+      ConsumerBuilder builder =
+          connection
+              .consumerBuilder()
+              .queue(this.name)
+              .messageHandler(
+                  (context, message) -> {
+                    messageRef.set(message);
+                    context.accept();
+                    consumeSync.down();
+                  });
+      if (type == STREAM) {
+        builder.stream().offset(ConsumerBuilder.StreamOffsetSpecification.FIRST);
+      }
+      builder.build();
+      assertThat(consumeSync).completes();
+      Message message = messageRef.get();
+      assertThat(message).isDurable(true);
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
   }
 }

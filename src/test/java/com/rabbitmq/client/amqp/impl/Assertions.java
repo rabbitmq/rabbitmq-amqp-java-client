@@ -359,6 +359,13 @@ public final class Assertions {
           .isEqualTo(expected);
       return this;
     }
+
+    void isDurable(boolean durable) {
+      isNotNull();
+      if (actual.durable() != durable) {
+        fail("Message durable flag should be %s but is %s", durable, actual.durable());
+      }
+    }
   }
 
   static class ConnectionAssert extends AbstractObjectAssert<ConnectionAssert, AmqpConnection> {

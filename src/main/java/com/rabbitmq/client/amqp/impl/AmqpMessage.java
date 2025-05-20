@@ -35,6 +35,8 @@ final class AmqpMessage implements Message {
 
   private final org.apache.qpid.protonj2.client.Message<byte[]> delegate;
 
+  private boolean durableIsSet = false;
+
   AmqpMessage() {
     this(org.apache.qpid.protonj2.client.Message.create(EMPTY_BODY));
   }
@@ -455,6 +457,14 @@ final class AmqpMessage implements Message {
   }
 
   // header section
+
+  @Override
+  public Message durable(boolean durable) {
+    this.durableIsSet = true;
+    callOnDelegate(m -> m.durable(durable));
+    return this;
+  }
+
   @Override
   public boolean durable() {
     return returnFromDelegate(org.apache.qpid.protonj2.client.Message::durable);
@@ -533,6 +543,13 @@ final class AmqpMessage implements Message {
   @Override
   public MessageAddressBuilder replyToAddress() {
     return new DefaultMessageAddressBuilder(this, DefaultMessageAddressBuilder.REPLY_TO_CALLBACK);
+  }
+
+  AmqpMessage enforceDurability() throws ClientException {
+    if (!this.durableIsSet) {
+      this.delegate.durable(true);
+    }
+    return this;
   }
 
   private static class DefaultMessageAddressBuilder

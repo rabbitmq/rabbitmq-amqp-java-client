@@ -25,13 +25,32 @@ public class AmqpMessageTest {
 
   @Test
   void toShouldBePathEncoded() {
-    assertThat(new AmqpMessage().toAddress().exchange("foo bar").message().to())
+    assertThat(msg().toAddress().exchange("foo bar").message().to())
         .isEqualTo("/exchanges/foo%20bar");
   }
 
   @Test
   void replyToShouldBePathEncoded() {
-    assertThat(new AmqpMessage().replyToAddress().exchange("foo bar").message().replyTo())
+    assertThat(msg().replyToAddress().exchange("foo bar").message().replyTo())
         .isEqualTo("/exchanges/foo%20bar");
+  }
+
+  @Test
+  void shouldBeNonDurableOnlyIfExplicitlySet() throws Exception {
+    AmqpMessage msg = msg();
+    // durable by default
+    assertThat(msg.enforceDurability().nativeMessage().durable()).isTrue();
+    // non-durable explicitly set
+    msg = msg();
+    msg.durable(false);
+    assertThat(msg.enforceDurability().nativeMessage().durable()).isFalse();
+    // durable explicitly set
+    msg = msg();
+    msg.durable(true);
+    assertThat(msg.enforceDurability().nativeMessage().durable()).isTrue();
+  }
+
+  private static AmqpMessage msg() {
+    return new AmqpMessage();
   }
 }
