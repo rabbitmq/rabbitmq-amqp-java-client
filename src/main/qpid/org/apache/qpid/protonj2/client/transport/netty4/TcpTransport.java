@@ -23,6 +23,7 @@ import java.security.Principal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.netty.buffer.PooledByteBufAllocator;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
 import org.apache.qpid.protonj2.buffer.ProtonBufferComponent;
@@ -412,6 +413,7 @@ public class TcpTransport implements Transport {
         bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, options.connectTimeout());
         bootstrap.option(ChannelOption.SO_KEEPALIVE, options.tcpKeepAlive());
         bootstrap.option(ChannelOption.SO_LINGER, options.soLinger());
+        bootstrap.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
 
         if (options.sendBufferSize() != -1) {
             bootstrap.option(ChannelOption.SO_SNDBUF, options.sendBufferSize());
