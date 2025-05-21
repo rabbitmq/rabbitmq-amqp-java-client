@@ -134,9 +134,9 @@
             <classifier>osx-x86_64</classifier>
         </dependency>
         <dependency>
-            <groupId>io.netty.incubator</groupId>
-            <artifactId>netty-incubator-transport-native-io_uring</artifactId>
-            <version>${netty4.iouring.version}</version>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-io_uring</artifactId>
+            <version>${netty4.version}</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
         <!-- End of QPid dependencies -->

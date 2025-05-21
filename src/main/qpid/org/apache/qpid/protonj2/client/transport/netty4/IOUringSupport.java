@@ -18,15 +18,16 @@ package org.apache.qpid.protonj2.client.transport.netty4;
 
 import java.util.concurrent.ThreadFactory;
 
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.uring.IoUringIoHandler;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
-import io.netty.incubator.channel.uring.IOUring;
-import io.netty.incubator.channel.uring.IOUringEventLoopGroup;
-import io.netty.incubator.channel.uring.IOUringSocketChannel;
+import io.netty.channel.uring.IoUring;
+import io.netty.channel.uring.IoUringSocketChannel;
 
 public final class IOUringSupport {
 
@@ -36,7 +37,7 @@ public final class IOUringSupport {
 
     public static boolean isAvailable(TransportOptions transportOptions) {
         try {
-            return transportOptions.allowNativeIO() && IOUring.isAvailable();
+            return transportOptions.allowNativeIO() && IoUring.isAvailable();
         } catch (NoClassDefFoundError ncdfe) {
             LOG.debug("Unable to check for IO_Uring support due to missing class definition", ncdfe);
             return false;
@@ -44,10 +45,10 @@ public final class IOUringSupport {
     }
 
     public static EventLoopGroup createGroup(int nThreads, ThreadFactory ioThreadFactory) {
-        return new IOUringEventLoopGroup(nThreads, ioThreadFactory);
+        return new MultiThreadIoEventLoopGroup(nThreads, ioThreadFactory, IoUringIoHandler.newFactory());
     }
 
     public static Class<? extends Channel> getChannelClass() {
-        return IOUringSocketChannel.class;
+        return IoUringSocketChannel.class;
     }
 }
