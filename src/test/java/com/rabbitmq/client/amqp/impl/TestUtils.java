@@ -572,8 +572,7 @@ public abstract class TestUtils {
     return new Sync(count, doneCallback, format, args);
   }
 
-  private static class CloseableResourceWrapper<T>
-      implements ExtensionContext.Store.CloseableResource {
+  private static class CloseableResourceWrapper<T> implements AutoCloseable {
 
     private final T resource;
     private final Consumer<T> closing;
