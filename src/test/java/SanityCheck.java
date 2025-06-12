@@ -1,5 +1,4 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
-//REPOS mavencentral,ossrh-snapshot=https://oss.sonatype.org/content/repositories/snapshots,ossrh-staging=https://oss.sonatype.org/content/groups/staging/
 //DEPS com.rabbitmq.client:amqp-client:${env.RABBITMQ_LIBRARY_VERSION}
 //DEPS org.slf4j:slf4j-simple:1.7.36
 

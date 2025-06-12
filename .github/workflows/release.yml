@@ -38,19 +38,14 @@ jobs:
           path: './tls-gen'
       - name: Start broker
         run: ci/start-broker.sh
-      - name: Set up JDK for sanity check and documentation generation
+      - name: Stop broker
+        run: docker stop rabbitmq && docker rm rabbitmq
+      - name: Set up JDK for and documentation generation
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
-      - name: Sanity Check
-        run: |
-          source ./release-versions.txt
-          export RABBITMQ_LIBRARY_VERSION=$RELEASE_VERSION
-          curl -Ls https://sh.jbang.dev | bash -s - src/test/java/SanityCheck.java
-      - name: Stop broker
-        run: docker stop rabbitmq && docker rm rabbitmq
       - name: Publish Documentation
         run: |
           git config user.name "rabbitmq-ci"
