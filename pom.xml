@@ -64,7 +64,6 @@
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
-        <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <spotless.version>2.44.5</spotless.version>
         <google-java-format.version>1.27.0</google-java-format.version>
         <spotbugs-maven-plugin.version>4.9.3.0</spotbugs-maven-plugin.version>
@@ -74,6 +73,7 @@
         <asciidoctor.maven.plugin.version>3.2.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj.diagram.version>2.3.2</asciidoctorj.diagram.version>
+        <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <gpg.skip>true</gpg.skip>
         <gpg.keyname>6026DFCA</gpg.keyname>
@@ -600,7 +600,7 @@
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.7.0</version>
+                <version>${central-publishing-maven-plugin.version}</version>
                 <extensions>true</extensions>
                 <configuration>
                     <publishingServerId>central</publishingServerId>
