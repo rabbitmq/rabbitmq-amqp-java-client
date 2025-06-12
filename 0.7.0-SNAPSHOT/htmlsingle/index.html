@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.7.0-SNAPSHOT</span>
-<br><span id="revremark">(5d9d5e1)</span>
+<br><span id="revremark">(81f6c68)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -784,8 +784,8 @@ Snapshots are available from a repository which must be declared in the dependen
 <pre class="rouge highlight"><code data-lang="xml"><span class="nt">&lt;repositories&gt;</span>
 
   <span class="nt">&lt;repository&gt;</span>
-    <span class="nt">&lt;id&gt;</span>ossrh<span class="nt">&lt;/id&gt;</span>
-    <span class="nt">&lt;url&gt;</span>https://oss.sonatype.org/content/repositories/snapshots<span class="nt">&lt;/url&gt;</span>
+    <span class="nt">&lt;id&gt;</span>central-portal-snapshots<span class="nt">&lt;/id&gt;</span>
+    <span class="nt">&lt;url&gt;</span>https://central.sonatype.com/repository/maven-snapshots/<span class="nt">&lt;/url&gt;</span>
     <span class="nt">&lt;snapshots&gt;&lt;enabled&gt;</span>true<span class="nt">&lt;/enabled&gt;&lt;/snapshots&gt;</span>
     <span class="nt">&lt;releases&gt;&lt;enabled&gt;</span>false<span class="nt">&lt;/enabled&gt;&lt;/releases&gt;</span>
   <span class="nt">&lt;/repository&gt;</span>
@@ -800,7 +800,14 @@ Snapshots are available from a repository which must be declared in the dependen
 <div class="title">Snapshot repository declaration for Gradle:</div>
 <div class="content">
 <pre class="rouge highlight"><code data-lang="groovy"><span class="n">repositories</span> <span class="o">{</span>
-  <span class="n">maven</span> <span class="o">{</span> <span class="n">url</span> <span class="s1">'https://oss.sonatype.org/content/repositories/snapshots'</span> <span class="o">}</span>
+  <span class="n">maven</span> <span class="o">{</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s1">'Central Portal Snapshots'</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="s1">'https://central.sonatype.com/repository/maven-snapshots/'</span>
+    <span class="c1">// Only search this repository for the specific dependency</span>
+    <span class="n">content</span> <span class="o">{</span>
+      <span class="n">includeModule</span><span class="o">(</span><span class="s2">"com.rabbitmq.client"</span><span class="o">,</span> <span class="s2">"amqp-client"</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
   <span class="n">mavenCentral</span><span class="o">()</span>
 <span class="o">}</span></code></pre>
 </div>
@@ -1839,7 +1846,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.7.0-SNAPSHOT<br>
-Last updated 2025-06-11 06:06:40 UTC
+Last updated 2025-06-12 07:53:50 UTC
 </div>
 </div>
 </body>
