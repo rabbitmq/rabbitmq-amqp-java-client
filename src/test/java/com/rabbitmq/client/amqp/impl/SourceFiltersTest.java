@@ -28,6 +28,7 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
@@ -472,7 +473,7 @@ public class SourceFiltersTest {
   @Test
   // TODO should be 4.2
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void filterExpressionSql() {
+  void sqlFilterExpressionsShouldFilterMessages() {
     publish(1, m -> m.subject("abc 123"));
     publish(1, m -> m.subject("foo bar"));
     publish(1, m -> m.subject("ab 12"));
@@ -482,6 +483,23 @@ public class SourceFiltersTest {
 
     msgs = consume(1, m -> m.sql("properties.subject like 'foo%'"));
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
+  }
+
+  @Test
+  // TODO should be 4.2
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void incorrectFilterShouldThrowException() {
+    assertThatThrownBy(
+            () ->
+                connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).stream()
+                    .offset(FIRST)
+                    .filter()
+                    .sql("TRUE TRUE")
+                    .stream()
+                    .builder()
+                    .build())
+        .isInstanceOf(AmqpException.class)
+        .hasMessageContaining("filters do not match");
   }
 
   void publish(int messageCount) {
