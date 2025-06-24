@@ -236,6 +236,15 @@ final class Utils {
     }
   }
 
+  static boolean is4_2_OrMore(String brokerVersion) {
+    try {
+      return versionCompare(currentVersion(brokerVersion), "4.2.0") >= 0;
+    } catch (Exception e) {
+      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
+      return true;
+    }
+  }
+
   static boolean is4_1_OrMore(String brokerVersion) {
     try {
       return versionCompare(currentVersion(brokerVersion), "4.1.0") >= 0;
@@ -250,6 +259,11 @@ final class Utils {
   }
 
   static boolean supportSetToken(String brokerVersion) {
+    return is4_1_OrMore(brokerVersion);
+  }
+
+  static boolean supportSqlFilterExpressions(String brokerVersion) {
+    // TODO should be 4.2
     return is4_1_OrMore(brokerVersion);
   }
 

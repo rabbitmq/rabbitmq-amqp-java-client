@@ -565,6 +565,27 @@ public interface ConsumerBuilder {
      * @return type-parameter object
      */
     T propertySymbol(String key, String value);
+
+    /**
+     * Set an SQL filter expression.
+     *
+     * <p>Section 6 of the AMQP Filter Expressions specification defines the semantics of the
+     * feature, but the <b>SQL syntax follows the <a
+     * href="https://jakarta.ee/specifications/messaging/3.1/jakarta-messaging-spec-3.1#message-selector-syntax">JMS
+     * message selector syntax</a></b>.
+     *
+     * <p>Requires RabbitMQ 4.2 or more.
+     *
+     * @param sql SQL expression
+     * @return type-parameter object
+     * @see <a
+     *     href="https://jakarta.ee/specifications/messaging/3.1/jakarta-messaging-spec-3.1#message-selector-syntax">JMS
+     *     message selector syntax</a>
+     * @see <a
+     *     href="https://groups.oasis-open.org/higherlogic/ws/public/document?document_id=66227">AMQP
+     *     Filter Expressions</a>
+     */
+    T sql(String sql);
   }
 
   /**

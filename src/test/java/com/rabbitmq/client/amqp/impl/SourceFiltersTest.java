@@ -469,6 +469,21 @@ public class SourceFiltersTest {
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
   }
 
+  @Test
+  // TODO should be 4.2
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void filterExpressionSql() {
+    publish(1, m -> m.subject("abc 123"));
+    publish(1, m -> m.subject("foo bar"));
+    publish(1, m -> m.subject("ab 12"));
+
+    List<Message> msgs = consume(2, m -> m.sql("properties.subject LIKE 'ab%'"));
+    msgs.forEach(m -> assertThat(m.subject()).startsWith("ab"));
+
+    msgs = consume(1, m -> m.sql("properties.subject like 'foo%'"));
+    msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
+  }
+
   void publish(int messageCount) {
     this.publish(messageCount, UnaryOperator.identity());
   }
