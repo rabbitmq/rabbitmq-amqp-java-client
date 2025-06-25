@@ -273,6 +273,68 @@ public class SourceFiltersTest {
     assertThat(receivedCount)
         .hasValueGreaterThanOrEqualTo(2 * messageWaveCount)
         .hasValueLessThan(waveCount * messageWaveCount);
+
+    consumer.close();
+  }
+
+  @Test
+  void streamFilteringWithClientSideFiltering() {
+    int messageTotalCount = 1_000;
+    List<String> filterValues = List.of("apple", "orange", "banana");
+    Random random = new Random();
+    String selection = filterValues.get(random.nextInt(filterValues.size()));
+    AtomicInteger selectionMessageCount = new AtomicInteger(0);
+    publish(
+        messageTotalCount,
+        msg -> {
+          String filterValue = filterValues.get(random.nextInt(filterValues.size()));
+          if (filterValue.equals(selection)) {
+            selectionMessageCount.incrementAndGet();
+          }
+          return msg.subject(filterValue).annotation("x-stream-filter-value", filterValue);
+        });
+
+    assertThat(selectionMessageCount).hasPositiveValue().hasValueLessThan(messageTotalCount);
+
+    AtomicInteger receivedCount = new AtomicInteger(0);
+    Consumer consumer =
+        connection.consumerBuilder().queue(name).stream()
+            .offset(FIRST)
+            .filterValues(selection)
+            .builder()
+            .messageHandler(
+                (ctx, msg) -> {
+                  receivedCount.incrementAndGet();
+                  ctx.accept();
+                })
+            .build();
+    waitUntilStable(receivedCount::get);
+    assertThat(receivedCount)
+        .hasValueGreaterThanOrEqualTo(selectionMessageCount.get())
+        .hasValueLessThan(messageTotalCount);
+    consumer.close();
+
+    receivedCount.set(0);
+    AtomicInteger selectedMessageCount = new AtomicInteger(0);
+    consumer =
+        connection.consumerBuilder().queue(name).stream()
+            .offset(FIRST)
+            .filterValues(selection)
+            .builder()
+            .messageHandler(
+                (ctx, msg) -> {
+                  receivedCount.incrementAndGet();
+                  if (selection.equals(msg.subject())) {
+                    selectedMessageCount.incrementAndGet();
+                  }
+                  ctx.accept();
+                })
+            .build();
+    waitUntilStable(receivedCount::get);
+    assertThat(selectedMessageCount)
+        .hasValue(selectionMessageCount.get())
+        .hasValueLessThan(receivedCount.get())
+        .hasValueLessThan(messageTotalCount);
     consumer.close();
   }
 
