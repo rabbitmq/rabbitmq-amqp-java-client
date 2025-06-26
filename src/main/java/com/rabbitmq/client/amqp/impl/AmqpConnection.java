@@ -26,6 +26,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.Tuples.pair;
 import static com.rabbitmq.client.amqp.impl.Utils.supportFilterExpressions;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSetToken;
+import static com.rabbitmq.client.amqp.impl.Utils.supportSqlFilterExpressions;
 import static java.lang.System.nanoTime;
 import static java.time.Duration.ofNanos;
 
@@ -115,7 +116,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final ConnectionSettings.AffinityStrategy affinityStrategy;
   private final String name;
   private final Lock instanceLock = new ReentrantLock();
-  private final boolean filterExpressionsSupported, setTokenSupported;
+  private final boolean filterExpressionsSupported,
+      setTokenSupported,
+      sqlFilterExpressionsSupported;
   private volatile ConsumerWorkService consumerWorkService;
   private volatile Executor dispatchingExecutor;
   private final boolean privateDispatchingExecutor;
@@ -212,6 +215,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     String brokerVersion = brokerVersion(this.nativeConnection);
     this.filterExpressionsSupported = supportFilterExpressions(brokerVersion);
     this.setTokenSupported = supportSetToken(brokerVersion);
+    this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
     LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
@@ -854,6 +858,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   boolean filterExpressionsSupported() {
     return this.filterExpressionsSupported;
+  }
+
+  boolean sqlFilterExpressionsSupported() {
+    return this.sqlFilterExpressionsSupported;
   }
 
   boolean setTokenSupported() {
