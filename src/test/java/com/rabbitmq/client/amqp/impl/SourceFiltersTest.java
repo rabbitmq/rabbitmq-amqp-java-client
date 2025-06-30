@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
 import static java.nio.charset.StandardCharsets.*;
@@ -28,6 +29,7 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
@@ -529,6 +531,36 @@ public class SourceFiltersTest {
 
     msgs = consume(1, m -> m.subject("&s:bar"));
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
+  void sqlFilterExpressionsShouldFilterMessages() {
+    publish(1, m -> m.subject("abc 123"));
+    publish(1, m -> m.subject("foo bar"));
+    publish(1, m -> m.subject("ab 12"));
+
+    List<Message> msgs = consume(2, m -> m.sql("properties.subject LIKE 'ab%'"));
+    msgs.forEach(m -> assertThat(m.subject()).startsWith("ab"));
+
+    msgs = consume(1, m -> m.sql("properties.subject like 'foo%'"));
+    msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
+  void incorrectFilterShouldThrowException() {
+    assertThatThrownBy(
+            () ->
+                connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).stream()
+                    .offset(FIRST)
+                    .filter()
+                    .sql("TRUE TRUE")
+                    .stream()
+                    .builder()
+                    .build())
+        .isInstanceOf(AmqpException.class)
+        .hasMessageContaining("filters do not match");
   }
 
   void publish(int messageCount) {

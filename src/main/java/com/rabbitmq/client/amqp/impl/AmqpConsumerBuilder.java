@@ -226,11 +226,11 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   private static class DefaultStreamFilterOptions implements StreamFilterOptions {
 
-    private final StreamOptions streamOptions;
+    private final DefaultStreamOptions streamOptions;
     private final Map<String, DescribedType> filters;
 
     private DefaultStreamFilterOptions(
-        StreamOptions streamOptions, Map<String, DescribedType> filters) {
+        DefaultStreamOptions streamOptions, Map<String, DescribedType> filters) {
       this.streamOptions = streamOptions;
       this.filters = filters;
     }
@@ -438,6 +438,16 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     @Override
     public StreamFilterOptions propertySymbol(String key, String value) {
       return this.applicationPropertyFilter(key, Symbol.valueOf(value));
+    }
+
+    @Override
+    public StreamFilterOptions sql(String sql) {
+      if (!this.streamOptions.builder.connection.filterExpressionsSupported()) {
+        throw new IllegalArgumentException(
+            "AMQP SQL filter expressions requires at least RabbitMQ 4.2.0");
+      }
+      this.filters.put("sql-filter", filterValue("apache.org:selector-filter:string", sql));
+      return this;
     }
 
     @Override

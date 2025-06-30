@@ -219,6 +219,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           (ClientReceiver)
               ExceptionUtils.wrapGet(
                   nativeSession.openReceiver(address, receiverOptions).openFuture());
+      boolean filterOk = true;
       if (!filters.isEmpty()) {
         Map<String, String> remoteSourceFilters = receiver.source().filters();
         for (Map.Entry<String, Object> localEntry : localSourceFilters.entrySet()) {
@@ -227,8 +228,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                 "Missing filter value in attach response: {} => {}",
                 localEntry.getKey(),
                 localEntry.getValue());
+            filterOk = false;
           }
         }
+      }
+      if (!filterOk) {
+        receiver.close();
+        throw new AmqpException(
+            "The sending endpoint filters do not match the receiving endpoint filters");
       }
       return receiver;
     } catch (ClientException e) {
