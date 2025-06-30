@@ -104,6 +104,16 @@ public class WebsiteDocumentation {
         .message();
   }
 
+  void publishStreamFiltering() {
+    Publisher publisher = null;
+    byte[] body = null;
+    Message message = publisher.message(body)
+        .annotation("x-stream-filter-value", "invoices");
+    publisher.publish(message, context -> {
+      // confirm callback
+    });
+  }
+
   void consuming() {
     Connection connection = null;
     Consumer consumer = connection.consumerBuilder()
@@ -147,8 +157,13 @@ public class WebsiteDocumentation {
         .filterValues("invoices", "orders")
         .filterMatchUnfiltered(true)
         .builder()
-        .messageHandler((context, message) -> {
-          // message processing
+        .messageHandler((ctx, msg) -> {
+          String filterValue = (String) msg.annotation("x-stream-filter-value");
+          // there must be some client-side filter logic
+          if ("invoices".equals(filterValue) || "orders".equals(filterValue)) {
+            // message processing
+          }
+          ctx.accept();
         })
         .build();
 

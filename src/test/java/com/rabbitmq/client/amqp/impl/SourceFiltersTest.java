@@ -326,7 +326,8 @@ public class SourceFiltersTest {
             .messageHandler(
                 (ctx, msg) -> {
                   receivedCount.incrementAndGet();
-                  if (selection.equals(msg.subject())) {
+                  if (selection.equals(msg.subject())
+                      && selection.equals(msg.annotation("x-stream-filter-value"))) {
                     selectedMessageCount.incrementAndGet();
                   }
                   ctx.accept();
