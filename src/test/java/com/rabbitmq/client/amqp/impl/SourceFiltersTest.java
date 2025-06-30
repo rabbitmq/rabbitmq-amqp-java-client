@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
 import static java.nio.charset.StandardCharsets.*;
@@ -471,8 +472,7 @@ public class SourceFiltersTest {
   }
 
   @Test
-  // TODO should be 4.2
-  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void sqlFilterExpressionsShouldFilterMessages() {
     publish(1, m -> m.subject("abc 123"));
     publish(1, m -> m.subject("foo bar"));
@@ -486,8 +486,7 @@ public class SourceFiltersTest {
   }
 
   @Test
-  // TODO should be 4.2
-  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void incorrectFilterShouldThrowException() {
     assertThatThrownBy(
             () ->

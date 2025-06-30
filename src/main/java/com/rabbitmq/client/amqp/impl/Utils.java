@@ -263,8 +263,7 @@ final class Utils {
   }
 
   static boolean supportSqlFilterExpressions(String brokerVersion) {
-    // TODO should be 4.2
-    return is4_1_OrMore(brokerVersion);
+    return is4_2_OrMore(brokerVersion);
   }
 
   static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {
