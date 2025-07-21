@@ -544,7 +544,7 @@ public class SourceFiltersTest {
     List<Message> msgs = consume(2, m -> m.sql("properties.subject LIKE 'ab%'"));
     msgs.forEach(m -> assertThat(m.subject()).startsWith("ab"));
 
-    msgs = consume(1, m -> m.sql("properties.subject like 'foo%'"));
+    msgs = consume(1, m -> m.sql("properties.subject LIKE 'foo%'"));
     msgs.forEach(m -> assertThat(m).hasSubject("foo bar"));
   }
 

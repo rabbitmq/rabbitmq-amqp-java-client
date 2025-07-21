@@ -446,7 +446,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
         throw new IllegalArgumentException(
             "AMQP SQL filter expressions requires at least RabbitMQ 4.2.0");
       }
-      this.filters.put("sql-filter", filterValue("apache.org:selector-filter:string", sql));
+      this.filters.put("sql-filter", filterValue("amqp:sql-filter", sql));
       return this;
     }
 
