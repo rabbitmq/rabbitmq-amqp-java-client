@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
+import net.jqwik.api.Arbitraries;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -785,8 +786,24 @@ public class AmqpTest {
             publishSync.down();
           }
         };
+    float fValue = Arbitraries.floats().sample();
+    double dValue = Arbitraries.doubles().sample();
     Publisher publisher = connection.publisherBuilder().queue(q).build();
-    publisher.publish(publisher.message().property("key1", -1L), callback);
+    publisher.publish(
+        publisher
+            .message()
+            .property("key1", -1L)
+            .property("float", fValue)
+            .property("fMin", Float.MIN_VALUE)
+            .property("fMax", Float.MAX_VALUE)
+            .property("fNegInf", Float.NEGATIVE_INFINITY)
+            .property("fPosInf", Float.POSITIVE_INFINITY)
+            .property("double", dValue)
+            .property("dMin", Double.MIN_VALUE)
+            .property("dMax", Double.MAX_VALUE)
+            .property("dNegInf", Double.NEGATIVE_INFINITY)
+            .property("dPosInf", Double.POSITIVE_INFINITY),
+        callback);
     assertThat(publishSync).completes();
     AtomicReference<Message> message = new AtomicReference<>();
     Sync consumeSync = sync();
@@ -801,7 +818,18 @@ public class AmqpTest {
             })
         .build();
     assertThat(consumeSync).completes();
-    assertThat(message.get()).hasProperty("key1", -1L);
+    assertThat(message.get())
+        .hasProperty("key1", -1L)
+        .hasProperty("float", fValue)
+        .hasProperty("fMin", Float.MIN_VALUE)
+        .hasProperty("fMax", Float.MAX_VALUE)
+        .hasProperty("fNegInf", Float.NEGATIVE_INFINITY)
+        .hasProperty("fPosInf", Float.POSITIVE_INFINITY)
+        .hasProperty("double", dValue)
+        .hasProperty("dMin", Double.MIN_VALUE)
+        .hasProperty("dMax", Double.MAX_VALUE)
+        .hasProperty("dNegInf", Double.NEGATIVE_INFINITY)
+        .hasProperty("dPosInf", Double.POSITIVE_INFINITY);
   }
 
   @Test
