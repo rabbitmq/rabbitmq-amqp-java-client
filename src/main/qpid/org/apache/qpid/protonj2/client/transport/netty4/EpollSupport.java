@@ -20,7 +20,6 @@ import java.util.concurrent.ThreadFactory;
 
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.epoll.EpollIoHandler;
-import io.netty.channel.nio.NioIoHandler;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +36,12 @@ public final class EpollSupport {
     public static final String NAME = "EPOLL";
 
     public static boolean isAvailable(TransportOptions transportOptions) {
+        return transportOptions.allowNativeIO() && isAvailable();
+    }
+
+    public static boolean isAvailable() {
         try {
-            return transportOptions.allowNativeIO() && Epoll.isAvailable();
+            return Epoll.isAvailable();
         } catch (NoClassDefFoundError ncdfe) {
             LOG.debug("Unable to check for Epoll support due to missing class definition", ncdfe);
             return false;
@@ -46,10 +49,20 @@ public final class EpollSupport {
     }
 
     public static EventLoopGroup createGroup(int nThreads, ThreadFactory ioThreadFactory) {
+        ensureAvailability();
         return new MultiThreadIoEventLoopGroup(nThreads, ioThreadFactory, EpollIoHandler.newFactory());
     }
 
     public static Class<? extends Channel> getChannelClass() {
+        ensureAvailability();
+
         return EpollSocketChannel.class;
+    }
+
+    public static void ensureAvailability() {
+        if (!isAvailable()) {
+            throw new UnsupportedOperationException(
+                "Netty Epoll support is not enabled because the Netty library indicates it is not present or disabled");
+        }
     }
 }
