@@ -11,8 +11,9 @@ import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class WebsiteDocumentation {
 
@@ -48,7 +49,7 @@ public class WebsiteDocumentation {
 
     // create the message
     Message message = publisher
-        .message("hello".getBytes(StandardCharsets.UTF_8))
+        .message("hello".getBytes(UTF_8))
         .messageId(1L);
 
     // publish the message and deal with broker feedback
@@ -325,5 +326,53 @@ public class WebsiteDocumentation {
         .recovery()
         .activated(false)
         .connectionBuilder().build();
+  }
+
+  void propertyFilterExpressions() {
+    Connection connection = null;
+    Consumer consumer = connection.consumerBuilder()
+        .stream().filter()
+            .userId("John".getBytes(UTF_8))
+            .subject("&p:Order")
+            .property("region", "emea")
+        .stream().builder()
+        .queue("my-queue")
+        .messageHandler((ctx, msg ) -> {
+          // message processing
+        })
+        .build();
+  }
+
+  void sqlFilterExpressions() {
+    Connection connection = null;
+    Consumer consumer = connection.consumerBuilder()
+        .stream().filter()
+            .sql("properties.user_id = 'John' AND " +
+                 "properties.subject LIKE 'Order%' AND " +
+                 "region = 'emea'")
+        .stream().builder()
+        .queue("my-queue")
+        .messageHandler((ctx, msg ) -> {
+          // message processing
+        })
+        .build();
+  }
+
+  void combinedFilterExpressions() {
+    Connection connection = null;
+    Consumer consumer = connection.consumerBuilder()
+        .stream()
+            .filterValues("order.created")
+            .filter()
+                .sql("p.subject = 'order.created' AND " +
+                     "p.creation_time > UTC() - 3600000 AND " +
+                     "region IN ('AMER', 'EMEA', 'APJ') AND " +
+                     "(h.priority > 4 OR price >= 99.99 OR premium_customer = TRUE)")
+        .stream().builder()
+        .queue("my-queue")
+        .messageHandler((ctx, msg ) -> {
+            // message processing
+        })
+        .build();
   }
 }
