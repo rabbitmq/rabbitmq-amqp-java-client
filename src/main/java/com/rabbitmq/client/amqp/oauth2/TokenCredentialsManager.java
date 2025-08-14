@@ -1,17 +1,14 @@
-// Copyright (c) 2024 Broadcom. All Rights Reserved.
+// Copyright (c) 2024-2025 Broadcom. All Rights Reserved.
 // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This software, the RabbitMQ Stream Java client library, is dual-licensed under the
+// Mozilla Public License 2.0 ("MPL"), and the Apache License version 2 ("ASL").
+// For the MPL, please see LICENSE-MPL-RabbitMQ. For the ASL,
+// please see LICENSE-APACHE2.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY KIND,
+// either express or implied. See the LICENSE file for specific language governing
+// rights and limitations of this software.
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
@@ -80,16 +77,16 @@ public final class TokenCredentialsManager implements CredentialsManager {
   }
 
   private Token getToken() {
-    if (LOGGER.isDebugEnabled()) {
+    if (debug()) {
       LOGGER.debug(
           "Requesting new token ({})...", registrationSummary(this.registrations.values()));
     }
     long start = 0L;
-    if (LOGGER.isDebugEnabled()) {
+    if (debug()) {
       start = System.nanoTime();
     }
     Token token = requester.request();
-    if (LOGGER.isDebugEnabled()) {
+    if (debug()) {
       LOGGER.debug(
           "Got new token in {} ms, token expires on {} ({})",
           Duration.ofNanos(System.nanoTime() - start),
@@ -128,14 +125,14 @@ public final class TokenCredentialsManager implements CredentialsManager {
                 registration.registrationToken = this.token;
                 refreshedCount++;
               } else {
-                if (LOGGER.isDebugEnabled()) {
+                if (debug()) {
                   LOGGER.debug(
                       "Not updating registration {} (closed or already has the new token)",
                       registration.name());
                 }
               }
             } else {
-              if (LOGGER.isDebugEnabled()) {
+              if (debug()) {
                 LOGGER.debug(
                     "Not updating registration {} (the token has changed)", registration.name());
               }
@@ -160,19 +157,25 @@ public final class TokenCredentialsManager implements CredentialsManager {
   private void scheduleTokenRefresh(Token t) {
     if (this.schedulingRefresh.compareAndSet(false, true)) {
       if (this.refreshTask != null) {
+        if (debug()) {
+          LOGGER.debug("Cancelling refresh task (scheduling a new one)");
+        }
         this.refreshTask.cancel(false);
       }
       Duration delay = this.refreshDelayStrategy.apply(t.expirationTime());
       if (!this.registrations.isEmpty()) {
-        if (LOGGER.isDebugEnabled()) {
+        if (debug()) {
           LOGGER.debug(
-              "Scheduling token retrieval in {} ({})",
+              "Scheduling token update in {} ({})",
               delay,
               registrationSummary(this.registrations.values()));
         }
         this.refreshTask =
             this.scheduledExecutorService.schedule(
                 () -> {
+                  if (debug()) {
+                    LOGGER.debug("Starting token update task");
+                  }
                   Token previousToken = this.token;
                   this.lock();
                   try {
@@ -180,6 +183,10 @@ public final class TokenCredentialsManager implements CredentialsManager {
                       Token newToken = getToken();
                       token(newToken);
                       updateRegistrations(newToken);
+                    } else {
+                      if (debug()) {
+                        LOGGER.debug("Token has already been updated");
+                      }
                     }
                   } finally {
                     unlock();
@@ -187,6 +194,9 @@ public final class TokenCredentialsManager implements CredentialsManager {
                 },
                 delay.toMillis(),
                 TimeUnit.MILLISECONDS);
+        if (debug()) {
+          LOGGER.debug("Task scheduled");
+        }
       } else {
         this.refreshTask = null;
       }
@@ -214,6 +224,9 @@ public final class TokenCredentialsManager implements CredentialsManager {
 
     @Override
     public void connect(AuthenticationCallback callback) {
+      if (debug()) {
+        LOGGER.debug("Connecting registration {}", this.name);
+      }
       boolean shouldRefresh = false;
       Token tokenToUse;
       lock();
@@ -235,6 +248,11 @@ public final class TokenCredentialsManager implements CredentialsManager {
       } finally {
         unlock();
       }
+      if (debug()) {
+        if (debug()) {
+          LOGGER.debug("Authenticating registration {}", this.name);
+        }
+      }
       callback.authenticate("", tokenToUse.value());
       if (shouldRefresh) {
         updateRegistrations(tokenToUse);
@@ -244,6 +262,7 @@ public final class TokenCredentialsManager implements CredentialsManager {
     @Override
     public void close() {
       if (this.closed.compareAndSet(false, true)) {
+        LOGGER.debug("Closing credentials registration {}", this.name);
         registrations.remove(this.id);
         ScheduledFuture<?> task = refreshTask;
         if (registrations.isEmpty() && task != null) {
@@ -324,5 +343,9 @@ public final class TokenCredentialsManager implements CredentialsManager {
 
   private static String registrationSummary(Collection<? extends Registration> registrations) {
     return registrations.stream().map(Registration::toString).collect(Collectors.joining(", "));
+  }
+
+  private static boolean debug() {
+    return LOGGER.isDebugEnabled();
   }
 }

@@ -1,29 +1,24 @@
-// Copyright (c) 2024 Broadcom. All Rights Reserved.
+// Copyright (c) 2024-2025 Broadcom. All Rights Reserved.
 // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This software, the RabbitMQ Stream Java client library, is dual-licensed under the
+// Mozilla Public License 2.0 ("MPL"), and the Apache License version 2 ("ASL").
+// For the MPL, please see LICENSE-MPL-RabbitMQ. For the ASL,
+// please see LICENSE-APACHE2.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY KIND,
+// either express or implied. See the LICENSE file for specific language governing
+// rights and limitations of this software.
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.randomNetworkPort;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import com.rabbitmq.client.amqp.impl.HttpTestUtils;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -53,7 +48,7 @@ public class HttpTokenRequesterTest {
 
   @BeforeEach
   void init() throws IOException {
-    this.port = randomNetworkPort();
+    this.port = OAuth2TestUtils.randomNetworkPort();
   }
 
   @ParameterizedTest
@@ -64,7 +59,7 @@ public class HttpTokenRequesterTest {
     Consumer<HttpClient.Builder> clientBuilderConsumer;
     if (tls) {
       protocol = "https";
-      keyStore = HttpTestUtils.generateKeyPair();
+      keyStore = OAuth2TestUtils.generateKeyPair();
       SSLContext sslContext = SSLContext.getInstance("TLS");
       TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
       tmf.init(keyStore);
@@ -86,7 +81,7 @@ public class HttpTokenRequesterTest {
 
     Duration expiresIn = Duration.ofSeconds(60);
     server =
-        HttpTestUtils.startServer(
+        OAuth2TestUtils.startServer(
             port,
             contextPath,
             keyStore,

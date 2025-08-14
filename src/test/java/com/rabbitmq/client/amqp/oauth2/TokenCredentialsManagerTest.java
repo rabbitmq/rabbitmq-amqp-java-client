@@ -1,25 +1,22 @@
-// Copyright (c) 2024 Broadcom. All Rights Reserved.
+// Copyright (c) 2024-2025 Broadcom. All Rights Reserved.
 // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// This software, the RabbitMQ Stream Java client library, is dual-licensed under the
+// Mozilla Public License 2.0 ("MPL"), and the Apache License version 2 ("ASL").
+// For the MPL, please see LICENSE-MPL-RabbitMQ. For the ASL,
+// please see LICENSE-APACHE2.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY KIND,
+// either express or implied. See the LICENSE file for specific language governing
+// rights and limitations of this software.
 //
 // If you have any questions regarding licensing, please contact us at
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
-import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
-import static com.rabbitmq.client.amqp.oauth2.Tuples.pair;
+import static com.rabbitmq.stream.oauth2.OAuth2TestUtils.pair;
+import static com.rabbitmq.stream.oauth2.OAuth2TestUtils.waitAtMost;
+import static com.rabbitmq.stream.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
@@ -27,14 +24,13 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.rabbitmq.client.amqp.impl.Assertions;
-import com.rabbitmq.client.amqp.impl.TestUtils;
-import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
@@ -76,17 +72,22 @@ public class TokenCredentialsManagerTest {
             this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
     int expectedRefreshCount = 3;
     AtomicInteger refreshCount = new AtomicInteger();
-    Sync refreshSync = TestUtils.sync(expectedRefreshCount);
+    CountDownLatch refreshSync = new CountDownLatch(expectedRefreshCount);
     CredentialsManager.Registration registration =
         credentials.register(
             "",
             (u, p) -> {
               refreshCount.incrementAndGet();
-              refreshSync.down();
+              refreshSync.countDown();
             });
     registration.connect(connectionCallback(() -> {}));
     assertThat(requestCount).hasValue(1);
-    Assertions.assertThat(refreshSync).completes();
+    try {
+      assertThat(refreshSync.await(ofSeconds(10).toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    }
     assertThat(requestCount).hasValue(expectedRefreshCount + 1);
     registration.close();
     assertThat(refreshCount).hasValue(expectedRefreshCount);
@@ -97,7 +98,7 @@ public class TokenCredentialsManagerTest {
   }
 
   @Test
-  void severalRegistrationsShouldBeRefreshed() throws InterruptedException {
+  void severalRegistrationsShouldBeRefreshed() throws Exception {
     Duration tokenExpiry = ofMillis(50);
     Duration waitTime = tokenExpiry.dividedBy(4);
     Duration timeout = tokenExpiry.multipliedBy(20);
@@ -109,24 +110,33 @@ public class TokenCredentialsManagerTest {
     int expectedRefreshCountPerConnection = 3;
     int connectionCount = 10;
     AtomicInteger totalRefreshCount = new AtomicInteger();
-    List<Tuples.Pair<CredentialsManager.Registration, Sync>> registrations =
+    List<OAuth2TestUtils.Pair<CredentialsManager.Registration, CountDownLatch>> registrations =
         range(0, connectionCount)
             .mapToObj(
                 ignored -> {
-                  Sync sync = TestUtils.sync(expectedRefreshCountPerConnection);
+                  CountDownLatch sync = new CountDownLatch(expectedRefreshCountPerConnection);
                   CredentialsManager.Registration r =
                       credentials.register(
                           "",
                           (username, password) -> {
                             totalRefreshCount.incrementAndGet();
-                            sync.down();
+                            sync.countDown();
                           });
                   return pair(r, sync);
                 })
             .collect(toList());
 
     registrations.forEach(r -> r.v1().connect(connectionCallback(() -> {})));
-    registrations.forEach(r -> Assertions.assertThat(r.v2()).completes());
+    for (OAuth2TestUtils.Pair<CredentialsManager.Registration, CountDownLatch> registrationPair :
+        registrations) {
+      try {
+        assertThat(registrationPair.v2().await(ofSeconds(10).toMillis(), TimeUnit.MILLISECONDS))
+            .isTrue();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+    }
     // all connections have been refreshed once
     int refreshCountSnapshot = totalRefreshCount.get();
     assertThat(refreshCountSnapshot).isEqualTo(connectionCount * expectedRefreshCountPerConnection);
