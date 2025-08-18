@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-
     steps:
       - uses: actions/checkout@v5
       - name: Checkout tls-gen
@@ -24,6 +23,8 @@ jobs:
           cache: 'maven'
       - name: Start broker
         run: ci/start-broker.sh
+        env:
+          RABBITMQ_IMAGE: pivotalrabbitmq/rabbitmq:pr-14389-otp28
       - name: Start toxiproxy
         run: ci/start-toxiproxy.sh
       - name: Display Java version

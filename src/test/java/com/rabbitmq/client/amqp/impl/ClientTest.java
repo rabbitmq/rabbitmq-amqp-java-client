@@ -26,6 +26,7 @@ import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
 import static org.apache.qpid.protonj2.client.DeliveryState.released;
 import static org.assertj.core.api.Assertions.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.*;
 
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
@@ -422,5 +423,73 @@ public class ClientTest {
       assertThat(delivery).isNotNull();
       assertThat(delivery.message().body()).isEqualTo(body);
     }
+  }
+
+  @Test
+  void refuseLinkSenderToMissingExchangeShouldReturnNotFound() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c = connection(client);
+      Session s = c.openSession();
+      assertThatThrownBy(
+              () -> ExceptionUtils.wrapGet(s.openSender("/exchanges/missing").openFuture()))
+          .isInstanceOf(ClientLinkRemotelyClosedException.class)
+          .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
+          .matches(e -> "amqp:not-found".equals(e.getErrorCondition().condition()));
+      checkSession(s);
+    }
+  }
+
+  @Test
+  void refuseLinkSenderToInvalidAddressShouldReturnInvalidField() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c = connection(client);
+      Session s = c.openSession();
+      assertThatThrownBy(() -> ExceptionUtils.wrapGet(s.openSender("/fruit/orange").openFuture()))
+          .isInstanceOf(ClientLinkRemotelyClosedException.class)
+          .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
+          .matches(e -> "amqp:invalid-field".equals(e.getErrorCondition().condition()));
+      checkSession(s);
+    }
+  }
+
+  @Test
+  void refuseLinkReceiverToMissingQueueShouldReturnNotFound() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c = connection(client);
+      Session s = c.openSession().openFuture().get(10, SECONDS);
+      assertThatThrownBy(
+              () ->
+                  ExceptionUtils.wrapGet(
+                      s.openReceiver("/queues/missing", new ReceiverOptions().creditWindow(0))
+                          .openFuture()))
+          .isInstanceOf(ClientLinkRemotelyClosedException.class)
+          .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
+          .matches(e -> "amqp:not-found".equals(e.getErrorCondition().condition()));
+      checkSession(s);
+    }
+  }
+
+  @Test
+  void refuseLinkReceiverToInvalidAddressShouldReturnInvalidField() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection c = connection(client);
+      Session s = c.openSession().openFuture().get(10, SECONDS);
+      assertThatThrownBy(
+              () ->
+                  ExceptionUtils.wrapGet(
+                      s.openReceiver("/fruit/orange", new ReceiverOptions().creditWindow(0))
+                          .openFuture()))
+          .isInstanceOf(ClientLinkRemotelyClosedException.class)
+          .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
+          .matches(e -> "amqp:invalid-field".equals(e.getErrorCondition().condition()));
+      checkSession(s);
+    }
+  }
+
+  private static void checkSession(Session s) throws Exception {
+    ReceiverOptions receiverOptions = new ReceiverOptions();
+    receiverOptions.sourceOptions().capabilities("temporary-queue");
+    Receiver receiver = s.openDynamicReceiver(receiverOptions);
+    receiver.openFuture().get(10, SECONDS);
   }
 }
