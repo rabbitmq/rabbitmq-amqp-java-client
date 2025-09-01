@@ -29,7 +29,7 @@ public interface RpcClient extends AutoCloseable {
   /**
    * Create a message meant to be published by the underlying publisher instance.
    *
-   * <p>Once published with the {@link #publish(Message)} the message instance should be not be
+   * <p>Once published with the {@link #publish(Message)} the message instance should not be
    * modified or even reused.
    *
    * @return a message
@@ -39,7 +39,7 @@ public interface RpcClient extends AutoCloseable {
   /**
    * Create a message meant to be published by the underlying publisher instance.
    *
-   * <p>Once published with the {@link #publish(Message)} the message instance should be not be
+   * <p>Once published with the {@link #publish(Message)} the message instance should not be
    * modified or even reused.
    *
    * @param body message body
