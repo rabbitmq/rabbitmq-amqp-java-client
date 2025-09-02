@@ -1,4 +1,4 @@
-name: Test against RabbitMQ 4.0
+name: Test against RabbitMQ stable
 
 on:
   push:

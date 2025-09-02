@@ -31,7 +31,7 @@ import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpRpcServer implements RpcServer {
+final class AmqpRpcServer implements RpcServer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcServer.class);
 
