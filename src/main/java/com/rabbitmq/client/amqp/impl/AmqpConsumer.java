@@ -65,6 +65,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final int initialCredits;
   private final Long id;
   private final String address;
+  private volatile String directReplyToAddress;
   private final String queue;
   private final Map<String, DescribedType> filters;
   private final Map<String, Object> linkProperties;
@@ -96,10 +97,15 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .connection()
             .observationCollector()
             .subscribe(builder.queue(), builder.messageHandler());
-    DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
-    addressBuilder.queue(builder.queue());
-    this.address = addressBuilder.address();
-    this.queue = builder.queue();
+    if (builder.directReplyTo()) {
+      this.address = null;
+      this.queue = null;
+    } else {
+      DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
+      addressBuilder.queue(builder.queue());
+      this.address = addressBuilder.address();
+      this.queue = builder.queue();
+    }
     this.filters = Map.copyOf(builder.filters());
     this.linkProperties = Map.copyOf(builder.properties());
     this.subscriptionListener =
@@ -120,7 +126,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     this.consumerWorkService = connection.consumerWorkService();
     this.consumerWorkService.register(this);
     this.nativeReceiver =
-        this.createNativeReceiver(
+        createNativeReceiver(
             this.sessionHandler.session(),
             this.address,
             this.linkProperties,
@@ -128,10 +134,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.subscriptionListener,
             this.nativeHandler,
             this.nativeCloseHandler);
-    this.initStateFromNativeReceiver(this.nativeReceiver);
-    this.metricsCollector = this.connection.metricsCollector();
-    this.state(OPEN);
     try {
+      this.directReplyToAddress = nativeReceiver.address();
+      this.initStateFromNativeReceiver(this.nativeReceiver);
+      this.metricsCollector = this.connection.metricsCollector();
+      this.state(OPEN);
       this.nativeReceiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
       AmqpException ex = ExceptionUtils.convert(e);
@@ -189,7 +196,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // internal API
 
-  private ClientReceiver createNativeReceiver(
+  private static ClientReceiver createNativeReceiver(
       Session nativeSession,
       String address,
       Map<String, Object> properties,
@@ -201,24 +208,47 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       filters = new LinkedHashMap<>(filters);
       StreamOptions streamOptions = AmqpConsumerBuilder.streamOptions(filters);
       subscriptionListener.preSubscribe(() -> streamOptions);
-      ReceiverOptions receiverOptions =
-          new ReceiverOptions()
-              .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-              .autoAccept(false)
-              .autoSettle(false)
-              .handler(nativeHandler)
-              .closeHandler(closeHandler)
-              .creditWindow(0)
-              .properties(properties);
+      boolean directReplyTo = address == null;
+      ReceiverOptions receiverOptions = new ReceiverOptions();
+
+      if (directReplyTo) {
+        receiverOptions
+            .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+            .autoAccept(true)
+            .autoSettle(true)
+            .sourceOptions()
+            .capabilities("rabbitmq:volatile-queue")
+            .expiryPolicy(ExpiryPolicy.LINK_CLOSE)
+            .durabilityMode(DurabilityMode.NONE);
+      } else {
+        receiverOptions
+            .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+            .autoAccept(false)
+            .autoSettle(false);
+      }
+      receiverOptions
+          .handler(nativeHandler)
+          .closeHandler(closeHandler)
+          .creditWindow(0)
+          .properties(properties);
       Map<String, Object> localSourceFilters = Collections.emptyMap();
       if (!filters.isEmpty()) {
         localSourceFilters = Map.copyOf(filters);
         receiverOptions.sourceOptions().filters(localSourceFilters);
       }
-      ClientReceiver receiver =
-          (ClientReceiver)
-              ExceptionUtils.wrapGet(
-                  nativeSession.openReceiver(address, receiverOptions).openFuture());
+      ClientReceiver receiver;
+      if (directReplyTo) {
+        receiver =
+            (ClientReceiver)
+                ExceptionUtils.wrapGet(
+                    nativeSession.openDynamicReceiver(receiverOptions).openFuture());
+      } else {
+        receiver =
+            (ClientReceiver)
+                ExceptionUtils.wrapGet(
+                    nativeSession.openReceiver(address, receiverOptions).openFuture());
+      }
+
       boolean filterOk = true;
       if (!filters.isEmpty()) {
         Map<String, String> remoteSourceFilters = receiver.source().filters();
@@ -298,10 +328,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             List.of(ofSeconds(1), ofSeconds(2), ofSeconds(3), BackOffDelayPolicy.TIMEOUT),
             "Create AMQP receiver to address '%s'",
             this.address);
-    this.initStateFromNativeReceiver(this.nativeReceiver);
-    this.pauseStatus.set(PauseStatus.UNPAUSED);
-    this.unsettledMessageCount.set(0);
     try {
+      this.directReplyToAddress = this.nativeReceiver.address();
+      this.initStateFromNativeReceiver(this.nativeReceiver);
+      this.pauseStatus.set(PauseStatus.UNPAUSED);
+      this.unsettledMessageCount.set(0);
       this.nativeReceiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
@@ -491,6 +522,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         }
       }
     }
+  }
+
+  String directReplyToAddress() {
+    return this.directReplyToAddress;
   }
 
   @Override

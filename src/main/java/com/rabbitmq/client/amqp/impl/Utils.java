@@ -228,26 +228,24 @@ final class Utils {
   }
 
   static boolean is4_0_OrMore(String brokerVersion) {
-    try {
-      return versionCompare(currentVersion(brokerVersion), "4.0.0") >= 0;
-    } catch (Exception e) {
-      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
-      return true;
-    }
-  }
-
-  static boolean is4_2_OrMore(String brokerVersion) {
-    try {
-      return versionCompare(currentVersion(brokerVersion), "4.2.0") >= 0;
-    } catch (Exception e) {
-      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
-      return true;
-    }
+    return atLeastVersion(brokerVersion, "4.0.0");
   }
 
   static boolean is4_1_OrMore(String brokerVersion) {
+    return atLeastVersion(brokerVersion, "4.1.0");
+  }
+
+  static boolean is4_2_OrMore(String brokerVersion) {
+    return atLeastVersion(brokerVersion, "4.2.0");
+  }
+
+  static boolean is4_3_OrMore(String brokerVersion) {
+    return atLeastVersion(brokerVersion, "4.3.0");
+  }
+
+  private static boolean atLeastVersion(String brokerVersion, String expectedVersion) {
     try {
-      return versionCompare(currentVersion(brokerVersion), "4.1.0") >= 0;
+      return versionCompare(currentVersion(brokerVersion), expectedVersion) >= 0;
     } catch (Exception e) {
       LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
       return true;
@@ -264,6 +262,10 @@ final class Utils {
 
   static boolean supportSqlFilterExpressions(String brokerVersion) {
     return is4_2_OrMore(brokerVersion);
+  }
+
+  static boolean supportDirectReplyTo(String brokerVersion) {
+    return is4_3_OrMore(brokerVersion);
   }
 
   static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {
