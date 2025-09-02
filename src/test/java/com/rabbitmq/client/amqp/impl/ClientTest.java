@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -426,6 +427,7 @@ public class ClientTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void refuseLinkSenderToMissingExchangeShouldReturnNotFound() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
@@ -440,6 +442,7 @@ public class ClientTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void refuseLinkSenderToInvalidAddressShouldReturnInvalidField() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
@@ -453,6 +456,7 @@ public class ClientTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void refuseLinkReceiverToMissingQueueShouldReturnNotFound() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
@@ -470,6 +474,7 @@ public class ClientTest {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void refuseLinkReceiverToInvalidAddressShouldReturnInvalidField() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
