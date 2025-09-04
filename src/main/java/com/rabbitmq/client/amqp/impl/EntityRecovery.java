@@ -103,7 +103,7 @@ class EntityRecovery {
   }
 
   private void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
-    if (queue.exclusive()) {
+    if (queue.exclusive() || queue.autoDelete()) {
       LOGGER.debug("Recovering queue {}", queue.name());
       try {
         Management.QueueSpecification spec =

@@ -34,6 +34,7 @@ import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
+import com.rabbitmq.client.amqp.Management.QueueSpecification;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
@@ -622,32 +623,15 @@ public class TopologyRecoveryTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void autoDeleteClientNamedQueueShouldBeRecovered(boolean isolateResources) {
-    try (Connection connection = connection(isolateResources)) {
-      Management.QueueInfo queueInfo = connection.management().queue().exclusive(true).declare();
+    this.queueIsRecovered(isolateResources, s -> s.autoDelete(true));
+    this.queueIsRecoveredNoConsumerBeforeRecovery(isolateResources, s -> s.autoDelete(true));
+  }
 
-      String queueName = queueInfo.name();
-
-      Sync consumeSync = TestUtils.sync();
-      Publisher publisher = connection.publisherBuilder().queue(queueName).build();
-      connection
-          .consumerBuilder()
-          .queue(queueName)
-          .messageHandler(
-              (ctx, message) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
-          .build();
-
-      publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeSync).completes();
-
-      closeConnectionAndWaitForRecovery();
-
-      publisher.publish(publisher.message(), ctx -> {});
-      assertThat(consumeSync).completes();
-      waitAtMost(() -> connection.management().queueInfo(queueName).messageCount() == 0);
-    }
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void exclusiveClientNamedQueueShouldBeRecovered(boolean isolateResources) {
+    this.queueIsRecovered(isolateResources, s -> s.exclusive(true));
+    this.queueIsRecoveredNoConsumerBeforeRecovery(isolateResources, s -> s.exclusive(true));
   }
 
   @Test
@@ -765,5 +749,72 @@ public class TopologyRecoveryTest {
     Cli.closeConnection(this.connectionName);
     assertThat(this.recoveredSync).completes();
     this.recoveredSync.reset();
+  }
+
+  private void queueIsRecovered(
+      boolean isolateResources, java.util.function.Consumer<QueueSpecification> specCallback) {
+    try (Connection connection = connection(isolateResources)) {
+      QueueSpecification spec = connection.management().queue();
+      specCallback.accept(spec);
+      Management.QueueInfo queueInfo = spec.declare();
+
+      String queueName = queueInfo.name();
+
+      Sync consumeSync = TestUtils.sync();
+      Publisher publisher = connection.publisherBuilder().queue(queueName).build();
+      connection
+          .consumerBuilder()
+          .queue(queueName)
+          .messageHandler(
+              (ctx, message) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
+          .build();
+
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeSync).completes();
+
+      closeConnectionAndWaitForRecovery();
+
+      consumeSync.reset();
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(consumeSync).completes();
+      waitAtMost(() -> connection.management().queueInfo(queueName).messageCount() == 0);
+    }
+  }
+
+  private void queueIsRecoveredNoConsumerBeforeRecovery(
+      boolean isolateResources, java.util.function.Consumer<QueueSpecification> specCallback) {
+    try (Connection connection = connection(isolateResources)) {
+      QueueSpecification spec = connection.management().queue();
+      specCallback.accept(spec);
+      Management.QueueInfo queueInfo = spec.declare();
+
+      String queueName = queueInfo.name();
+
+      Sync sync = TestUtils.sync();
+      Publisher publisher = connection.publisherBuilder().queue(queueName).build();
+
+      publisher.publish(publisher.message(), ctx -> sync.down());
+      assertThat(sync).completes();
+
+      closeConnectionAndWaitForRecovery();
+
+      sync.reset();
+      connection
+          .consumerBuilder()
+          .queue(queueName)
+          .messageHandler(
+              (ctx, message) -> {
+                ctx.accept();
+                sync.down();
+              })
+          .build();
+
+      publisher.publish(publisher.message(), ctx -> {});
+      assertThat(sync).completes();
+      waitAtMost(() -> connection.management().queueInfo(queueName).messageCount() == 0);
+    }
   }
 }
