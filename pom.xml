@@ -51,7 +51,7 @@
         <assertj.version>3.27.4</assertj.version>
         <mockito.version>5.19.0</mockito.version>
         <jqwik.version>1.9.3</jqwik.version>
-        <micrometer-tracing-test.version>1.5.3</micrometer-tracing-test.version>
+        <micrometer-tracing-test.version>1.5.4</micrometer-tracing-test.version>
         <micrometer-docs-generator.version>1.0.4</micrometer-docs-generator.version>
         <jose4j.version>0.9.6</jose4j.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
