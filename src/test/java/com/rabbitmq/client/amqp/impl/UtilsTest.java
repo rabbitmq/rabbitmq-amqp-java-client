@@ -18,12 +18,14 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Utils.checkMessageAnnotations;
+import static com.rabbitmq.client.amqp.impl.Utils.extractQueueName;
 import static java.util.Map.of;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 public class UtilsTest {
@@ -99,5 +101,15 @@ public class UtilsTest {
   void validateBrokerVersionParsing41AndLater(String brokerVersion) {
     assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
     assertThat(Utils.supportFilterExpressions(brokerVersion)).isTrue();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "/queues/q1,q1",
+    "/exchanges/foo,",
+    "/queues/amq.rabbitmq.reply-to.g1h2AA9yZXBseUAxMjc1MDQ2NDQAAAJ6AAAAAGi1jj8%3D.0T5a3Sa%2BQ7ZRPeMFMi%2BJ0A%3D%3D,amq.rabbitmq.reply-to.g1h2AA9yZXBseUAxMjc1MDQ2NDQAAAJ6AAAAAGi1jj8=.0T5a3Sa+Q7ZRPeMFMi+J0A=="
+  })
+  void extractQueueNameTest(String address, String expected) {
+    assertThat(extractQueueName(address)).isEqualTo(expected);
   }
 }

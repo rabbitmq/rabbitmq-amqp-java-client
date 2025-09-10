@@ -66,6 +66,30 @@ final class AmqpRpcServer implements RpcServer {
 
     Context context =
         new Context() {
+
+          @Override
+          public boolean isRequesterAlive(Message message) {
+            String replyToAddr = message.replyTo();
+            String replyToQueue = Utils.extractQueueName(replyToAddr);
+            boolean replyToOk = true;
+            if (replyToQueue != null) {
+              try {
+                connection.management().queueInfo(replyToQueue);
+              } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+                replyToOk = false;
+              } catch (Exception e) {
+                if (LOGGER.isWarnEnabled()) {
+                  LOGGER.warn(
+                      "Error while checking reply queue '{}' ({}): {}",
+                      replyToQueue,
+                      replyToAddr,
+                      e.getMessage());
+                }
+              }
+            }
+            return replyToOk;
+          }
+
           @Override
           public Message message() {
             return publisher.message();
@@ -95,6 +119,7 @@ final class AmqpRpcServer implements RpcServer {
     } else {
       this.replyPostProcessor = builder.replyPostProcessor();
     }
+
     this.consumer =
         this.connection
             .consumerBuilder()
@@ -104,8 +129,9 @@ final class AmqpRpcServer implements RpcServer {
                   Object correlationId = null;
                   try {
                     Message reply = handler.handle(context, msg);
-                    if (reply != null && msg.replyTo() != null) {
-                      reply.to(msg.replyTo());
+                    String replyToAddr = msg.replyTo();
+                    if (reply != null && replyToAddr != null) {
+                      reply.to(replyToAddr);
                     }
                     correlationId = correlationIdExtractor.apply(msg);
                     reply = replyPostProcessor.apply(reply, correlationId);

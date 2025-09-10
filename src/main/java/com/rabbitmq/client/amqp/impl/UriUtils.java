@@ -106,4 +106,38 @@ final class UriUtils {
     }
     return buf.toString();
   }
+
+  static String decode(final CharSequence content) {
+    return decode(content, false);
+  }
+
+  private static String decode(final CharSequence content, final boolean plusAsBlank) {
+    if (content == null) {
+      return null;
+    }
+    final ByteBuffer bb = ByteBuffer.allocate(content.length());
+    final CharBuffer cb = CharBuffer.wrap(content);
+    while (cb.hasRemaining()) {
+      final char c = cb.get();
+      if (c == '%' && cb.remaining() >= 2) {
+        final char uc = cb.get();
+        final char lc = cb.get();
+        final int u = Character.digit(uc, RADIX);
+        final int l = Character.digit(lc, RADIX);
+        if (u != -1 && l != -1) {
+          bb.put((byte) ((u << 4) + l));
+        } else {
+          bb.put((byte) '%');
+          bb.put((byte) uc);
+          bb.put((byte) lc);
+        }
+      } else if (plusAsBlank && c == '+') {
+        bb.put((byte) ' ');
+      } else {
+        bb.put((byte) c);
+      }
+    }
+    bb.flip();
+    return StandardCharsets.UTF_8.decode(bb).toString();
+  }
 }

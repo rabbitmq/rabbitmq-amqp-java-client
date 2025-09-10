@@ -367,4 +367,12 @@ final class Utils {
 
     void run() throws Exception;
   }
+
+  static String extractQueueName(String address) {
+    if (address == null || !address.startsWith("/queues/")) {
+      return null;
+    } else {
+      return UriUtils.decode(address.replaceFirst("/queues/", ""));
+    }
+  }
 }
