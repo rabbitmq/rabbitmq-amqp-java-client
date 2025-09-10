@@ -85,7 +85,13 @@ class AmqpRpcServer implements RpcServer {
       this.correlationIdExtractor = builder.correlationIdExtractor();
     }
     if (builder.replyPostProcessor() == null) {
-      this.replyPostProcessor = Message::correlationId;
+      this.replyPostProcessor =
+          (msg, corrId) -> {
+            if (msg != null) {
+              msg.correlationId(corrId);
+            }
+            return msg;
+          };
     } else {
       this.replyPostProcessor = builder.replyPostProcessor();
     }
