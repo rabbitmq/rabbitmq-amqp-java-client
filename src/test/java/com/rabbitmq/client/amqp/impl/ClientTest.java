@@ -493,8 +493,8 @@ public class ClientTest {
   }
 
   @Test
-  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
-  void rpcVolatileQueue() throws Exception {
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
+  void requestReplyVolatileQueue() throws Exception {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection serverC = connection(client);
       Session serverS = serverC.openSession();
