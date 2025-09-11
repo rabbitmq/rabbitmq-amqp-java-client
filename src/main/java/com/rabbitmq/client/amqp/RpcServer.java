@@ -42,6 +42,20 @@ public interface RpcServer extends AutoCloseable {
   interface Context {
 
     /**
+     * Tell whether the requester is still able to receive the response.
+     *
+     * <p>The call assumes a reply-to queue address has been set on the request message and checks
+     * whether this queue still exists or not.
+     *
+     * <p>A time-consuming request handler can use this call from time to time to make sure it still
+     * worth keeping processing the request.
+     *
+     * @param request the incoming request
+     * @return true if the requester is still considered alive, false otherwise
+     */
+    boolean isRequesterAlive(Message request);
+
+    /**
      * Create a message meant to be published by the underlying publisher instance.
      *
      * <p>Once returned in the {@link Handler#handle(Context, Message)} the message instance should

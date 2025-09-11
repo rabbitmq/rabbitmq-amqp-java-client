@@ -18,7 +18,6 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
-import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
@@ -39,7 +38,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpRpcClient implements RpcClient {
+final class AmqpRpcClient implements RpcClient {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcClient.class);
 
@@ -48,7 +47,7 @@ class AmqpRpcClient implements RpcClient {
   private final AmqpConnection connection;
   private final Clock clock;
   private final Publisher publisher;
-  private final Consumer consumer;
+  private final AmqpConsumer consumer;
   private final Map<Object, OutstandingRequest> outstandingRequests = new ConcurrentHashMap<>();
   private final Supplier<Object> correlationIdSupplier;
   private final BiFunction<Message, Object, Message> requestPostProcessor;
@@ -67,30 +66,39 @@ class AmqpRpcClient implements RpcClient {
     this.publisher = publisherBuilder.build();
 
     String replyTo = builder.replyToQueue();
+    boolean directReplyTo;
     if (replyTo == null) {
-      Management.QueueInfo queueInfo =
-          this.connection.management().queue().exclusive(true).autoDelete(true).declare();
-      replyTo = queueInfo.name();
+      directReplyTo = connection.directReplyToSupported();
+      if (!directReplyTo) {
+        Management.QueueInfo queueInfo =
+            this.connection.management().queue().exclusive(true).autoDelete(true).declare();
+        replyTo = queueInfo.name();
+      }
+    } else {
+      directReplyTo = false;
     }
     if (builder.correlationIdExtractor() == null) {
       this.correlationIdExtractor = Message::correlationId;
     } else {
       this.correlationIdExtractor = builder.correlationIdExtractor();
     }
+    AmqpConsumerBuilder consumerBuilder = (AmqpConsumerBuilder) this.connection.consumerBuilder();
+    LOGGER.debug("Using direct reply-to: {}", this.connection.directReplyToSupported());
     this.consumer =
-        this.connection
-            .consumerBuilder()
-            .queue(replyTo)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  OutstandingRequest request =
-                      this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
-                  if (request != null) {
-                    request.future.complete(msg);
-                  }
-                })
-            .build();
+        (AmqpConsumer)
+            consumerBuilder
+                .directReplyTo(directReplyTo)
+                .queue(replyTo)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      OutstandingRequest request =
+                          this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
+                      if (request != null) {
+                        request.future.complete(msg);
+                      }
+                    })
+                .build();
 
     if (builder.correlationIdSupplier() == null) {
       String correlationIdPrefix = UUID.randomUUID().toString();
@@ -102,14 +110,25 @@ class AmqpRpcClient implements RpcClient {
     }
 
     if (builder.requestPostProcessor() == null) {
-      DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
-      addressBuilder.queue(replyTo);
-      String replyToAddress = addressBuilder.address();
-      // HTTP over AMQP 1.0 extension specification, 5.1:
-      // To associate a response with a request, the correlation-id value of the response properties
-      // MUST be set to the message-id value of the request properties.
-      this.requestPostProcessor =
-          (request, correlationId) -> request.replyTo(replyToAddress).messageId(correlationId);
+      if (directReplyTo) {
+        // HTTP over AMQP 1.0 extension specification, 5.1:
+        // To associate a response with a request, the correlation-id value of the response
+        // properties
+        // MUST be set to the message-id value of the request properties.
+        this.requestPostProcessor =
+            (request, correlationId) ->
+                request.replyTo(consumer.directReplyToAddress()).messageId(correlationId);
+      } else {
+        DefaultAddressBuilder<?> addressBuilder = Utils.addressBuilder();
+        addressBuilder.queue(replyTo);
+        String replyToAddress = addressBuilder.address();
+        // HTTP over AMQP 1.0 extension specification, 5.1:
+        // To associate a response with a request, the correlation-id value of the response
+        // properties
+        // MUST be set to the message-id value of the request properties.
+        this.requestPostProcessor =
+            (request, correlationId) -> request.replyTo(replyToAddress).messageId(correlationId);
+      }
     } else {
       this.requestPostProcessor = builder.requestPostProcessor();
     }

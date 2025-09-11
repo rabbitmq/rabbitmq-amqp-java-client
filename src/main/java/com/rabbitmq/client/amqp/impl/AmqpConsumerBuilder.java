@@ -33,6 +33,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   private final AmqpConnection connection;
   private String queue;
+  private boolean directReplyTo = false;
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 100;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
@@ -48,6 +49,19 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   @Override
   public ConsumerBuilder queue(String queue) {
     this.queue = queue;
+    if (this.queue == null) {
+      this.directReplyTo = true;
+    } else {
+      this.directReplyTo = false;
+    }
+    return this;
+  }
+
+  ConsumerBuilder directReplyTo(boolean directReplyTo) {
+    this.directReplyTo = directReplyTo;
+    if (this.directReplyTo) {
+      this.queue = null;
+    }
     return this;
   }
 
@@ -102,6 +116,10 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
     return queue;
   }
 
+  boolean directReplyTo() {
+    return this.directReplyTo;
+  }
+
   Consumer.MessageHandler messageHandler() {
     return messageHandler;
   }
@@ -124,7 +142,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   @Override
   public Consumer build() {
-    if (this.queue == null || this.queue.isBlank()) {
+    if ((this.queue == null || this.queue.isBlank()) && !this.directReplyTo) {
       throw new IllegalArgumentException("A queue must be specified");
     }
     if (this.messageHandler == null) {
@@ -442,7 +460,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
     @Override
     public StreamFilterOptions sql(String sql) {
-      if (!this.streamOptions.builder.connection.filterExpressionsSupported()) {
+      if (!this.streamOptions.builder.connection.sqlFilterExpressionsSupported()) {
         throw new IllegalArgumentException(
             "AMQP SQL filter expressions requires at least RabbitMQ 4.2.0");
       }

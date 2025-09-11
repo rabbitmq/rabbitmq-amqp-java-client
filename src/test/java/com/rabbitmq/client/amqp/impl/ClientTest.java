@@ -24,6 +24,7 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.*;
 import static java.nio.charset.StandardCharsets.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.qpid.protonj2.client.DeliveryMode.AT_LEAST_ONCE;
+import static org.apache.qpid.protonj2.client.DeliveryMode.AT_MOST_ONCE;
 import static org.apache.qpid.protonj2.client.DeliveryState.released;
 import static org.assertj.core.api.Assertions.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -488,6 +489,57 @@ public class ClientTest {
           .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
           .matches(e -> "amqp:invalid-field".equals(e.getErrorCondition().condition()));
       checkSession(s);
+    }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_2_0)
+  void requestReplyVolatileQueue() throws Exception {
+    try (Client client = client()) {
+      org.apache.qpid.protonj2.client.Connection serverC = connection(client);
+      Session serverS = serverC.openSession();
+      Sender serverSnd = serverS.openAnonymousSender(null);
+      Receiver serverR =
+          serverS.openReceiver(
+              "/queues/" + q,
+              new ReceiverOptions()
+                  .deliveryMode(AT_LEAST_ONCE)
+                  .autoSettle(false)
+                  .autoAccept(false));
+
+      org.apache.qpid.protonj2.client.Connection clientC = connection(client);
+      Session clientS = clientC.openSession();
+      ReceiverOptions receiverOptions = new ReceiverOptions().deliveryMode(AT_MOST_ONCE);
+      receiverOptions
+          .sourceOptions()
+          .capabilities("rabbitmq:volatile-queue")
+          .expiryPolicy(ExpiryPolicy.LINK_CLOSE)
+          .durabilityMode(DurabilityMode.NONE);
+      Receiver clientR = clientS.openDynamicReceiver(receiverOptions);
+      clientR.openFuture().get();
+      assertThat(clientR.address()).isNotNull();
+
+      Sender clientSnd = clientC.openSender("/queues/" + q);
+      String body = UUID.randomUUID().toString();
+      String corrId = UUID.randomUUID().toString();
+      Message<String> request = Message.create(body).replyTo(clientR.address()).messageId(corrId);
+      clientSnd.send(request);
+
+      Delivery delivery = serverR.receive(10, SECONDS);
+      assertThat(delivery).isNotNull();
+      request = delivery.message();
+      Message<String> response =
+          Message.create("*** " + request.body() + " ***")
+              .to(request.replyTo())
+              .correlationId(request.messageId());
+      serverSnd.send(response);
+      delivery.disposition(DeliveryState.accepted(), true);
+
+      delivery = clientR.receive(10, SECONDS);
+      assertThat(delivery).isNotNull();
+      response = delivery.message();
+      assertThat(response.correlationId()).isEqualTo(corrId);
+      assertThat(response.body()).isEqualTo("*** " + body + " ***");
     }
   }
 

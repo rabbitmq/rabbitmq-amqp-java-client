@@ -55,4 +55,13 @@ public class UriUtilsTest {
   void encodeNonUnreservedTest(String param, String expected) {
     assertThat(encodeNonUnreserved(param)).isEqualTo(expected);
   }
+
+  @ParameterizedTest
+  @CsvSource({
+    "test,test",
+    "amq.rabbitmq.reply-to.g1h2AA9yZXBseUAxMjc1MDQ2NDQAAAJ6AAAAAGi1jj8%3D.0T5a3Sa%2BQ7ZRPeMFMi%2BJ0A%3D%3D,amq.rabbitmq.reply-to.g1h2AA9yZXBseUAxMjc1MDQ2NDQAAAJ6AAAAAGi1jj8=.0T5a3Sa+Q7ZRPeMFMi+J0A=="
+  })
+  void decodeTest(String in, String expected) {
+    assertThat(decode(in)).isEqualTo(expected);
+  }
 }

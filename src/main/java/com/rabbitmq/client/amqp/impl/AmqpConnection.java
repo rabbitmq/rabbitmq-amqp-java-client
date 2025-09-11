@@ -24,6 +24,7 @@ import static com.rabbitmq.client.amqp.Resource.State.OPENING;
 import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.Tuples.pair;
+import static com.rabbitmq.client.amqp.impl.Utils.supportDirectReplyTo;
 import static com.rabbitmq.client.amqp.impl.Utils.supportFilterExpressions;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSetToken;
 import static com.rabbitmq.client.amqp.impl.Utils.supportSqlFilterExpressions;
@@ -118,7 +119,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final Lock instanceLock = new ReentrantLock();
   private final boolean filterExpressionsSupported,
       setTokenSupported,
-      sqlFilterExpressionsSupported;
+      sqlFilterExpressionsSupported,
+      directReplyToSupported;
   private volatile ConsumerWorkService consumerWorkService;
   private volatile Executor dispatchingExecutor;
   private final boolean privateDispatchingExecutor;
@@ -216,6 +218,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.filterExpressionsSupported = supportFilterExpressions(brokerVersion);
     this.setTokenSupported = supportSetToken(brokerVersion);
     this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
+    this.directReplyToSupported = supportDirectReplyTo(brokerVersion);
     LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
     this.state(OPEN);
     this.environment.metricsCollector().openConnection();
@@ -866,6 +869,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   boolean setTokenSupported() {
     return this.setTokenSupported;
+  }
+
+  boolean directReplyToSupported() {
+    return this.directReplyToSupported;
   }
 
   long id() {

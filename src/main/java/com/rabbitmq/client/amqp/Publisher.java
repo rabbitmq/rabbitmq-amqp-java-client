@@ -32,8 +32,8 @@ public interface Publisher extends AutoCloseable, Resource {
   /**
    * Create a message meant to be published by the publisher instance.
    *
-   * <p>Once published with the {@link #publish(Message, Callback)} the message instance should be
-   * not be modified or even reused.
+   * <p>Once published with the {@link #publish(Message, Callback)} the message instance should not
+   * be modified or even reused.
    *
    * @return a message
    */
@@ -42,8 +42,8 @@ public interface Publisher extends AutoCloseable, Resource {
   /**
    * Create a message meant to be published by the publisher instance.
    *
-   * <p>Once published with the {@link #publish(Message, Callback)} the message instance should be
-   * not be modified or even reused.
+   * <p>Once published with the {@link #publish(Message, Callback)} the message instance should not
+   * be modified or even reused.
    *
    * @param body message body
    * @return a message with the provided body

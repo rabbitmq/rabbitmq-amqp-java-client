@@ -108,6 +108,87 @@ public class RpcTest {
   }
 
   @Test
+  void rpcIsRequesterAliveShouldReturnTrueIfPublisherStillOpen() throws Exception {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      List<Boolean> calls = new CopyOnWriteArrayList<>();
+      serverConnection
+          .rpcServerBuilder()
+          .requestQueue(requestQueue)
+          .handler(
+              (ctx, request) -> {
+                calls.add(ctx.isRequesterAlive(request));
+                return HANDLER.handle(ctx, request);
+              })
+          .build();
+
+      String request = UUID.randomUUID().toString();
+      CompletableFuture<Message> responseFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      Message response = responseFuture.get(10, TimeUnit.SECONDS);
+      assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+      assertThat(calls).containsExactly(true);
+    }
+  }
+
+  @Test
+  void rpcIsRequesterAliveShouldReturnFalseIfPublisherClosed() {
+    try (Connection clientConnection = environment.connectionBuilder().build();
+        Connection serverConnection = environment.connectionBuilder().build()) {
+
+      String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
+
+      RpcClient rpcClient =
+          clientConnection
+              .rpcClientBuilder()
+              .requestAddress()
+              .queue(requestQueue)
+              .rpcClient()
+              .build();
+
+      Sync requestReceivedSync = sync();
+      Sync requesterClosedSync = sync();
+
+      List<Boolean> calls = new CopyOnWriteArrayList<>();
+      serverConnection
+          .rpcServerBuilder()
+          .requestQueue(requestQueue)
+          .handler(
+              (ctx, request) -> {
+                calls.add(ctx.isRequesterAlive(request));
+                requestReceivedSync.down();
+                requesterClosedSync.await(Duration.ofSeconds(20));
+                calls.add(ctx.isRequesterAlive(request));
+                return null;
+              })
+          .build();
+
+      String request = UUID.randomUUID().toString();
+      CompletableFuture<Message> responseFuture =
+          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+      assertThat(requestReceivedSync).completes();
+      assertThat(calls).containsExactly(true);
+      rpcClient.close();
+      assertThat(responseFuture).completesExceptionallyWithin(Duration.ofSeconds(10));
+      requesterClosedSync.down();
+      waitAtMost(() -> calls.size() == 2);
+      assertThat(calls).containsExactly(true, false);
+      waitAtMost(() -> serverConnection.management().queueInfo(requestQueue).messageCount() == 0);
+    }
+  }
+
+  @Test
   void rpcWithCustomSettings() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {

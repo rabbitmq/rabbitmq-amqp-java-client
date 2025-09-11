@@ -713,11 +713,18 @@ class AmqpManagement implements Management {
 
     @SuppressWarnings("unchecked")
     private DefaultQueueInfo(Map<String, Object> response) {
+      QueueType queueType;
       this.name = (String) response.get("name");
       this.durable = (Boolean) response.get("durable");
       this.autoDelete = (Boolean) response.get("auto_delete");
       this.exclusive = (Boolean) response.get("exclusive");
-      this.type = QueueType.valueOf(((String) response.get("type")).toUpperCase(Locale.ENGLISH));
+      try {
+        queueType = QueueType.valueOf(((String) response.get("type")).toUpperCase(Locale.ENGLISH));
+      } catch (Exception e) {
+        // this happens for reply-to queues, no need to make the type public
+        queueType = null;
+      }
+      this.type = queueType;
       this.arguments = Map.copyOf((Map<String, Object>) response.get("arguments"));
       this.leader = (String) response.get("leader");
       String[] members = (String[]) response.get("replicas");
