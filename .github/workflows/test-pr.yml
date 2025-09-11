@@ -23,8 +23,6 @@ jobs:
           cache: 'maven'
       - name: Start broker
         run: ci/start-broker.sh
-        env:
-          RABBITMQ_IMAGE: pivotalrabbitmq/rabbitmq:pr-14474-otp28
       - name: Start toxiproxy
         run: ci/start-toxiproxy.sh
       - name: Display Java version

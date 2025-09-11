@@ -239,10 +239,6 @@ final class Utils {
     return atLeastVersion(brokerVersion, "4.2.0");
   }
 
-  static boolean is4_3_OrMore(String brokerVersion) {
-    return atLeastVersion(brokerVersion, "4.3.0");
-  }
-
   private static boolean atLeastVersion(String brokerVersion, String expectedVersion) {
     try {
       return versionCompare(currentVersion(brokerVersion), expectedVersion) >= 0;
@@ -265,7 +261,7 @@ final class Utils {
   }
 
   static boolean supportDirectReplyTo(String brokerVersion) {
-    return is4_3_OrMore(brokerVersion);
+    return is4_2_OrMore(brokerVersion);
   }
 
   static final class ObservationConnectionInfo implements ObservationCollector.ConnectionInfo {

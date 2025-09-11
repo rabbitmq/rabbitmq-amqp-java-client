@@ -83,6 +83,7 @@ final class AmqpRpcClient implements RpcClient {
       this.correlationIdExtractor = builder.correlationIdExtractor();
     }
     AmqpConsumerBuilder consumerBuilder = (AmqpConsumerBuilder) this.connection.consumerBuilder();
+    LOGGER.debug("Using direct reply-to: {}", this.connection.directReplyToSupported());
     this.consumer =
         (AmqpConsumer)
             consumerBuilder

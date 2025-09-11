@@ -872,9 +872,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   }
 
   boolean directReplyToSupported() {
-    // TODO use flag when version for direct reply-to is known
-    return true;
-    //    return this.directReplyToSupported;
+    return this.directReplyToSupported;
   }
 
   long id() {
