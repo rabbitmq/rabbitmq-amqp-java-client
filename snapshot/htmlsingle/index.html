@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.8.0-SNAPSHOT</span>
-<br><span id="revremark">(cdaf625)</span>
+<br><span id="revremark">(0bd8e91)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -679,7 +679,7 @@ pre.rouge {
 <li><a href="#subscription-listener">Subscription Listener</a></li>
 <li><a href="#oauth-2-support">OAuth 2 Support</a></li>
 <li><a href="#metrics-collection">Metrics Collection</a></li>
-<li><a href="#remote-procedure-call-rpc">Remote Procedure Call (RPC)</a></li>
+<li><a href="#requestresponse">Request/Response</a></li>
 </ul>
 </li>
 <li><a href="#micrometer-observation">Appendix A: Micrometer Observation</a>
@@ -1238,28 +1238,28 @@ Micrometer is a façade for observability systems: the user can choose the Micro
 </div>
 </div>
 <div class="sect2">
-<h3 id="remote-procedure-call-rpc"><a class="anchor" href="#remote-procedure-call-rpc"></a>Remote Procedure Call (RPC)</h3>
+<h3 id="requestresponse"><a class="anchor" href="#requestresponse"></a>Request/Response</h3>
 <div class="paragraph">
-<p>Remote procedure call with RabbitMQ consists in a client sending a request message and a server replying with a response message.
-Both the RPC client and server are <em>client applications</em> and the messages flow through the broker.
-The RPC client must send a reply-to queue address with the request.
-The RPC server uses this reply-to queue address to send the response.
-There must also be a way to correlate a request with its response, this is usually handled with a header that the RPC client and server agree on.</p>
+<p>Request/response with RabbitMQ consists in a requester sending a request message and a responder replying with a response message.
+Both the requester and responder are <em>client applications</em> and the messages flow through the broker.
+The requester must send a reply-to queue address with the request.
+The responder uses this reply-to queue address to send the response.
+There must also be a way to correlate a request with its response, this is usually handled with a header that the requester and responder agree on.</p>
 </div>
 <div class="paragraph">
-<p>The library provides RPC client and server support classes.
+<p>The library provides requester and responder support classes.
 They use sensible defaults and some of the internal mechanics are configurable.
-They should meet the requirements of most RPC use cases.
-It is still possible to implement one part or the other with regular publishers and consumers for special cases, as this is what the RPC support classes do.</p>
+They should meet the requirements of most request/response use cases.
+It is still possible to implement one part or the other with regular publishers and consumers for special cases, as this is what the request/response support classes do.</p>
 </div>
 <div class="paragraph">
-<p>Here is how to create an RPC server instance:</p>
+<p>Here is how to create a responder instance:</p>
 </div>
 <div class="listingblock">
-<div class="title">Creating an RPC server</div>
+<div class="title">Creating a responder</div>
 <div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">RpcServer</span> <span class="n">rpcServer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">rpcServerBuilder</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"rpc-server"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Responder</span> <span class="n">responder</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">responderBuilder</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
+    <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
     <span class="o">.</span><span class="na">handler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">req</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span> <i class="conum" data-value="3"></i><b>(3)</b>
       <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
       <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
@@ -1288,18 +1288,18 @@ It is still possible to implement one part or the other with regular publishers 
 </table>
 </div>
 <div class="paragraph">
-<p>Note the RPC server does not create the queue it waits requests on.
+<p>Note the responder does not create the queue it waits requests on.
 It must be created beforehand.</p>
 </div>
 <div class="paragraph">
-<p>Here is how to create an RPC client:</p>
+<p>Here is how to create a requester:</p>
 </div>
 <div class="listingblock">
-<div class="title">Creating an RPC client</div>
+<div class="title">Creating a requester</div>
 <div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">RpcClient</span> <span class="n">rpcClient</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">rpcClientBuilder</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">requestAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="s">"rpc-server"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
-    <span class="o">.</span><span class="na">rpcClient</span><span class="o">()</span>
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Requester</span> <span class="n">requester</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">requesterBuilder</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
+    <span class="o">.</span><span class="na">requestAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
+    <span class="o">.</span><span class="na">requester</span><span class="o">()</span>
     <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
 </div>
 </div>
@@ -1316,7 +1316,7 @@ It must be created beforehand.</p>
 </table>
 </div>
 <div class="paragraph">
-<p>The RPC client will send its request to the configured destination.
+<p>The requester will send its request to the configured destination.
 It can be an exchange or a queue, like in the example above.</p>
 </div>
 <div class="paragraph">
@@ -1325,8 +1325,8 @@ It can be an exchange or a queue, like in the example above.</p>
 <div class="listingblock">
 <div class="title">Sending a request</div>
 <div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">Message</span> <span class="n">request</span> <span class="o">=</span> <span class="n">rpcClient</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="s">"hello"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span> <i class="conum" data-value="1"></i><b>(1)</b>
-<span class="nc">CompletableFuture</span><span class="o">&lt;</span><span class="nc">Message</span><span class="o">&gt;</span> <span class="n">replyFuture</span> <span class="o">=</span> <span class="n">rpcClient</span><span class="o">.</span><span class="na">publish</span><span class="o">(</span><span class="n">request</span><span class="o">);</span> <i class="conum" data-value="2"></i><b>(2)</b>
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Message</span> <span class="n">request</span> <span class="o">=</span> <span class="n">requester</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="s">"hello"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span> <i class="conum" data-value="1"></i><b>(1)</b>
+<span class="nc">CompletableFuture</span><span class="o">&lt;</span><span class="nc">Message</span><span class="o">&gt;</span> <span class="n">replyFuture</span> <span class="o">=</span> <span class="n">requester</span><span class="o">.</span><span class="na">publish</span><span class="o">(</span><span class="n">request</span><span class="o">);</span> <i class="conum" data-value="2"></i><b>(2)</b>
 <span class="nc">Message</span> <span class="n">reply</span> <span class="o">=</span> <span class="n">replyFuture</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">10</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">);</span> <i class="conum" data-value="3"></i><b>(3)</b></code></pre>
 </div>
 </div>
@@ -1347,11 +1347,11 @@ It can be an exchange or a queue, like in the example above.</p>
 </table>
 </div>
 <div class="paragraph">
-<p>The <code>RpcClient#publish(Message)</code> method returns a <code>CompletableFuture&lt;Message&gt;</code> that holds the reply message.
+<p>The <code>Requester#publish(Message)</code> method returns a <code>CompletableFuture&lt;Message&gt;</code> that holds the reply message.
 It is then possible to wait for the reply asynchronously or synchronously.</p>
 </div>
 <div class="paragraph">
-<p>The RPC server has the following behavior:</p>
+<p>The responder has the following behavior:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -1359,15 +1359,15 @@ It is then possible to wait for the reply asynchronously or synchronously.</p>
 <p>when receiving a message request, it calls the processing logic (handler), extracts the correlation ID, calls a reply post-processor if defined, and sends the reply message.</p>
 </li>
 <li>
-<p>if all these operations succeed, the server accepts the request message (settles it with the <code>ACCEPTED</code> outcome).</p>
+<p>if all these operations succeed, the responder accepts the request message (settles it with the <code>ACCEPTED</code> outcome).</p>
 </li>
 <li>
-<p>if any of these operations throws an exception, the server discards the request message (the message is removed from the request queue and is <a href="https://www.rabbitmq.com/client-libraries/amqp-client-libraries#message-processing-result-outcome">dead-lettered</a> if configured).</p>
+<p>if any of these operations throws an exception, the responder discards the request message (the message is removed from the request queue and is <a href="https://www.rabbitmq.com/client-libraries/amqp-client-libraries#message-processing-result-outcome">dead-lettered</a> if configured).</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>The RPC server uses the following defaults:</p>
+<p>The responder uses the following defaults:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -1379,12 +1379,12 @@ It is then possible to wait for the reply asynchronously or synchronously.</p>
 </li>
 <li>
 <p>it assigns the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>reply-to</code> property</a> to the <em>reply</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>to</code> property</a> if it is defined.
-This behavior is hardcoded but it is possible to cancel it thanks to a reply post-processor.</p>
+This behavior is hardcoded, but it is possible to override it thanks to a reply post-processor.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>The RPC client uses the following defaults:</p>
+<p>The requester uses the following defaults:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -1393,7 +1393,7 @@ This behavior is hardcoded but it is possible to cancel it thanks to a reply pos
 </li>
 <li>
 <p>it uses a string-based correlation ID generator, with a fixed random UUID prefix and a strictly monotonic increasing sequence suffix (<code>{UUID}-{sequence}</code>, e.g. <code>6f839461-6b19-47e1-80b3-6be10d899d85-42</code>).
-The prefix is different for each <code>RpcClient</code> instance and the suffix is incremented by one for each request.</p>
+The prefix is different for each <code>Requester</code> instance and the suffix is incremented by one for each request.</p>
 </li>
 <li>
 <p>it sets the <em>request</em> <a href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties"><code>reply-to</code> property</a> to the reply-to queue address (defined by the user or created automatically, see above).</p>
@@ -1407,28 +1407,28 @@ The prefix is different for each <code>RpcClient</code> instance and the suffix 
 </ul>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s see how to customize some of the RPC support mechanics.
+<p>Let&#8217;s see how to customize some of the request/response support mechanics.
 Imagine the request <code>message-id</code> property is a critical piece of information and we do not want to use it as the correlation ID.
-The request can use the <code>correlation-id</code> property and the RPC server just has to extract the correlation ID from this property (instead of the <code>message-id</code> property by default).
+The request can use the <code>correlation-id</code> property and the responder just has to extract the correlation ID from this property (instead of the <code>message-id</code> property by default).
 Let&#8217;s also use a random UUID for the correlation ID generation (avoids doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).</p>
 </div>
 <div class="paragraph">
-<p>Here is how to declare the RPC client:</p>
+<p>Here is how to declare the requester:</p>
 </div>
 <div class="listingblock">
-<div class="title">Customizing the RPC client</div>
+<div class="title">Customizing the requester</div>
 <div class="content">
 <pre class="rouge highlight"><code data-lang="java"><span class="nc">String</span> <span class="n">replyToQueue</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">management</span><span class="o">().</span><span class="na">queue</span><span class="o">()</span>
     <span class="o">.</span><span class="na">autoDelete</span><span class="o">(</span><span class="kc">true</span><span class="o">).</span><span class="na">exclusive</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span>
     <span class="o">.</span><span class="na">declare</span><span class="o">().</span><span class="na">name</span><span class="o">();</span> <i class="conum" data-value="1"></i><b>(1)</b>
-<span class="nc">RpcClient</span> <span class="n">rpcClient</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">rpcClientBuilder</span><span class="o">()</span>
+<span class="nc">Requester</span> <span class="n">requester</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">requesterBuilder</span><span class="o">()</span>
     <span class="o">.</span><span class="na">correlationIdSupplier</span><span class="o">(</span><span class="nl">UUID:</span><span class="o">:</span><span class="n">randomUUID</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
     <span class="o">.</span><span class="na">requestPostProcessor</span><span class="o">((</span><span class="n">msg</span><span class="o">,</span> <span class="n">corrId</span><span class="o">)</span> <span class="o">-&gt;</span>
         <span class="n">msg</span><span class="o">.</span><span class="na">correlationId</span><span class="o">(</span><span class="n">corrId</span><span class="o">)</span> <i class="conum" data-value="3"></i><b>(3)</b>
            <span class="o">.</span><span class="na">replyToAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="n">replyToQueue</span><span class="o">).</span><span class="na">message</span><span class="o">())</span> <i class="conum" data-value="4"></i><b>(4)</b>
     <span class="o">.</span><span class="na">replyToQueue</span><span class="o">(</span><span class="n">replyToQueue</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">requestAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="s">"rpc-server"</span><span class="o">)</span> <i class="conum" data-value="5"></i><b>(5)</b>
-    <span class="o">.</span><span class="na">rpcClient</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">requestAddress</span><span class="o">().</span><span class="na">queue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span> <i class="conum" data-value="5"></i><b>(5)</b>
+    <span class="o">.</span><span class="na">requester</span><span class="o">()</span>
     <span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre>
 </div>
 </div>
@@ -1457,14 +1457,14 @@ Let&#8217;s also use a random UUID for the correlation ID generation (avoids doi
 </table>
 </div>
 <div class="paragraph">
-<p>We just have to tell the RPC server to get the correlation ID from the request <code>correlation-id</code> property:</p>
+<p>We just have to tell the responder to get the correlation ID from the request <code>correlation-id</code> property:</p>
 </div>
 <div class="listingblock">
-<div class="title">Customizing the RPC server</div>
+<div class="title">Customizing the responder</div>
 <div class="content">
-<pre class="rouge highlight"><code data-lang="java"><span class="nc">RpcServer</span> <span class="n">rpcServer</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">rpcServerBuilder</span><span class="o">()</span>
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Responder</span> <span class="n">responder</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">responderBuilder</span><span class="o">()</span>
     <span class="o">.</span><span class="na">correlationIdExtractor</span><span class="o">(</span><span class="nl">Message:</span><span class="o">:</span><span class="n">correlationId</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
-    <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"rpc-server"</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span>
     <span class="o">.</span><span class="na">handler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">req</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
       <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
       <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
@@ -1846,7 +1846,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.8.0-SNAPSHOT<br>
-Last updated 2025-09-11 07:34:54 UTC
+Last updated 2025-09-11 10:03:50 UTC
 </div>
 </div>
 </body>
