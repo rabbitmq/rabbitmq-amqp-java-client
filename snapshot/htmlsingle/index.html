@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.8.0-SNAPSHOT</span>
-<br><span id="revremark">(d6ace80)</span>
+<br><span id="revremark">(cdaf625)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -1389,7 +1389,7 @@ This behavior is hardcoded but it is possible to cancel it thanks to a reply pos
 <div class="ulist">
 <ul>
 <li>
-<p>it creates and waits for replies on an auto-delete, exclusive queue if no reply-to queue is set.</p>
+<p>it uses <a href="https://www.rabbitmq.com/docs/direct-reply-to">direct reply-to</a> if available (RabbitMQ 4.2 or more) for replies if no reply-to queue is set (it falls back to an auto-delete, exclusive queue if direct reply-to is not available)</p>
 </li>
 <li>
 <p>it uses a string-based correlation ID generator, with a fixed random UUID prefix and a strictly monotonic increasing sequence suffix (<code>{UUID}-{sequence}</code>, e.g. <code>6f839461-6b19-47e1-80b3-6be10d899d85-42</code>).
@@ -1846,7 +1846,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.8.0-SNAPSHOT<br>
-Last updated 2025-09-10 15:00:17 UTC
+Last updated 2025-09-11 07:34:54 UTC
 </div>
 </div>
 </body>
