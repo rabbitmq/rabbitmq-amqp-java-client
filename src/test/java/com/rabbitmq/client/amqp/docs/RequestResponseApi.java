@@ -1,9 +1,9 @@
 package com.rabbitmq.client.amqp.docs;
 
-import com.rabbitmq.client.amqp.RpcClient;
+import com.rabbitmq.client.amqp.Requester;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.Responder;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -11,60 +11,60 @@ import java.util.concurrent.TimeUnit;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public class RpcApi {
+public class RequestResponseApi {
 
-  void rpcWithDefaults() throws Exception {
+  void withDefaults() throws Exception {
     Connection connection = null;
-    // tag::rpc-server-creation[]
-    RpcServer rpcServer = connection.rpcServerBuilder() // <1>
-        .requestQueue("rpc-server") // <2>
+    // tag::responder-creation[]
+    Responder responder = connection.responderBuilder() // <1>
+        .requestQueue("request-queue") // <2>
         .handler((ctx, req) -> { // <3>
           String in = new String(req.body(), UTF_8);
           String out = "*** " + in + " ***";
           return ctx.message(out.getBytes(UTF_8)); // <4>
         }).build();
-    // end::rpc-server-creation[]
+    // end::responder-creation[]
 
-    // tag::rpc-client-creation[]
-    RpcClient rpcClient = connection.rpcClientBuilder() // <1>
-        .requestAddress().queue("rpc-server") // <2>
-        .rpcClient()
+    // tag::requester-creation[]
+    Requester requester = connection.requesterBuilder() // <1>
+        .requestAddress().queue("request-queue") // <2>
+        .requester()
         .build();
-    // end::rpc-client-creation[]
+    // end::requester-creation[]
 
-    // tag::rpc-client-request[]
-    Message request = rpcClient.message("hello".getBytes(UTF_8)); // <1>
-    CompletableFuture<Message> replyFuture = rpcClient.publish(request); // <2>
+    // tag::requester-request[]
+    Message request = requester.message("hello".getBytes(UTF_8)); // <1>
+    CompletableFuture<Message> replyFuture = requester.publish(request); // <2>
     Message reply = replyFuture.get(10, TimeUnit.SECONDS); // <3>
-    // end::rpc-client-request[]
+    // end::requester-request[]
   }
 
-  void rpcWithCustomSettings() throws Exception {
+  void withCustomSettings() {
     Connection connection = null;
-    // tag::rpc-custom-client-creation[]
+    // tag::custom-requester-creation[]
     String replyToQueue = connection.management().queue()
         .autoDelete(true).exclusive(true)
         .declare().name(); // <1>
-    RpcClient rpcClient = connection.rpcClientBuilder()
+    Requester requester = connection.requesterBuilder()
         .correlationIdSupplier(UUID::randomUUID) // <2>
         .requestPostProcessor((msg, corrId) ->
             msg.correlationId(corrId) // <3>
                .replyToAddress().queue(replyToQueue).message()) // <4>
         .replyToQueue(replyToQueue)
-        .requestAddress().queue("rpc-server") // <5>
-        .rpcClient()
+        .requestAddress().queue("request-queue") // <5>
+        .requester()
         .build();
-    // end::rpc-custom-client-creation[]
+    // end::custom-requester-creation[]
 
-    // tag::rpc-custom-server-creation[]
-    RpcServer rpcServer = connection.rpcServerBuilder()
+    // tag::custom-responder-creation[]
+    Responder responder = connection.responderBuilder()
         .correlationIdExtractor(Message::correlationId) // <1>
-        .requestQueue("rpc-server")
+        .requestQueue("request-queue")
         .handler((ctx, req) -> {
           String in = new String(req.body(), UTF_8);
           String out = "*** " + in + " ***";
           return ctx.message(out.getBytes(UTF_8));
         }).build();
-    // end::rpc-custom-server-creation[]
+    // end::custom-responder-creation[]
   }
 }

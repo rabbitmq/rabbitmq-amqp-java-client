@@ -18,11 +18,11 @@
 package com.rabbitmq.client.amqp;
 
 /**
- * Client server class for RPC.
+ * Responder class for request/response interaction.
  *
- * @see RpcServerBuilder
+ * @see ResponderBuilder
  */
-public interface RpcServer extends AutoCloseable {
+public interface Responder extends AutoCloseable {
 
   /** Contract to process a request message and return a reply message. */
   @FunctionalInterface
@@ -87,7 +87,7 @@ public interface RpcServer extends AutoCloseable {
   /** Request to receive messages again. */
   void unpause();
 
-  /** Close the RPC server and its resources. */
+  /** Close the responder and its resources. */
   @Override
   void close();
 }

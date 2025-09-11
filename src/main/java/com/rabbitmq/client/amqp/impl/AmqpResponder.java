@@ -21,7 +21,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
-import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.Responder;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,9 +31,9 @@ import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class AmqpRpcServer implements RpcServer {
+final class AmqpResponder implements Responder {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcServer.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpResponder.class);
 
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
 
@@ -57,7 +57,7 @@ final class AmqpRpcServer implements RpcServer {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Duration closeTimeout;
 
-  AmqpRpcServer(RpcSupport.AmqpRpcServerBuilder builder) {
+  AmqpResponder(RequestResponseSupport.AmqpResponderBuilder builder) {
     this.connection = builder.connection();
     this.closeTimeout = builder.closeTimeout();
     Handler handler = builder.handler();
@@ -141,7 +141,7 @@ final class AmqpRpcServer implements RpcServer {
                     ctx.accept();
                   } catch (Exception e) {
                     LOGGER.info(
-                        "Error while processing RPC request (correlation ID {}): {}",
+                        "Error while processing request (correlation ID {}): {}",
                         correlationId,
                         e.getMessage());
                     ctx.discard();
@@ -165,25 +165,25 @@ final class AmqpRpcServer implements RpcServer {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      this.connection.removeRpcServer(this);
+      this.connection.removeResponder(this);
       try {
         this.maybeWaitForUnsettledMessages();
       } catch (Exception e) {
-        LOGGER.warn("Error while waiting for unsettled messages in RPC server: {}", e.getMessage());
+        LOGGER.warn("Error while waiting for unsettled messages in responder: {}", e.getMessage());
       }
       try {
         long unsettledMessageCount = this.consumer.unsettledMessageCount();
         if (unsettledMessageCount > 0) {
-          LOGGER.info("Closing RPC server with {} unsettled message(s)", unsettledMessageCount);
+          LOGGER.info("Closing responder with {} unsettled message(s)", unsettledMessageCount);
         }
         this.consumer.close();
       } catch (Exception e) {
-        LOGGER.warn("Error while closing RPC server consumer: {}", e.getMessage());
+        LOGGER.warn("Error while closing responder consumer: {}", e.getMessage());
       }
       try {
         this.publisher.close();
       } catch (Exception e) {
-        LOGGER.warn("Error while closing RPC server publisher: {}", e.getMessage());
+        LOGGER.warn("Error while closing responder publisher: {}", e.getMessage());
       }
     }
   }
@@ -197,9 +197,9 @@ final class AmqpRpcServer implements RpcServer {
           },
           RESPONSE_SENDING_EXCEPTION_PREDICATE,
           RESPONSE_SENDING_RETRY_WAIT_TIMES,
-          "RPC Server Response");
+          "Responder Response");
     } catch (Exception e) {
-      LOGGER.info("Error while processing RPC request: {}", e.getMessage());
+      LOGGER.info("Error while processing request: {}", e.getMessage());
     }
   }
 
@@ -221,7 +221,7 @@ final class AmqpRpcServer implements RpcServer {
 
   private void checkOpen() {
     if (this.closed.get()) {
-      throw new AmqpException.AmqpResourceClosedException("RPC server is closed");
+      throw new AmqpException.AmqpResourceClosedException("Responder is closed");
     }
   }
 }

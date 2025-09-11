@@ -34,9 +34,9 @@ import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Requester;
 import com.rabbitmq.client.amqp.Resource;
-import com.rabbitmq.client.amqp.RpcClient;
-import com.rabbitmq.client.amqp.RpcServer;
+import com.rabbitmq.client.amqp.Responder;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -50,9 +50,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
-public class RpcTest {
+public class RequestResponseTest {
 
-  private static final RpcServer.Handler HANDLER =
+  private static final Responder.Handler HANDLER =
       (ctx, request) -> {
         String in = new String(request.body(), UTF_8);
         return ctx.message(process(in).getBytes(UTF_8));
@@ -72,21 +72,21 @@ public class RpcTest {
   }
 
   @Test
-  void rpcWithDefaults() {
+  void withDefaults() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
-      serverConnection.rpcServerBuilder().requestQueue(requestQueue).handler(HANDLER).build();
+      serverConnection.responderBuilder().requestQueue(requestQueue).handler(HANDLER).build();
 
       int requestCount = 100;
       Sync sync = sync(requestCount);
@@ -97,7 +97,7 @@ public class RpcTest {
                       () -> {
                         String request = UUID.randomUUID().toString();
                         CompletableFuture<Message> responseFuture =
-                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                            requester.publish(requester.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
                         sync.down();
@@ -108,23 +108,23 @@ public class RpcTest {
   }
 
   @Test
-  void rpcIsRequesterAliveShouldReturnTrueIfPublisherStillOpen() throws Exception {
+  void isRequesterAliveShouldReturnTrueIfPublisherStillOpen() throws Exception {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       List<Boolean> calls = new CopyOnWriteArrayList<>();
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .requestQueue(requestQueue)
           .handler(
               (ctx, request) -> {
@@ -135,7 +135,7 @@ public class RpcTest {
 
       String request = UUID.randomUUID().toString();
       CompletableFuture<Message> responseFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       Message response = responseFuture.get(10, TimeUnit.SECONDS);
       assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
       assertThat(calls).containsExactly(true);
@@ -143,18 +143,18 @@ public class RpcTest {
   }
 
   @Test
-  void rpcIsRequesterAliveShouldReturnFalseIfPublisherClosed() {
+  void isRequesterAliveShouldReturnFalseIfPublisherClosed() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       Sync requestReceivedSync = sync();
@@ -162,7 +162,7 @@ public class RpcTest {
 
       List<Boolean> calls = new CopyOnWriteArrayList<>();
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .requestQueue(requestQueue)
           .handler(
               (ctx, request) -> {
@@ -176,10 +176,10 @@ public class RpcTest {
 
       String request = UUID.randomUUID().toString();
       CompletableFuture<Message> responseFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       assertThat(requestReceivedSync).completes();
       assertThat(calls).containsExactly(true);
-      rpcClient.close();
+      requester.close();
       assertThat(responseFuture).completesExceptionallyWithin(Duration.ofSeconds(10));
       requesterClosedSync.down();
       waitAtMost(() -> calls.size() == 2);
@@ -189,7 +189,7 @@ public class RpcTest {
   }
 
   @Test
-  void rpcWithCustomSettings() {
+  void withCustomSettings() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
@@ -200,9 +200,9 @@ public class RpcTest {
 
       // we are using application properties for the correlation ID and the reply-to queue
       // (instead of the standard properties)
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .correlationIdSupplier(correlationIdSequence::getAndIncrement)
               .requestPostProcessor(
                   (msg, corrId) ->
@@ -212,11 +212,11 @@ public class RpcTest {
               .replyToQueue(replyToQueue)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .correlationIdExtractor(msg -> msg.property("message-id"))
           .replyPostProcessor((msg, corrId) -> msg.property("correlation-id", (Long) corrId))
           .requestQueue(requestQueue)
@@ -239,7 +239,7 @@ public class RpcTest {
                       () -> {
                         String request = UUID.randomUUID().toString();
                         CompletableFuture<Message> responseFuture =
-                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                            requester.publish(requester.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         org.assertj.core.api.Assertions.assertThat(response.body())
                             .asString(UTF_8)
@@ -252,7 +252,7 @@ public class RpcTest {
   }
 
   @Test
-  void rpcUseCorrelationIdRequestProperty() {
+  void useCorrelationIdRequestProperty() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
@@ -260,9 +260,9 @@ public class RpcTest {
 
       String replyToQueue =
           clientConnection.management().queue().autoDelete(true).exclusive(true).declare().name();
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .correlationIdSupplier(UUID::randomUUID)
               .requestPostProcessor(
                   (msg, corrId) ->
@@ -270,11 +270,11 @@ public class RpcTest {
               .replyToQueue(replyToQueue)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .correlationIdExtractor(Message::correlationId)
           .requestQueue(requestQueue)
           .handler(HANDLER)
@@ -289,7 +289,7 @@ public class RpcTest {
                       () -> {
                         String request = UUID.randomUUID().toString();
                         CompletableFuture<Message> responseFuture =
-                            rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                            requester.publish(requester.message(request.getBytes(UTF_8)));
                         Message response = responseFuture.get(10, TimeUnit.SECONDS);
                         assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
                         sync.down();
@@ -301,7 +301,7 @@ public class RpcTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void rpcShouldRecoverAfterConnectionIsClosed(boolean isolateResources)
+  void shouldRecoverAfterConnectionIsClosed(boolean isolateResources)
       throws ExecutionException, InterruptedException, TimeoutException {
     String clientConnectionName = UUID.randomUUID().toString();
     Sync clientConnectionSync = sync();
@@ -328,41 +328,41 @@ public class RpcTest {
             .backOffDelayPolicy(backOffDelayPolicy)
             .connectionBuilder()
             .build()) {
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
-      serverConnection.rpcServerBuilder().requestQueue(requestQueue).handler(HANDLER).build();
+      serverConnection.responderBuilder().requestQueue(requestQueue).handler(HANDLER).build();
 
       byte[] requestBody = request(UUID.randomUUID().toString());
       CompletableFuture<Message> response =
-          rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+          requester.publish(requester.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
 
       Cli.closeConnection(clientConnectionName);
       requestBody = request(UUID.randomUUID().toString());
       try {
-        rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+        requester.publish(requester.message(requestBody).messageId(UUID.randomUUID()));
         fail("Client connection is recovering, the call should have failed");
       } catch (AmqpException e) {
         // OK
       }
       assertThat(clientConnectionSync).completes();
       requestBody = request(UUID.randomUUID().toString());
-      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      response = requester.publish(requester.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
 
       Cli.closeConnection(serverConnectionName);
       requestBody = request(UUID.randomUUID().toString());
-      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      response = requester.publish(requester.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
       assertThat(serverConnectionSync).completes();
       requestBody = request(UUID.randomUUID().toString());
-      response = rpcClient.publish(rpcClient.message(requestBody).messageId(UUID.randomUUID()));
+      response = requester.publish(requester.message(requestBody).messageId(UUID.randomUUID()));
       assertThat(response.get(10, TimeUnit.SECONDS).body()).isEqualTo(process(requestBody));
     } finally {
       serverConnection.management().queueDelete(requestQueue);
@@ -378,7 +378,7 @@ public class RpcTest {
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .requestQueue(requestQueue)
           .handler(
               (ctx, msg) -> {
@@ -393,13 +393,13 @@ public class RpcTest {
           .build();
 
       Duration requestTimeout = Duration.ofSeconds(1);
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestTimeout(requestTimeout)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       int requestCount = 100;
@@ -421,7 +421,7 @@ public class RpcTest {
                 executorService.submit(
                     () -> {
                       CompletableFuture<Message> responseFuture =
-                          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                          requester.publish(requester.message(request.getBytes(UTF_8)));
                       responseFuture.handle(
                           (msg, ex) -> {
                             if (ex != null) {
@@ -438,14 +438,14 @@ public class RpcTest {
   }
 
   @Test
-  void outstandingRequestsShouldCompleteExceptionallyOnRpcClientClosing() {
+  void outstandingRequestsShouldCompleteExceptionallyOnRequesterClosing() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .requestQueue(requestQueue)
           .handler(
               (ctx, msg) -> {
@@ -459,12 +459,12 @@ public class RpcTest {
           .replyPostProcessor((r, corrId) -> r == null ? null : r.correlationId(corrId))
           .build();
 
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       int requestCount = 100;
@@ -487,7 +487,7 @@ public class RpcTest {
                 executorService.submit(
                     () -> {
                       CompletableFuture<Message> responseFuture =
-                          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                          requester.publish(requester.message(request.getBytes(UTF_8)));
                       responseFuture.handle(
                           (msg, ex) -> {
                             if (ex == null) {
@@ -503,7 +503,7 @@ public class RpcTest {
       assertThat(allRequestSubmitted).completes();
       waitAtMost(() -> completedRequestCount.get() == requestCount - expectedPoisonCount.get());
       assertThat(timedOutRequestCount).hasValue(0);
-      rpcClient.close();
+      requester.close();
       assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
     }
   }
@@ -525,17 +525,17 @@ public class RpcTest {
           management.queue().exclusive(true).deadLetterExchange(dlx).declare().name();
 
       Duration requestTimeout = Duration.ofSeconds(1);
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestTimeout(requestTimeout)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       serverConnection
-          .rpcServerBuilder()
+          .responderBuilder()
           .requestQueue(requestQueue)
           .handler(
               (ctx, request) -> {
@@ -549,7 +549,7 @@ public class RpcTest {
 
       String request = UUID.randomUUID().toString();
       CompletableFuture<Message> responseFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       Message response = responseFuture.get(10, TimeUnit.SECONDS);
       assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
 
@@ -557,7 +557,7 @@ public class RpcTest {
 
       request = "poison";
       CompletableFuture<Message> poisonFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       waitAtMost(() -> management.queueInfo(dlq).messageCount() == 1);
       assertThatThrownBy(
               () -> poisonFuture.get(requestTimeout.multipliedBy(3).toMillis(), MILLISECONDS))
@@ -567,25 +567,25 @@ public class RpcTest {
   }
 
   @Test
-  void rpcServerShouldWaitForAllOutstandingMessagesToBeProcessedBeforeClosingInternalConsumer()
+  void responderShouldWaitForAllOutstandingMessagesToBeProcessedBeforeClosingInternalConsumer()
       throws ExecutionException, InterruptedException, TimeoutException {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       Sync receivedSync = sync();
-      RpcServer rpcServer =
+      Responder responder =
           serverConnection
-              .rpcServerBuilder()
+              .responderBuilder()
               .requestQueue(requestQueue)
               .handler(
                   (ctx, request) -> {
@@ -601,35 +601,35 @@ public class RpcTest {
 
       String request = UUID.randomUUID().toString();
       CompletableFuture<Message> responseFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       assertThat(receivedSync).completes();
-      rpcServer.close();
+      responder.close();
       Message response = responseFuture.get(10, TimeUnit.SECONDS);
       assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
     }
   }
 
   @Test
-  void outstandingRequestShouldTimeOutWhenRpcServerDoesNotCloseConsumerGracefully() {
+  void outstandingRequestShouldTimeOutWhenResponderDoesNotCloseConsumerGracefully() {
     try (Connection clientConnection = environment.connectionBuilder().build();
         Connection serverConnection = environment.connectionBuilder().build()) {
 
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
       Duration requestTimeout = Duration.ofSeconds(1);
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestTimeout(requestTimeout)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
       Sync receivedSync = sync();
-      RpcServer rpcServer =
+      Responder responder =
           serverConnection
-              .rpcServerBuilder()
+              .responderBuilder()
               .closeTimeout(Duration.ZERO) // close the consumer immediately
               .requestQueue(requestQueue)
               .handler(
@@ -646,9 +646,9 @@ public class RpcTest {
 
       String request = UUID.randomUUID().toString();
       CompletableFuture<Message> responseFuture =
-          rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+          requester.publish(requester.message(request.getBytes(UTF_8)));
       assertThat(receivedSync).completes();
-      rpcServer.close();
+      responder.close();
       assertThatThrownBy(
               () -> responseFuture.get(requestTimeout.multipliedBy(3).toMillis(), MILLISECONDS))
           .isInstanceOf(ExecutionException.class)
@@ -665,18 +665,18 @@ public class RpcTest {
       String requestQueue = serverConnection.management().queue().exclusive(true).declare().name();
 
       Duration requestTimeout = Duration.ofSeconds(1);
-      RpcClient rpcClient =
+      Requester requester =
           clientConnection
-              .rpcClientBuilder()
+              .requesterBuilder()
               .requestTimeout(requestTimeout)
               .requestAddress()
               .queue(requestQueue)
-              .rpcClient()
+              .requester()
               .build();
 
-      RpcServer rpcServer =
+      Responder responder =
           serverConnection
-              .rpcServerBuilder()
+              .responderBuilder()
               .closeTimeout(Duration.ZERO) // close the consumer immediately
               .requestQueue(requestQueue)
               .handler(HANDLER)
@@ -690,7 +690,7 @@ public class RpcTest {
             String request = UUID.randomUUID().toString();
             expectedReplies.add(process(request));
             CompletableFuture<Message> responseFuture =
-                rpcClient.publish(rpcClient.message(request.getBytes(UTF_8)));
+                requester.publish(requester.message(request.getBytes(UTF_8)));
             futures.add(responseFuture);
           };
 
@@ -701,7 +701,7 @@ public class RpcTest {
       expectedReplies.clear();
       futures.clear();
 
-      rpcServer.pause();
+      responder.pause();
       int requestCount = 10;
       IntStream.range(0, requestCount).forEach(ignored -> sendRequest.run());
       waitAtMost(
@@ -710,7 +710,7 @@ public class RpcTest {
 
       futures.forEach(f -> assertThat(f).isNotCompleted());
 
-      rpcServer.unpause();
+      responder.unpause();
 
       futures.forEach(f -> assertThat(getAndExtract(f)).isIn(expectedReplies));
 

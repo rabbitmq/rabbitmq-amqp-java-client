@@ -20,11 +20,11 @@ package com.rabbitmq.client.amqp;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Client support class for RPC.
+ * Requester support class for request/response interaction.
  *
- * @see RpcClientBuilder
+ * @see RequesterBuilder
  */
-public interface RpcClient extends AutoCloseable {
+public interface Requester extends AutoCloseable {
 
   /**
    * Create a message meant to be published by the underlying publisher instance.
@@ -55,7 +55,7 @@ public interface RpcClient extends AutoCloseable {
    */
   CompletableFuture<Message> publish(Message message);
 
-  /** Close the RPC client and its resources. */
+  /** Close the requester and its resources. */
   @Override
   void close();
 }

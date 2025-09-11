@@ -21,8 +21,8 @@ import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-/** API to configure and create a {@link RpcServer}. */
-public interface RpcServerBuilder {
+/** API to configure and create a {@link Responder}. */
+public interface ResponderBuilder {
 
   /**
    * The queue to wait for requests on.
@@ -30,7 +30,7 @@ public interface RpcServerBuilder {
    * @param requestQueue request queue
    * @return this builder instance
    */
-  RpcServerBuilder requestQueue(String requestQueue);
+  ResponderBuilder requestQueue(String requestQueue);
 
   /**
    * The logic to process requests and issue replies.
@@ -38,7 +38,7 @@ public interface RpcServerBuilder {
    * @param handler handler
    * @return this builder instance
    */
-  RpcServerBuilder handler(RpcServer.Handler handler);
+  ResponderBuilder handler(Responder.Handler handler);
 
   /**
    * Logic to extract the correlation ID from a request message.
@@ -48,7 +48,7 @@ public interface RpcServerBuilder {
    * @param correlationIdExtractor logic to extract the correlation ID
    * @return this builder instance
    */
-  RpcServerBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
+  ResponderBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
 
   /**
    * A callback called after request processing but before sending the reply message.
@@ -61,7 +61,7 @@ public interface RpcServerBuilder {
    * @param replyPostProcessor logic to post-process reply message
    * @return this builder instance
    */
-  RpcServerBuilder replyPostProcessor(BiFunction<Message, Object, Message> replyPostProcessor);
+  ResponderBuilder replyPostProcessor(BiFunction<Message, Object, Message> replyPostProcessor);
 
   /**
    * The time the server waits for all outstanding requests to be processed before closing.
@@ -73,12 +73,12 @@ public interface RpcServerBuilder {
    * @param closeTimeout close timeout
    * @return this builder instance
    */
-  RpcServerBuilder closeTimeout(Duration closeTimeout);
+  ResponderBuilder closeTimeout(Duration closeTimeout);
 
   /**
    * Create the configured instance.
    *
    * @return the configured instance
    */
-  RpcServer build();
+  Responder build();
 }

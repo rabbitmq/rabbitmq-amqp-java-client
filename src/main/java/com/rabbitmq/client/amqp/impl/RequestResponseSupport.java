@@ -18,70 +18,70 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.RpcClient;
-import com.rabbitmq.client.amqp.RpcClientBuilder;
-import com.rabbitmq.client.amqp.RpcServer;
-import com.rabbitmq.client.amqp.RpcServerBuilder;
+import com.rabbitmq.client.amqp.Requester;
+import com.rabbitmq.client.amqp.RequesterBuilder;
+import com.rabbitmq.client.amqp.Responder;
+import com.rabbitmq.client.amqp.ResponderBuilder;
 import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-abstract class RpcSupport {
+final class RequestResponseSupport {
 
-  private RpcSupport() {}
+  private RequestResponseSupport() {}
 
-  static class AmqpRpcClientBuilder implements RpcClientBuilder {
+  static class AmqpRequesterBuilder implements RequesterBuilder {
 
     private static final Duration REQUEST_TIMEOUT_MIN = Duration.ofSeconds(1);
 
     private final AmqpConnection connection;
 
-    private final DefaultRpcClientAddressBuilder requestAddressBuilder =
-        new DefaultRpcClientAddressBuilder(this);
+    private final DefaultRequesterAddressBuilder requestAddressBuilder =
+        new DefaultRequesterAddressBuilder(this);
     private String replyToQueue;
     private Supplier<Object> correlationIdSupplier;
     private BiFunction<Message, Object, Message> requestPostProcessor;
     private Function<Message, Object> correlationIdExtractor;
     private Duration requestTimeout = Duration.ofSeconds(30);
 
-    AmqpRpcClientBuilder(AmqpConnection connection) {
+    AmqpRequesterBuilder(AmqpConnection connection) {
       this.connection = connection;
     }
 
     @Override
-    public RpcClientAddressBuilder requestAddress() {
+    public RequesterAddressBuilder requestAddress() {
       return this.requestAddressBuilder;
     }
 
     @Override
-    public RpcClientBuilder replyToQueue(String replyToQueue) {
+    public RequesterBuilder replyToQueue(String replyToQueue) {
       this.replyToQueue = replyToQueue;
       return this;
     }
 
     @Override
-    public RpcClientBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier) {
+    public RequesterBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier) {
       this.correlationIdSupplier = correlationIdSupplier;
       return this;
     }
 
     @Override
-    public RpcClientBuilder requestPostProcessor(
+    public RequesterBuilder requestPostProcessor(
         BiFunction<Message, Object, Message> requestPostProcessor) {
       this.requestPostProcessor = requestPostProcessor;
       return this;
     }
 
     @Override
-    public RpcClientBuilder correlationIdExtractor(
+    public RequesterBuilder correlationIdExtractor(
         Function<Message, Object> correlationIdExtractor) {
       this.correlationIdExtractor = correlationIdExtractor;
       return this;
     }
 
     @Override
-    public RpcClientBuilder requestTimeout(Duration timeout) {
+    public RequesterBuilder requestTimeout(Duration timeout) {
       if (timeout == null) {
         throw new IllegalArgumentException("Request timeout cannot be null");
       }
@@ -98,8 +98,8 @@ abstract class RpcSupport {
     }
 
     @Override
-    public RpcClient build() {
-      return this.connection.createRpcClient(this);
+    public Requester build() {
+      return this.connection.createRequester(this);
     }
 
     AmqpConnection connection() {
@@ -123,77 +123,77 @@ abstract class RpcSupport {
     }
   }
 
-  private static class DefaultRpcClientAddressBuilder
-      extends DefaultAddressBuilder<RpcClientBuilder.RpcClientAddressBuilder>
-      implements RpcClientBuilder.RpcClientAddressBuilder {
+  private static class DefaultRequesterAddressBuilder
+      extends DefaultAddressBuilder<RequesterBuilder.RequesterAddressBuilder>
+      implements RequesterBuilder.RequesterAddressBuilder {
 
-    private final AmqpRpcClientBuilder builder;
+    private final AmqpRequesterBuilder builder;
 
-    private DefaultRpcClientAddressBuilder(AmqpRpcClientBuilder builder) {
+    private DefaultRequesterAddressBuilder(AmqpRequesterBuilder builder) {
       super(null);
       this.builder = builder;
     }
 
     @Override
-    RpcClientBuilder.RpcClientAddressBuilder result() {
+    RequesterBuilder.RequesterAddressBuilder result() {
       return this;
     }
 
     @Override
-    public RpcClientBuilder rpcClient() {
+    public RequesterBuilder requester() {
       return this.builder;
     }
   }
 
-  static class AmqpRpcServerBuilder implements RpcServerBuilder {
+  static class AmqpResponderBuilder implements ResponderBuilder {
 
     private final AmqpConnection connection;
 
     private String requestQueue;
-    private RpcServer.Handler handler;
+    private Responder.Handler handler;
     private Function<Message, Object> correlationIdExtractor;
     private BiFunction<Message, Object, Message> replyPostProcessor;
     private Duration closeTimeout = Duration.ofSeconds(60);
 
-    AmqpRpcServerBuilder(AmqpConnection connection) {
+    AmqpResponderBuilder(AmqpConnection connection) {
       this.connection = connection;
     }
 
     @Override
-    public RpcServerBuilder requestQueue(String requestQueue) {
+    public ResponderBuilder requestQueue(String requestQueue) {
       this.requestQueue = requestQueue;
       return this;
     }
 
     @Override
-    public RpcServerBuilder handler(RpcServer.Handler handler) {
+    public ResponderBuilder handler(Responder.Handler handler) {
       this.handler = handler;
       return this;
     }
 
     @Override
-    public RpcServerBuilder correlationIdExtractor(
+    public ResponderBuilder correlationIdExtractor(
         Function<Message, Object> correlationIdExtractor) {
       this.correlationIdExtractor = correlationIdExtractor;
       return this;
     }
 
     @Override
-    public RpcServerBuilder replyPostProcessor(
+    public ResponderBuilder replyPostProcessor(
         BiFunction<Message, Object, Message> replyPostProcessor) {
       this.replyPostProcessor = replyPostProcessor;
       return this;
     }
 
     @Override
-    public RpcServerBuilder closeTimeout(Duration closeTimeout) {
+    public ResponderBuilder closeTimeout(Duration closeTimeout) {
       this.closeTimeout = closeTimeout;
       return this;
     }
 
     @Override
-    public RpcServer build() {
-      return this.connection.createRpcServer(this);
+    public Responder build() {
+      return this.connection.createResponder(this);
     }
 
     AmqpConnection connection() {
@@ -204,7 +204,7 @@ abstract class RpcSupport {
       return this.requestQueue;
     }
 
-    RpcServer.Handler handler() {
+    Responder.Handler handler() {
       return this.handler;
     }
 
