@@ -44,18 +44,18 @@ public interface Connection extends Closeable, Resource {
   ConsumerBuilder consumerBuilder();
 
   /**
-   * Create a builder to configure and create a {@link RpcClientBuilder}.
+   * Create a builder to configure and create a {@link RequesterBuilder}.
    *
-   * @return RPC client builder
+   * @return requester builder
    */
-  RpcClientBuilder rpcClientBuilder();
+  RequesterBuilder requesterBuilder();
 
   /**
-   * Create a builder to configure and create a {@link RpcServerBuilder}.
+   * Create a builder to configure and create a {@link Responder}.
    *
-   * @return RPC server builder
+   * @return responder builder
    */
-  RpcServerBuilder rpcServerBuilder();
+  ResponderBuilder responderBuilder();
 
   /** Close the connection and its resources */
   @Override

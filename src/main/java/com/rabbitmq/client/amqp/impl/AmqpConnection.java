@@ -41,10 +41,10 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.PublisherBuilder;
-import com.rabbitmq.client.amqp.RpcClient;
-import com.rabbitmq.client.amqp.RpcClientBuilder;
-import com.rabbitmq.client.amqp.RpcServer;
-import com.rabbitmq.client.amqp.RpcServerBuilder;
+import com.rabbitmq.client.amqp.Requester;
+import com.rabbitmq.client.amqp.RequesterBuilder;
+import com.rabbitmq.client.amqp.Responder;
+import com.rabbitmq.client.amqp.ResponderBuilder;
 import com.rabbitmq.client.amqp.impl.Tuples.Pair;
 import com.rabbitmq.client.amqp.impl.Utils.RunnableWithException;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
@@ -106,8 +106,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private volatile Session nativeSession;
   private final List<AmqpPublisher> publishers = new CopyOnWriteArrayList<>();
   private final List<AmqpConsumer> consumers = new CopyOnWriteArrayList<>();
-  private final List<RpcClient> rpcClients = new CopyOnWriteArrayList<>();
-  private final List<RpcServer> rpcServers = new CopyOnWriteArrayList<>();
+  private final List<Requester> requesters = new CopyOnWriteArrayList<>();
+  private final List<Responder> responders = new CopyOnWriteArrayList<>();
   private final TopologyListener topologyListener;
   private final EntityRecovery entityRecovery;
   private final AtomicBoolean recoveringConnection = new AtomicBoolean(false);
@@ -253,13 +253,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
   }
 
   @Override
-  public RpcClientBuilder rpcClientBuilder() {
-    return new RpcSupport.AmqpRpcClientBuilder(this);
+  public RequesterBuilder requesterBuilder() {
+    return new RequestResponseSupport.AmqpRequesterBuilder(this);
   }
 
   @Override
-  public RpcServerBuilder rpcServerBuilder() {
-    return new RpcSupport.AmqpRpcServerBuilder(this);
+  public ResponderBuilder responderBuilder() {
+    return new RequestResponseSupport.AmqpResponderBuilder(this);
   }
 
   @Override
@@ -802,24 +802,24 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.topologyListener.consumerDeleted(consumer.id(), consumer.queue());
   }
 
-  RpcClient createRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
-    RpcClient rpcClient = new AmqpRpcClient(builder);
-    this.rpcClients.add(rpcClient);
-    return rpcClient;
+  Requester createRequester(RequestResponseSupport.AmqpRequesterBuilder builder) {
+    Requester requester = new AmqpRequester(builder);
+    this.requesters.add(requester);
+    return requester;
   }
 
-  void removeRpcClient(RpcClient rpcClient) {
-    this.rpcClients.remove(rpcClient);
+  void removeRequester(Requester requester) {
+    this.requesters.remove(requester);
   }
 
-  RpcServer createRpcServer(RpcSupport.AmqpRpcServerBuilder builder) {
-    RpcServer rpcServer = new AmqpRpcServer(builder);
-    this.rpcServers.add(rpcServer);
-    return rpcServer;
+  Responder createResponder(RequestResponseSupport.AmqpResponderBuilder builder) {
+    Responder responder = new AmqpResponder(builder);
+    this.responders.add(responder);
+    return responder;
   }
 
-  void removeRpcServer(RpcServer rpcServer) {
-    this.rpcServers.remove(rpcServer);
+  void removeResponder(Responder responder) {
+    this.responders.remove(responder);
   }
 
   private void changeStateOfPublishers(State newState, Throwable failure) {
@@ -900,11 +900,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
       }
       safeClose.accept("management", this::closeManagement);
 
-      for (RpcClient rpcClient : this.rpcClients) {
-        safeClose.accept("RPC client", rpcClient::close);
+      for (Requester requester : this.requesters) {
+        safeClose.accept("requester", requester::close);
       }
-      for (RpcServer rpcServer : this.rpcServers) {
-        safeClose.accept("RPC server", rpcServer::close);
+      for (Responder responder : this.responders) {
+        safeClose.accept("responder", responder::close);
       }
       for (AmqpPublisher publisher : this.publishers) {
         safeClose.accept("publisher", () -> publisher.close(cause));

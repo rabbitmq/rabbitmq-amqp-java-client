@@ -22,27 +22,28 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-/** API to configure and create a {@link RpcClient}. */
-public interface RpcClientBuilder {
+/** API to configure and create a {@link Requester}. */
+public interface RequesterBuilder {
 
   /**
    * Builder for the request address.
    *
    * @return the request address builder
    */
-  RpcClientAddressBuilder requestAddress();
+  RequesterAddressBuilder requestAddress();
 
   /**
    * The queue the client expects responses on.
    *
    * <p>The queue <b>must</b> exist if it is set.
    *
-   * <p>The RPC client will create an exclusive, auto-delete queue if it is not set.
+   * <p>The requester will a direct reply-to queue (RabbitMQ 4.2 or more) or create an exclusive,
+   * auto-delete queue if this parameter is not set.
    *
    * @param replyToQueue reply queue
    * @return this builder instance
    */
-  RpcClientBuilder replyToQueue(String replyToQueue);
+  RequesterBuilder replyToQueue(String replyToQueue);
 
   /**
    * The generator for correlation ID.
@@ -53,7 +54,7 @@ public interface RpcClientBuilder {
    * @param correlationIdSupplier correlation ID generator
    * @return the this builder instance
    */
-  RpcClientBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier);
+  RequesterBuilder correlationIdSupplier(Supplier<Object> correlationIdSupplier);
 
   /**
    * A callback before sending a request message.
@@ -67,7 +68,7 @@ public interface RpcClientBuilder {
    * @param requestPostProcessor logic to post-process request message
    * @return this builder instance
    */
-  RpcClientBuilder requestPostProcessor(BiFunction<Message, Object, Message> requestPostProcessor);
+  RequesterBuilder requestPostProcessor(BiFunction<Message, Object, Message> requestPostProcessor);
 
   /**
    * Callback to extract the correlation ID from a reply message.
@@ -80,7 +81,7 @@ public interface RpcClientBuilder {
    * @param correlationIdExtractor correlation ID extractor
    * @return this builder instance
    */
-  RpcClientBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
+  RequesterBuilder correlationIdExtractor(Function<Message, Object> correlationIdExtractor);
 
   /**
    * Timeout before failing outstanding requests.
@@ -88,23 +89,23 @@ public interface RpcClientBuilder {
    * @param timeout timeout
    * @return the builder instance
    */
-  RpcClientBuilder requestTimeout(Duration timeout);
+  RequesterBuilder requestTimeout(Duration timeout);
 
   /**
    * Build the configured instance.
    *
    * @return the configured instance
    */
-  RpcClient build();
+  Requester build();
 
   /** Builder for the request address. */
-  interface RpcClientAddressBuilder extends AddressBuilder<RpcClientAddressBuilder> {
+  interface RequesterAddressBuilder extends AddressBuilder<RequesterAddressBuilder> {
 
     /**
-     * Go back to the RPC client builder.
+     * Go back to the requester builder.
      *
-     * @return the RPC client builder
+     * @return the requester builder
      */
-    RpcClientBuilder rpcClient();
+    RequesterBuilder requester();
   }
 }

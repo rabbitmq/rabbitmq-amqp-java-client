@@ -21,7 +21,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
-import com.rabbitmq.client.amqp.RpcClient;
+import com.rabbitmq.client.amqp.Requester;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
@@ -38,9 +38,9 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class AmqpRpcClient implements RpcClient {
+final class AmqpRequester implements Requester {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRpcClient.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpRequester.class);
 
   private static final Publisher.Callback NO_OP_CALLBACK = ctx -> {};
 
@@ -56,7 +56,7 @@ final class AmqpRpcClient implements RpcClient {
   private final Duration requestTimeout;
   private final ScheduledFuture<?> requestTimeoutFuture;
 
-  AmqpRpcClient(RpcSupport.AmqpRpcClientBuilder builder) {
+  AmqpRequester(RequestResponseSupport.AmqpRequesterBuilder builder) {
     this.connection = builder.connection();
     this.clock = this.connection.clock();
 
@@ -176,21 +176,21 @@ final class AmqpRpcClient implements RpcClient {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      this.connection.removeRpcClient(this);
+      this.connection.removeRequester(this);
       this.requestTimeoutFuture.cancel(true);
       try {
         this.publisher.close();
       } catch (Exception e) {
-        LOGGER.warn("Error while closing RPC client publisher: {}", e.getMessage());
+        LOGGER.warn("Error while closing requester publisher: {}", e.getMessage());
       }
       try {
         this.consumer.close();
       } catch (Exception e) {
-        LOGGER.warn("Error while closing RPC client consumer: {}", e.getMessage());
+        LOGGER.warn("Error while closing requester consumer: {}", e.getMessage());
       }
       this.outstandingRequests
           .values()
-          .forEach(r -> r.future.completeExceptionally(new AmqpException("RPC client is closed")));
+          .forEach(r -> r.future.completeExceptionally(new AmqpException("Requester is closed")));
     }
   }
 
@@ -209,7 +209,7 @@ final class AmqpRpcClient implements RpcClient {
           } catch (Exception e) {
             LOGGER.warn("Error while pruning timed out request: {}", e.getMessage());
           }
-          request.future.completeExceptionally(new AmqpException("RPC request timed out"));
+          request.future.completeExceptionally(new AmqpException("Request timed out"));
         }
       }
     };
@@ -217,7 +217,7 @@ final class AmqpRpcClient implements RpcClient {
 
   private void checkOpen() {
     if (this.closed.get()) {
-      throw new AmqpException("RPC client is closed");
+      throw new AmqpException("Requester is closed");
     }
   }
 
