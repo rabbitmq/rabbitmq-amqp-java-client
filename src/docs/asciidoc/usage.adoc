@@ -14,7 +14,7 @@ This documentation covers only the advanced usage of the library; a https://www.
 
 === Connection Settings at the Environment Level
 
-Connection settings (URI, credentials, etc) can be set at the environment level.
+Connection settings (URI, credentials, etc.) can be set at the environment level.
 They will then be re-used for each connection.
 It is possible to override the environment connection settings for a given connection:
 
@@ -167,7 +167,7 @@ rabbitmq_amqp_publishers 1.0
 
 === Request/Response
 
-Request/response with RabbitMQ consists in a requester sending a request message and a responder replying with a response message.
+Request/response with RabbitMQ consists of a requester sending a request message and a responder replying with a response message.
 Both the requester and responder are _client applications_ and the messages flow through the broker.
 The requester must send a reply-to queue address with the request.
 The responder uses this reply-to queue address to send the response.
@@ -190,7 +190,7 @@ include::{test-examples}/RequestResponseApi.java[tag=responder-creation]
 <3> Define the processing logic
 <4> Create the reply message
 
-Note the responder does not create the queue it waits requests on.
+Note that the responder does not create the queue it waits for requests on.
 It must be created beforehand.
 
 Here is how to create a requester:
@@ -251,13 +251,13 @@ include::{test-examples}/RequestResponseApi.java[tag=is-requester-alive]
 --------
 <1> Check if the requester is still connected
 
-The requester can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
+The responder can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
 Note each call to `Context#isRequesterAlive(Message)` implies a request to the broker.
 
 Let's see how to customize some of the request/response support mechanics.
 Imagine the request `message-id` property is a critical piece of information and we do not want to use it as the correlation ID.
 The request can use the `correlation-id` property and the responder just has to extract the correlation ID from this property (instead of the `message-id` property by default).
-Let's also use a random UUID for the correlation ID generation (avoids doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).
+Let's also use a random UUID for the correlation ID generation (avoid doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).
 
 Here is how to declare the requester:
 
