@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.8.0-SNAPSHOT</span>
-<br><span id="revremark">(f1a1167)</span>
+<br><span id="revremark">(bdfc899)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -1261,9 +1261,9 @@ It is still possible to implement one part or the other with regular publishers 
 <pre class="rouge highlight"><code data-lang="java"><span class="nc">Responder</span> <span class="n">responder</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">responderBuilder</span><span class="o">()</span> <i class="conum" data-value="1"></i><b>(1)</b>
     <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span> <i class="conum" data-value="2"></i><b>(2)</b>
     <span class="o">.</span><span class="na">handler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">req</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span> <i class="conum" data-value="3"></i><b>(3)</b>
-      <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
-      <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
-      <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="n">out</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span> <i class="conum" data-value="4"></i><b>(4)</b>
+        <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
+        <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="n">out</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span> <i class="conum" data-value="4"></i><b>(4)</b>
     <span class="o">}).</span><span class="na">build</span><span class="o">();</span></code></pre>
 </div>
 </div>
@@ -1407,6 +1407,37 @@ The prefix is different for each <code>Requester</code> instance and the suffix 
 </ul>
 </div>
 <div class="paragraph">
+<p>If the responder will perform expensive work, it can proactively check whether the requester is still present with the <code>Context#isRequesterAlive(Message)</code> method:</p>
+</div>
+<div class="listingblock">
+<div class="title">Checking the requester</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="java"><span class="nc">Responder</span> <span class="n">responder</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="na">responderBuilder</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">handler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">req</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">ctx</span><span class="o">.</span><span class="na">isRequesterAlive</span><span class="o">(</span><span class="n">req</span><span class="o">))</span> <span class="o">{</span> <i class="conum" data-value="1"></i><b>(1)</b>
+          <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
+          <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
+          <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="n">out</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span>
+        <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+          <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}).</span><span class="na">build</span><span class="o">();</span></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Check if the requester is still connected</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The requester can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
+Note each call to <code>Context#isRequesterAlive(Message)</code> implies a request to the broker.</p>
+</div>
+<div class="paragraph">
 <p>Let&#8217;s see how to customize some of the request/response support mechanics.
 Imagine the request <code>message-id</code> property is a critical piece of information and we do not want to use it as the correlation ID.
 The request can use the <code>correlation-id</code> property and the responder just has to extract the correlation ID from this property (instead of the <code>message-id</code> property by default).
@@ -1466,9 +1497,9 @@ Let&#8217;s also use a random UUID for the correlation ID generation (avoids doi
     <span class="o">.</span><span class="na">correlationIdExtractor</span><span class="o">(</span><span class="nl">Message:</span><span class="o">:</span><span class="n">correlationId</span><span class="o">)</span> <i class="conum" data-value="1"></i><b>(1)</b>
     <span class="o">.</span><span class="na">requestQueue</span><span class="o">(</span><span class="s">"request-queue"</span><span class="o">)</span>
     <span class="o">.</span><span class="na">handler</span><span class="o">((</span><span class="n">ctx</span><span class="o">,</span> <span class="n">req</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-      <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
-      <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
-      <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="n">out</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span>
+        <span class="nc">String</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">req</span><span class="o">.</span><span class="na">body</span><span class="o">(),</span> <span class="no">UTF_8</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">out</span> <span class="o">=</span> <span class="s">"*** "</span> <span class="o">+</span> <span class="n">in</span> <span class="o">+</span> <span class="s">" ***"</span><span class="o">;</span>
+        <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="na">message</span><span class="o">(</span><span class="n">out</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="no">UTF_8</span><span class="o">));</span>
     <span class="o">}).</span><span class="na">build</span><span class="o">();</span></code></pre>
 </div>
 </div>
@@ -1846,7 +1877,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.8.0-SNAPSHOT<br>
-Last updated 2025-09-12 05:58:41 UTC
+Last updated 2025-09-12 07:08:02 UTC
 </div>
 </div>
 </body>
