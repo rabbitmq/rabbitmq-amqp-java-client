@@ -242,6 +242,18 @@ The prefix is different for each `Requester` instance and the suffix is incremen
 * it sets the _request_ https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties[`message-id` property] to the generated correlation ID.
 * it extracts the correlation ID from the _reply_ https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-properties[`correlation-id` property] to correlate a reply with the appropriate request.
 
+If the responder will perform expensive work, it can proactively check whether the requester is still present with the `Context#isRequesterAlive(Message)` method:
+
+.Checking the requester
+[source,java,indent=0]
+--------
+include::{test-examples}/RequestResponseApi.java[tag=is-requester-alive]
+--------
+<1> Check if the requester is still connected
+
+The requester can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
+Note each call to `Context#isRequesterAlive(Message)` implies a request to the broker.
+
 Let's see how to customize some of the request/response support mechanics.
 Imagine the request `message-id` property is a critical piece of information and we do not want to use it as the correlation ID.
 The request can use the `correlation-id` property and the responder just has to extract the correlation ID from this property (instead of the `message-id` property by default).

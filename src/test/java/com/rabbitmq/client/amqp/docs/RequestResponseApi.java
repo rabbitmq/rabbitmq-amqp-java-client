@@ -19,9 +19,9 @@ public class RequestResponseApi {
     Responder responder = connection.responderBuilder() // <1>
         .requestQueue("request-queue") // <2>
         .handler((ctx, req) -> { // <3>
-          String in = new String(req.body(), UTF_8);
-          String out = "*** " + in + " ***";
-          return ctx.message(out.getBytes(UTF_8)); // <4>
+            String in = new String(req.body(), UTF_8);
+            String out = "*** " + in + " ***";
+            return ctx.message(out.getBytes(UTF_8)); // <4>
         }).build();
     // end::responder-creation[]
 
@@ -39,7 +39,24 @@ public class RequestResponseApi {
     // end::requester-request[]
   }
 
-  void withCustomSettings() {
+  void isRequesterAlive() {
+    Connection connection = null;
+    // tag::is-requester-alive[]
+    Responder responder = connection.responderBuilder()
+        .requestQueue("request-queue")
+        .handler((ctx, req) -> {
+            if (ctx.isRequesterAlive(req)) { // <1>
+              String in = new String(req.body(), UTF_8);
+              String out = "*** " + in + " ***";
+              return ctx.message(out.getBytes(UTF_8));
+            } else {
+              return null;
+            }
+        }).build();
+    // end::is-requester-alive[]
+  }
+
+    void withCustomSettings() {
     Connection connection = null;
     // tag::custom-requester-creation[]
     String replyToQueue = connection.management().queue()
@@ -61,9 +78,9 @@ public class RequestResponseApi {
         .correlationIdExtractor(Message::correlationId) // <1>
         .requestQueue("request-queue")
         .handler((ctx, req) -> {
-          String in = new String(req.body(), UTF_8);
-          String out = "*** " + in + " ***";
-          return ctx.message(out.getBytes(UTF_8));
+            String in = new String(req.body(), UTF_8);
+            String out = "*** " + in + " ***";
+            return ctx.message(out.getBytes(UTF_8));
         }).build();
     // end::custom-responder-creation[]
   }
