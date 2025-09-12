@@ -655,7 +655,7 @@ pre.rouge {
 <h1>RabbitMQ AMQP 1.0 Java Client</h1>
 <div class="details">
 <span id="revnumber">version 0.8.0-SNAPSHOT</span>
-<br><span id="revremark">(bdfc899)</span>
+<br><span id="revremark">(09b6261)</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -892,7 +892,7 @@ This documentation covers only the advanced usage of the library; a <a href="htt
 <div class="sect2">
 <h3 id="connection-settings-at-the-environment-level"><a class="anchor" href="#connection-settings-at-the-environment-level"></a>Connection Settings at the Environment Level</h3>
 <div class="paragraph">
-<p>Connection settings (URI, credentials, etc) can be set at the environment level.
+<p>Connection settings (URI, credentials, etc.) can be set at the environment level.
 They will then be re-used for each connection.
 It is possible to override the environment connection settings for a given connection:</p>
 </div>
@@ -1240,7 +1240,7 @@ Micrometer is a façade for observability systems: the user can choose the Micro
 <div class="sect2">
 <h3 id="requestresponse"><a class="anchor" href="#requestresponse"></a>Request/Response</h3>
 <div class="paragraph">
-<p>Request/response with RabbitMQ consists in a requester sending a request message and a responder replying with a response message.
+<p>Request/response with RabbitMQ consists of a requester sending a request message and a responder replying with a response message.
 Both the requester and responder are <em>client applications</em> and the messages flow through the broker.
 The requester must send a reply-to queue address with the request.
 The responder uses this reply-to queue address to send the response.
@@ -1288,7 +1288,7 @@ It is still possible to implement one part or the other with regular publishers 
 </table>
 </div>
 <div class="paragraph">
-<p>Note the responder does not create the queue it waits requests on.
+<p>Note that the responder does not create the queue it waits for requests on.
 It must be created beforehand.</p>
 </div>
 <div class="paragraph">
@@ -1434,14 +1434,14 @@ The prefix is different for each <code>Requester</code> instance and the suffix 
 </table>
 </div>
 <div class="paragraph">
-<p>The requester can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
+<p>The responder can check the requester at any time - when a request comes in or even during a long processing - and react accordingly by stopping the processing.
 Note each call to <code>Context#isRequesterAlive(Message)</code> implies a request to the broker.</p>
 </div>
 <div class="paragraph">
 <p>Let&#8217;s see how to customize some of the request/response support mechanics.
 Imagine the request <code>message-id</code> property is a critical piece of information and we do not want to use it as the correlation ID.
 The request can use the <code>correlation-id</code> property and the responder just has to extract the correlation ID from this property (instead of the <code>message-id</code> property by default).
-Let&#8217;s also use a random UUID for the correlation ID generation (avoids doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).</p>
+Let&#8217;s also use a random UUID for the correlation ID generation (avoid doing this in production: this is OK in terms of uniqueness but not optimal in terms of performance because randomness is not cheap).</p>
 </div>
 <div class="paragraph">
 <p>Here is how to declare the requester:</p>
@@ -1877,7 +1877,7 @@ Micrometer internally uses <code>nanoseconds</code> for the baseunit. However, e
 <div id="footer">
 <div id="footer-text">
 Version 0.8.0-SNAPSHOT<br>
-Last updated 2025-09-12 07:08:02 UTC
+Last updated 2025-09-12 07:15:43 UTC
 </div>
 </div>
 </body>
