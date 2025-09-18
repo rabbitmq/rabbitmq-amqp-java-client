@@ -67,7 +67,7 @@
         <spotless.version>2.46.1</spotless.version>
         <google-java-format.version>1.28.0</google-java-format.version>
         <spotbugs-maven-plugin.version>4.9.5.0</spotbugs-maven-plugin.version>
-        <spotbugs.version>4.9.5</spotbugs.version>
+        <spotbugs.version>4.9.6</spotbugs.version>
         <buildnumber.plugin.version>3.2.1</buildnumber.plugin.version>
         <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
         <asciidoctor.maven.plugin.version>3.2.0</asciidoctor.maven.plugin.version>
