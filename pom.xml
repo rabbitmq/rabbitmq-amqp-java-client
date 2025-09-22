@@ -48,7 +48,7 @@
         <gson.version>2.13.2</gson.version>
         <logback.version>1.2.13</logback.version>
         <junit.jupiter.version>5.13.4</junit.jupiter.version>
-        <assertj.version>3.27.5</assertj.version>
+        <assertj.version>3.27.6</assertj.version>
         <mockito.version>5.19.0</mockito.version>
         <jqwik.version>1.9.3</jqwik.version>
         <micrometer-tracing-test.version>1.5.4</micrometer-tracing-test.version>
