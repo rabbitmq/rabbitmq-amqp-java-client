@@ -73,7 +73,7 @@
         <asciidoctor.maven.plugin.version>3.2.0</asciidoctor.maven.plugin.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj.diagram.version>3.0.1</asciidoctorj.diagram.version>
-        <central-publishing-maven-plugin.version>0.8.0</central-publishing-maven-plugin.version>
+        <central-publishing-maven-plugin.version>0.9.0</central-publishing-maven-plugin.version>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <gpg.skip>true</gpg.skip>
         <gpg.keyname>6026DFCA</gpg.keyname>
