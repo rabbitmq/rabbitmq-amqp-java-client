@@ -54,7 +54,7 @@
         <micrometer-tracing-test.version>1.5.4</micrometer-tracing-test.version>
         <micrometer-docs-generator.version>1.0.4</micrometer-docs-generator.version>
         <jose4j.version>0.9.6</jose4j.version>
-        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-lang3.version>3.19.0</commons-lang3.version>
         <bouncycastle.version>1.82</bouncycastle.version>
         <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
         <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
