@@ -17,7 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.TestUtils.*;
+import static com.rabbitmq.client.amqp.impl.TestUtils.randomNetworkPort;
+import static com.rabbitmq.client.amqp.impl.TestUtils.toxiproxy;
 
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Resource;

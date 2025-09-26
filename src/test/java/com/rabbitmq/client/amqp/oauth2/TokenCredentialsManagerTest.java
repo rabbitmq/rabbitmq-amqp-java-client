@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.oauth2;
 
-import static com.rabbitmq.client.amqp.oauth2.CredentialsManager.*;
 import static com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.pair;
 import static com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.DEFAULT_REFRESH_DELAY_STRATEGY;
@@ -29,6 +28,8 @@ import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager.AuthenticationCallback;
+import com.rabbitmq.client.amqp.oauth2.CredentialsManager.Registration;
 import com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.Pair;
 import java.time.Duration;
 import java.time.Instant;

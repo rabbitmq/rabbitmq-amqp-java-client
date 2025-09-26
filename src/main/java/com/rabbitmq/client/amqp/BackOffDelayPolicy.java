@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import static com.rabbitmq.client.amqp.BackOffDelayPolicy.fixedWithInitialDelay;
+
 import java.time.Duration;
 
 /**

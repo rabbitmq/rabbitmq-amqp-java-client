@@ -27,7 +27,8 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
 import java.util.concurrent.CountDownLatch;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 @AmqpTestInfrastructure
 public class AddressFormatTest {

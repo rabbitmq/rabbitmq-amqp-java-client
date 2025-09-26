@@ -20,7 +20,6 @@ package com.rabbitmq.client.amqp;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-import org.apache.qpid.protonj2.types.*;
 
 /** API to configure and create a {@link Consumer}. */
 public interface ConsumerBuilder {

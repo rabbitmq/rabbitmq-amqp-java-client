@@ -17,7 +17,10 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.UriUtils.*;
+import static com.rabbitmq.client.amqp.impl.UriUtils.decode;
+import static com.rabbitmq.client.amqp.impl.UriUtils.encodeNonUnreserved;
+import static com.rabbitmq.client.amqp.impl.UriUtils.encodeParameter;
+import static com.rabbitmq.client.amqp.impl.UriUtils.encodePathSegment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.params.ParameterizedTest;

@@ -18,7 +18,9 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
-import static com.rabbitmq.client.amqp.impl.Cli.*;
+import static com.rabbitmq.client.amqp.impl.Cli.addUser;
+import static com.rabbitmq.client.amqp.impl.Cli.deleteUser;
+import static com.rabbitmq.client.amqp.impl.Cli.setPermissions;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.closedOnSecurityExceptionListener;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
@@ -35,7 +37,9 @@ import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 

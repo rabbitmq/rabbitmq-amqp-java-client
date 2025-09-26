@@ -17,7 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.Cli.*;
+import static com.rabbitmq.client.amqp.impl.Cli.addUser;
+import static com.rabbitmq.client.amqp.impl.Cli.addVhost;
+import static com.rabbitmq.client.amqp.impl.Cli.deleteUser;
+import static com.rabbitmq.client.amqp.impl.Cli.deleteVhost;
+import static com.rabbitmq.client.amqp.impl.Cli.setPermissions;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,7 +32,11 @@ import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Publisher;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 @AmqpTestInfrastructure
 public class AuthorizationTest {

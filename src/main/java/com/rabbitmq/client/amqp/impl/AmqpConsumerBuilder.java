@@ -24,8 +24,25 @@ import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.Resource;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.*;
-import org.apache.qpid.protonj2.types.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import org.apache.qpid.protonj2.types.Binary;
+import org.apache.qpid.protonj2.types.Decimal128;
+import org.apache.qpid.protonj2.types.Decimal32;
+import org.apache.qpid.protonj2.types.Decimal64;
+import org.apache.qpid.protonj2.types.DescribedType;
+import org.apache.qpid.protonj2.types.Symbol;
+import org.apache.qpid.protonj2.types.UnknownDescribedType;
+import org.apache.qpid.protonj2.types.UnsignedByte;
+import org.apache.qpid.protonj2.types.UnsignedInteger;
+import org.apache.qpid.protonj2.types.UnsignedLong;
+import org.apache.qpid.protonj2.types.UnsignedShort;
 
 class AmqpConsumerBuilder implements ConsumerBuilder {
 

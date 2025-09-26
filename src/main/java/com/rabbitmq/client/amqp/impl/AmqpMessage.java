@@ -27,7 +27,15 @@ import java.util.Date;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
-import org.apache.qpid.protonj2.types.*;
+import org.apache.qpid.protonj2.types.Binary;
+import org.apache.qpid.protonj2.types.Decimal128;
+import org.apache.qpid.protonj2.types.Decimal32;
+import org.apache.qpid.protonj2.types.Decimal64;
+import org.apache.qpid.protonj2.types.Symbol;
+import org.apache.qpid.protonj2.types.UnsignedByte;
+import org.apache.qpid.protonj2.types.UnsignedInteger;
+import org.apache.qpid.protonj2.types.UnsignedLong;
+import org.apache.qpid.protonj2.types.UnsignedShort;
 
 final class AmqpMessage implements Message {
 

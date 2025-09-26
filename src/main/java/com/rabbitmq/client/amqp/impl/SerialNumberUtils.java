@@ -18,7 +18,8 @@
 package com.rabbitmq.client.amqp.impl;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.ToLongFunction;
 
 final class SerialNumberUtils {

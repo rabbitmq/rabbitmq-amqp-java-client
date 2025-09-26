@@ -17,7 +17,10 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.Resource.State.*;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
+import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.Resource.State.OPENING;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Resource;

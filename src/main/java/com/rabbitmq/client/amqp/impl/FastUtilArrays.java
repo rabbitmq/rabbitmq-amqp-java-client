@@ -17,6 +17,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;

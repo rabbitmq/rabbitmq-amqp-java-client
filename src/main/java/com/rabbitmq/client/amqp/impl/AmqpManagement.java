@@ -17,15 +17,27 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.*;
+import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.CLOSED;
+import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.CREATED;
+import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.OPEN;
+import static com.rabbitmq.client.amqp.impl.AmqpManagement.State.UNAVAILABLE;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Management;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,7 +46,14 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.qpid.protonj2.client.*;
+import org.apache.qpid.protonj2.client.Delivery;
+import org.apache.qpid.protonj2.client.DeliveryMode;
+import org.apache.qpid.protonj2.client.Message;
+import org.apache.qpid.protonj2.client.Receiver;
+import org.apache.qpid.protonj2.client.ReceiverOptions;
+import org.apache.qpid.protonj2.client.Sender;
+import org.apache.qpid.protonj2.client.SenderOptions;
+import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;

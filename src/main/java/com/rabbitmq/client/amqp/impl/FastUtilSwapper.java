@@ -17,6 +17,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 /** An object that can swap elements whose position is specified by integers.
  *

@@ -1,15 +1,15 @@
 package com.rabbitmq.client.amqp.docs;
 
-import com.rabbitmq.client.amqp.Requester;
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.Responder;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Message;
+import com.rabbitmq.client.amqp.Requester;
+import com.rabbitmq.client.amqp.Responder;
 
 public class RequestResponseApi {
 

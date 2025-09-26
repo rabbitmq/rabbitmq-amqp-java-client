@@ -17,14 +17,16 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.*;
+import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.FIRST;
+import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.LAST;
+import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.NEXT;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
-import static java.nio.charset.StandardCharsets.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +42,12 @@ import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Queue;
+import java.util.Random;
+import java.util.SortedSet;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,7 +57,10 @@ import net.jqwik.api.Arbitraries;
 import net.jqwik.api.arbitraries.ArrayArbitrary;
 import net.jqwik.api.arbitraries.StringArbitrary;
 import org.apache.qpid.protonj2.types.Symbol;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 @AmqpTestInfrastructure
 public class SourceFiltersTest {

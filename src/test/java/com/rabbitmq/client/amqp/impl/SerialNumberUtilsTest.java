@@ -17,7 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.*;
+import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.SERIAL_SPACE;
+import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.compare;
+import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.inc;
+import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.ranges;
+import static com.rabbitmq.client.amqp.impl.SerialNumberUtils.sort;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

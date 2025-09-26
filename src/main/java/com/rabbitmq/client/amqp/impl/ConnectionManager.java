@@ -17,7 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;

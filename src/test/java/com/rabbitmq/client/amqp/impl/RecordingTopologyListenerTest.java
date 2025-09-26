@@ -18,7 +18,6 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.impl.RecordingTopologyListenerTest.RecoveryAssert.assertThat;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import java.util.concurrent.ExecutorService;

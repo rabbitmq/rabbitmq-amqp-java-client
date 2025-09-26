@@ -17,40 +17,20 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.docs;
 
+import javax.net.ssl.SSLContext;
+
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
+import com.rabbitmq.client.amqp.Environment;
+import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.MicrometerMetricsCollector;
-import com.rabbitmq.client.amqp.Address;
-import com.rabbitmq.client.amqp.AddressSelector;
-import com.rabbitmq.client.amqp.AmqpException;
-import com.rabbitmq.client.amqp.BackOffDelayPolicy;
-import com.rabbitmq.client.amqp.Connection;
-import com.rabbitmq.client.amqp.ConnectionBuilder;
-import com.rabbitmq.client.amqp.ConnectionSettings;
-import com.rabbitmq.client.amqp.Consumer;
-import com.rabbitmq.client.amqp.ConsumerBuilder;
-import com.rabbitmq.client.amqp.CredentialsProvider;
-import com.rabbitmq.client.amqp.DefaultUsernamePasswordCredentialsProvider;
-import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.EnvironmentBuilder;
-import com.rabbitmq.client.amqp.Management;
-import com.rabbitmq.client.amqp.Message;
-import com.rabbitmq.client.amqp.OAuth2Settings;
-import com.rabbitmq.client.amqp.ObservationCollector;
-import com.rabbitmq.client.amqp.Publisher;
-import com.rabbitmq.client.amqp.PublisherBuilder;
-import com.rabbitmq.client.amqp.Resource;
-import com.rabbitmq.client.amqp.Requester;
-import com.rabbitmq.client.amqp.RequesterBuilder;
-import com.rabbitmq.client.amqp.Responder;
-import com.rabbitmq.client.amqp.ResponderBuilder;
-import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.observation.micrometer.MicrometerObservationCollectorBuilder;
+
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-
-import javax.net.ssl.SSLContext;
 
 class Api {
 

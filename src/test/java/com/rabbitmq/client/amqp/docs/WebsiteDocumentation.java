@@ -1,5 +1,9 @@
 package com.rabbitmq.client.amqp.docs;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.time.Duration;
+
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.ByteCapacity;
 import com.rabbitmq.client.amqp.Connection;
@@ -10,10 +14,6 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.impl.AmqpEnvironmentBuilder;
-
-import java.time.Duration;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class WebsiteDocumentation {
 

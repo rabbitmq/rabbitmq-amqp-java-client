@@ -19,11 +19,15 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
-import static com.rabbitmq.client.amqp.Resource.State.*;
-import static com.rabbitmq.client.amqp.impl.Assertions.*;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
+import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.Cli.closeConnection;
-import static com.rabbitmq.client.amqp.impl.TestUtils.*;
-import static org.assertj.core.api.Assertions.*;
+import static com.rabbitmq.client.amqp.impl.TestUtils.name;
+import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
