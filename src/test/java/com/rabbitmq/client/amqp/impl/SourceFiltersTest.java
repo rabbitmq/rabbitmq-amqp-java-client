@@ -26,6 +26,7 @@ import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.IntStream.range;
@@ -590,13 +591,15 @@ public class SourceFiltersTest {
   void publish(int messageCount, UnaryOperator<Message> messageLogic) {
     try (Publisher publisher = connection.publisherBuilder().queue(name).build()) {
       Sync publishSync = sync(messageCount);
-      Publisher.Callback callback = ctx -> {
-        if (ctx.status() == ACCEPTED) {
-          publishSync.down();
-        } else {
-          LOGGER.warn("Outbound message not accepted by the broker, status is {}", ctx.status());
-        }
-      };
+      Publisher.Callback callback =
+          ctx -> {
+            if (ctx.status() == ACCEPTED) {
+              publishSync.down();
+            } else {
+              LOGGER.warn(
+                  "Outbound message not accepted by the broker, status is {}", ctx.status());
+            }
+          };
       range(0, messageCount)
           .forEach(ignored -> publisher.publish(messageLogic.apply(publisher.message()), callback));
       assertThat(publishSync).completes();
@@ -625,7 +628,7 @@ public class SourceFiltersTest {
 
     try (Consumer ignored = builder.build()) {
       assertThat(consumedSync).completes();
-      waitUntilStable(receivedMessageCount::get, Duration.ofMillis(50));
+      waitAtMost(() -> receivedMessageCount.get() >= expectedMessageCount);
       assertThat(receivedMessageCount).hasValue(expectedMessageCount);
     }
 
