@@ -235,7 +235,6 @@ abstract class Cli {
         cmd = cmd.replace("docker exec " + value, "docker exec " + containerId);
       }
     }
-    System.out.println(cmd);
     return executeCommand(cmd + " quorum_status --formatter erlang " + queue).output();
   }
 
