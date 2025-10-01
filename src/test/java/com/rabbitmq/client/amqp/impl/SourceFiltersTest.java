@@ -363,7 +363,7 @@ public class SourceFiltersTest {
     int messageCount = 10;
     UUID uuid = UUID.randomUUID();
     long now = System.currentTimeMillis();
-    byte[] binary = binaryArbitrary.sample();
+    byte[] binary = "hello".getBytes(UTF_8);
     publish(messageCount, msg -> msg.property("foo", true));
     publish(messageCount, msg -> msg.property("foo", 42));
     publish(messageCount, msg -> msg.property("foo", 42.1));
