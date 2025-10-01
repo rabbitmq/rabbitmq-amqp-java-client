@@ -575,7 +575,7 @@ public class ClusterTest {
     Management.QueueInfo info = queueInfo();
     String initialLeader = info.leader();
     int initialReplicaCount = info.members().size();
-    deleteMemberOperation.accept(initialLeader);
+    retry(() -> deleteMemberOperation.accept(initialLeader));
     TestUtils.waitAtMost(() -> !initialLeader.equals(queueInfo().leader()));
     assertThat(queueInfo().members()).hasSize(initialReplicaCount - 1);
     return initialLeader;
@@ -586,7 +586,7 @@ public class ClusterTest {
   }
 
   void deleteQqMember(String member) {
-    Cli.deleteQuorumQueueMember(q, member);
+    retry(() -> Cli.deleteQuorumQueueMember(q, member));
   }
 
   void deleteStreamMember(String member) {
@@ -604,7 +604,7 @@ public class ClusterTest {
   void addMember(Runnable addMemberOperation) {
     Management.QueueInfo info = queueInfo();
     int initialReplicaCount = info.members().size();
-    addMemberOperation.run();
+    retry(addMemberOperation);
     TestUtils.waitAtMost(() -> queueInfo().members().size() == initialReplicaCount + 1);
   }
 
@@ -647,5 +647,25 @@ public class ClusterTest {
         return addresses.get(count.getAndIncrement() % addresses.size());
       }
     }
+  }
+
+  private static void retry(Runnable action) {
+    int attempt = 0;
+    RuntimeException lastException = null;
+    while (attempt <= 3) {
+      attempt++;
+      try {
+        action.run();
+        return;
+      } catch (RuntimeException e) {
+        lastException = e;
+        try {
+          Thread.sleep(1000L);
+        } catch (InterruptedException ex) {
+          throw new RuntimeException(ex);
+        }
+      }
+    }
+    throw lastException;
   }
 }
