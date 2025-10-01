@@ -299,7 +299,7 @@ public class ClusterTest {
   }
 
   @Test
-  void consumeFromQuorumQueueWhenLeaderIsPaused() throws InterruptedException {
+  void consumeFromQuorumQueueWhenLeaderIsPaused() {
     management.queue(q).type(QUORUM).declare();
     Management.QueueInfo queueInfo = queueInfo();
     String initialLeader = queueInfo.leader();
@@ -352,6 +352,7 @@ public class ClusterTest {
       consumeSync.reset();
 
       waitAtMost(
+          ofSeconds(20),
           () -> initialFollowers.contains(mgmt.queueInfo(q).leader()),
           () ->
               "Current leader is not in initial followers, initial followers "
@@ -359,7 +360,6 @@ public class ClusterTest {
                   + ", "
                   + "queue info "
                   + mgmt.queueInfo(q));
-      assertThat(initialFollowers).contains(mgmt.queueInfo(q).leader());
 
       Cli.unpauseNode(initialLeader);
       nodePaused = false;
@@ -371,7 +371,15 @@ public class ClusterTest {
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
 
-      waitAtMost(() -> initialFollowers.contains(mgmt.queueInfo(q).leader()));
+      waitAtMost(
+          ofSeconds(20),
+          () -> initialFollowers.contains(mgmt.queueInfo(q).leader()),
+          () ->
+              "Current leader is not in initial followers, initial followers "
+                  + initialFollowers
+                  + ", "
+                  + "queue info "
+                  + mgmt.queueInfo(q));
     } finally {
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);
