@@ -381,10 +381,10 @@ public class ClusterTest {
                   + "queue info "
                   + mgmt.queueInfo(q));
     } finally {
+      System.out.println(Cli.quorumStatus(q, initialFollowers.get(0)));
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);
       }
-      System.out.println(Cli.quorumStatus(q, initialFollowers.get(0)));
       management.queueDelete(q);
     }
   }
