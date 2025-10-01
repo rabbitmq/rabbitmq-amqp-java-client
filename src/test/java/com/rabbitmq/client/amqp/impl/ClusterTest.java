@@ -381,6 +381,9 @@ public class ClusterTest {
                   + "queue info "
                   + mgmt.queueInfo(q));
     } finally {
+      System.out.println(
+          Cli.rabbitmqctl("eval 'khepri:info(rabbitmq_metadata).'", initialFollowers.get(0))
+              .output());
       System.out.println(Cli.quorumStatus(q, initialFollowers.get(0)));
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);

@@ -87,6 +87,10 @@ abstract class Cli {
     return rabbitmqctl.substring(0, lastIndex) + "rabbitmq-streams";
   }
 
+  static ProcessState rabbitmqctl(String command, String node) {
+    return executeCommand(replaceContainerId(rabbitmqctlCommand(), node) + " " + command);
+  }
+
   static ProcessState rabbitmqctl(String command) {
     return executeCommand(rabbitmqctlCommand() + " " + command);
   }
@@ -227,15 +231,20 @@ abstract class Cli {
   }
 
   static String quorumStatus(String queue, String node) {
+    String cmd = replaceContainerId(rabbitmqQueuesCommand(), node);
+    return executeCommand(cmd + " quorum_status --formatter erlang " + queue).output();
+  }
+
+  private static String replaceContainerId(String cmd, String node) {
     String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
     Assert.notNull(containerId, "Container ID for node " + node);
-    String cmd = rabbitmqQueuesCommand();
     for (String value : DOCKER_NODES_TO_CONTAINERS.values()) {
       if (cmd.contains("docker exec " + value)) {
         cmd = cmd.replace("docker exec " + value, "docker exec " + containerId);
+        break;
       }
     }
-    return executeCommand(cmd + " quorum_status --formatter erlang " + queue).output();
+    return cmd;
   }
 
   static void addStreamMember(String stream, String node) {
