@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
+import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.TestUtils.name;
@@ -111,7 +112,7 @@ public class ClusterTest {
   @Test
   void connectionShouldRecoverToNewQuorumQueueLeaderAfterItHasMoved() {
     try {
-      management.queue(q).type(Management.QueueType.QUORUM).declare();
+      management.queue(q).type(QUORUM).declare();
       Management.QueueInfo info = queueInfo();
       String initialLeader = info.leader();
 
@@ -139,7 +140,7 @@ public class ClusterTest {
   @Test
   void publishToMovingQq() {
     try {
-      management.queue(q).type(Management.QueueType.QUORUM).declare();
+      management.queue(q).type(QUORUM).declare();
 
       AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
       assertThat(publishConnection).hasNodename(queueInfo().leader());
@@ -183,7 +184,7 @@ public class ClusterTest {
   @Test
   void consumeFromMovingQq() {
     try {
-      management.queue(q).type(Management.QueueType.QUORUM).declare();
+      management.queue(q).type(QUORUM).declare();
 
       AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
       assertThat(consumeConnection).isOnFollower(queueInfo());
@@ -240,7 +241,7 @@ public class ClusterTest {
   @Test
   void publishConsumeQuorumQueueWhenLeaderChanges() {
     try {
-      management.queue(q).type(Management.QueueType.QUORUM).declare();
+      management.queue(q).type(QUORUM).declare();
 
       AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
       assertThat(consumeConnection).isOnFollower(queueInfo());
@@ -298,8 +299,8 @@ public class ClusterTest {
   }
 
   @Test
-  void consumeFromQuorumQueueWhenLeaderIsPaused() {
-    management.queue(q).type(Management.QueueType.QUORUM).declare();
+  void consumeFromQuorumQueueWhenLeaderIsPaused() throws InterruptedException {
+    management.queue(q).type(QUORUM).declare();
     Management.QueueInfo queueInfo = queueInfo();
     String initialLeader = queueInfo.leader();
     boolean nodePaused = false;
@@ -350,7 +351,14 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
       consumeSync.reset();
 
-      waitAtMost(() -> initialFollowers.contains(mgmt.queueInfo(q).leader()));
+      waitAtMost(
+          () -> initialFollowers.contains(mgmt.queueInfo(q).leader()),
+          () ->
+              "Current leader is not in initial followers, initial followers "
+                  + initialFollowers
+                  + ", "
+                  + "queue info "
+                  + mgmt.queueInfo(q));
       assertThat(initialFollowers).contains(mgmt.queueInfo(q).leader());
 
       Cli.unpauseNode(initialLeader);
