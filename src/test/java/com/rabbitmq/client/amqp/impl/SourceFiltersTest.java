@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification
 import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.LAST;
 import static com.rabbitmq.client.amqp.ConsumerBuilder.StreamOffsetSpecification.NEXT;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
+import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_1_0;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
@@ -61,9 +62,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @AmqpTestInfrastructure
 public class SourceFiltersTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SourceFiltersTest.class);
 
   Connection connection;
   String name;
@@ -585,7 +590,13 @@ public class SourceFiltersTest {
   void publish(int messageCount, UnaryOperator<Message> messageLogic) {
     try (Publisher publisher = connection.publisherBuilder().queue(name).build()) {
       Sync publishSync = sync(messageCount);
-      Publisher.Callback callback = ctx -> publishSync.down();
+      Publisher.Callback callback = ctx -> {
+        if (ctx.status() == ACCEPTED) {
+          publishSync.down();
+        } else {
+          LOGGER.warn("Outbound message not accepted by the broker, status is {}", ctx.status());
+        }
+      };
       range(0, messageCount)
           .forEach(ignored -> publisher.publish(messageLogic.apply(publisher.message()), callback));
       assertThat(publishSync).completes();
