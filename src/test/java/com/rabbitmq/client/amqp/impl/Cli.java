@@ -50,7 +50,7 @@ abstract class Cli {
   public static String rabbitmqctlCommand() {
     String rabbitmqCtl = System.getProperty("rabbitmqctl.bin");
     if (rabbitmqCtl == null) {
-      rabbitmqCtl = "DOCKER:rabbitmq";
+      rabbitmqCtl = DOCKER_PREFIX + "rabbitmq";
     }
     if (rabbitmqCtl.startsWith(DOCKER_PREFIX)) {
       String containerId = rabbitmqCtl.split(":")[1];
@@ -224,6 +224,19 @@ abstract class Cli {
 
   static void deleteQuorumQueueMember(String queue, String node) {
     rabbitmqQueues(" delete_member " + queue + " " + node);
+  }
+
+  static String quorumStatus(String queue, String node) {
+    String containerId = DOCKER_NODES_TO_CONTAINERS.get(node);
+    Assert.notNull(containerId, "Container ID for node " + node);
+    String cmd = rabbitmqQueuesCommand();
+    for (String value : DOCKER_NODES_TO_CONTAINERS.values()) {
+      if (cmd.contains("docker exec " + value)) {
+        cmd = cmd.replace("docker exec " + value, "docker exec " + containerId);
+      }
+    }
+    System.out.println(cmd);
+    return executeCommand(cmd + " quorum_status --formatter erlang " + queue).output();
   }
 
   static void addStreamMember(String stream, String node) {

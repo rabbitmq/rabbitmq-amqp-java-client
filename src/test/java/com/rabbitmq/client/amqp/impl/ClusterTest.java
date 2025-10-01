@@ -299,10 +299,12 @@ public class ClusterTest {
   }
 
   @Test
-  void consumeFromQuorumQueueWhenLeaderIsPaused() {
+  void consumeFromQuorumQueueWhenLeaderIsPaused() throws InterruptedException {
     management.queue(q).type(QUORUM).declare();
     Management.QueueInfo queueInfo = queueInfo();
     String initialLeader = queueInfo.leader();
+    List<String> initialFollowers =
+        queueInfo.members().stream().filter(n -> !n.equals(initialLeader)).collect(toList());
     boolean nodePaused = false;
     try {
       AmqpConnection consumeConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
@@ -335,8 +337,6 @@ public class ClusterTest {
       assertThat(messageIds).containsExactlyInAnyOrder(1L);
       consumeSync.reset();
 
-      List<String> initialFollowers =
-          queueInfo.members().stream().filter(n -> !n.equals(initialLeader)).collect(toList());
       assertThat(initialFollowers).isNotEmpty();
 
       Cli.pauseNode(initialLeader);
@@ -384,6 +384,7 @@ public class ClusterTest {
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);
       }
+      System.out.println(Cli.quorumStatus(q, initialFollowers.get(0)));
       management.queueDelete(q);
     }
   }
