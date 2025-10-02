@@ -10,6 +10,7 @@
     <logger name="com.rabbitmq.client.amqp" level="warn" />
     <logger name="org.apache.qpid" level="error" />
     <logger name="com.rabbitmq.client.amqp.perf" level="info" />
+    <logger name="com.rabbitmq.client.amqp.impl.ClusterTest" level="info" />
 <!--    <logger name="com.rabbitmq.client.amqp.impl.ConnectionUtils" level="debug" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="debug" />-->
 <!--    <logger name="com.rabbitmq.client.amqp.impl.RecoveryClusterTest" level="info" />-->
