@@ -54,7 +54,7 @@ jobs:
         env:
           RABBITMQ_IMAGE: ${{ matrix.rabbitmq-image }}
       - name: Test against cluster
-        run: ./mvnw test -Dtest="ClusterTest" -Drabbitmqctl.bin=DOCKER:rabbitmq0
+        run: ./mvnw test -Dtest="*ClusterTest" -Drabbitmqctl.bin=DOCKER:rabbitmq0
       - name: Get cluster logs
         if: ${{ steps.start-cluster.outcome == 'success' }}
         run: |
