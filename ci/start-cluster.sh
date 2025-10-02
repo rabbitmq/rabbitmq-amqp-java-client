@@ -21,6 +21,10 @@ docker exec rabbitmq0 rabbitmqctl enable_feature_flag --opt-in khepri_db
 docker exec rabbitmq1 rabbitmqctl enable_feature_flag --opt-in khepri_db
 docker exec rabbitmq2 rabbitmqctl enable_feature_flag --opt-in khepri_db
 
+docker exec rabbitmq0 rabbitmqctl set_log_level debug
+docker exec rabbitmq1 rabbitmqctl set_log_level debug
+docker exec rabbitmq2 rabbitmqctl set_log_level debug
+
 docker exec rabbitmq0 rabbitmqctl cluster_status
 
 docker compose --file ci/cluster/docker-compose.yml ps
