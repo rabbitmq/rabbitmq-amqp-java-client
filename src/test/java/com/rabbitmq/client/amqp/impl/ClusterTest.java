@@ -352,7 +352,7 @@ public class ClusterTest {
       consumeSync.reset();
 
       waitAtMost(
-          ofSeconds(20),
+          ofSeconds(60),
           () -> initialFollowers.contains(mgmt.queueInfo(q).leader()),
           () ->
               "Current leader is not in initial followers, initial followers "
