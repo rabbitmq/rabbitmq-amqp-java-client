@@ -361,7 +361,7 @@ public class SourceFiltersTest {
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionApplicationProperties() {
     int messageCount = 10;
-    UUID uuid = UUID.randomUUID();
+    UUID uuid = UUID.nameUUIDFromBytes("foobar".getBytes(UTF_8));
     long now = System.currentTimeMillis();
     byte[] binary = "hello".getBytes(UTF_8);
     publish(messageCount, msg -> msg.property("foo", true));
