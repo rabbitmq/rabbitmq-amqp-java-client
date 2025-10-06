@@ -35,10 +35,13 @@ import static java.util.Collections.singletonMap;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.of;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Fail.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpEntityDoesNotExistException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpResourceInvalidStateException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.Environment;
@@ -337,7 +340,7 @@ public class AmqpTest {
   void publisherShouldThrowWhenExchangeDoesNotExist() {
     String doesNotExist = uuid();
     assertThatThrownBy(() -> connection.publisherBuilder().exchange(doesNotExist).build())
-        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(doesNotExist);
   }
 
@@ -367,7 +370,7 @@ public class AmqpTest {
           try {
             publisher.publish(publisher.message(), ctx -> {});
             return false;
-          } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+          } catch (AmqpEntityDoesNotExistException e) {
             exception.set(e);
             return true;
           }
@@ -377,7 +380,7 @@ public class AmqpTest {
         .forEach(
             e ->
                 org.assertj.core.api.Assertions.assertThat(e)
-                    .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+                    .isInstanceOf(AmqpEntityDoesNotExistException.class)
                     .hasMessageContaining(name)
                     .hasMessageContaining(ExceptionUtils.ERROR_NOT_FOUND));
   }
@@ -387,7 +390,7 @@ public class AmqpTest {
   void publisherShouldThrowWhenQueueDoesNotExist() {
     String doesNotExist = uuid();
     assertThatThrownBy(() -> connection.publisherBuilder().queue(doesNotExist).build())
-        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(doesNotExist);
   }
 
@@ -415,18 +418,20 @@ public class AmqpTest {
           try {
             publisher.publish(publisher.message(), ctx -> {});
             return false;
-          } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+          } catch (AmqpEntityDoesNotExistException | AmqpResourceInvalidStateException e) {
             exception.set(e);
             return true;
           }
         });
     assertThat(closedSync).completes();
-    of(exception.get(), closedException.get())
-        .forEach(
-            e ->
-                org.assertj.core.api.Assertions.assertThat(e)
-                    .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
-                    .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED));
+
+    assertThat(exception.get())
+        .isInstanceOfAny(
+            AmqpEntityDoesNotExistException.class, AmqpEntityDoesNotExistException.class);
+
+    assertThat(closedException.get())
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
+        .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
   }
 
   @Test
@@ -478,7 +483,7 @@ public class AmqpTest {
                     .queue(doesNotExist)
                     .messageHandler((ctx, msg) -> {})
                     .build())
-        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(doesNotExist);
   }
 
@@ -510,7 +515,7 @@ public class AmqpTest {
     connection.management().queueDelete(name);
     assertThat(closedSync).completes();
     org.assertj.core.api.Assertions.assertThat(exception.get())
-        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
   }
 
@@ -780,7 +785,7 @@ public class AmqpTest {
   void queuePurgeOnNonExistingQueueShouldThrowException(TestInfo info) {
     String q = TestUtils.name(info);
     assertThatThrownBy(() -> connection.management().queuePurge(q))
-        .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
+        .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(q);
   }
 
