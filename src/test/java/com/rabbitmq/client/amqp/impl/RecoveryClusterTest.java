@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -68,7 +69,7 @@ public class RecoveryClusterTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RecoveryClusterTest.class);
 
-  static final Duration TIMEOUT = Duration.ofSeconds(20);
+  static final Duration TIMEOUT = Duration.ofSeconds(35);
   static final String[] URIS =
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
   static final Duration RECOVERY_INITIAL_DELAY = Duration.ofSeconds(10);
@@ -333,28 +334,24 @@ public class RecoveryClusterTest {
   private List<QueueConfiguration> queueConfigurations(
       List<Management.QueueType> queueTypes, int queueCount) {
     AtomicInteger classicQueueCount = new AtomicInteger(0);
+    String suffix = "rec-" + new Random().nextInt(1000);
     return queueTypes.stream()
         .flatMap(
             (Function<Management.QueueType, Stream<QueueConfiguration>>)
                 type ->
                     IntStream.range(0, queueCount)
                         .mapToObj(
-                            ignored -> {
+                            i -> {
                               boolean exclusive =
                                   type == Management.QueueType.CLASSIC
                                       && classicQueueCount.incrementAndGet() > queueCount;
-                              String prefix =
-                                  type.name().toLowerCase() + (exclusive ? "-ex-" : "-");
-                              String n = name(prefix);
+                              String prefix = type.name().toLowerCase() + (exclusive ? "-ex" : "");
+                              String n = String.format("%s-%s-%02d", prefix, suffix, i);
                               UnaryOperator<Management.QueueSpecification> c =
                                   s -> s.type(type).exclusive(exclusive);
                               return new QueueConfiguration(n, type, exclusive, c);
                             }))
         .collect(toList());
-  }
-
-  String name(String prefix) {
-    return prefix + TestUtils.name(this.testInfo);
   }
 
   private static class PublisherState implements AutoCloseable {

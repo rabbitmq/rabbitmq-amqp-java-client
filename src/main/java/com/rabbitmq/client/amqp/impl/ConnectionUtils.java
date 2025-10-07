@@ -159,14 +159,14 @@ final class ConnectionUtils {
             "Error while closing native connection while enforcing affinity: {}", ex.getMessage());
       }
       management.markUnavailable();
-      LOGGER.warn(
+      LOGGER.info(
           "Cannot enforce affinity {} of '{}' because connection has been closed",
           context,
           connectionName,
           e);
       throw e;
     } catch (RuntimeException e) {
-      LOGGER.warn(
+      LOGGER.info(
           "Cannot enforce affinity {} of '{}' error when looking up queue",
           context,
           connectionName,
