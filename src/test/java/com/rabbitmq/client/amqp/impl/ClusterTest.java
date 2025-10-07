@@ -21,11 +21,14 @@ import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CON
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.Cli.quorumStatus;
+import static com.rabbitmq.client.amqp.impl.Cli.rabbitmqctl;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.TestUtils.name;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofNanos;
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
@@ -59,9 +62,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @DisabledIfNotCluster
 public class ClusterTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(ClusterTest.class);
 
   static final String[] URIS =
       new String[] {"amqp://localhost:5672", "amqp://localhost:5673", "amqp://localhost:5674"};
@@ -339,8 +346,12 @@ public class ClusterTest {
 
       assertThat(initialFollowers).isNotEmpty();
 
+      LOGGER.info("Pausing node {}", initialLeader);
+
       Cli.pauseNode(initialLeader);
       nodePaused = true;
+
+      LOGGER.info("Node {} paused", initialLeader);
 
       publisher.publish(publisher.message().messageId(2L), ctx -> publishSync.down());
 
@@ -350,6 +361,9 @@ public class ClusterTest {
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
       consumeSync.reset();
+
+      LOGGER.info("Waiting for topology update");
+      long start = System.nanoTime();
 
       waitAtMost(
           ofSeconds(20),
@@ -361,8 +375,14 @@ public class ClusterTest {
                   + "queue info "
                   + mgmt.queueInfo(q));
 
+      LOGGER.info(
+          "Topology updated after {} second(s)", ofNanos(System.nanoTime() - start).toSeconds());
+
+      LOGGER.info("Unpausing node {}", initialLeader);
+
       Cli.unpauseNode(initialLeader);
       nodePaused = false;
+      LOGGER.info("Node {} unpaused", initialLeader);
 
       publisher.publish(publisher.message().messageId(3L), ctx -> publishSync.down());
       assertThat(publishSync).completes();
@@ -381,10 +401,14 @@ public class ClusterTest {
                   + "queue info "
                   + mgmt.queueInfo(q));
     } finally {
-      System.out.println(
-          Cli.rabbitmqctl("eval 'khepri:info(rabbitmq_metadata).'", initialFollowers.get(0))
-              .output());
-      System.out.println(Cli.quorumStatus(q, initialFollowers.get(0)));
+      if (LOGGER.isInfoEnabled()) {
+        LOGGER.info("Khepri status:");
+        System.out.println(
+            rabbitmqctl("eval 'khepri:info(rabbitmq_metadata).'", initialFollowers.get(0))
+                .output());
+        LOGGER.info("Quorum queue status:");
+        System.out.println(quorumStatus(q, initialFollowers.get(0)));
+      }
       if (nodePaused) {
         Cli.unpauseNode(initialLeader);
       }
