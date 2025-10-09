@@ -53,4 +53,10 @@ public final class NoOpMetricsCollector implements MetricsCollector {
 
   @Override
   public void consumeDisposition(ConsumeDisposition disposition) {}
+
+  @Override
+  public void writtenBytes(int writtenBytes) {}
+
+  @Override
+  public void readBytes(int readBytes) {}
 }

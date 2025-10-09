@@ -315,6 +315,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
           .useWebSockets(true)
           .webSocketPath(connectionSettings.webSocketPath());
     }
+    connectionOptions
+        .transportOptions()
+        .readBytesConsumer(this.environment().readBytesConsumer())
+        .writtenBytesConsumer(this.environment().writtenBytesConsumer());
     StopWatch stopWatch = new StopWatch();
     try {
       LOGGER.trace("Connecting '{}' to {}...", this.name(), address);

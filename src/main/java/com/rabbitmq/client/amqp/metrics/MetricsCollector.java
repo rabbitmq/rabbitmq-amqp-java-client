@@ -62,6 +62,20 @@ public interface MetricsCollector {
    */
   void consumeDisposition(ConsumeDisposition disposition);
 
+  /**
+   * Called when a connection writes bytes to its socket.
+   *
+   * @param writtenBytes the number of written bytes
+   */
+  void writtenBytes(int writtenBytes);
+
+  /**
+   * Called when a connection reads bytes from its socket.
+   *
+   * @param readBytes the number of read bytes
+   */
+  void readBytes(int readBytes);
+
   /** The broker-to-client dispositions. */
   enum PublishDisposition {
     /** see {@link com.rabbitmq.client.amqp.Publisher.Status#ACCEPTED} */

@@ -20,7 +20,9 @@ package com.rabbitmq.client.amqp.metrics;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.impl.TestUtils;
+import com.rabbitmq.client.amqp.impl.TestUtils.DisabledOnJavaSemeru;
+import com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition;
+import com.rabbitmq.client.amqp.metrics.MetricsCollector.PublishDisposition;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -65,15 +67,15 @@ public class MicrometerMetricsCollectorTest {
     assertThat(registry.get("rabbitmq.amqp.published").counter().count()).isEqualTo(2.0);
 
     assertThat(registry.get("rabbitmq.amqp.published_accepted").counter().count()).isZero();
-    collector.publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
+    collector.publishDisposition(PublishDisposition.ACCEPTED);
     assertThat(registry.get("rabbitmq.amqp.published_accepted").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.published_rejected").counter().count()).isZero();
-    collector.publishDisposition(MetricsCollector.PublishDisposition.REJECTED);
+    collector.publishDisposition(PublishDisposition.REJECTED);
     assertThat(registry.get("rabbitmq.amqp.published_rejected").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.published_released").counter().count()).isZero();
-    collector.publishDisposition(MetricsCollector.PublishDisposition.RELEASED);
+    collector.publishDisposition(PublishDisposition.RELEASED);
     assertThat(registry.get("rabbitmq.amqp.published_released").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.consumed").counter().count()).isZero();
@@ -84,19 +86,31 @@ public class MicrometerMetricsCollectorTest {
     assertThat(registry.get("rabbitmq.amqp.consumed").counter().count()).isEqualTo(3.0);
 
     assertThat(registry.get("rabbitmq.amqp.consumed_accepted").counter().count()).isZero();
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
+    collector.consumeDisposition(ConsumeDisposition.ACCEPTED);
     assertThat(registry.get("rabbitmq.amqp.consumed_accepted").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.consumed_requeued").counter().count()).isZero();
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
+    collector.consumeDisposition(ConsumeDisposition.REQUEUED);
     assertThat(registry.get("rabbitmq.amqp.consumed_requeued").counter().count()).isEqualTo(1.0);
 
     assertThat(registry.get("rabbitmq.amqp.consumed_discarded").counter().count()).isZero();
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
+    collector.consumeDisposition(ConsumeDisposition.DISCARDED);
     assertThat(registry.get("rabbitmq.amqp.consumed_discarded").counter().count()).isEqualTo(1.0);
+
+    assertThat(registry.get("rabbitmq.amqp.written_bytes").counter().count()).isZero();
+    collector.writtenBytes(12);
+    assertThat(registry.get("rabbitmq.amqp.written_bytes").counter().count()).isEqualTo(12);
+    collector.writtenBytes(20);
+    assertThat(registry.get("rabbitmq.amqp.written_bytes").counter().count()).isEqualTo(32.0);
+
+    assertThat(registry.get("rabbitmq.amqp.read_bytes").counter().count()).isZero();
+    collector.readBytes(42);
+    assertThat(registry.get("rabbitmq.amqp.read_bytes").counter().count()).isEqualTo(42.0);
+    collector.readBytes(10);
+    assertThat(registry.get("rabbitmq.amqp.read_bytes").counter().count()).isEqualTo(52.0);
   }
 
-  @TestUtils.DisabledOnJavaSemeru
+  @DisabledOnJavaSemeru
   @Test
   void prometheus() {
     PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
@@ -117,17 +131,20 @@ public class MicrometerMetricsCollectorTest {
     collector.publish();
     collector.publish();
 
-    collector.publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
-    collector.publishDisposition(MetricsCollector.PublishDisposition.REJECTED);
-    collector.publishDisposition(MetricsCollector.PublishDisposition.RELEASED);
+    collector.publishDisposition(PublishDisposition.ACCEPTED);
+    collector.publishDisposition(PublishDisposition.REJECTED);
+    collector.publishDisposition(PublishDisposition.RELEASED);
 
     collector.consume();
     collector.consume();
     collector.consume();
 
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.ACCEPTED);
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.REQUEUED);
-    collector.consumeDisposition(MetricsCollector.ConsumeDisposition.DISCARDED);
+    collector.consumeDisposition(ConsumeDisposition.ACCEPTED);
+    collector.consumeDisposition(ConsumeDisposition.REQUEUED);
+    collector.consumeDisposition(ConsumeDisposition.DISCARDED);
+
+    collector.writtenBytes(42);
+    collector.readBytes(12);
 
     Stream.of(
             "# TYPE rabbitmq_amqp_connections gauge",
@@ -151,7 +168,13 @@ public class MicrometerMetricsCollectorTest {
             "# TYPE rabbitmq_amqp_consumed_discarded_total counter",
             "rabbitmq_amqp_consumed_discarded_total 1.0",
             "# TYPE rabbitmq_amqp_consumed_requeued_total counter",
-            "rabbitmq_amqp_consumed_requeued_total 1.0")
+            "rabbitmq_amqp_consumed_requeued_total 1.0",
+            "# HELP rabbitmq_amqp_read_bytes_total",
+            "# TYPE rabbitmq_amqp_read_bytes_total counter",
+            "rabbitmq_amqp_read_bytes_total 12.0",
+            "# HELP rabbitmq_amqp_written_bytes_total",
+            "# TYPE rabbitmq_amqp_written_bytes_total counter",
+            "rabbitmq_amqp_written_bytes_total 42.0")
         .forEach(expected -> waitAtMost(() -> registry.scrape().contains(expected)));
   }
 }
