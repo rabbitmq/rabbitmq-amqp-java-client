@@ -34,6 +34,8 @@ public class MicrometerMetricsCollector implements MetricsCollector {
   private final AtomicLong consumers;
   private final Counter publish, publishAccepted, publishRejected, publishReleased;
   private final Counter consume, consumeAccepted, consumeRequeued, consumeDiscarded;
+  private final Counter writtenBytes;
+  private final Counter readBytes;
 
   public MicrometerMetricsCollector(MeterRegistry registry) {
     this(registry, "rabbitmq.amqp");
@@ -61,6 +63,8 @@ public class MicrometerMetricsCollector implements MetricsCollector {
     this.consumeAccepted = registry.counter(prefix + ".consumed_accepted", tags);
     this.consumeRequeued = registry.counter(prefix + ".consumed_requeued", tags);
     this.consumeDiscarded = registry.counter(prefix + ".consumed_discarded", tags);
+    this.writtenBytes = registry.counter(prefix + ".written_bytes", tags);
+    this.readBytes = registry.counter(prefix + ".read_bytes", tags);
   }
 
   @Override
@@ -135,5 +139,15 @@ public class MicrometerMetricsCollector implements MetricsCollector {
       default:
         break;
     }
+  }
+
+  @Override
+  public void writtenBytes(int writtenBytes) {
+    this.writtenBytes.increment(writtenBytes);
+  }
+
+  @Override
+  public void readBytes(int readBytes) {
+    this.readBytes.increment(readBytes);
   }
 }

@@ -17,11 +17,15 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.DISCARDED;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.REQUEUED;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.PublishDisposition.RELEASED;
 import static java.lang.String.format;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -55,6 +59,8 @@ public class MetricsCollectorTest {
     try (Environment environment =
         TestUtils.environmentBuilder().metricsCollector(metricsCollector).build()) {
       verify(metricsCollector, never()).openConnection();
+      verify(metricsCollector, never()).writtenBytes(anyInt());
+      verify(metricsCollector, never()).readBytes(anyInt());
       String c1Name = UUID.randomUUID().toString();
       CountDownLatch recoveredLatch = new CountDownLatch(1);
       Connection c1 =
@@ -66,9 +72,11 @@ public class MetricsCollectorTest {
               .connectionBuilder()
               .build();
       verify(metricsCollector, times(1)).openConnection();
+      verify(metricsCollector, atLeastOnce()).writtenBytes(anyInt());
+      verify(metricsCollector, atLeastOnce()).readBytes(anyInt());
 
       Cli.closeConnection(c1Name);
-      Assertions.assertThat(recoveredLatch).completes();
+      assertThat(recoveredLatch).completes();
       // a recovered connection is not closed
       verify(metricsCollector, never()).closeConnection();
 
@@ -98,7 +106,7 @@ public class MetricsCollectorTest {
           .when(metricsCollector)
           .closeConnection();
       Cli.closeConnection(c2Name);
-      Assertions.assertThat(c2ClosedLatch).completes();
+      assertThat(c2ClosedLatch).completes();
       // the connection is closed because automatic recovery was not activated
       verify(metricsCollector, times(1)).closeConnection();
 
@@ -112,7 +120,7 @@ public class MetricsCollectorTest {
       CountDownLatch disposed = new CountDownLatch(1);
       publisher.publish(publisher.message().toAddress().queue(q).message(), disposed(disposed));
       verify(metricsCollector, times(1)).publish();
-      Assertions.assertThat(disposed).completes();
+      assertThat(disposed).completes();
       verify(metricsCollector, times(1))
           .publishDisposition(MetricsCollector.PublishDisposition.ACCEPTED);
 
@@ -122,7 +130,7 @@ public class MetricsCollectorTest {
           publisher.message().toAddress().queue(UUID.randomUUID().toString()).message(),
           disposed(disposed));
       verify(metricsCollector, times(2)).publish();
-      Assertions.assertThat(disposed).completes();
+      assertThat(disposed).completes();
       // the last message could not be routed, so its disposition state is RELEASED
       verify(metricsCollector, times(1)).publishDisposition(RELEASED);
       verify(metricsCollector, times(2)).publishDisposition(any());
@@ -160,7 +168,7 @@ public class MetricsCollectorTest {
                     consumedCount.incrementAndGet();
                   })
               .build();
-      TestUtils.waitAtMost(
+      waitAtMost(
           () -> consumedCount.get() == 1,
           () -> format("Expected 1 message, but got %d.", consumedCount.get()));
       // the first message is accepted
@@ -172,7 +180,7 @@ public class MetricsCollectorTest {
       publisher.publish(publisher.message().toAddress().queue(q).message(), ctx -> {});
 
       // the message is requeued, so it comes back, and it's then discarded
-      TestUtils.waitAtMost(() -> consumedCount.get() == 1 + 2);
+      waitAtMost(() -> consumedCount.get() == 1 + 2);
       verify(metricsCollector, times(1 + 2)).consume();
       verify(metricsCollector, times(1)).consumeDisposition(REQUEUED);
       verify(metricsCollector, times(1)).consumeDisposition(DISCARDED);

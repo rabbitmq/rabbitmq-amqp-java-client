@@ -22,6 +22,7 @@ import java.net.URISyntaxException;
 import java.security.Principal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntConsumer;
 
 import io.netty.buffer.PooledByteBufAllocator;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -70,6 +71,8 @@ public class TcpTransport implements Transport {
     protected final TransportOptions options;
     protected final SslOptions sslOptions;
     protected final Bootstrap bootstrap;
+    private final IntConsumer readBytesConsumer;
+    private final IntConsumer writtenBytesConsumer;
 
     protected Channel channel;
     protected volatile IOException failureCause;
@@ -104,6 +107,8 @@ public class TcpTransport implements Transport {
         this.sslOptions = sslOptions;
         this.options = options;
         this.bootstrap = bootstrap;
+        this.readBytesConsumer = options.readBytesConsumer();
+        this.writtenBytesConsumer = options.writtenBytesConsumer();
     }
 
     @Override
@@ -344,6 +349,8 @@ public class TcpTransport implements Transport {
                     }
                 }
 
+                this.writtenBytesConsumer.accept(nettyBuf.writableBytes());
+
                 if (--writeCount > 0) {
                     channel.write(nettyBuf, channel.voidPromise());
                 } else {
@@ -530,6 +537,7 @@ public class TcpTransport implements Transport {
             final ProtonBuffer wrapped = nettyAllocator.wrap(buffer).convertToReadOnly();
 
             try (wrapped) {
+                readBytesConsumer.accept(wrapped.getReadableBytes());
                 listener.transportRead(wrapped);
             }
         }

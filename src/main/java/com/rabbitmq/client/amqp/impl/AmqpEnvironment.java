@@ -32,6 +32,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.IntConsumer;
 import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.ClientOptions;
 import org.slf4j.Logger;
@@ -65,6 +66,7 @@ class AmqpEnvironment implements Environment {
   private final ExecutorService recoveryEventLoopExecutorService;
   private final CredentialsManagerFactory credentialsManagerFactory =
       new CredentialsManagerFactory(this);
+  private final IntConsumer readBytesConsumer, writtenBytesConsumer;
 
   AmqpEnvironment(
       ExecutorService executorService,
@@ -106,6 +108,8 @@ class AmqpEnvironment implements Environment {
     }
     this.metricsCollector =
         metricsCollector == null ? NoOpMetricsCollector.INSTANCE : metricsCollector;
+    this.readBytesConsumer = this.metricsCollector::readBytes;
+    this.writtenBytesConsumer = this.metricsCollector::writtenBytes;
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
     this.recoveryEventLoopExecutorService =
@@ -188,6 +192,14 @@ class AmqpEnvironment implements Environment {
 
   MetricsCollector metricsCollector() {
     return this.metricsCollector;
+  }
+
+  IntConsumer readBytesConsumer() {
+    return this.readBytesConsumer;
+  }
+
+  IntConsumer writtenBytesConsumer() {
+    return this.writtenBytesConsumer;
   }
 
   ObservationCollector observationCollector() {

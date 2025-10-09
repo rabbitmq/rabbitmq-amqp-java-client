@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 /**
  * Encapsulates all the Transport options in one configuration object.
@@ -67,7 +68,11 @@ public class TransportOptions implements Cloneable {
 
     private final Map<String, String> webSocketHeaders = new HashMap<>();
 
-    @Override
+    private IntConsumer readBytesConsumer = i -> { };
+    private IntConsumer writtenBytesConsumer = i -> { };
+
+
+  @Override
     public TransportOptions clone() {
         return copyInto(new TransportOptions());
     }
@@ -481,6 +486,24 @@ public class TransportOptions implements Cloneable {
         return this;
     }
 
+    public IntConsumer readBytesConsumer() {
+      return readBytesConsumer;
+    }
+
+    public TransportOptions readBytesConsumer(IntConsumer readBytesConsumer) {
+      this.readBytesConsumer = readBytesConsumer;
+      return this;
+    }
+
+    public IntConsumer writtenBytesConsumer() {
+      return writtenBytesConsumer;
+    }
+
+    public TransportOptions writtenBytesConsumer(IntConsumer writtenBytesConsumer) {
+      this.writtenBytesConsumer = writtenBytesConsumer;
+      return this;
+    }
+
     /**
      * Copy all configuration into the given {@link TransportOptions} from this instance.
      *
@@ -509,6 +532,8 @@ public class TransportOptions implements Cloneable {
         other.webSocketHeaders().putAll(webSocketHeaders);
         other.webSocketMaxFrameSize(webSocketMaxFrameSize());
         other.webSocketCompression(webSocketCompression());
+        other.readBytesConsumer(readBytesConsumer());
+        other.writtenBytesConsumer(writtenBytesConsumer());
 
         return other;
     }
