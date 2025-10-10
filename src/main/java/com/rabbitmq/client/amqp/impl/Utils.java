@@ -43,18 +43,23 @@ import org.slf4j.LoggerFactory;
 
 final class Utils {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
+
+  static final boolean VIRTUAL_THREADS_ON =
+      Boolean.parseBoolean(System.getProperty("rabbitmq.stream.threads.virtual.enabled", "false"));
+
   static final int AVAILABLE_PROCESSORS = Runtime.getRuntime().availableProcessors();
 
   static final Supplier<String> NAME_SUPPLIER = new NameSupplier("client.gen-");
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
   private static final ThreadFactory THREAD_FACTORY;
   private static final Function<String, ExecutorService> EXECUTOR_SERVICE_FACTORY;
 
   static {
+    LOGGER.debug("Virtual threads enabled: {}", VIRTUAL_THREADS_ON);
+    LOGGER.debug("Java 21 or more: {}", isJava21OrMore());
     if (isJava21OrMore()) {
-      LOGGER.debug("Running Java 21 or more, using virtual threads");
+      LOGGER.debug("Using virtual threads");
       Class<?> builderClass =
           Arrays.stream(Thread.class.getDeclaredClasses())
               .filter(c -> "Builder".equals(c.getSimpleName()))
