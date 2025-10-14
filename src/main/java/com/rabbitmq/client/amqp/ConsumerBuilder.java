@@ -46,7 +46,7 @@ public interface ConsumerBuilder {
    * <p>The default is 100.
    *
    * @param initialCredits number of initial credits
-   * @return this buidler instance
+   * @return this builder instance
    */
   ConsumerBuilder initialCredits(int initialCredits);
 
