@@ -1,5 +1,6 @@
 = RabbitMQ AMQP 1.0 Java Client
 
+image:https://maven-badges.sml.io/sonatype-central/com.rabbitmq.client/amqp-client/badge.svg?subject=maven["Maven Central", link="https://maven-badges.sml.io/sonatype-central/com.rabbitmq.client/amqp-client/"]
 image:https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml/badge.svg["Build Status", link="https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml"]
 
 This library is part of the https://www.rabbitmq.com/client-libraries/amqp-client-libraries[RabbitMQ AMQP 1.0 client libraries].
