@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - src/main/java/com/rabbitmq/client/amqp
+      - src/main/java/com/rabbitmq/client/amqp/**
       - src/docs/**
       - src/test/java/com/rabbitmq/client/amqp/docs/*
   workflow_dispatch:
