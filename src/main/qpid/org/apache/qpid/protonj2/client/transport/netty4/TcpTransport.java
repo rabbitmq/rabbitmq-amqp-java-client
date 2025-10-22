@@ -72,7 +72,7 @@ public class TcpTransport implements Transport {
     protected final SslOptions sslOptions;
     protected final Bootstrap bootstrap;
     private final IntConsumer readBytesConsumer;
-    private final IntConsumer writtenBytesConsumer;
+    protected final IntConsumer writtenBytesConsumer;
 
     protected Channel channel;
     protected volatile IOException failureCause;

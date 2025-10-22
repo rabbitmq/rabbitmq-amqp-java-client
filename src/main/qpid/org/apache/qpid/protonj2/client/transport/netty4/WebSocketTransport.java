@@ -22,6 +22,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.TransportOptions;
@@ -87,10 +88,12 @@ public class WebSocketTransport extends TcpTransport {
 
         LOG.trace("Attempted write of: {} bytes", length);
 
+        ByteBuf nettyBuf = toOutputBuffer(output);
+        this.writtenBytesConsumer.accept(nettyBuf.writableBytes());
         if (onComplete == null) {
-            channel.write(new BinaryWebSocketFrame(toOutputBuffer(output)), channel.voidPromise());
+            channel.write(new BinaryWebSocketFrame(nettyBuf), channel.voidPromise());
         } else {
-            channel.write(new BinaryWebSocketFrame(toOutputBuffer(output)), channel.newPromise().addListener(new GenericFutureListener<Future<? super Void>>() {
+            channel.write(new BinaryWebSocketFrame(nettyBuf), channel.newPromise().addListener(new GenericFutureListener<Future<? super Void>>() {
 
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
