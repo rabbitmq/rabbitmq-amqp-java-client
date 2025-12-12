@@ -1,5 +1,6 @@
 package com.rabbitmq.client.amqp.docs;
 
+import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.time.Duration;
@@ -373,6 +374,17 @@ public class WebsiteDocumentation {
         .messageHandler((ctx, msg ) -> {
             // message processing
         })
+        .build();
+  }
+
+  void affinity() {
+    Environment environment = null;
+    Connection connection = environment.connectionBuilder()
+        .affinity()
+            .queue("my-queue")
+            .operation(PUBLISH)
+            .reuse(true)
+        .connection()
         .build();
   }
 }
