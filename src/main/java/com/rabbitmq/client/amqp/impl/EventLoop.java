@@ -232,15 +232,33 @@ final class EventLoop implements AutoCloseable {
           });
     }
 
+    // for testing
+    <R> R query(Function<S, R> queryFunction) {
+      AtomicReference<R> result = new AtomicReference<>();
+      CountDownLatch latch = new CountDownLatch(1);
+
+      // Submit a task that extracts data from the state
+      this.loop.submit(
+          this,
+          s -> {
+            result.set(queryFunction.apply(s));
+            latch.countDown();
+            return TaskResult.CONTINUE;
+          });
+
+      try {
+        latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return result.get();
+    }
+
     @Override
     public void close() {
       if (this.closed.compareAndSet(false, true)) {
         this.loop.submit(this, s -> TaskResult.STOP);
       }
-    }
-
-    S state() {
-      return this.stateReference.get();
     }
   }
 

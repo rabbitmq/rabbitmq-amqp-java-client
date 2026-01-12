@@ -350,27 +350,23 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   // for test assertions
 
-  private State state() {
-    return this.eventLoopClient.state();
-  }
-
   Map<String, ExchangeSpec> exchanges() {
-    return new LinkedHashMap<>(state().exchanges);
+    return this.eventLoopClient.query(s -> s.exchanges);
   }
 
   Map<String, QueueSpec> queues() {
-    return new LinkedHashMap<>(state().queues);
+    return this.eventLoopClient.query(s -> s.queues);
   }
 
   int bindingCount() {
-    return state().bindings.size();
+    return this.eventLoopClient.query(s -> s.bindings.size());
   }
 
   int exchangeCount() {
-    return state().exchanges.size();
+    return this.eventLoopClient.query(s -> s.exchanges.size());
   }
 
   int queueCount() {
-    return state().queues.size();
+    return this.eventLoopClient.query(s -> s.queues.size());
   }
 }

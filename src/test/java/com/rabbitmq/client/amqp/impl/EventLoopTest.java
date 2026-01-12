@@ -82,12 +82,6 @@ public class EventLoopTest {
     assertThatThrownBy(() -> loop.register(State::new)).isInstanceOf(IllegalStateException.class);
   }
 
-  @Test
-  void stateIsAccessibleDirectly() {
-    client.submit(s -> s.a = 100);
-    assertThat(client.state().a).isEqualTo(100);
-  }
-
   static class State {
 
     private int a, b;
