@@ -31,8 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,8 +44,7 @@ final class EventLoop implements AutoCloseable {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Future<?> loop;
   private final AtomicReference<Thread> loopThread = new AtomicReference<>();
-  private final BlockingQueue<ClientTaskContext<Object>> taskQueue =
-      new LinkedBlockingQueue<>(1000);
+  private final BlockingQueue<ClientTaskContext<?>> taskQueue = new LinkedBlockingQueue<>(1000);
 
   EventLoop(ExecutorService executorService) {
     CountDownLatch loopThreadSetLatch = new CountDownLatch(1);
@@ -54,19 +53,27 @@ final class EventLoop implements AutoCloseable {
             () -> {
               loopThread.set(Thread.currentThread());
               loopThreadSetLatch.countDown();
-              Map<Long, Object> states = new HashMap<>();
+              Map<Long, Object> activeClients = new HashMap<>();
               while (!Thread.currentThread().isInterrupted()) {
                 try {
-                  ClientTaskContext<Object> context =
-                      this.taskQueue.poll(1000, TimeUnit.MILLISECONDS);
+                  ClientTaskContext<?> context = this.taskQueue.poll(1000, TimeUnit.MILLISECONDS);
                   if (context != null) {
-                    Object state = states.get(context.client.id);
-                    state = context.task.apply(state);
-                    if (state == null) {
-                      states.remove(context.client.id);
-                    } else {
-                      states.put(context.client.id, state);
+                    if (context.registration) {
+                      context.task.apply(null);
+                      activeClients.put(context.client.id, context.client.stateReference.get());
+                      context.complete();
+                      continue;
                     }
+                    Object clientState = activeClients.get(context.client.id);
+                    if (clientState == null) {
+                      context.complete();
+                      continue;
+                    }
+                    TaskResult result = context.task.apply(clientState);
+                    if (result == TaskResult.STOP) {
+                      activeClients.remove(context.client.id);
+                    }
+                    context.complete();
                   }
                 } catch (InterruptedException e) {
                   LOGGER.debug("Event loop has been interrupted.");
@@ -87,62 +94,91 @@ final class EventLoop implements AutoCloseable {
   }
 
   <S> Client<S> register(Supplier<S> stateSupplier) {
+    if (this.closed.get()) {
+      throw new IllegalStateException("Event loop is closed");
+    }
     Client<S> client = new Client<>(this);
-    this.submit(
-        client,
-        nullState -> {
-          S state = stateSupplier.get();
-          client.stateReference.set(state);
-          return state;
-        });
+    CountDownLatch latch = new CountDownLatch(1);
+    try {
+      ClientTaskContext context =
+          new ClientTaskContext(
+              client,
+              s -> {
+                S state = stateSupplier.get();
+                client.stateReference.set(state);
+                return TaskResult.CONTINUE;
+              },
+              latch,
+              true);
+      boolean added = this.taskQueue.offer(context, TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+      if (!added) {
+        throw new AmqpException("Enqueueing of registration timed out");
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AmqpException("Registration enqueueing has been interrupted", e);
+    }
+    try {
+      boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+      if (!completed) {
+        LOGGER.warn(
+            "Event loop registration did not complete in {} second(s), queue size is {}",
+            TIMEOUT.toSeconds(),
+            this.taskQueue.size());
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AmqpException("Registration processing has been interrupted", e);
+    }
     return client;
   }
 
-  private <ST> void submit(Client<ST> client, UnaryOperator<ST> task) {
+  private <S> void submit(Client<S> client, Function<S, TaskResult> task) {
     if (this.closed.get()) {
       throw new IllegalStateException("Event loop is closed");
-    } else {
-      if (Thread.currentThread().equals(this.loopThread.get())) {
+    }
+    if (Thread.currentThread().equals(this.loopThread.get())) {
+      try {
         task.apply(client.stateReference.get());
-      } else {
-        CountDownLatch latch = new CountDownLatch(1);
-        try {
-          ClientTaskContext<ST> context =
-              new ClientTaskContext<>(
-                  client,
-                  state -> {
-                    try {
-                      return task.apply(state);
-                    } catch (Exception e) {
-                      LOGGER.info("Error during task", e);
-                    } finally {
-                      latch.countDown();
-                    }
-                    return null;
-                  });
-          @SuppressWarnings("unchecked")
-          boolean added =
-              this.taskQueue.offer(
-                  (ClientTaskContext<Object>) context, TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-          if (!added) {
-            throw new AmqpException("Enqueueing of task timed out");
-          }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new AmqpException("Task enqueueing has been interrupted", e);
+      } catch (Exception e) {
+        LOGGER.warn("Error during task", e);
+      }
+    } else {
+      CountDownLatch latch = new CountDownLatch(1);
+      try {
+        @SuppressWarnings("unchecked")
+        ClientTaskContext context =
+            new ClientTaskContext(
+                client,
+                s -> {
+                  try {
+                    return task.apply((S) s);
+                  } catch (Exception e) {
+                    LOGGER.warn("Error during task", e);
+                    return TaskResult.CONTINUE;
+                  }
+                },
+                latch,
+                false);
+        boolean added = this.taskQueue.offer(context, TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        if (!added) {
+          throw new AmqpException("Enqueueing of task timed out");
         }
-        try {
-          boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-          if (!completed) {
-            LOGGER.warn(
-                "Event loop task did not complete in {} second(s), queue size is {}",
-                TIMEOUT.toSeconds(),
-                this.taskQueue.size());
-          }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new AmqpException("Topology task processing has been interrupted", e);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AmqpException("Task enqueueing has been interrupted", e);
+      }
+      try {
+        boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        if (!completed) {
+          LOGGER.warn(
+              "Event loop task did not complete in {} second(s), queue size is {}",
+              TIMEOUT.toSeconds(),
+              this.taskQueue.size());
         }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AmqpException("Topology task processing has been interrupted", e);
       }
     }
   }
@@ -152,6 +188,11 @@ final class EventLoop implements AutoCloseable {
     if (this.closed.compareAndSet(false, true)) {
       this.loop.cancel(true);
     }
+  }
+
+  enum TaskResult {
+    CONTINUE,
+    STOP
   }
 
   private static final AtomicLong CLIENT_ID_SEQUENCE = new AtomicLong();
@@ -170,21 +211,20 @@ final class EventLoop implements AutoCloseable {
 
     void submit(Consumer<S> task) {
       if (this.closed.get()) {
-        throw new IllegalStateException("Event loop is closed");
-      } else {
-        this.loop.submit(
-            this,
-            s -> {
-              task.accept(s);
-              return s;
-            });
+        throw new IllegalStateException("Client is closed");
       }
+      this.loop.submit(
+          this,
+          s -> {
+            task.accept(s);
+            return TaskResult.CONTINUE;
+          });
     }
 
     @Override
     public void close() {
       if (this.closed.compareAndSet(false, true)) {
-        this.loop.submit(this, s -> null);
+        this.loop.submit(this, s -> TaskResult.STOP);
       }
     }
 
@@ -196,11 +236,25 @@ final class EventLoop implements AutoCloseable {
   private static class ClientTaskContext<S> {
 
     private final Client<S> client;
-    private final UnaryOperator<S> task;
+    private final Function<Object, TaskResult> task;
+    private final CountDownLatch latch;
+    private final boolean registration;
 
-    private ClientTaskContext(Client<S> client, UnaryOperator<S> task) {
+    private ClientTaskContext(
+        Client<S> client,
+        Function<Object, TaskResult> task,
+        CountDownLatch latch,
+        boolean registration) {
       this.client = client;
       this.task = task;
+      this.latch = latch;
+      this.registration = registration;
+    }
+
+    void complete() {
+      if (this.latch != null) {
+        this.latch.countDown();
+      }
     }
   }
 }
