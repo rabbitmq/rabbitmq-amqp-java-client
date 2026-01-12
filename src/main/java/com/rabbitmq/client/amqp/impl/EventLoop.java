@@ -22,11 +22,14 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -100,8 +103,8 @@ final class EventLoop implements AutoCloseable {
     Client<S> client = new Client<>(this);
     CountDownLatch latch = new CountDownLatch(1);
     try {
-      ClientTaskContext context =
-          new ClientTaskContext(
+      ClientTaskContext<S> context =
+          new ClientTaskContext<>(
               client,
               s -> {
                 S state = stateSupplier.get();
@@ -147,8 +150,8 @@ final class EventLoop implements AutoCloseable {
       CountDownLatch latch = new CountDownLatch(1);
       try {
         @SuppressWarnings("unchecked")
-        ClientTaskContext context =
-            new ClientTaskContext(
+        ClientTaskContext<S> context =
+            new ClientTaskContext<>(
                 client,
                 s -> {
                   try {
@@ -187,6 +190,14 @@ final class EventLoop implements AutoCloseable {
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
       this.loop.cancel(true);
+      try {
+        Duration timeout = Duration.ofSeconds(5);
+        this.loop.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+      } catch (CancellationException | ExecutionException | TimeoutException e) {
+        // OK
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

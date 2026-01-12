@@ -167,9 +167,10 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   void accept(Visitor visitor) {
     LOGGER.debug("Topology listener '{}' visitor, retrieving state...", this.label);
-    AtomicReference<List<ExchangeSpec>> exchangeCopy = new AtomicReference<>();
-    AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>();
-    AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>();
+    AtomicReference<List<ExchangeSpec>> exchangeCopy =
+        new AtomicReference<>(Collections.emptyList());
+    AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>(Collections.emptyList());
+    AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>(Collections.emptySet());
     submit(
         s -> {
           exchangeCopy.set(new ArrayList<>(s.exchanges.values()));
