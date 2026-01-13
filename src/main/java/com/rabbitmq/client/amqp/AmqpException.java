@@ -25,7 +25,7 @@ public class AmqpException extends RuntimeException {
   }
 
   public AmqpException(String format, Object... args) {
-    super(String.format(format, args));
+    super(args.length == 0 ? format : String.format(format, args));
   }
 
   public AmqpException(String message, Throwable cause) {
