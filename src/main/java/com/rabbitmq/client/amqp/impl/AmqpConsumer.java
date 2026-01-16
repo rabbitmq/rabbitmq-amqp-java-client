@@ -75,12 +75,14 @@ import org.slf4j.LoggerFactory;
 final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
+  private static final Consumer.Context PRE_SETTLED_CONTEXT = new PreSettledContext();
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
   private volatile ClientReceiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final int initialCredits;
+  private final boolean preSettled;
   private final Long id;
   private final String address;
   private volatile String directReplyToAddress;
@@ -110,6 +112,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
+    this.preSettled = builder.isPreSettled();
     MessageHandler messageHandler =
         builder
             .connection()
@@ -147,6 +150,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         createNativeReceiver(
             this.sessionHandler.session(),
             this.address,
+            this.preSettled,
             this.linkProperties,
             this.filters,
             this.subscriptionListener,
@@ -217,6 +221,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private static ClientReceiver createNativeReceiver(
       Session nativeSession,
       String address,
+      boolean preSettled,
       Map<String, Object> properties,
       Map<String, DescribedType> filters,
       SubscriptionListener subscriptionListener,
@@ -239,10 +244,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             .expiryPolicy(ExpiryPolicy.LINK_CLOSE)
             .durabilityMode(DurabilityMode.NONE);
       } else {
-        receiverOptions
-            .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
-            .autoAccept(false)
-            .autoSettle(false);
+        if (preSettled) {
+          receiverOptions.deliveryMode(DeliveryMode.AT_MOST_ONCE).autoAccept(true).autoSettle(true);
+        } else {
+          receiverOptions
+              .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+              .autoAccept(false)
+              .autoSettle(false);
+        }
       }
       receiverOptions
           .handler(nativeHandler)
@@ -292,36 +301,53 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private java.util.function.Consumer<Delivery> createNativeHandler(MessageHandler handler) {
+    java.util.function.Consumer<Delivery> runnable;
+    if (this.preSettled) {
+      runnable =
+          delivery -> {
+            AmqpMessage message;
+            try {
+              message = new AmqpMessage(delivery.message());
+            } catch (ClientException e) {
+              LOGGER.warn("Error while decoding message: {}", e.getMessage());
+              return;
+            }
+            metricsCollector.consumeDisposition(ACCEPTED);
+            protonExecutor.execute(replenishCreditOperation);
+            handler.handle(PRE_SETTLED_CONTEXT, message);
+          };
+    } else {
+      runnable =
+          delivery -> {
+            AmqpMessage message;
+            try {
+              message = new AmqpMessage(delivery.message());
+            } catch (ClientException e) {
+              LOGGER.warn("Error while decoding message: {}", e.getMessage());
+              try {
+                delivery.disposition(DeliveryState.rejected("", ""), true);
+              } catch (ClientException ex) {
+                LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
+              }
+              return;
+            }
+            Consumer.Context context =
+                new DeliveryContext(
+                    delivery,
+                    this.protonExecutor,
+                    this.protonReceiver,
+                    this.metricsCollector,
+                    this.unsettledMessageCount,
+                    this.replenishCreditOperation,
+                    this);
+            handler.handle(context, message);
+          };
+    }
     return delivery -> {
       if (this.state() == OPEN) {
         this.unsettledMessageCount.incrementAndGet();
         this.metricsCollector.consume();
-        this.consumerWorkService.dispatch(
-            this,
-            () -> {
-              AmqpMessage message;
-              try {
-                message = new AmqpMessage(delivery.message());
-              } catch (ClientException e) {
-                LOGGER.warn("Error while decoding message: {}", e.getMessage());
-                try {
-                  delivery.disposition(DeliveryState.rejected("", ""), true);
-                } catch (ClientException ex) {
-                  LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
-                }
-                return;
-              }
-              Consumer.Context context =
-                  new DeliveryContext(
-                      delivery,
-                      this.protonExecutor,
-                      this.protonReceiver,
-                      this.metricsCollector,
-                      this.unsettledMessageCount,
-                      this.replenishCreditOperation,
-                      this);
-              handler.handle(context, message);
-            });
+        this.consumerWorkService.dispatch(this, () -> runnable.accept(delivery));
       }
     };
   }
@@ -333,6 +359,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                 createNativeReceiver(
                     this.sessionHandler.sessionNoCheck(),
                     this.address,
+                    this.preSettled,
                     this.linkProperties,
                     this.filters,
                     this.subscriptionListener,
@@ -492,7 +519,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public void discard() {
-      settle(REJECTED, DISCARDED, "discard");
+      this.settle(REJECTED, DISCARDED, "discard");
     }
 
     @Override
@@ -504,7 +531,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public void requeue() {
-      settle(DeliveryState.released(), REQUEUED, "requeue");
+      this.settle(DeliveryState.released(), REQUEUED, "requeue");
     }
 
     @Override
@@ -669,6 +696,39 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           handleContextException(this.consumer, e, label);
         }
       }
+    }
+  }
+
+  private static class PreSettledContext implements Consumer.Context {
+
+    @Override
+    public void accept() {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void discard() {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void discard(Map<String, Object> annotations) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void requeue() {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void requeue(Map<String, Object> annotations) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public BatchContext batch(int batchSizeHint) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
     }
   }
 

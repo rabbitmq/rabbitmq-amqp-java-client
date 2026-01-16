@@ -1024,4 +1024,44 @@ public class AmqpTest {
       connection.management().queueDelete(this.name);
     }
   }
+
+  @Test
+  void consumerPreSettled() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    int initialCredits = messageCount / 10;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    AtomicReference<Exception> exception = new AtomicReference<>();
+    Sync consumeSync = sync(messageCount);
+    com.rabbitmq.client.amqp.Consumer consumer =
+        connection
+            .consumerBuilder()
+            .queue(name)
+            .initialCredits(initialCredits)
+            .preSettled()
+            .messageHandler(
+                (ctx, msg) -> {
+                  if (exception.get() == null) {
+                    try {
+                      ctx.accept();
+                    } catch (Exception e) {
+                      exception.set(e);
+                    }
+                  }
+                  consumeSync.down();
+                })
+            .build();
+
+    assertThat(consumeSync).completes();
+    assertThat(exception)
+        .doesNotHaveNullValue()
+        .hasValueMatching(e -> e instanceof UnsupportedOperationException);
+    consumer.close();
+    assertThat(connection.management().queueInfo(name)).isEmpty();
+  }
 }
