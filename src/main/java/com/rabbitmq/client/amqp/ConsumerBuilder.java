@@ -61,8 +61,8 @@ public interface ConsumerBuilder {
    *
    * <p>When enabled, RabbitMQ considers the message successfully delivered the moment it is sent.
    * The message arrives at your application already "settled." Consequently, the library will
-   * <b>not</b> send any acknowledgment (disposition frame) back to RabbitMQ, and you do not need
-   * to call any settle methods on the received message.
+   * <b>not</b> send any acknowledgment (disposition frame) back to RabbitMQ, and you do not need to
+   * call any settle methods on the received message.
    *
    * <h3>Performance vs. Reliability:</h3>
    *
