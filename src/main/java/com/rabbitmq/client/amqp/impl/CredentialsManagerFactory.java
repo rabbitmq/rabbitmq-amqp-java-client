@@ -23,10 +23,12 @@ import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import com.rabbitmq.client.amqp.oauth2.GsonTokenParser;
 import com.rabbitmq.client.amqp.oauth2.HttpTokenRequester;
 import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
-import java.net.http.HttpClient;
+import java.net.HttpURLConnection;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 
 final class CredentialsManagerFactory {
 
@@ -80,11 +82,17 @@ final class CredentialsManagerFactory {
   private CredentialsManager createOAuth2Credentials(
       DefaultConnectionSettings<?> connectionSettings) {
     DefaultConnectionSettings.DefaultOAuth2Settings<?> settings = connectionSettings.oauth2();
-    Consumer<HttpClient.Builder> clientBuilderConsumer;
+    Consumer<HttpURLConnection> connectionConfigurator;
     if (settings.tlsEnabled()) {
-      clientBuilderConsumer = b -> b.sslContext(settings.tls().sslContext());
+      SSLContext sslContext = settings.tls().sslContext();
+      connectionConfigurator =
+          c -> {
+            if (c instanceof HttpsURLConnection) {
+              ((HttpsURLConnection) c).setSSLSocketFactory(sslContext.getSocketFactory());
+            }
+          };
     } else {
-      clientBuilderConsumer = ignored -> {};
+      connectionConfigurator = c -> {};
     }
     HttpTokenRequester tokenRequester =
         new HttpTokenRequester(
@@ -93,7 +101,7 @@ final class CredentialsManagerFactory {
             settings.clientSecret(),
             settings.grantType(),
             settings.parameters(),
-            clientBuilderConsumer,
+            connectionConfigurator,
             null,
             new GsonTokenParser());
     return new TokenCredentialsManager(
