@@ -733,7 +733,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   private Session openSession(org.apache.qpid.protonj2.client.Connection connection) {
     try {
-      return connection.openSession();
+      return connection.openSession(Utils.sessionOptions());
     } catch (ClientException e) {
       throw convert(e, "Error while opening session");
     }

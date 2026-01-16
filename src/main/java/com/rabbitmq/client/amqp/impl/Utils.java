@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import org.apache.qpid.protonj2.client.SessionOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,6 +104,10 @@ final class Utils {
   }
 
   private Utils() {}
+
+  static SessionOptions sessionOptions() {
+    return new SessionOptions().incomingCapacity(0);
+  }
 
   static ExecutorService executorService(String prefixFormat, Object... args) {
     return EXECUTOR_SERVICE_FACTORY.apply(String.format(prefixFormat, args));

@@ -70,7 +70,7 @@ interface SessionHandler extends AutoCloseable {
     public Session session() {
       closeCurrentSession();
       try {
-        Session session = this.connection.get().openSession();
+        Session session = this.connection.get().openSession(Utils.sessionOptions());
         this.session.set(ExceptionUtils.wrapGet(session.openFuture()));
         return this.session.get();
       } catch (ClientException e) {
