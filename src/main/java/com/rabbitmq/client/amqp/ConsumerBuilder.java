@@ -54,14 +54,14 @@ public interface ConsumerBuilder {
    * Configures the link to use <b>At-Most-Once</b> delivery by receiving messages in a
    * "pre-settled" state.
    *
-   * <p>By default, this library uses <b>At-Least-Once</b> delivery, meaning you must explicitly
+   * <p>By default, the library uses <b>At-Least-Once</b> delivery, meaning you must explicitly
    * acknowledge (settle) each message. Calling this method changes that behavior.
    *
    * <h3>How it works:</h3>
    *
-   * <p>When enabled, the server considers the message successfully delivered the moment it is sent.
-   * The message arrives at your application already "settled." Consequently, this library will
-   * <b>not</b> send any acknowledgment (disposition frame) back to the server, and you do not need
+   * <p>When enabled, RabbitMQ considers the message successfully delivered the moment it is sent.
+   * The message arrives at your application already "settled." Consequently, the library will
+   * <b>not</b> send any acknowledgment (disposition frame) back to RabbitMQ, and you do not need
    * to call any settle methods on the received message.
    *
    * <h3>Performance vs. Reliability:</h3>
@@ -70,7 +70,7 @@ public interface ConsumerBuilder {
    *   <li><b>Performance:</b> This is the fastest consumption mode. It eliminates the network
    *       round-trip overhead of sending acknowledgments.
    *   <li><b>Reliability:</b> If your application crashes or the connection fails while you are
-   *       processing the message, the message is lost. The server has already discarded it and will
+   *       processing the message, the message is lost. RabbitMQ has already discarded it and will
    *       not redeliver it.
    * </ul>
    *
