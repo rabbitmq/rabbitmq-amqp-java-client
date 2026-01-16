@@ -284,7 +284,7 @@ class AmqpManagement implements Management {
                 this.receiveLoop = null;
               }
               LOGGER.debug("Creating management session ({}).", this);
-              this.session = this.connection.nativeConnection().openSession();
+              this.session = this.connection.nativeConnection().openSession(Utils.sessionOptions());
               String linkPairName = "management-link-pair";
               Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
               LOGGER.debug("Creating management sender ({}).", this);
