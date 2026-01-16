@@ -53,6 +53,7 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   private boolean directReplyTo = false;
   private Consumer.MessageHandler messageHandler;
   private int initialCredits = 100;
+  private boolean preSettled = false;
   private final List<Resource.StateListener> listeners = new ArrayList<>();
   private final Map<String, DescribedType> filters = new LinkedHashMap<>();
   private final Map<String, Object> properties = new LinkedHashMap<>();
@@ -91,6 +92,12 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
   @Override
   public ConsumerBuilder initialCredits(int initialCredits) {
     this.initialCredits = initialCredits;
+    return this;
+  }
+
+  @Override
+  public ConsumerBuilder preSettled() {
+    this.preSettled = true;
     return this;
   }
 
@@ -143,6 +150,10 @@ class AmqpConsumerBuilder implements ConsumerBuilder {
 
   int initialCredits() {
     return this.initialCredits;
+  }
+
+  boolean isPreSettled() {
+    return this.preSettled;
   }
 
   Map<String, Object> properties() {
