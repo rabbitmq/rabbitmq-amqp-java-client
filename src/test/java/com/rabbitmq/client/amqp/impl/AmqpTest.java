@@ -1038,29 +1038,33 @@ public class AmqpTest {
 
     AtomicReference<Exception> exception = new AtomicReference<>();
     Sync consumeSync = sync(messageCount);
-    com.rabbitmq.client.amqp.Consumer consumer =
-        connection
-            .consumerBuilder()
-            .queue(name)
-            .initialCredits(initialCredits)
-            .preSettled()
-            .messageHandler(
-                (ctx, msg) -> {
-                  if (exception.get() == null) {
-                    try {
-                      ctx.accept();
-                    } catch (Exception e) {
-                      exception.set(e);
-                    }
-                  }
-                  consumeSync.down();
-                })
-            .build();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            connection
+                .consumerBuilder()
+                .queue(name)
+                .initialCredits(initialCredits)
+                .preSettled()
+                .messageHandler(
+                    (ctx, msg) -> {
+                      if (exception.get() == null) {
+                        try {
+                          ctx.accept();
+                        } catch (Exception e) {
+                          exception.set(e);
+                        }
+                      }
+                      consumeSync.down();
+                    })
+                .build();
 
     assertThat(consumeSync).completes();
     assertThat(exception)
         .doesNotHaveNullValue()
         .hasValueMatching(e -> e instanceof UnsupportedOperationException);
+
+    waitAtMost(() -> !consumer.protonHasUnsettled());
+
     consumer.close();
     assertThat(connection.management().queueInfo(name)).isEmpty();
   }

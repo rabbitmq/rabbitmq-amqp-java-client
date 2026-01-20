@@ -704,6 +704,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
+  // for testing
+  boolean protonHasUnsettled() {
+    return this.protonReceiver.hasUnsettled();
+  }
+
   private static class PreSettledContext implements Consumer.Context {
 
     @Override
