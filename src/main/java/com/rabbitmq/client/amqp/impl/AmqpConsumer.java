@@ -312,6 +312,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               LOGGER.warn("Error while decoding message: {}", e.getMessage());
               return;
             }
+            try {
+              delivery.disposition(DeliveryState.accepted(), true);
+            } catch (ClientException e) {
+              LOGGER.warn("Error while accepting and settling message: {}", e.getMessage());
+            }
             metricsCollector.consumeDisposition(ACCEPTED);
             protonExecutor.execute(replenishCreditOperation);
             handler.handle(PRE_SETTLED_CONTEXT, message);
