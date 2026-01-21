@@ -1068,4 +1068,35 @@ public class AmqpTest {
     consumer.close();
     assertThat(connection.management().queueInfo(name)).isEmpty();
   }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void exceptionInMessageHandlerShouldSettleMessage(boolean preSettled) {
+    connection.management().queue(name).exclusive(true).declare();
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync();
+    publisher.publish(publisher.message(), ctx -> publishSync.down());
+    assertThat(publishSync).completes();
+
+    Sync consumeSync = sync();
+    ConsumerBuilder builder = connection.consumerBuilder();
+    if (preSettled) {
+      builder.preSettled();
+    }
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            builder
+                .queue(name)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      consumeSync.down();
+                      throw new RuntimeException("simulated exception in message handler");
+                    })
+                .build();
+
+    assertThat(consumeSync).completes();
+    waitAtMost(() -> !consumer.protonHasUnsettled());
+    consumer.close();
+    assertThat(connection.management().queueInfo(name)).isEmpty();
+  }
 }
