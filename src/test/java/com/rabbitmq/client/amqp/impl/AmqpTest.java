@@ -1064,6 +1064,7 @@ public class AmqpTest {
         .hasValueMatching(e -> e instanceof UnsupportedOperationException);
 
     waitAtMost(() -> !consumer.protonHasUnsettled());
+    assertThat(consumer.unsettledMessageCount()).isZero();
 
     consumer.close();
     assertThat(connection.management().queueInfo(name)).isEmpty();
@@ -1096,6 +1097,7 @@ public class AmqpTest {
 
     assertThat(consumeSync).completes();
     waitAtMost(() -> !consumer.protonHasUnsettled());
+    assertThat(consumer.unsettledMessageCount()).isZero();
     consumer.close();
     assertThat(connection.management().queueInfo(name)).isEmpty();
   }

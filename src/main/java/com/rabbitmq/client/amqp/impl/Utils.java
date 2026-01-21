@@ -53,6 +53,8 @@ final class Utils {
 
   static final Supplier<String> NAME_SUPPLIER = new NameSupplier("client.gen-");
 
+  static final Runnable NO_OP_RUNNABLE = () -> {};
+
   private static final ThreadFactory THREAD_FACTORY;
   private static final Function<String, ExecutorService> EXECUTOR_SERVICE_FACTORY;
 

@@ -301,9 +301,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private java.util.function.Consumer<Delivery> createNativeHandler(MessageHandler handler) {
-    java.util.function.Consumer<Delivery> runnable;
+    Runnable maybeIncrementUnsettledRunnable;
+    java.util.function.Consumer<Delivery> dispatchedRunnable;
     if (this.preSettled) {
-      runnable =
+      maybeIncrementUnsettledRunnable = Utils.NO_OP_RUNNABLE;
+      dispatchedRunnable =
           delivery -> {
             try {
               delivery.settle();
@@ -330,7 +332,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             }
           };
     } else {
-      runnable =
+      maybeIncrementUnsettledRunnable = this.unsettledMessageCount::incrementAndGet;
+      dispatchedRunnable =
           delivery -> {
             AmqpMessage message;
             try {
@@ -367,9 +370,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
     return delivery -> {
       if (this.state() == OPEN) {
-        this.unsettledMessageCount.incrementAndGet();
+        maybeIncrementUnsettledRunnable.run();
         this.metricsCollector.consume();
-        this.consumerWorkService.dispatch(this, () -> runnable.accept(delivery));
+        this.consumerWorkService.dispatch(this, () -> dispatchedRunnable.accept(delivery));
       }
     };
   }
