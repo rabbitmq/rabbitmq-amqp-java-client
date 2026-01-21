@@ -317,9 +317,17 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               LOGGER.warn("Error while decoding message: {}", e.getMessage());
               return;
             }
-            metricsCollector.consumeDisposition(ACCEPTED);
-            protonExecutor.execute(replenishCreditOperation);
-            handler.handle(PRE_SETTLED_CONTEXT, message);
+            try {
+              metricsCollector.consumeDisposition(ACCEPTED);
+              protonExecutor.execute(replenishCreditOperation);
+            } catch (Exception e) {
+              LOGGER.warn("Error while executing replenish credit operation: {}", e.getMessage());
+            }
+            try {
+              handler.handle(PRE_SETTLED_CONTEXT, message);
+            } catch (Exception ex) {
+              LOGGER.warn("Error in message handler", ex);
+            }
           };
     } else {
       runnable =
@@ -345,7 +353,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.unsettledMessageCount,
                     this.replenishCreditOperation,
                     this);
-            handler.handle(context, message);
+            try {
+              handler.handle(context, message);
+            } catch (Exception ex) {
+              LOGGER.warn("Error in message handler, discarding message", ex);
+              try {
+                context.discard();
+              } catch (Exception iex) {
+                LOGGER.warn("Error while discarding message", iex);
+              }
+            }
           };
     }
     return delivery -> {
