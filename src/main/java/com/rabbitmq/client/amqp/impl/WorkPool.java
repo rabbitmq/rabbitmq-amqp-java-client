@@ -63,7 +63,6 @@ import java.util.function.BiConsumer;
  * @param <W> Work -- type of work item
  */
 final class WorkPool<K, W> {
-  private static final int MAX_QUEUE_LENGTH = 1000;
 
   /** An injective queue of <i>ready</i> clients. */
   private final SetQueue<K> ready = new SetQueue<>();
@@ -77,7 +76,7 @@ final class WorkPool<K, W> {
   private final BiConsumer<LinkedBlockingQueue<W>, W> enqueueingCallback;
   private final Lock lock = new ReentrantLock();
 
-  public WorkPool(Duration queueingTimeout) {
+  WorkPool(Duration queueingTimeout) {
     if (queueingTimeout.toNanos() > 0) {
       long timeout = queueingTimeout.toMillis();
       this.enqueueingCallback =
@@ -109,12 +108,13 @@ final class WorkPool<K, W> {
    * initially <i>dormant</i>. No-op if <code><b>key</b></code> already present.
    *
    * @param key client to add to pool
+   * @param queueCapacity the capacity of the client queue
    */
-  public void registerKey(K key) {
+  public void registerKey(K key, int queueLength) {
     this.lock.lock();
     try {
       if (!this.pool.containsKey(key)) {
-        this.pool.put(key, new LinkedBlockingQueue<>(MAX_QUEUE_LENGTH));
+        this.pool.put(key, new LinkedBlockingQueue<>(queueLength));
       }
     } finally {
       this.lock.unlock();

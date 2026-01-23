@@ -78,6 +78,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class AmqpTest {
 
   Connection connection;
+  Environment environment;
   String name;
 
   private static String uuid() {
@@ -1100,5 +1101,56 @@ public class AmqpTest {
     assertThat(consumer.unsettledMessageCount()).isZero();
     consumer.close();
     assertThat(connection.management().queueInfo(name)).isEmpty();
+  }
+
+  @Test
+  void consumptionBacklogShouldNotDeadlockSending() {
+    connection.management().queue(this.name).type(QUORUM).declare();
+    String qname =
+        connection
+            .management()
+            .queue("")
+            .type(CLASSIC)
+            .exclusive(true)
+            .autoDelete(true)
+            .declare()
+            .name();
+    Publisher publisher2 = connection.publisherBuilder().queue(qname).build();
+
+    int messageCount = 10_000;
+    AtomicInteger receivedCount = new AtomicInteger();
+    connection
+        .consumerBuilder()
+        .queue(this.name)
+        .preSettled()
+        .initialCredits(messageCount / 10)
+        .messageHandler(
+            (ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              try {
+                Thread.sleep(1);
+                publisher2.publish(publisher2.message(), publishCtx -> {});
+              } catch (Exception e) {
+                // OK
+              }
+            })
+        .build();
+
+    Connection publisherConnection = environment.connectionBuilder().build();
+    Publisher publisher = publisherConnection.publisherBuilder().queue(this.name).build();
+    Runnable publish =
+        () -> {
+          Sync publishSync = sync(messageCount);
+          Publisher.Callback callback = ctx -> publishSync.down();
+          IntStream.range(0, messageCount)
+              .forEach(
+                  ignored -> {
+                    publisher.publish(publisher.message(), callback);
+                  });
+          assertThat(publishSync).completes();
+        };
+
+    publish.run();
+    waitAtMost(() -> receivedCount.get() > messageCount / 5);
   }
 }

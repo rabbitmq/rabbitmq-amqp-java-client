@@ -47,8 +47,8 @@ final class WorkPoolConsumerWorkService implements ConsumerWorkService {
   }
 
   @Override
-  public void register(AmqpConsumer consumer) {
-    this.workPool.registerKey(consumer);
+  public void register(AmqpConsumer consumer, int queueLength) {
+    this.workPool.registerKey(consumer, queueLength);
   }
 
   @Override
