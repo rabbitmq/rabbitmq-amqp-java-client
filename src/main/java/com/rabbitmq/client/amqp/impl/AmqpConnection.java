@@ -767,8 +767,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
               Executors.newFixedThreadPool(
                   DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
         }
-        this.consumerWorkService =
-            new WorkPoolConsumerWorkService(this.dispatchingExecutor, Duration.ZERO);
+        this.consumerWorkService = new WorkPoolConsumerWorkService(this.dispatchingExecutor);
       }
       return this.consumerWorkService;
     } finally {

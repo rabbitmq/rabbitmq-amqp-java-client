@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -29,9 +28,9 @@ final class WorkPoolConsumerWorkService implements ConsumerWorkService {
   private final Executor executor;
   private final WorkPool<AmqpConsumer, Runnable> workPool;
 
-  WorkPoolConsumerWorkService(Executor executorService, Duration queueingTimeout) {
+  WorkPoolConsumerWorkService(Executor executorService) {
     this.executor = executorService;
-    this.workPool = new WorkPool<>(queueingTimeout);
+    this.workPool = new WorkPool<>();
   }
 
   @Override

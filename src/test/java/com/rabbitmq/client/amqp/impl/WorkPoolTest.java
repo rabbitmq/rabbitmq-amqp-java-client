@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,7 @@ public class WorkPoolTest {
 
   private static final int QUEUE_LENGTH = 1000;
 
-  private final WorkPool<String, Object> pool = new WorkPool<>(Duration.ZERO);
+  private final WorkPool<String, Object> pool = new WorkPool<>();
 
   /** Test unknown key tolerated silently */
   @Test
