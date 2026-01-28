@@ -113,7 +113,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     super(builder.listeners());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
-    this.preSettled = builder.isPreSettled();
+    this.preSettled = builder.isPreSettled() || builder.directReplyTo();
     MessageHandler messageHandler =
         builder
             .connection()
