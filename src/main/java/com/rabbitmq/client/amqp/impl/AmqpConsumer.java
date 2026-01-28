@@ -43,6 +43,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
@@ -58,7 +59,6 @@ import org.apache.qpid.protonj2.client.exceptions.ClientIOException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.apache.qpid.protonj2.client.impl.ClientConversionSupport;
 import org.apache.qpid.protonj2.client.impl.ClientReceiver;
-import org.apache.qpid.protonj2.client.util.DeliveryQueue;
 import org.apache.qpid.protonj2.engine.EventHandler;
 import org.apache.qpid.protonj2.engine.Scheduler;
 import org.apache.qpid.protonj2.engine.impl.ProtonLinkCreditState;
@@ -101,10 +101,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final java.util.function.Consumer<Delivery> nativeHandler;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
   private final ConsumerWorkService consumerWorkService;
+  private final AtomicInteger pendingWorkItems = new AtomicInteger(0);
+
   // native receiver internal state, accessed only in the native executor/scheduler
   private ProtonReceiver protonReceiver;
   private volatile Scheduler protonExecutor;
-  private DeliveryQueue protonDeliveryQueue;
   private ProtonSessionIncomingWindow sessionWindow;
   private ProtonLinkCreditState creditState;
 
@@ -145,7 +146,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                   });
         };
     this.consumerWorkService = connection.consumerWorkService();
-    this.consumerWorkService.register(this);
+    this.consumerWorkService.register(this, this.initialCredits);
     this.nativeReceiver =
         createNativeReceiver(
             this.sessionHandler.session(),
@@ -317,18 +318,21 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               message = new AmqpMessage(delivery.message());
             } catch (ClientException e) {
               LOGGER.warn("Error while decoding message: {}", e.getMessage());
+              pendingWorkItems.decrementAndGet();
               return;
             }
-            try {
-              metricsCollector.consumeDisposition(ACCEPTED);
-              protonExecutor.execute(replenishCreditOperation);
-            } catch (Exception e) {
-              LOGGER.warn("Error while executing replenish credit operation: {}", e.getMessage());
-            }
+            metricsCollector.consumeDisposition(ACCEPTED);
             try {
               handler.handle(PRE_SETTLED_CONTEXT, message);
             } catch (Exception ex) {
               LOGGER.warn("Error in message handler", ex);
+            } finally {
+              pendingWorkItems.decrementAndGet();
+            }
+            try {
+              protonExecutor.execute(replenishCreditOperation);
+            } catch (Exception e) {
+              LOGGER.warn("Error while executing replenish credit operation: {}", e.getMessage());
             }
           };
     } else {
@@ -345,6 +349,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               } catch (ClientException ex) {
                 LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
               }
+              pendingWorkItems.decrementAndGet();
               return;
             }
             Consumer.Context context =
@@ -365,6 +370,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               } catch (Exception iex) {
                 LOGGER.warn("Error while discarding message", iex);
               }
+            } finally {
+              pendingWorkItems.decrementAndGet();
             }
           };
     }
@@ -372,6 +379,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (this.state() == OPEN) {
         maybeIncrementUnsettledRunnable.run();
         this.metricsCollector.consume();
+        pendingWorkItems.incrementAndGet();
         this.consumerWorkService.dispatch(this, () -> dispatchedRunnable.accept(delivery));
       }
     };
@@ -449,7 +457,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.protonReceiver = (ProtonReceiver) receiver.protonReceiver();
             this.creditState = this.protonReceiver.getCreditState();
             this.sessionWindow = this.protonReceiver.sessionWindow();
-            this.protonDeliveryQueue = receiver.deliveryQueue();
 
             EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
                 this.protonReceiver.linkCreditUpdatedHandler();
@@ -479,9 +486,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       int creditWindow = this.initialCredits;
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
-        int potentialPrefetch = currentCredit + this.protonDeliveryQueue.size();
-        if (potentialPrefetch <= creditWindow * 0.7) {
-          int additionalCredit = creditWindow - potentialPrefetch;
+        int pendingInWorkPool = this.pendingWorkItems.get();
+        int totalInFlight = currentCredit + pendingInWorkPool;
+        if (totalInFlight <= creditWindow * 0.7) {
+          int additionalCredit = creditWindow - totalInFlight;
           try {
             protonReceiver.addCredit(additionalCredit);
           } catch (Exception ex) {

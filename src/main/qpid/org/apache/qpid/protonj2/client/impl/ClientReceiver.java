@@ -58,13 +58,14 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
             protonReceiver.addCredit(options.creditWindow());
         }
 
-        deliveryQueue = new FifoDeliveryQueue(options.creditWindow());
-        deliveryQueue.start();
         if (options.handler() == null) {
+            deliveryQueue = new FifoDeliveryQueue(options.creditWindow());
             this.handler = d -> deliveryQueue.enqueue((ClientDelivery) d);
         } else {
+            deliveryQueue = new FifoDeliveryQueue(1);
             this.handler = options.handler();
         }
+        deliveryQueue.start();
 
         this.closeHandler = options.closeHandler() == null ? e ->  { } : options.closeHandler();
     }
@@ -269,10 +270,6 @@ public final class ClientReceiver extends ClientReceiverLinkType<Receiver> imple
 
     public org.apache.qpid.protonj2.engine.Receiver protonReceiver() {
         return this.protonReceiver;
-    }
-
-    public DeliveryQueue deliveryQueue() {
-        return this.deliveryQueue;
     }
 
 }

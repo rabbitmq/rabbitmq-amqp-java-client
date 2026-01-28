@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,9 @@ import org.junit.jupiter.api.Test;
 /** Unit tests for {@link WorkPool} */
 public class WorkPoolTest {
 
-  private final WorkPool<String, Object> pool = new WorkPool<>(Duration.ZERO);
+  private static final int QUEUE_LENGTH = 1000;
+
+  private final WorkPool<String, Object> pool = new WorkPool<>();
 
   /** Test unknown key tolerated silently */
   @Test
@@ -44,7 +45,7 @@ public class WorkPoolTest {
     Object one = new Object();
     Object two = new Object();
 
-    this.pool.registerKey("test");
+    this.pool.registerKey("test", QUEUE_LENGTH);
     assertTrue(this.pool.addWorkItem("test", one));
     assertFalse(this.pool.addWorkItem("test", two));
 
@@ -71,7 +72,7 @@ public class WorkPoolTest {
     Object one = new Object();
     Object two = new Object();
 
-    this.pool.registerKey("test");
+    this.pool.registerKey("test", QUEUE_LENGTH);
     assertTrue(this.pool.addWorkItem("test", one));
 
     List<Object> workList = new ArrayList<Object>(16);
@@ -98,8 +99,8 @@ public class WorkPoolTest {
     Object two = new Object();
     Object three = new Object();
 
-    this.pool.registerKey("test1");
-    this.pool.registerKey("test2");
+    this.pool.registerKey("test1", QUEUE_LENGTH);
+    this.pool.registerKey("test2", QUEUE_LENGTH);
 
     assertTrue(this.pool.addWorkItem("test1", one));
     assertTrue(this.pool.addWorkItem("test2", two));
@@ -127,8 +128,8 @@ public class WorkPoolTest {
     Object two = new Object();
     Object three = new Object();
 
-    this.pool.registerKey("test1");
-    this.pool.registerKey("test2");
+    this.pool.registerKey("test1", QUEUE_LENGTH);
+    this.pool.registerKey("test2", QUEUE_LENGTH);
 
     assertTrue(this.pool.addWorkItem("test1", one));
     assertTrue(this.pool.addWorkItem("test2", two));
@@ -150,8 +151,8 @@ public class WorkPoolTest {
     Object two = new Object();
     Object three = new Object();
 
-    this.pool.registerKey("test1");
-    this.pool.registerKey("test2");
+    this.pool.registerKey("test1", QUEUE_LENGTH);
+    this.pool.registerKey("test2", QUEUE_LENGTH);
 
     assertTrue(this.pool.addWorkItem("test1", one));
     assertTrue(this.pool.addWorkItem("test2", two));

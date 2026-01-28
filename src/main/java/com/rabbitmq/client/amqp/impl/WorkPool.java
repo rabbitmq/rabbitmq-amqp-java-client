@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,11 +24,10 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 
 /**
  * This is based on the <code>WorkPool</code> class from RabbitMQ AMQP 091 Java client library. The
@@ -63,7 +61,6 @@ import java.util.function.BiConsumer;
  * @param <W> Work -- type of work item
  */
 final class WorkPool<K, W> {
-  private static final int MAX_QUEUE_LENGTH = 1000;
 
   /** An injective queue of <i>ready</i> clients. */
   private final SetQueue<K> ready = new SetQueue<>();
@@ -72,49 +69,24 @@ final class WorkPool<K, W> {
   private final Set<K> inProgress = new HashSet<>();
 
   /** The pool of registered clients, with their work queues. */
-  private final Map<K, LinkedBlockingQueue<W>> pool = new HashMap<>();
+  private final Map<K, BlockingQueue<W>> pool = new HashMap<>();
 
-  private final BiConsumer<LinkedBlockingQueue<W>, W> enqueueingCallback;
   private final Lock lock = new ReentrantLock();
 
-  public WorkPool(Duration queueingTimeout) {
-    if (queueingTimeout.toNanos() > 0) {
-      long timeout = queueingTimeout.toMillis();
-      this.enqueueingCallback =
-          (queue, item) -> {
-            try {
-              boolean offered = queue.offer(item, timeout, TimeUnit.MILLISECONDS);
-              if (!offered) {
-                throw new WorkPoolFullException(
-                    "Could not enqueue in work pool after " + queueingTimeout + " ms.");
-              }
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-          };
-    } else {
-      this.enqueueingCallback =
-          (queue, item) -> {
-            try {
-              queue.put(item);
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-          };
-    }
-  }
+  WorkPool() {}
 
   /**
    * Add client <code><b>key</b></code> to pool of item queues, with an empty queue. A client is
    * initially <i>dormant</i>. No-op if <code><b>key</b></code> already present.
    *
    * @param key client to add to pool
+   * @param queueCapacity the capacity of the client queue
    */
-  public void registerKey(K key) {
+  public void registerKey(K key, int queueCapacity) {
     this.lock.lock();
     try {
       if (!this.pool.containsKey(key)) {
-        this.pool.put(key, new LinkedBlockingQueue<>(MAX_QUEUE_LENGTH));
+        this.pool.put(key, new ArrayBlockingQueue<>(queueCapacity));
       }
     } finally {
       this.lock.unlock();
@@ -163,7 +135,7 @@ final class WorkPool<K, W> {
     try {
       K nextKey = readyToInProgress();
       if (nextKey != null) {
-        LinkedBlockingQueue<W> queue = this.pool.get(nextKey);
+        BlockingQueue<W> queue = this.pool.get(nextKey);
         drainTo(queue, to, size);
       }
       return nextKey;
@@ -181,7 +153,7 @@ final class WorkPool<K, W> {
    * @param maxElements to take from deList
    * @return number of elements actually taken
    */
-  private int drainTo(LinkedBlockingQueue<W> deList, Collection<W> c, int maxElements) {
+  private int drainTo(BlockingQueue<W> deList, Collection<W> c, int maxElements) {
     int n = 0;
     while (n < maxElements) {
       W first = deList.poll();
@@ -202,29 +174,23 @@ final class WorkPool<K, W> {
    *     a result of this work item</i>
    */
   public boolean addWorkItem(K key, W item) {
-    LinkedBlockingQueue<W> queue;
     this.lock.lock();
     try {
-      queue = this.pool.get(key);
-    } finally {
-      this.lock.unlock();
-    }
-    // The put operation may block. We need to make sure we are not holding the lock while that
-    // happens.
-    if (queue != null) {
-      enqueueingCallback.accept(queue, item);
-
-      this.lock.lock();
-      try {
+      BlockingQueue<W> queue = this.pool.get(key);
+      if (queue != null) {
+        boolean added = queue.offer(item);
+        if (!added) {
+          throw new WorkPoolFullException("Work pool queue is full");
+        }
         if (isDormant(key)) {
           dormantToReady(key);
           return true;
         }
-      } finally {
-        this.lock.unlock();
       }
+      return false;
+    } finally {
+      this.lock.unlock();
     }
-    return false;
   }
 
   /**
@@ -256,8 +222,8 @@ final class WorkPool<K, W> {
   }
 
   private boolean moreWorkItems(K key) {
-    LinkedBlockingQueue<W> leList = this.pool.get(key);
-    return leList != null && !leList.isEmpty();
+    BlockingQueue<W> queue = this.pool.get(key);
+    return queue != null && !queue.isEmpty();
   }
 
   /* State identification functions */

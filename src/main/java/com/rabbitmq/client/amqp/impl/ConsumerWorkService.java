@@ -19,7 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 interface ConsumerWorkService extends AutoCloseable {
 
-  void register(AmqpConsumer consumer);
+  void register(AmqpConsumer consumer, int queueLength);
 
   void dispatch(AmqpConsumer consumer, Runnable runnable);
 
