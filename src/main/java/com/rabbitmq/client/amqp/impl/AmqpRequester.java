@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -84,6 +85,8 @@ final class AmqpRequester implements Requester {
     }
     AmqpConsumerBuilder consumerBuilder = (AmqpConsumerBuilder) this.connection.consumerBuilder();
     LOGGER.debug("Using direct reply-to: {}", this.connection.directReplyToSupported());
+    Consumer<com.rabbitmq.client.amqp.Consumer.Context> settleAction =
+        directReplyTo ? ctx -> {} : com.rabbitmq.client.amqp.Consumer.Context::accept;
     this.consumer =
         (AmqpConsumer)
             consumerBuilder
@@ -91,7 +94,7 @@ final class AmqpRequester implements Requester {
                 .queue(replyTo)
                 .messageHandler(
                     (ctx, msg) -> {
-                      ctx.accept();
+                      settleAction.accept(ctx);
                       OutstandingRequest request =
                           this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
                       if (request != null) {
