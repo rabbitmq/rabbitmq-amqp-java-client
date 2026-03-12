@@ -134,7 +134,7 @@ public class AmqpTest {
   @ValueSource(strings = {"foobar", "фообар"})
   void queueDeclareDeletePublishConsume(String subject) {
     try {
-      connection.management().queue().name(name).quorum().queue().declare();
+      connection.management().queue().name(name).classic().queue().declare();
       Publisher publisher = connection.publisherBuilder().queue(name).build();
 
       int messageCount = 100;

@@ -65,6 +65,7 @@ final class AmqpTestInfrastructureExtension
       }
     }
 
+    String brokerVersion = null;
     Field connectionField = field(context.getTestClass().get(), "connection");
     if (connectionField != null) {
       AmqpConnectionBuilder connectionBuilder = (AmqpConnectionBuilder) env.connectionBuilder();
@@ -78,9 +79,41 @@ final class AmqpTestInfrastructureExtension
         }
       }
       Connection connection = connectionBuilder.name(name(context)).build();
+      brokerVersion = ((AmqpConnection) connection).brokerVersion();
+
       connectionField.setAccessible(true);
       connectionField.set(context.getTestInstance().get(), connection);
       store(context).put("connection", connection);
+    }
+
+    Field field = field(context.getTestInstance().get().getClass(), "brokerVersion");
+    if (field != null) {
+      if (brokerVersion == null) {
+        brokerVersion =
+            context
+                .getRoot()
+                .getStore(ExtensionContext.Namespace.GLOBAL)
+                .get("brokerVersion", String.class);
+      }
+      if (brokerVersion == null) {
+        if (env != null) {
+          try (Connection c = env.connectionBuilder().build()) {
+            brokerVersion = ((AmqpConnection) c).brokerVersion();
+          }
+        }
+      }
+      if (brokerVersion == null) {
+        try (Environment e = TestUtils.environmentBuilder().build()) {
+          Connection c = e.connectionBuilder().build();
+          brokerVersion = ((AmqpConnection) c).brokerVersion();
+        }
+      }
+      context
+          .getRoot()
+          .getStore(ExtensionContext.Namespace.GLOBAL)
+          .put("brokerVersion", brokerVersion);
+      field.setAccessible(true);
+      field.set(context.getTestInstance().get(), brokerVersion);
     }
   }
 

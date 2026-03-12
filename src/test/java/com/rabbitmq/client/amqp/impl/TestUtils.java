@@ -53,6 +53,7 @@ import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.slf4j.LoggerFactory;
 
 public abstract class TestUtils {
 
@@ -508,6 +509,37 @@ public abstract class TestUtils {
           ? ConditionEvaluationResult.disabled("Test fails on Semeru")
           : ConditionEvaluationResult.enabled("OK");
     }
+  }
+
+  static boolean atLeastVersion(String expectedVersion, String currentVersion) {
+    if (currentVersion.contains("alpha-stream")) {
+      return true;
+    }
+    try {
+      currentVersion = currentVersion(currentVersion);
+      return "0.0.0".equals(currentVersion)
+          || Utils.versionCompare(currentVersion, expectedVersion) >= 0;
+    } catch (RuntimeException e) {
+      LoggerFactory.getLogger(TestUtils.class)
+          .warn("Unable to parse broker version {}", currentVersion, e);
+      throw e;
+    }
+  }
+
+  static String currentVersion(String currentVersion) {
+    // versions built from source: 3.7.0+rc.1.4.gedc5d96
+    if (currentVersion.contains("+")) {
+      currentVersion = currentVersion.substring(0, currentVersion.indexOf("+"));
+    }
+    // alpha (snapshot) versions: 3.7.0~alpha.449-1
+    if (currentVersion.contains("~")) {
+      currentVersion = currentVersion.substring(0, currentVersion.indexOf("~"));
+    }
+    // alpha (snapshot) versions: 3.7.1-alpha.40
+    if (currentVersion.contains("-")) {
+      currentVersion = currentVersion.substring(0, currentVersion.indexOf("-"));
+    }
+    return currentVersion;
   }
 
   @Target({ElementType.TYPE, ElementType.METHOD})

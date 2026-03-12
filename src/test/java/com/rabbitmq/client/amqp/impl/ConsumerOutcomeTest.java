@@ -71,6 +71,8 @@ public class ConsumerOutcomeTest {
   Connection connection;
   Management management;
   String q, dlx, dlq;
+  String brokerVersion;
+  String countAnnotation;
 
   @BeforeEach
   void init(TestInfo info) {
@@ -78,6 +80,12 @@ public class ConsumerOutcomeTest {
     this.q = TestUtils.name(info);
     this.dlx = TestUtils.name(info);
     this.dlq = TestUtils.name(info);
+
+    if (TestUtils.atLeastVersion("4.3.0", this.brokerVersion)) {
+      countAnnotation = "x-acquired-count";
+    } else {
+      countAnnotation = "x-delivery-count";
+    }
   }
 
   @AfterEach
@@ -112,9 +120,9 @@ public class ConsumerOutcomeTest {
     publisher.publish(publisher.message(), ctx -> {});
     assertThat(redeliveredSync).completes();
     Message message = messages.poll();
-    assertThat(message).doesNotHaveAnnotation("x-delivery-count");
+    assertThat(message).doesNotHaveAnnotation(countAnnotation);
     message = messages.poll();
-    assertThat(message).hasAnnotation("x-delivery-count", 1L);
+    assertThat(message).hasAnnotation(countAnnotation, 1L);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
   }
 
@@ -151,10 +159,10 @@ public class ConsumerOutcomeTest {
     publisher.publish(publisher.message(), ctx -> {});
     assertThat(redeliveredSync).completes();
     Message message = messages.poll();
-    assertThat(message).doesNotHaveAnnotation("x-delivery-count");
+    assertThat(message).doesNotHaveAnnotation(countAnnotation);
     message = messages.poll();
     assertThat(message)
-        .hasAnnotation("x-delivery-count", 1L)
+        .hasAnnotation(countAnnotation, 1L)
         .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE)
         .hasAnnotation(ANNOTATION_KEY_ARRAY, ANNOTATION_VALUE_ARRAY)
         .hasAnnotation(ANNOTATION_KEY_LIST, ANNOTATION_VALUE_LIST)
