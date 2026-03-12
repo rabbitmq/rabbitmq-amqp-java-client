@@ -46,13 +46,10 @@ public final class IOUringSupport {
         try {
             final Class<?> ioUring = Class.forName("io.netty.channel.uring.IoUring");
             final Method isAvailable = ioUring.getDeclaredMethod("isAvailable", (Class<?>[])null);
-            final Class<?> eventLoopGroup = Class.forName("io.netty.channel.MultiThreadIoEventLoopGroup");
-            final Class<?> ioUringHandler = Class.forName("io.netty.channel.uring.IoUringIoHandler");
-            final Class<?> ioUringHandlerFactory = Class.forName("io.netty.channel.IoHandlerFactory");
 
             socketChannelClass = (Class<? extends Channel>) Class.forName("io.netty.channel.uring.IoUringSocketChannel");
             available = (boolean) isAvailable.invoke(null);
-        } catch (Exception e) {
+        } catch (UnsatisfiedLinkError | Exception e) {
             LOG.debug("Unable to enable netty io_uring support due to error", e);
         }
 
@@ -60,11 +57,10 @@ public final class IOUringSupport {
             try {
                 final Class<?> ioUring = Class.forName("io.netty.incubator.channel.uring.IOUring");
                 final Method isAvailable = ioUring.getDeclaredMethod("isAvailable");
-                final Class<?> eventLoopGroup = Class.forName("io.netty.incubator.channel.uring.IOUringEventLoopGroup");
 
                 socketChannelClass = (Class<? extends Channel>) Class.forName("io.netty.incubator.channel.uring.IOUringSocketChannel");
                 available = (boolean) isAvailable.invoke(null);
-            } catch (Exception e) {
+            } catch (UnsatisfiedLinkError | Exception e) {
                 LOG.debug("Unable to enable netty incubator io_uring support due to error", e);
             }
         }
