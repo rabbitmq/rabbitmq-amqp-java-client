@@ -43,6 +43,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpEntityDoesNotExistException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceInvalidStateException;
 import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
@@ -64,6 +65,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 import net.jqwik.api.Arbitraries;
 import org.junit.jupiter.api.BeforeEach;
@@ -171,9 +173,7 @@ public class AmqpTest {
               .build();
 
       assertThat(consumeSync).completes();
-      org.assertj.core.api.Assertions.assertThat(receivedSubject)
-          .doesNotHaveNullValue()
-          .hasValue(subject);
+      assertThat(receivedSubject).doesNotHaveNullValue().hasValue(subject);
 
       queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasConsumerCount(1).isEmpty();
@@ -293,9 +293,7 @@ public class AmqpTest {
     publisher.publish(publisher.message("two".getBytes(UTF_8)), ctx -> {});
 
     assertThat(consumeLatch).completes();
-    org.assertj.core.api.Assertions.assertThat(messageBodies)
-        .hasSize(2)
-        .containsOnly("one".getBytes(UTF_8), "two".getBytes(UTF_8));
+    assertThat(messageBodies).hasSize(2).containsOnly("one".getBytes(UTF_8), "two".getBytes(UTF_8));
   }
 
   @Test
@@ -323,8 +321,7 @@ public class AmqpTest {
 
     assertThat(connection.management().queueInfo(q)).hasMessageCount(messageCount - initialCredits);
 
-    org.assertj.core.api.Assertions.assertThat(Cli.queueInfo(q).unackedMessageCount())
-        .isEqualTo(initialCredits);
+    assertThat(Cli.queueInfo(q).unackedMessageCount()).isEqualTo(initialCredits);
 
     consumer.pause();
     new ArrayList<>(messageContexts).forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
@@ -380,7 +377,7 @@ public class AmqpTest {
     of(exception.get(), closedException.get())
         .forEach(
             e ->
-                org.assertj.core.api.Assertions.assertThat(e)
+                assertThat(e)
                     .isInstanceOf(AmqpEntityDoesNotExistException.class)
                     .hasMessageContaining(name)
                     .hasMessageContaining(ExceptionUtils.ERROR_NOT_FOUND));
@@ -515,7 +512,7 @@ public class AmqpTest {
     assertThat(consumeSync).completes();
     connection.management().queueDelete(name);
     assertThat(closedSync).completes();
-    org.assertj.core.api.Assertions.assertThat(exception.get())
+    assertThat(exception.get())
         .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(ExceptionUtils.ERROR_RESOURCE_DELETED);
   }
@@ -550,12 +547,12 @@ public class AmqpTest {
             .build();
 
     int unsettledMessageCount = waitUntilStable(unsettledMessages::size);
-    org.assertj.core.api.Assertions.assertThat(unsettledMessageCount).isNotZero();
+    assertThat(unsettledMessageCount).isNotZero();
     consumer.pause();
     int receivedCountAfterPausing = receivedCount.get();
     unsettledMessages.forEach(com.rabbitmq.client.amqp.Consumer.Context::accept);
     consumer.close();
-    org.assertj.core.api.Assertions.assertThat(receivedCount).hasValue(receivedCountAfterPausing);
+    assertThat(receivedCount).hasValue(receivedCountAfterPausing);
     assertThat(connection.management().queueInfo(name))
         .hasMessageCount(messageCount - receivedCount.get());
   }
@@ -670,18 +667,74 @@ public class AmqpTest {
     publish.run();
 
     assertThat(consumeSync).completes();
-    org.assertj.core.api.Assertions.assertThat(lowCount).hasValue(0);
-    org.assertj.core.api.Assertions.assertThat(highCount).hasValue(messageCount);
+    assertThat(lowCount).hasValue(0);
+    assertThat(highCount).hasValue(messageCount);
 
     highPriorityConsumer.close();
 
     consumeSync.reset(messageCount);
     publish.run();
     assertThat(consumeSync).completes();
-    org.assertj.core.api.Assertions.assertThat(lowCount).hasValue(messageCount);
-    org.assertj.core.api.Assertions.assertThat(highCount).hasValue(messageCount);
+    assertThat(lowCount).hasValue(messageCount);
+    assertThat(highCount).hasValue(messageCount);
 
     lowPriorityConsumer.close();
+  }
+
+  @Test
+  void singleActiveConsumerOnQuorumQueue() {
+    int messageCount = 100;
+    connection.management().queue(name).quorum().queue().singleActiveConsumer(true).declare();
+    try {
+      Connection c1 = environment.connectionBuilder().build();
+      Connection c2 = environment.connectionBuilder().build();
+      Connection c3 = environment.connectionBuilder().build();
+
+      AtomicInteger count1 = new AtomicInteger(0);
+      AtomicInteger count2 = new AtomicInteger(0);
+      AtomicInteger count3 = new AtomicInteger(0);
+
+      Sync consumeSync = sync(messageCount);
+      BiFunction<Connection, AtomicInteger, Consumer> createConsumer =
+          (c, count) ->
+              c.consumerBuilder()
+                  .queue(name)
+                  .messageHandler(
+                      (ctx, msg) -> {
+                        ctx.accept();
+                        count.incrementAndGet();
+                        consumeSync.down();
+                      })
+                  .build();
+      Consumer consumer1 = createConsumer.apply(c1, count1);
+      Consumer consumer2 = createConsumer.apply(c2, count2);
+      Consumer consumer3 = createConsumer.apply(c3, count3);
+
+      Publisher publisher = connection.publisherBuilder().queue(name).build();
+      range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+
+      assertThat(consumeSync).completes();
+      assertThat(count1).hasValue(messageCount);
+      assertThat(count2).hasValue(0);
+      assertThat(count3).hasValue(0);
+
+      consumer1.close();
+      c1.close();
+
+      consumeSync.reset(messageCount);
+      range(0, messageCount).forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+
+      assertThat(consumeSync).completes();
+      assertThat(count2.get() + count3.get()).isEqualTo(messageCount);
+
+      consumer2.close();
+      consumer3.close();
+      publisher.close();
+      c2.close();
+      c3.close();
+    } finally {
+      connection.management().queueDelete(name);
+    }
   }
 
   @Test
@@ -706,7 +759,7 @@ public class AmqpTest {
       management.exchange(name).type(FANOUT).declare();
       fail("Declaring an existing exchange with different arguments should trigger an exception");
     } catch (AmqpException e) {
-      org.assertj.core.api.Assertions.assertThat(e).hasMessageContaining("409");
+      assertThat(e).hasMessageContaining("409");
       // OK
     } finally {
       management.exchangeDelete(name);
@@ -727,7 +780,7 @@ public class AmqpTest {
             operation.accept(management);
             fail("Creating a queue with unsupported arguments should trigger an exception");
           } catch (AmqpException e) {
-            org.assertj.core.api.Assertions.assertThat(e).hasMessageContaining("409");
+            assertThat(e).hasMessageContaining("409");
           }
         });
   }
@@ -778,7 +831,7 @@ public class AmqpTest {
     assertThat(publishSync).completes();
     assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
     Management.PurgeStatus purgeStatus = management.queuePurge(q);
-    org.assertj.core.api.Assertions.assertThat(purgeStatus.messageCount()).isEqualTo(messageCount);
+    assertThat(purgeStatus.messageCount()).isEqualTo(messageCount);
     assertThat(management.queueInfo(q)).isEmpty();
   }
 
@@ -874,7 +927,7 @@ public class AmqpTest {
                     })
                 .build();
             assertThat(sync).completes();
-            org.assertj.core.api.Assertions.assertThat(threadName.get()).startsWith(prefix);
+            assertThat(threadName.get()).startsWith(prefix);
           };
 
       Connection c1 = env.connectionBuilder().build();
@@ -932,26 +985,26 @@ public class AmqpTest {
     assertThat(consumeSync).completes();
     Message m = inMessage.get();
     List<?> list = (List<?>) m.annotation("x-list");
-    org.assertj.core.api.Assertions.assertThat(list.get(0)).isEqualTo("1");
-    org.assertj.core.api.Assertions.assertThat(list.get(1)).isEqualTo("2");
-    org.assertj.core.api.Assertions.assertThat(list.get(2)).isEqualTo(3);
-    org.assertj.core.api.Assertions.assertThat(list.get(3)).isEqualTo(List.of("1"));
-    org.assertj.core.api.Assertions.assertThat(list.get(4)).isEqualTo(Map.of("k1", "v1"));
-    org.assertj.core.api.Assertions.assertThat(list.get(5)).isEqualTo(new String[] {"1"});
+    assertThat(list.get(0)).isEqualTo("1");
+    assertThat(list.get(1)).isEqualTo("2");
+    assertThat(list.get(2)).isEqualTo(3);
+    assertThat(list.get(3)).isEqualTo(List.of("1"));
+    assertThat(list.get(4)).isEqualTo(Map.of("k1", "v1"));
+    assertThat(list.get(5)).isEqualTo(new String[] {"1"});
 
     Map<?, ?> map = (Map<?, ?>) m.annotation("x-map");
-    org.assertj.core.api.Assertions.assertThat(map.get("k1")).isEqualTo("v1");
-    org.assertj.core.api.Assertions.assertThat(map.get("k2")).isEqualTo(List.of("v2"));
-    org.assertj.core.api.Assertions.assertThat(map.get("k3")).isEqualTo(Map.of("k1", "v1"));
-    org.assertj.core.api.Assertions.assertThat(map.get("k4")).isEqualTo(new String[] {"1"});
+    assertThat(map.get("k1")).isEqualTo("v1");
+    assertThat(map.get("k2")).isEqualTo(List.of("v2"));
+    assertThat(map.get("k3")).isEqualTo(Map.of("k1", "v1"));
+    assertThat(map.get("k4")).isEqualTo(new String[] {"1"});
 
     Object[] arrayString = (Object[]) m.annotation("x-arrayString");
-    org.assertj.core.api.Assertions.assertThat(arrayString).containsExactly("1", "2", "3");
+    assertThat(arrayString).containsExactly("1", "2", "3");
 
     int[] ints = (int[]) m.annotation("x-arrayInteger");
-    org.assertj.core.api.Assertions.assertThat(ints).containsExactly(1, 2, 3);
+    assertThat(ints).containsExactly(1, 2, 3);
     ints = (int[]) m.annotation("x-arrayInt");
-    org.assertj.core.api.Assertions.assertThat(ints).containsExactly(4, 5, 6);
+    assertThat(ints).containsExactly(4, 5, 6);
   }
 
   @ParameterizedTest
