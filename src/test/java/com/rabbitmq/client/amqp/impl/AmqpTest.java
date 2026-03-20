@@ -53,6 +53,7 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -1205,5 +1207,40 @@ public class AmqpTest {
 
     publish.run();
     waitAtMost(() -> receivedCount.get() > messageCount / 5);
+  }
+
+  @Test
+  void consumerWithInitialCreditsOfOneShouldReceiveAllMessages() {
+    // https://github.com/rabbitmq/rabbitmq-amqp-java-client/issues/358
+    connection.management().queue(this.name).type(QUORUM).declare();
+    try {
+      int messageCount = 5;
+      Publisher publisher = connection.publisherBuilder().queue(this.name).build();
+      Sync publishSync = sync(messageCount);
+      for (int i = 0; i < messageCount; i++) {
+        publisher.publish(
+            publisher.message().body(("msg-" + i).getBytes()), ctx -> publishSync.down());
+      }
+      assertThat(publishSync).completes();
+      publisher.close();
+
+      Sync consumeSync = sync(messageCount);
+      Consumer consumer =
+          connection
+              .consumerBuilder()
+              .queue(this.name)
+              .initialCredits(1)
+              .messageHandler(
+                  (ctx, msg) -> {
+                    ctx.accept();
+                    consumeSync.down();
+                  })
+              .build();
+
+      assertThat(consumeSync).completes();
+      consumer.close();
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
   }
 }

@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.Delivery;
 import org.apache.qpid.protonj2.client.DeliveryMode;
@@ -97,7 +98,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
-  private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
+  private final IntConsumer replenishCreditOperation = this::replenishCreditIfNeeded;
   private final java.util.function.Consumer<Delivery> nativeHandler;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
   private final ConsumerWorkService consumerWorkService;
@@ -330,7 +331,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               pendingWorkItems.decrementAndGet();
             }
             try {
-              protonExecutor.execute(replenishCreditOperation);
+              protonExecutor.execute(() -> replenishCreditOperation.accept(1));
             } catch (Exception e) {
               LOGGER.warn("Error while executing replenish credit operation: {}", e.getMessage());
             }
@@ -481,19 +482,23 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void replenishCreditIfNeeded() {
+  private void replenishCreditIfNeeded(int settledCount) {
     if (!this.pausedOrPausing() && this.state() == OPEN) {
       int creditWindow = this.initialCredits;
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
-        int pendingInWorkPool = this.pendingWorkItems.get();
+        // Settled messages are still counted in pendingWorkItems because the handler
+        // hasn't returned yet. Subtract them to avoid understating available credit.
+        int pendingInWorkPool = Math.max(0, this.pendingWorkItems.get() - settledCount);
         int totalInFlight = currentCredit + pendingInWorkPool;
         if (totalInFlight <= creditWindow * 0.7) {
           int additionalCredit = creditWindow - totalInFlight;
-          try {
-            protonReceiver.addCredit(additionalCredit);
-          } catch (Exception ex) {
-            LOGGER.debug("Error caught during credit top-up", ex);
+          if (additionalCredit > 0) {
+            try {
+              protonReceiver.addCredit(additionalCredit);
+            } catch (Exception ex) {
+              LOGGER.debug("Error caught during credit top-up", ex);
+            }
           }
         }
       }
@@ -525,7 +530,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
-    private final Runnable replenishCreditOperation;
+    private final IntConsumer replenishCreditOperation;
     private final AmqpConsumer consumer;
 
     private DeliveryContext(
@@ -534,7 +539,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
-        Runnable replenishCreditOperation,
+        IntConsumer replenishCreditOperation,
         AmqpConsumer consumer) {
       this.delivery = delivery;
       this.protonExecutor = protonExecutor;
@@ -591,7 +596,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         DeliveryState state, MetricsCollector.ConsumeDisposition disposition, String label) {
       if (settled.compareAndSet(false, true)) {
         try {
-          protonExecutor.execute(replenishCreditOperation);
+          protonExecutor.execute(() -> replenishCreditOperation.accept(1));
           delivery.disposition(state, true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(disposition);
@@ -621,7 +626,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
-    private final Runnable replenishCreditOperation;
+    private final IntConsumer replenishCreditOperation;
     private final AmqpConsumer consumer;
 
     private BatchDeliveryContext(
@@ -630,7 +635,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
-        Runnable replenishCreditOperation,
+        IntConsumer replenishCreditOperation,
         AmqpConsumer consumer) {
       this.contexts = new ArrayList<>(batchSizeHint);
       this.protonExecutor = protonExecutor;
@@ -710,7 +715,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         int batchSize = this.contexts.size();
         try {
-          protonExecutor.execute(replenishCreditOperation);
+          protonExecutor.execute(() -> replenishCreditOperation.accept(batchSize));
           long[][] ranges =
               SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
           this.protonExecutor.execute(
