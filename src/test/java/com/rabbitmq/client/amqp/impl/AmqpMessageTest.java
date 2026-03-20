@@ -19,6 +19,13 @@ package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
+import org.apache.qpid.protonj2.client.impl.ClientMessageSupport;
+import org.apache.qpid.protonj2.codec.CodecFactory;
+import org.apache.qpid.protonj2.codec.Encoder;
+import org.apache.qpid.protonj2.types.Binary;
+import org.apache.qpid.protonj2.types.messaging.AmqpValue;
 import org.junit.jupiter.api.Test;
 
 public class AmqpMessageTest {
@@ -48,6 +55,19 @@ public class AmqpMessageTest {
     msg = msg();
     msg.durable(true);
     assertThat(msg.enforceDurability().nativeMessage().durable()).isTrue();
+  }
+
+  @Test
+  void bodyShouldHandleAmqpValueWithBinary() throws Exception {
+    byte[] payload = {1, 2, 3};
+    Encoder encoder = CodecFactory.getDefaultEncoder();
+    try (ProtonBuffer buffer = ProtonBufferAllocator.defaultAllocator().allocate(256)) {
+      encoder.writeObject(buffer, encoder.newEncoderState(), new AmqpValue<>(new Binary(payload)));
+      org.apache.qpid.protonj2.client.Message<?> decoded =
+          ClientMessageSupport.decodeMessage(buffer, null);
+      AmqpMessage message = new AmqpMessage(decoded);
+      assertThat(message.body()).isEqualTo(payload);
+    }
   }
 
   private static AmqpMessage msg() {
