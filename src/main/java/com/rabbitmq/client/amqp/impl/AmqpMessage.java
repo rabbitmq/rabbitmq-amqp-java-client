@@ -36,12 +36,13 @@ import org.apache.qpid.protonj2.types.UnsignedByte;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.UnsignedShort;
+import org.apache.qpid.protonj2.types.messaging.Data;
 
 final class AmqpMessage implements Message {
 
   private static final byte[] EMPTY_BODY = new byte[0];
 
-  private final org.apache.qpid.protonj2.client.Message<byte[]> delegate;
+  private final org.apache.qpid.protonj2.client.Message<?> delegate;
 
   private boolean durableIsSet = false;
 
@@ -53,7 +54,7 @@ final class AmqpMessage implements Message {
     this(org.apache.qpid.protonj2.client.Message.create(body));
   }
 
-  AmqpMessage(org.apache.qpid.protonj2.client.Message<byte[]> delegate) {
+  AmqpMessage(org.apache.qpid.protonj2.client.Message<?> delegate) {
     this.delegate = delegate;
   }
 
@@ -448,7 +449,8 @@ final class AmqpMessage implements Message {
   @Override
   public Message body(byte[] body) {
     try {
-      this.delegate.body(body);
+      this.delegate.toAdvancedMessage().clearBodySections();
+      this.delegate.toAdvancedMessage().addBodySection(new Data(body));
     } catch (ClientException e) {
       throw convert(e);
     }
@@ -458,7 +460,16 @@ final class AmqpMessage implements Message {
   @Override
   public byte[] body() {
     try {
-      return this.delegate.body();
+      Object value = this.delegate.body();
+      if (value == null) {
+        return null;
+      } else if (value instanceof byte[]) {
+        return (byte[]) value;
+      } else if (value instanceof Binary) {
+        return ((Binary) value).asByteArray();
+      } else {
+        throw new AmqpException("Unsupported body type: " + value.getClass().getName());
+      }
     } catch (ClientException e) {
       throw convert(e);
     }
