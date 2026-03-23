@@ -1206,4 +1206,311 @@ public class AmqpTest {
     publish.run();
     waitAtMost(() -> receivedCount.get() > messageCount / 5);
   }
+
+  @Test
+  void batchAcceptShouldAcceptAllMessages() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+    publisher.close();
+
+    int batchSize = 10;
+    Sync consumeSync = sync(messageCount);
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            new Consumer.MessageHandler() {
+              Consumer.BatchContext batch;
+
+              @Override
+              public void handle(Consumer.Context context, Message message) {
+                if (batch == null) {
+                  batch = context.batch(batchSize);
+                }
+                batch.add(context);
+                if (batch.size() == batchSize) {
+                  batch.accept();
+                  batch = null;
+                }
+                consumeSync.down();
+              }
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+  }
+
+  @Test
+  void batchDiscardShouldDiscardAllMessages() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+    publisher.close();
+
+    int batchSize = 10;
+    Sync consumeSync = sync(messageCount);
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            new Consumer.MessageHandler() {
+              Consumer.BatchContext batch;
+
+              @Override
+              public void handle(Consumer.Context context, Message message) {
+                if (batch == null) {
+                  batch = context.batch(batchSize);
+                }
+                batch.add(context);
+                if (batch.size() == batchSize) {
+                  batch.discard();
+                  batch = null;
+                }
+                consumeSync.down();
+              }
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+  }
+
+  @Test
+  void batchRequeueShouldRequeueAllMessages() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 20;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+    publisher.close();
+
+    int batchSize = 10;
+    AtomicInteger deliveryRound = new AtomicInteger(0);
+    Sync consumeSync = sync(messageCount * 2);
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            new Consumer.MessageHandler() {
+              Consumer.BatchContext batch;
+
+              @Override
+              public void handle(Consumer.Context context, Message message) {
+                if (batch == null) {
+                  batch = context.batch(batchSize);
+                }
+                batch.add(context);
+                if (batch.size() == batchSize) {
+                  if (deliveryRound.getAndIncrement() < 2) {
+                    batch.requeue();
+                  } else {
+                    batch.accept();
+                  }
+                  batch = null;
+                }
+                consumeSync.down();
+              }
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+  }
+
+  @Test
+  void batchAcceptWithSomeMessagesDiscardedIndividually() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 100;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(
+            i ->
+                publisher.publish(
+                    publisher.message().body(String.valueOf(i).getBytes(UTF_8)),
+                    ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+    publisher.close();
+
+    int batchSize = 10;
+    AtomicInteger discardedCount = new AtomicInteger(0);
+    Sync consumeSync = sync(messageCount);
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            new Consumer.MessageHandler() {
+              Consumer.BatchContext batch;
+
+              @Override
+              public void handle(Consumer.Context context, Message message) {
+                if (batch == null) {
+                  batch = context.batch(batchSize);
+                }
+                int index = Integer.parseInt(new String(message.body(), UTF_8));
+                if (index % 5 == 0) {
+                  context.discard();
+                  discardedCount.incrementAndGet();
+                } else {
+                  batch.add(context);
+                  if (batch.size() == batchSize) {
+                    batch.accept();
+                    batch = null;
+                  }
+                }
+                consumeSync.down();
+              }
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    assertThat(discardedCount).hasValueGreaterThan(0);
+    waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+  }
+
+  @Test
+  void batchAcceptWithPartialBatchSettlesRemainingMessages() {
+    connection.management().queue(name).exclusive(true).declare();
+    int messageCount = 25;
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Sync publishSync = sync(messageCount);
+    range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+    publisher.close();
+
+    int batchSize = 10;
+    AtomicReference<Consumer.BatchContext> lastBatch = new AtomicReference<>();
+    Sync consumeSync = sync(messageCount);
+    connection
+        .consumerBuilder()
+        .queue(name)
+        .messageHandler(
+            new Consumer.MessageHandler() {
+              Consumer.BatchContext batch;
+
+              @Override
+              public void handle(Consumer.Context context, Message message) {
+                if (batch == null) {
+                  batch = context.batch(batchSize);
+                }
+                batch.add(context);
+                if (batch.size() == batchSize) {
+                  batch.accept();
+                  batch = null;
+                }
+                lastBatch.set(batch);
+                consumeSync.down();
+              }
+            })
+        .build();
+
+    assertThat(consumeSync).completes();
+    Consumer.BatchContext remaining = lastBatch.get();
+    assertThat(remaining).isNotNull();
+    assertThat(remaining.size()).isEqualTo(messageCount % batchSize);
+    remaining.accept();
+    waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 5})
+  void consumerWithLittleInitialCreditsShouldReceiveAllMessages(int initialCredits) {
+    // https://github.com/rabbitmq/rabbitmq-amqp-java-client/issues/358
+    connection.management().queue(this.name).type(QUORUM).declare();
+    try {
+      int messageCount = 5;
+      Publisher publisher = connection.publisherBuilder().queue(this.name).build();
+      Sync publishSync = sync(messageCount);
+      for (int i = 0; i < messageCount; i++) {
+        publisher.publish(
+            publisher.message().body(("msg-" + i).getBytes()), ctx -> publishSync.down());
+      }
+      assertThat(publishSync).completes();
+      publisher.close();
+
+      Sync consumeSync = sync(messageCount);
+      Consumer consumer =
+          connection
+              .consumerBuilder()
+              .queue(this.name)
+              .initialCredits(initialCredits)
+              .messageHandler(
+                  (ctx, msg) -> {
+                    ctx.accept();
+                    consumeSync.down();
+                  })
+              .build();
+
+      assertThat(consumeSync).completes();
+      consumer.close();
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 5})
+  void batchAcceptWithLittleInitialCreditsShouldNotGetStuck(int batchSize) {
+    connection.management().queue(this.name).type(QUORUM).declare();
+    try {
+      int messageCount = 20;
+      Publisher publisher = connection.publisherBuilder().queue(this.name).build();
+      Sync publishSync = sync(messageCount);
+      for (int i = 0; i < messageCount; i++) {
+        publisher.publish(publisher.message(), ctx -> publishSync.down());
+      }
+      assertThat(publishSync).completes();
+      publisher.close();
+
+      AtomicReference<Consumer.BatchContext> lastBatch = new AtomicReference<>();
+      Sync consumeSync = sync(messageCount);
+      Consumer consumer =
+          connection
+              .consumerBuilder()
+              .queue(this.name)
+              .initialCredits(batchSize)
+              .messageHandler(
+                  new Consumer.MessageHandler() {
+                    Consumer.BatchContext batch;
+
+                    @Override
+                    public void handle(Consumer.Context context, Message message) {
+                      if (batch == null) {
+                        batch = context.batch(batchSize);
+                      }
+                      batch.add(context);
+                      if (batch.size() == batchSize) {
+                        batch.accept();
+                        batch = null;
+                      }
+                      lastBatch.set(batch);
+                      consumeSync.down();
+                    }
+                  })
+              .build();
+
+      assertThat(consumeSync).completes();
+      Consumer.BatchContext remaining = lastBatch.get();
+      if (remaining != null && remaining.size() > 0) {
+        remaining.accept();
+      }
+      waitAtMost(() -> connection.management().queueInfo(this.name).messageCount() == 0);
+      consumer.close();
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
+  }
 }
