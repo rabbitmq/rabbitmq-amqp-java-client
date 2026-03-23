@@ -397,12 +397,6 @@ public class AmqpConnectionAffinityUnitTest {
     }
 
     @Override
-    @SuppressWarnings("removal")
-    public List<String> replicas() {
-      return this.members();
-    }
-
-    @Override
     public List<String> members() {
       return this.members;
     }

@@ -282,12 +282,6 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
-    @SuppressWarnings("removal")
-    public Management.QuorumQueueSpecification quorumInitialGroupSize(int size) {
-      return this.initialMemberCount(size);
-    }
-
-    @Override
     public Management.QuorumQueueSpecification initialMemberCount(int initialMemberCount) {
       validatePositive("x-quorum-initial-group-size", initialMemberCount);
       this.parent.arg("x-quorum-initial-group-size", initialMemberCount);
@@ -352,12 +346,6 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
       validatePositive("x-stream-max-segment-size-bytes", maxSegmentSize.toBytes());
       this.parent.arg("x-stream-max-segment-size-bytes", maxSegmentSize.toBytes());
       return this;
-    }
-
-    @Override
-    @SuppressWarnings("removal")
-    public Management.StreamSpecification initialClusterSize(int initialClusterSize) {
-      return this.initialMemberCount(initialClusterSize);
     }
 
     @Override

@@ -102,22 +102,6 @@ public class AmqpEnvironmentBuilder implements EnvironmentBuilder {
   }
 
   /**
-   * Deprecated, do not use anymore. Consumers do not use a polling loop anymore.
-   *
-   * <p>Set executor service used for consumer loops.
-   *
-   * <p>The library uses sensible defaults, override only in case of problems.
-   *
-   * @param consumerExecutorService the executor service
-   * @return this builder instance
-   * @deprecated Do not use anymore
-   */
-  @Deprecated(forRemoval = true)
-  public AmqpEnvironmentBuilder consumerExecutorService(ExecutorService consumerExecutorService) {
-    return this;
-  }
-
-  /**
    * Set up a {@link MetricsCollector}.
    *
    * @param metricsCollector the metrics collector

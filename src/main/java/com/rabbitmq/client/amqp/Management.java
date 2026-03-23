@@ -54,15 +54,6 @@ public interface Management extends AutoCloseable {
   /**
    * Delete a queue.
    *
-   * @return the queue deletion
-   * @deprecated use {@link #queueDelete(String)} instead
-   */
-  @Deprecated(forRemoval = true)
-  QueueDeletion queueDeletion();
-
-  /**
-   * Delete a queue.
-   *
    * @param name the name of the queue
    */
   void queueDelete(String name);
@@ -89,15 +80,6 @@ public interface Management extends AutoCloseable {
    * @return the exchange specification
    */
   ExchangeSpecification exchange(String name);
-
-  /**
-   * Delete an exchange.
-   *
-   * @return the exchange deletion
-   * @deprecated use {@link #exchangeDelete(String)} instead
-   */
-  @Deprecated(forRemoval = true)
-  ExchangeDeletion exchangeDeletion();
 
   /**
    * Delete an exchange.
@@ -353,17 +335,6 @@ public interface Management extends AutoCloseable {
     QuorumQueueSpecification deliveryLimit(int limit);
 
     /**
-     * Deprecated, use {@link #initialMemberCount(int)} instead.
-     *
-     * @param size group size
-     * @return quorum queue specification
-     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#replication-factor">Initial
-     *     Replication Factor</a>
-     */
-    @Deprecated(forRemoval = true)
-    QuorumQueueSpecification quorumInitialGroupSize(int size);
-
-    /**
      * Set the number of initial members the quorum queue should have.
      *
      * @param initialMemberCount initial number of nodes
@@ -442,17 +413,6 @@ public interface Management extends AutoCloseable {
      * @see <a href="https://www.rabbitmq.com/docs/streams#declaring">Declaring a Stream</a>
      */
     StreamSpecification maxSegmentSizeBytes(ByteCapacity maxSegmentSize);
-
-    /**
-     * Deprecated, use {@link #initialMemberCount(int)} instead.
-     *
-     * @param initialClusterSize initial number of nodes
-     * @return the stream specification
-     * @see <a href="https://www.rabbitmq.com/docs/streams#replication-factor">Initial Replication
-     *     Factor</a>
-     */
-    @Deprecated(forRemoval = true)
-    StreamSpecification initialClusterSize(int initialClusterSize);
 
     /**
      * Set the number of initial members the stream should have.
@@ -610,22 +570,6 @@ public interface Management extends AutoCloseable {
   }
 
   /**
-   * Queue deletion.
-   *
-   * @deprecated use {@link #queueDelete(String)} instead
-   */
-  @Deprecated(forRemoval = true)
-  interface QueueDeletion {
-
-    /**
-     * Delete the queue.
-     *
-     * @param name queue name
-     */
-    void delete(String name);
-  }
-
-  /**
    * Specification of an exchange.
    *
    * @see <a href="https://www.rabbitmq.com/tutorials/amqp-concepts#exchanges">Exchanges</a>
@@ -721,22 +665,6 @@ public interface Management extends AutoCloseable {
      *     Exchange Type</a>
      */
     HEADERS
-  }
-
-  /**
-   * Exchange deletion.
-   *
-   * @deprecated use {@link #exchangeDelete(String)} instead
-   */
-  @Deprecated(forRemoval = true)
-  interface ExchangeDeletion {
-
-    /**
-     * Delete the exchange.
-     *
-     * @param name exchange name
-     */
-    void delete(String name);
   }
 
   /**
@@ -919,14 +847,6 @@ public interface Management extends AutoCloseable {
      * @return the node of the queue leader
      */
     String leader();
-
-    /**
-     * Deprecated, use {@link #members()} instead.
-     *
-     * @return the nodes of the queue members
-     */
-    @Deprecated(forRemoval = true)
-    List<String> replicas();
 
     /**
      * The nodes the queue has members on.
