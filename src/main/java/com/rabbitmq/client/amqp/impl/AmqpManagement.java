@@ -149,12 +149,6 @@ class AmqpManagement implements Management {
   }
 
   @Override
-  @SuppressWarnings("removal")
-  public QueueDeletion queueDeletion() {
-    return this::queueDelete;
-  }
-
-  @Override
   public void queueDelete(String name) {
     checkAvailable();
     Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
@@ -174,12 +168,6 @@ class AmqpManagement implements Management {
   public ExchangeSpecification exchange(String name) {
     checkAvailable();
     return this.exchange().name(name);
-  }
-
-  @Override
-  @SuppressWarnings("removal")
-  public ExchangeDeletion exchangeDeletion() {
-    return this::exchangeDelete;
   }
 
   @Override
@@ -789,12 +777,6 @@ class AmqpManagement implements Management {
     @Override
     public String leader() {
       return this.leader;
-    }
-
-    @Override
-    @SuppressWarnings("removal")
-    public List<String> replicas() {
-      return this.members();
     }
 
     @Override
