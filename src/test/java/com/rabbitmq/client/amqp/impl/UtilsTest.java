@@ -73,11 +73,13 @@ public class UtilsTest {
         "3.13.6-alpha.0",
         "3.13.6~beta-1",
         "3.13.6+funky-metadata-1",
+        "tanzu+rabbitmq.v3.13.6.dev.1.179.g335e26b",
         "4.0.6",
         "4.0.6.9",
         "4.0.6-alpha.0",
         "4.0.6~beta-1",
-        "4.0.6+funky-metadata-1"
+        "4.0.6+funky-metadata-1",
+        "tanzu+rabbitmq.v4.0.6.dev.1.179.g335e26b"
       })
   void validateBrokerVersionParsing4AndEarlier(String brokerVersion) {
     assertThat(Utils.is4_1_OrMore(brokerVersion)).isFalse();
@@ -92,15 +94,40 @@ public class UtilsTest {
         "4.1.6-alpha.0",
         "4.1.6~beta-1",
         "4.1.6+funky-metadata-1",
+        "tanzu+rabbitmq.v4.1.6.dev.1.179.g335e26b",
         "4.2.6",
         "4.2.6.9",
         "4.2.6-alpha.0",
         "4.2.6~beta-1",
-        "4.2.6+funky-metadata-1"
+        "4.2.6+funky-metadata-1",
+        "tanzu+rabbitmq.v4.2.6.dev.1.179.g335e26b"
       })
   void validateBrokerVersionParsing41AndLater(String brokerVersion) {
     assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
     assertThat(Utils.supportFilterExpressions(brokerVersion)).isTrue();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "4.3.0,4.3.0",
+    "3.13.6,3.13.6",
+    "3.13.6.2,3.13.6",
+    "3.13.6-alpha.0,3.13.6",
+    "3.13.6~beta-1,3.13.6",
+    "3.13.6+funky-metadata-1,3.13.6",
+    "3.7.0+rc.1.4.gedc5d96,3.7.0",
+    "tanzu+rabbitmq.v4.3.0.dev.1.179.g335e26b,4.3.0"
+  })
+  void currentVersionExtraction(String input, String expected) {
+    assertThat(Utils.currentVersion(input)).isEqualTo(expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"tanzu+rabbitmq", "not-a-version", "abc"})
+  void versionCheckReturnsTrueWhenVersionCannotBeParsed(String brokerVersion) {
+    assertThat(Utils.is4_0_OrMore(brokerVersion)).isTrue();
+    assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
+    assertThat(Utils.is4_2_OrMore(brokerVersion)).isTrue();
   }
 
   @ParameterizedTest

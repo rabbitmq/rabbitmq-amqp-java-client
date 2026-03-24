@@ -37,6 +37,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.qpid.protonj2.client.SessionOptions;
 import org.slf4j.Logger;
@@ -222,20 +223,14 @@ final class Utils {
     }
   }
 
-  private static String currentVersion(String currentVersion) {
-    // versions built from source: 3.7.0+rc.1.4.gedc5d96
-    if (currentVersion.contains("+")) {
-      currentVersion = currentVersion.substring(0, currentVersion.indexOf("+"));
+  private static final Pattern SEMVER_PATTERN = Pattern.compile("(\\d+\\.\\d+\\.\\d+)");
+
+  static String currentVersion(String currentVersion) {
+    Matcher matcher = SEMVER_PATTERN.matcher(currentVersion);
+    if (matcher.find()) {
+      return matcher.group(1);
     }
-    // alpha (snapshot) versions: 3.7.0~alpha.449-1
-    if (currentVersion.contains("~")) {
-      currentVersion = currentVersion.substring(0, currentVersion.indexOf("~"));
-    }
-    // alpha (snapshot) versions: 3.7.1-alpha.40
-    if (currentVersion.contains("-")) {
-      currentVersion = currentVersion.substring(0, currentVersion.indexOf("-"));
-    }
-    return currentVersion;
+    throw new IllegalArgumentException("No semver pattern found in: " + currentVersion);
   }
 
   /**
