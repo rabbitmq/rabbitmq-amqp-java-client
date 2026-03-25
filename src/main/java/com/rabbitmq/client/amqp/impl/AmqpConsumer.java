@@ -319,7 +319,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               message = new AmqpMessage(delivery.message());
             } catch (ClientException e) {
               LOGGER.warn("Error while decoding message: {}", e.getMessage());
-              pendingWorkItems.decrementAndGet();
+              // Decrement and replenish on proton executor to keep pendingWorkItems
+              // consistent with credit state and avoid over-crediting
+              protonExecutor.execute(
+                  () -> {
+                    pendingWorkItems.decrementAndGet();
+                    replenishCreditIfNeeded(0);
+                  });
               return;
             }
             metricsCollector.consumeDisposition(ACCEPTED);
@@ -327,14 +333,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               handler.handle(PRE_SETTLED_CONTEXT, message);
             } catch (Exception ex) {
               LOGGER.warn("Error in message handler", ex);
-            } finally {
-              pendingWorkItems.decrementAndGet();
             }
-            try {
-              protonExecutor.execute(() -> replenishCreditOperation.accept(1));
-            } catch (Exception e) {
-              LOGGER.warn("Error while executing replenish credit operation: {}", e.getMessage());
-            }
+            // Decrement and replenish on proton executor to keep pendingWorkItems
+            // consistent with credit state and avoid over-crediting
+            protonExecutor.execute(
+                () -> {
+                  pendingWorkItems.decrementAndGet();
+                  replenishCreditIfNeeded(0);
+                });
           };
     } else {
       maybeIncrementUnsettledRunnable = this.unsettledMessageCount::incrementAndGet;
@@ -350,7 +356,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               } catch (ClientException ex) {
                 LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
               }
-              pendingWorkItems.decrementAndGet();
+              unsettledMessageCount.decrementAndGet();
+              // Decrement and replenish on proton executor to keep pendingWorkItems
+              // consistent with credit state and avoid over-crediting
+              protonExecutor.execute(
+                  () -> {
+                    pendingWorkItems.decrementAndGet();
+                    replenishCreditIfNeeded(0);
+                  });
               return;
             }
             Consumer.Context context =
@@ -372,7 +385,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                 LOGGER.warn("Error while discarding message", iex);
               }
             } finally {
-              pendingWorkItems.decrementAndGet();
+              // Decrement on proton executor so replenishCreditIfNeeded sees
+              // a consistent pendingWorkItems value when it runs
+              protonExecutor.execute(() -> pendingWorkItems.decrementAndGet());
             }
           };
     }
@@ -489,8 +504,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       // this is the number of messages that may be on their way from the broker to the consumer
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
-        // Settled messages are still counted in pendingWorkItems because the handler
-        // hasn't returned yet. Subtract them to avoid understating available credit.
+        // settledCount compensates for items whose pendingWorkItems decrement is queued
+        // on the proton executor after this task (e.g. the handler's finally block)
         int pendingInWorkPool = Math.max(0, this.pendingWorkItems.get() - settledCount);
         int totalInFlight = currentCredit + pendingInWorkPool;
         if (totalInFlight <= creditWindow * 0.7) {
@@ -719,7 +734,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         int batchSize = this.contexts.size();
         try {
-          protonExecutor.execute(() -> replenishCreditOperation.accept(batchSize));
+          // settledCount = 1: only the current handler's pendingWorkItems decrement
+          // is still queued behind this task on the proton executor
+          protonExecutor.execute(() -> replenishCreditOperation.accept(1));
           long[][] ranges =
               SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
           this.protonExecutor.execute(
