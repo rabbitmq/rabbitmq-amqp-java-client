@@ -22,8 +22,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.nio.NioIoHandler;
 import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.apache.qpid.protonj2.client.transport.IOContext;
@@ -35,6 +33,8 @@ import org.slf4j.LoggerFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
 /**
@@ -101,7 +101,7 @@ public final class Netty4IOContext implements IOContext {
 
         if (selectedGroup == null) {
             LOG.trace("Netty Transports will be using NIO mode");
-            selectedGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+            selectedGroup = new MultiThreadIoEventLoopGroup(1, threadFactory, NioIoHandler.newFactory());
             selectedChannelClass = NioSocketChannel.class;
         }
 

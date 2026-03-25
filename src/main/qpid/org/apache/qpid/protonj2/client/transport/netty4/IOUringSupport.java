@@ -16,78 +16,52 @@
  */
 package org.apache.qpid.protonj2.client.transport.netty4;
 
-import java.lang.reflect.Method;
 import java.util.concurrent.ThreadFactory;
 
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.uring.IoUringIoHandler;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.uring.IoUring;
+import io.netty.channel.uring.IoUringIoHandler;
+import io.netty.channel.uring.IoUringSocketChannel;
 
-@SuppressWarnings("unchecked")
 public final class IOUringSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(IOUringSupport.class);
 
     public static final String NAME = "IO_URING";
 
-    private static final boolean AVAILABLE;
-    private static final Class<? extends Channel> SOCKET_CHANNEL_CLASS;
-
-    static {
-        boolean available = false;
-        Class<? extends Channel> socketChannelClass = null;
-
-        // Try for new Netty built in IoUring before falling back to incubator checks
-        try {
-            final Class<?> ioUring = Class.forName("io.netty.channel.uring.IoUring");
-            final Method isAvailable = ioUring.getDeclaredMethod("isAvailable", (Class<?>[])null);
-
-            socketChannelClass = (Class<? extends Channel>) Class.forName("io.netty.channel.uring.IoUringSocketChannel");
-            available = (boolean) isAvailable.invoke(null);
-        } catch (UnsatisfiedLinkError | Exception e) {
-            LOG.debug("Unable to enable netty io_uring support due to error", e);
-        }
-
-        if (!available) {
-            try {
-                final Class<?> ioUring = Class.forName("io.netty.incubator.channel.uring.IOUring");
-                final Method isAvailable = ioUring.getDeclaredMethod("isAvailable");
-
-                socketChannelClass = (Class<? extends Channel>) Class.forName("io.netty.incubator.channel.uring.IOUringSocketChannel");
-                available = (boolean) isAvailable.invoke(null);
-            } catch (UnsatisfiedLinkError | Exception e) {
-                LOG.debug("Unable to enable netty incubator io_uring support due to error", e);
-            }
-        }
-
-        AVAILABLE = available;
-        SOCKET_CHANNEL_CLASS = socketChannelClass;
-    }
-
     public static boolean isAvailable(TransportOptions transportOptions) {
-        return transportOptions.allowNativeIO() && AVAILABLE;
+        return transportOptions.allowNativeIO() && isAvailable();
     }
 
     public static boolean isAvailable() {
-        return AVAILABLE;
+        try {
+            return IoUring.isAvailable();
+        } catch (UnsatisfiedLinkError | Exception e) {
+            LOG.debug("Unable to enable netty io_uring support due to error", e);
+            return false;
+        }
     }
 
     public static EventLoopGroup createGroup(int nThreads, ThreadFactory ioThreadFactory) {
+        ensureAvailability();
+
         return new MultiThreadIoEventLoopGroup(nThreads, ioThreadFactory, IoUringIoHandler.newFactory());
     }
 
     public static Class<? extends Channel> getChannelClass() {
         ensureAvailability();
-        return SOCKET_CHANNEL_CLASS;
+
+        return IoUringSocketChannel.class;
     }
 
     public static void ensureAvailability() {
-        if (!AVAILABLE) {
+        if (!isAvailable()) {
             throw new UnsupportedOperationException(
                 "Netty io_ring support is not enabled because the Netty library indicates it is not present or disabled");
         }
