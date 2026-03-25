@@ -18,15 +18,15 @@ package org.apache.qpid.protonj2.client.transport.netty4;
 
 import java.util.concurrent.ThreadFactory;
 
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.epoll.EpollIoHandler;
 import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollIoHandler;
 import io.netty.channel.epoll.EpollSocketChannel;
 
 public final class EpollSupport {
@@ -50,6 +50,7 @@ public final class EpollSupport {
 
     public static EventLoopGroup createGroup(int nThreads, ThreadFactory ioThreadFactory) {
         ensureAvailability();
+
         return new MultiThreadIoEventLoopGroup(nThreads, ioThreadFactory, EpollIoHandler.newFactory());
     }
 
