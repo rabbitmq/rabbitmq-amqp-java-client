@@ -12,7 +12,7 @@ It is **for RabbitMQ only**, it does not support other brokers.
 
 == Pre-requisites
 
-This library requires at least Java 17 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
+This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
 
 [[license]]
 == License

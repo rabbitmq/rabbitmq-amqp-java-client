@@ -2344,7 +2344,8 @@ public class SplayMap<E> implements NavigableMap<UnsignedInteger, E> {
 
             @Override
             public boolean contains(Object o) {
-                if (o instanceof Map.Entry entry) {
+                if (o instanceof Map.Entry) {
+                    Map.Entry<?,?> entry = (Map.Entry<?,?>) o;
                     Number key = Number.class.cast(entry.getKey());
 
                     if (!isInRange(key.intValue())) {
@@ -2363,7 +2364,8 @@ public class SplayMap<E> implements NavigableMap<UnsignedInteger, E> {
 
             @Override
             public boolean remove(Object o) {
-                if (o instanceof Map.Entry entry) {
+                if (o instanceof Map.Entry) {
+                    Map.Entry<?,?> entry = (Map.Entry<?,?>) o;
                     Number key = Number.class.cast(entry.getKey());
 
                     if (!isInRange(key.intValue())) {

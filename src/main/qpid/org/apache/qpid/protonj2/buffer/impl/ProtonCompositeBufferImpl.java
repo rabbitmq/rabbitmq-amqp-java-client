@@ -904,7 +904,7 @@ public final class ProtonCompositeBufferImpl extends SharedResource<ProtonBuffer
 
     @Override
     public boolean equals(Object o) {
-        return o instanceof ProtonBuffer buffer && ProtonBufferUtils.equals(this, buffer);
+        return o instanceof ProtonBuffer && ProtonBufferUtils.equals(this, (ProtonBuffer) o);
     }
 
     @Override
@@ -938,8 +938,8 @@ public final class ProtonCompositeBufferImpl extends SharedResource<ProtonBuffer
             return 0;
         }
 
-        if (channel instanceof GatheringByteChannel gatheringChannel) {
-            return transferToGatheringByteChannel(gatheringChannel, writableBytes);
+        if (channel instanceof GatheringByteChannel) {
+            return transferToGatheringByteChannel((GatheringByteChannel) channel, writableBytes);
         } else {
             return transferToWritableByteChannel(channel, writableBytes);
         }

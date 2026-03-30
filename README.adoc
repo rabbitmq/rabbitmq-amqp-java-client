@@ -4,7 +4,7 @@ image:https://maven-badges.sml.io/sonatype-central/com.rabbitmq.client/amqp-clie
 image:https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml/badge.svg["Build Status", link="https://github.com/rabbitmq/rabbitmq-amqp-java-client/actions/workflows/test.yml"]
 
 This library is part of the https://www.rabbitmq.com/client-libraries/amqp-client-libraries[RabbitMQ AMQP 1.0 client libraries].
-It targets RabbitMQ 4.0+ and requires at least Java 17 (Java 21 or more is recommended).
+It targets RabbitMQ 4.0+ and requires at least Java 11 (Java 21 or more is recommended).
 
 Please refer to the https://rabbitmq.github.io/rabbitmq-amqp-java-client/stable/htmlsingle/[documentation] to find out more.
 
@@ -26,7 +26,7 @@ See the https://www.rabbitmq.com/client-libraries/java-versions[RabbitMQ Java li
 
 === Pre-requisites
 
-This library requires at least Java 17 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
+This library requires at least Java 11 (Java 21+ is recommended) and RabbitMQ 4.0 or more.
 
 === Dependencies
 

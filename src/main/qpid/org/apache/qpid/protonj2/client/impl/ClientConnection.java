@@ -1054,7 +1054,8 @@ public final class ClientConnection implements Connection {
     }
 
     private boolean isStoppageCause(ClientException cause) {
-        if (cause instanceof ClientConnectionSecuritySaslException saslFailure) {
+        if (cause instanceof ClientConnectionSecuritySaslException) {
+            ClientConnectionSecuritySaslException saslFailure = (ClientConnectionSecuritySaslException) cause;
             return !saslFailure.isSysTempFailure();
         } else if (cause instanceof ClientConnectionSecurityException ) {
             return true;

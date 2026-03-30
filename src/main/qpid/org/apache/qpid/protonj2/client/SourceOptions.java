@@ -208,11 +208,13 @@ public final class SourceOptions extends TerminusOptions<SourceOptions> implemen
                 return false;
             }
 
-            if (target instanceof DescribedType other) {
-                return Objects.equals(descriptor, other.getDescriptor()) && Objects.equals(described, other.getDescribed());
+            if (!(target instanceof DescribedType)) {
+                return false;
             }
 
-            return false;
+            final DescribedType other = (DescribedType) target;
+
+            return Objects.equals(descriptor, other.getDescriptor()) && Objects.equals(described, other.getDescribed());
         }
     }
 }
