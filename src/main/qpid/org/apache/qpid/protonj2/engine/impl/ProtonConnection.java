@@ -699,8 +699,9 @@ public class ProtonConnection extends ProtonEndpoint<Connection> implements Conn
         final Symbol condition;
         final String description = cause.getMessage();
 
-        if (cause instanceof ProtocolViolationException violation) {
-            condition = violation.getErrorCondition();
+        if (cause instanceof ProtocolViolationException) {
+            ProtocolViolationException error = (ProtocolViolationException) cause;
+            condition = error.getErrorCondition();
         } else {
             condition = AmqpError.INTERNAL_ERROR;
         }

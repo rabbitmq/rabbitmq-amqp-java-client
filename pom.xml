@@ -330,7 +330,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven.compiler.plugin.version}</version>
                 <configuration>
-                    <release>17</release>
+                    <release>11</release>
                     <compilerArgs>
                         <arg>-Xlint:deprecation</arg>
                         <arg>-Xlint:unchecked</arg>
@@ -386,7 +386,7 @@
                 <version>${maven-javadoc-plugin.version}</version>
                 <configuration>
                     <quiet>true</quiet>
-                    <source>17</source>
+                    <source>11</source>
                     <additionalOptions>-Xdoclint:none</additionalOptions>
                     <sourceFileIncludes>
                         <sourceFileInclude>com\/rabbitmq\/**\/\*.java</sourceFileInclude>
@@ -639,7 +639,7 @@
         <profile>
             <id>jvm-test-arguments-below-java-21</id>
             <activation>
-                <jdk>[17,21)</jdk>
+                <jdk>[11,21)</jdk>
             </activation>
             <properties>
                 <test-arguments>-Xshare:off</test-arguments>
