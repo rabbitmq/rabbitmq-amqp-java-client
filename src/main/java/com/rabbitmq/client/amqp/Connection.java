@@ -22,6 +22,52 @@ import java.io.Closeable;
 /** A connection to the broker. */
 public interface Connection extends Closeable, Resource {
 
+  /** Information about a connection. */
+  interface ConnectionInfo {
+
+    /**
+     * Get the broker version.
+     *
+     * @return broker version
+     */
+    String brokerVersion();
+
+    /**
+     * Get the broker product name.
+     *
+     * @return broker product name
+     */
+    String brokerProductName();
+
+    /**
+     * Get the broker node name.
+     *
+     * @return broker node name
+     */
+    String brokerNode();
+
+    /**
+     * Get the host this connection is connected to.
+     *
+     * @return connection host
+     */
+    String host();
+
+    /**
+     * Get the port this connection is connected to.
+     *
+     * @return connection port
+     */
+    int port();
+
+    /**
+     * Get the connection name.
+     *
+     * @return connection name
+     */
+    String name();
+  }
+
   /**
    * The {@link Management} instance of this connection.
    *
@@ -56,6 +102,14 @@ public interface Connection extends Closeable, Resource {
    * @return responder builder
    */
   ResponderBuilder responderBuilder();
+
+  /**
+   * Get connection information.
+   *
+   * @return connection information
+   * @throws AmqpException if the connection is not open
+   */
+  ConnectionInfo connectionInfo();
 
   /** Close the connection and its resources */
   @Override

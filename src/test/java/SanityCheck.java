@@ -23,6 +23,14 @@ public class SanityCheck {
       LOGGER.info("connecting");
       Connection connection = env.connectionBuilder().build();
       LOGGER.info("connected");
+      // Test the new connectionInfo() method
+      Connection.ConnectionInfo connectionInfo = connection.connectionInfo();
+      LOGGER.info("Broker version: {}", connectionInfo.brokerVersion());
+      LOGGER.info("Broker product name: {}", connectionInfo.brokerProductName());
+      LOGGER.info("Broker node: {}", connectionInfo.brokerNode());
+      LOGGER.info("Connection host: {}", connectionInfo.host());
+      LOGGER.info("Connection port: {}", connectionInfo.port());
+      LOGGER.info("Connection name: {}", connectionInfo.name());
       String q = connection.management().queue().exclusive(true).declare().name();
       LOGGER.info("test queue created");
       CountDownLatch publishLatch = new CountDownLatch(1);
