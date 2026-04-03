@@ -273,6 +273,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
   }
 
   @Override
+  public ConnectionInfo connectionInfo() {
+    checkOpen();
+    return new AmqpConnectionInfo();
+  }
+
+  @Override
   public void close() {
     this.close(null);
   }
@@ -345,11 +351,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   private static void checkBroker(org.apache.qpid.protonj2.client.Connection connection)
       throws ClientException {
-    String broker = (String) connection.properties().get("product");
-    if (!"rabbitmq".equalsIgnoreCase(broker)) {
+    String product = brokerProduct(connection);
+    if (!"rabbitmq".equalsIgnoreCase(product)) {
       LOGGER.warn(
           "Connected to another broker than RabbitMQ ('{}'), the library may not behave as expected",
-          broker);
+          product);
     }
   }
 
@@ -374,6 +380,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   String brokerVersion() {
     return brokerVersion(this.nativeConnection);
+  }
+
+  private static String brokerProduct(org.apache.qpid.protonj2.client.Connection connection) {
+    try {
+      return (String) connection.properties().get("product");
+    } catch (ClientException e) {
+      throw convert(e);
+    }
+  }
+
+  String brokerProduct() {
+    return brokerProduct(this.nativeConnection);
   }
 
   private static String extractNode(org.apache.qpid.protonj2.client.Connection connection)
@@ -986,22 +1004,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.name();
   }
 
-  private void authenticate(String username, String password) {
-    State state = this.state();
-    if (state == OPEN) {
-      LOGGER.debug("Setting new token for connection {}", this.name);
-      long start = nanoTime();
-      ((AmqpManagement) management()).setToken(password);
-      LOGGER.debug(
-          "Set new token for connection {} in {} ms",
-          this.name,
-          ofNanos(nanoTime() - start).toMillis());
-    } else {
-      LOGGER.debug(
-          "Could not set new token for connection {} because its state is {}", this.name(), state);
-    }
-  }
-
   static class NativeConnectionWrapper {
 
     private final org.apache.qpid.protonj2.client.Connection connection;
@@ -1053,6 +1055,41 @@ final class AmqpConnection extends ResourceBase implements Connection {
     @Override
     public void authenticate(String username, String password) {
       options.user(username).password(password);
+    }
+  }
+
+  private class AmqpConnectionInfo implements ConnectionInfo {
+
+    @Override
+    public String brokerVersion() {
+      return AmqpConnection.this.brokerVersion();
+    }
+
+    @Override
+    public String brokerProductName() {
+      return AmqpConnection.this.brokerProduct();
+    }
+
+    @Override
+    public String brokerNode() {
+      return AmqpConnection.this.connectionNodename();
+    }
+
+    @Override
+    public String host() {
+      Address address = AmqpConnection.this.connectionAddress();
+      return address != null ? address.host() : null;
+    }
+
+    @Override
+    public int port() {
+      Address address = AmqpConnection.this.connectionAddress();
+      return address != null ? address.port() : -1;
+    }
+
+    @Override
+    public String name() {
+      return AmqpConnection.this.name();
     }
   }
 }

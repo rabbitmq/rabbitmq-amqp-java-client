@@ -321,6 +321,42 @@ public class ClientTest {
   }
 
   @Test
+  void connectionInfoShouldReturnBrokerVersion() {
+    try (Environment env = TestUtils.environmentBuilder().build();
+        com.rabbitmq.client.amqp.Connection connection = env.connectionBuilder().build()) {
+      com.rabbitmq.client.amqp.Connection.ConnectionInfo connectionInfo =
+          connection.connectionInfo();
+      assertThat(connectionInfo.brokerVersion()).isNotNull().isNotEmpty();
+    }
+  }
+
+  @Test
+  void connectionInfoShouldThrowExceptionWhenConnectionClosed() {
+    com.rabbitmq.client.amqp.Connection connection;
+    try (Environment env = TestUtils.environmentBuilder().build()) {
+      connection = env.connectionBuilder().build();
+    }
+    assertThatThrownBy(connection::connectionInfo)
+        .isInstanceOf(com.rabbitmq.client.amqp.AmqpException.class);
+  }
+
+  @Test
+  void connectionInfoShouldReturnAllBrokerInformation() {
+    try (Environment env = TestUtils.environmentBuilder().build();
+        com.rabbitmq.client.amqp.Connection connection = env.connectionBuilder().build()) {
+      com.rabbitmq.client.amqp.Connection.ConnectionInfo connectionInfo =
+          connection.connectionInfo();
+
+      assertThat(connectionInfo.brokerVersion()).isNotNull().isNotEmpty();
+      assertThat(connectionInfo.brokerProductName()).isNotNull().isNotEmpty();
+      assertThat(connectionInfo.brokerNode()).isNotNull().isNotEmpty();
+      assertThat(connectionInfo.host()).isNotNull().isNotEmpty();
+      assertThat(connectionInfo.port()).isPositive();
+      assertThat(connectionInfo.name()).isNotNull();
+    }
+  }
+
+  @Test
   void exchangeDeletionImpactOnSender(TestInfo info) throws Exception {
     String exchange = name(info);
     try (Environment env = TestUtils.environmentBuilder().build();
