@@ -456,7 +456,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
             return;
           }
 
-          if (RECOVERY_PREDICATE.test(exception) && this.state() != OPENING) {
+          if (RECOVERY_PREDICATE.test(exception)) {
             LOGGER.debug(
                 "Queueing recovery task for '{}', error is {}",
                 this.name(),
@@ -506,9 +506,14 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.state(RECOVERING, failureCause);
       this.changeStateOfPublishers(RECOVERING, failureCause);
       this.changeStateOfConsumers(RECOVERING, failureCause);
-      this.nativeConnection = null;
-      this.nativeSession = null;
-      this.connectionAddress = null;
+      this.instanceLock.lock();
+      try {
+        this.nativeConnection = null;
+        this.nativeSession = null;
+        this.connectionAddress = null;
+      } finally {
+        this.instanceLock.unlock();
+      }
       LOGGER.debug("Releasing management resource of connection '{}'.", this.name());
       this.releaseManagementResources(failureCause);
       LOGGER.debug("Scheduling connection attempt for '{}'.", this.name());
@@ -631,7 +636,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
                               connectionName,
                               disconnectedHandlerReference.get(),
                               addrs);
-                      this.nativeConnection = wrapper.connection();
                       return wrapper;
                     },
                     this.management,
