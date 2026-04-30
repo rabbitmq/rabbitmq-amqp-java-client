@@ -431,6 +431,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
         resultReference = new AtomicReference<>();
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> result =
         (conn, event) -> {
+          if (this.closed.get()) {
+            LOGGER.debug("Connection '{}' is closed, disconnect handler skipped", this.name());
+            return;
+          }
           ClientIOException failureCause = event.failureCause();
           LOGGER.debug(
               "Disconnect handler of '{}', error is the following: {}",
@@ -487,6 +491,11 @@ final class AmqpConnection extends ResourceBase implements Connection {
       AmqpException failureCause,
       AtomicReference<BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>>
           disconnectedHandlerReference) {
+    if (this.closed.get()) {
+      LOGGER.debug("Connection '{}' is closed, skipping recovery", this.name());
+      this.releaseManagementResources(failureCause);
+      return;
+    }
     LOGGER.info(
         "Connection '{}' to '{}' has been disconnected, initializing recovery.",
         this.name(),
@@ -516,6 +525,18 @@ final class AmqpConnection extends ResourceBase implements Connection {
             ncw -> {
               this.sync(ncw);
               LOGGER.debug("Reconnected '{}' to {}", this.name(), this.currentConnectionLabel());
+              if (this.closed.get()) {
+                LOGGER.debug(
+                    "Connection '{}' is closed, closing fresh native connection and aborting recovery",
+                    this.name());
+                try {
+                  ncw.connection().close();
+                } catch (Exception e) {
+                  LOGGER.debug("Error while closing fresh native connection: {}", e.getMessage());
+                }
+                this.recoveringConnection.set(false);
+                return;
+              }
               try {
                 if (recoveryConfiguration.topology()) {
                   boolean managementPreviouslyClosed = this.management.isClosed();
@@ -533,6 +554,13 @@ final class AmqpConnection extends ResourceBase implements Connection {
                       LOGGER.info("Error while (re)closing management after recovery");
                     }
                   }
+                }
+                if (this.closed.get()) {
+                  LOGGER.debug(
+                      "Connection '{}' is closed, skipping final state transition to OPEN",
+                      this.name());
+                  this.recoveringConnection.set(false);
+                  return;
                 }
                 LOGGER.info(
                     "Recovered connection '{}' to {}", this.name(), this.currentConnectionLabel());
