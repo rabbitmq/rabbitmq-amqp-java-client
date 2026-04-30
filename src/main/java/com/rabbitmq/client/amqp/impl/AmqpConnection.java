@@ -636,6 +636,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
                               connectionName,
                               disconnectedHandlerReference.get(),
                               addrs);
+                      this.nativeConnection = wrapper.connection();
                       return wrapper;
                     },
                     this.management,
