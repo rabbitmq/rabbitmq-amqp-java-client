@@ -392,14 +392,19 @@ class AmqpManagement implements Management {
   }
 
   void releaseResources(AmqpException e, State state) {
-    if (state == null) {
-      this.markUnavailable();
-    } else {
-      this.state(state);
-    }
-    if (this.receiveLoop != null) {
-      this.receiveLoop.cancel(true);
-      this.receiveLoop = null;
+    initializationLock.lock();
+    try {
+      if (state == null) {
+        this.markUnavailable();
+      } else {
+        this.state(state);
+      }
+      if (this.receiveLoop != null) {
+        this.receiveLoop.cancel(true);
+        this.receiveLoop = null;
+      }
+    } finally {
+      initializationLock.unlock();
     }
     this.failRequests(e);
   }
@@ -527,7 +532,7 @@ class AmqpManagement implements Management {
                 IntStream.of(expectedResponseCodes)
                     .mapToObj(String::valueOf)
                     .collect(Collectors.joining(", ")),
-                explanation != null ? " (message: '" + explanation : "')");
+                explanation != null ? " (message: '" + explanation + "')" : "");
         try {
           LOGGER.info(
               "Management request failed: '{}'. Response body: '{}'",
