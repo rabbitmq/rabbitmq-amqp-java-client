@@ -527,7 +527,7 @@ class AmqpManagement implements Management {
                 IntStream.of(expectedResponseCodes)
                     .mapToObj(String::valueOf)
                     .collect(Collectors.joining(", ")),
-                explanation != null ? " (message: '" + explanation : "')");
+                explanation != null ? " (message: '" + explanation + "')" : "");
         try {
           LOGGER.info(
               "Management request failed: '{}'. Response body: '{}'",

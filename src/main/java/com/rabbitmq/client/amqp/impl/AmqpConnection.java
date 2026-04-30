@@ -491,18 +491,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
         "Connection '{}' to '{}' has been disconnected, initializing recovery.",
         this.name(),
         this.currentConnectionLabel());
-    LOGGER.debug("Notifying listeners of connection '{}'.", this.name());
-    this.state(RECOVERING, failureCause);
-    this.changeStateOfPublishers(RECOVERING, failureCause);
-    this.changeStateOfConsumers(RECOVERING, failureCause);
-    this.nativeConnection = null;
-    this.nativeSession = null;
-    this.connectionAddress = null;
-    LOGGER.debug("Releasing management resource of connection '{}'.", this.name());
-    this.releaseManagementResources(failureCause);
     CompletableFuture<NativeConnectionWrapper> ncwFuture;
     if (this.recoveringConnection.compareAndSet(false, true)) {
-      this.recoveringConnection.set(true);
+      LOGGER.debug("Notifying listeners of connection '{}'.", this.name());
+      this.state(RECOVERING, failureCause);
+      this.changeStateOfPublishers(RECOVERING, failureCause);
+      this.changeStateOfConsumers(RECOVERING, failureCause);
+      this.nativeConnection = null;
+      this.nativeSession = null;
+      this.connectionAddress = null;
+      LOGGER.debug("Releasing management resource of connection '{}'.", this.name());
+      this.releaseManagementResources(failureCause);
       LOGGER.debug("Scheduling connection attempt for '{}'.", this.name());
       ncwFuture =
           recoverNativeConnection(
@@ -537,8 +536,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
                 }
                 LOGGER.info(
                     "Recovered connection '{}' to {}", this.name(), this.currentConnectionLabel());
-                this.state(OPEN);
                 this.recoveringConnection.set(false);
+                this.state(OPEN);
               } catch (Exception ex) {
                 // likely InterruptedException or IO exception
                 LOGGER.warn(
@@ -546,11 +545,17 @@ final class AmqpConnection extends ResourceBase implements Connection {
                     this.name(),
                     ex.getMessage());
                 AmqpException amqpException = ExceptionUtils.convert(ex);
-                if (RECOVERY_PREDICATE.test(amqpException)) {
+                if (ex instanceof InterruptedException) {
+                  LOGGER.debug("Topology recovery interrupted for connection '{}'", this.name());
+                  this.recoveringConnection.set(false);
+                  Thread.currentThread().interrupt();
+                  this.close(amqpException);
+                } else if (RECOVERY_PREDICATE.test(amqpException)) {
                   LOGGER.debug(
                       "Error during topology recovery, queueing recovery task for '{}', error is {}",
                       this.name(),
                       ex.getMessage());
+                  this.recoveringConnection.set(false);
                   this.environment
                       .executorService()
                       .submit(
@@ -563,6 +568,12 @@ final class AmqpConnection extends ResourceBase implements Connection {
                                   disconnectedHandlerReference);
                             }
                           });
+                } else {
+                  LOGGER.debug(
+                      "Non-recoverable error during topology recovery for connection '{}', closing",
+                      this.name());
+                  this.recoveringConnection.set(false);
+                  this.close(amqpException);
                 }
               }
             })
