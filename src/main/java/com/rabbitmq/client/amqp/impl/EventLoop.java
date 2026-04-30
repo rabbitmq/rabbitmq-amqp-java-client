@@ -61,22 +61,23 @@ final class EventLoop implements AutoCloseable {
                 try {
                   ClientTaskContext<?> context = this.taskQueue.poll(1000, TimeUnit.MILLISECONDS);
                   if (context != null) {
-                    if (context.registration) {
-                      context.task.apply(null);
-                      activeClients.put(context.client.id, context.client.stateReference.get());
+                    try {
+                      if (context.registration) {
+                        context.task.apply(null);
+                        activeClients.put(context.client.id, context.client.stateReference.get());
+                        continue;
+                      }
+                      Object clientState = activeClients.get(context.client.id);
+                      if (clientState == null) {
+                        continue;
+                      }
+                      TaskResult result = context.task.apply(clientState);
+                      if (result == TaskResult.STOP) {
+                        activeClients.remove(context.client.id);
+                      }
+                    } finally {
                       context.complete();
-                      continue;
                     }
-                    Object clientState = activeClients.get(context.client.id);
-                    if (clientState == null) {
-                      context.complete();
-                      continue;
-                    }
-                    TaskResult result = context.task.apply(clientState);
-                    if (result == TaskResult.STOP) {
-                      activeClients.remove(context.client.id);
-                    }
-                    context.complete();
                   }
                 } catch (InterruptedException e) {
                   LOGGER.debug("Event loop has been interrupted.");
@@ -141,10 +142,12 @@ final class EventLoop implements AutoCloseable {
       throw new IllegalStateException("Event loop is closed");
     }
     if (Thread.currentThread().equals(this.loopThread.get())) {
-      try {
-        task.apply(client.stateReference.get());
-      } catch (Exception e) {
-        LOGGER.warn("Error during task", e);
+      if (!client.closed.get()) {
+        try {
+          task.apply(client.stateReference.get());
+        } catch (Exception e) {
+          LOGGER.warn("Error during task", e);
+        }
       }
     } else {
       CountDownLatch latch = new CountDownLatch(1);
@@ -235,29 +238,23 @@ final class EventLoop implements AutoCloseable {
     // for testing
     <R> R query(Function<S, R> queryFunction) {
       AtomicReference<R> result = new AtomicReference<>();
-      CountDownLatch latch = new CountDownLatch(1);
-
-      // Submit a task that extracts data from the state
       this.loop.submit(
           this,
           s -> {
             result.set(queryFunction.apply(s));
-            latch.countDown();
             return TaskResult.CONTINUE;
           });
-
-      try {
-        latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
       return result.get();
     }
 
     @Override
     public void close() {
       if (this.closed.compareAndSet(false, true)) {
-        this.loop.submit(this, s -> TaskResult.STOP);
+        try {
+          this.loop.submit(this, s -> TaskResult.STOP);
+        } catch (IllegalStateException e) {
+          // event loop already closed
+        }
       }
     }
   }

@@ -18,30 +18,25 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class EventLoopTest {
 
-  static ExecutorService executorService;
+  ExecutorService executorService;
   EventLoop loop;
   EventLoop.Client<State> client;
 
-  @BeforeAll
-  static void beforeAll() {
-    executorService = Executors.newSingleThreadExecutor();
-  }
-
   @BeforeEach
   void beforeEach() {
+    executorService = Executors.newSingleThreadExecutor();
     loop = new EventLoop(executorService);
     client = loop.register(State::new);
   }
@@ -49,10 +44,6 @@ public class EventLoopTest {
   @AfterEach
   void afterEach() {
     loop.close();
-  }
-
-  @AfterAll
-  static void afterAll() {
     executorService.shutdownNow();
   }
 
@@ -80,6 +71,23 @@ public class EventLoopTest {
     assertThatThrownBy(() -> client.submit(s -> {})).isInstanceOf(IllegalStateException.class);
     loop.close();
     assertThatThrownBy(() -> loop.register(State::new)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void taskThrowingExceptionUnblocksCallerAndLoopContinues() {
+    AtomicInteger buffer = new AtomicInteger();
+    client.submit(
+        s -> {
+          throw new RuntimeException("task failure (expected test failure)");
+        });
+    client.submit(s -> buffer.set(42));
+    assertThat(buffer).hasValue(42);
+  }
+
+  @Test
+  void closingClientAfterLoopCloseDoesNotThrow() {
+    loop.close();
+    assertThatCode(() -> client.close()).doesNotThrowAnyException();
   }
 
   static class State {
