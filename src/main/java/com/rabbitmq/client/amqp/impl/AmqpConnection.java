@@ -986,6 +986,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
       for (AmqpConsumer consumer : this.consumers) {
         safeClose.accept("consumer", () -> consumer.close(cause));
       }
+      // Best-effort lock acquisition to coordinate with nativeSession() initialization.
+      // If we can't acquire the lock within 1 second, we proceed with closing anyway
+      // to avoid hanging the close operation. This may race with session initialization
+      // but ensures close() always completes in a bounded time.
       boolean locked = false;
       try {
         locked = this.instanceLock.tryLock(1, TimeUnit.SECONDS);
@@ -1008,7 +1012,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       try {
         if (this.privateDispatchingExecutor) {
           Executor es = this.dispatchingExecutor;
-          if (es != null) {
+          if (es instanceof ExecutorService) {
             try {
               ((ExecutorService) es).shutdownNow();
             } catch (Exception e) {
