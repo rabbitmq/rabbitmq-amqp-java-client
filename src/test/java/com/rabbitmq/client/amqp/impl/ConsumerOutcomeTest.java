@@ -82,6 +82,9 @@ public class ConsumerOutcomeTest {
     this.dlq = TestUtils.name(info);
 
     if (TestUtils.atLeastVersion("4.3.0", this.brokerVersion)) {
+      // incremented every time a message is requeued
+      // (delivery-count is incremented only when a message is requeued due to a failed delivery
+      // attempt)
       countAnnotation = "x-acquired-count";
     } else {
       countAnnotation = "x-delivery-count";
