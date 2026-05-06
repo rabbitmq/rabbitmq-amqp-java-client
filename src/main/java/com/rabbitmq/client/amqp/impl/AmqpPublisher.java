@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.impl.AmqpUtils.mapToPublishDisposition;
 import static com.rabbitmq.client.amqp.impl.Utils.maybeClose;
 
 import com.rabbitmq.client.amqp.Message;
@@ -132,7 +133,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
             (t, ex) -> {
               Status status;
               if (ex == null) {
-                status = mapDeliveryState(t.remoteState());
+                DeliveryState remoteDelState = t.remoteState();
+                status = AmqpUtils.mapDeliveryState(remoteDelState);
+                ex = AmqpUtils.maybeMapToRejectedException(remoteDelState);
               } else {
                 status = Status.REJECTED;
               }
@@ -145,34 +148,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.metricsCollector.publish();
   }
 
-  private Status mapDeliveryState(DeliveryState in) {
-    if (in.isAccepted()) {
-      return Status.ACCEPTED;
-    } else if (in.getType() == DeliveryState.Type.REJECTED) {
-      return Status.REJECTED;
-    } else if (in.getType() == DeliveryState.Type.RELEASED) {
-      return Status.RELEASED;
-    } else {
-      LOGGER.warn("Delivery state not supported: " + in.getType());
-      throw new IllegalStateException("This delivery state is not supported: " + in.getType());
-    }
-  }
-
   private Tracker doSend(AmqpMessage msg) throws ClientException {
     msg.enforceDurability();
     return this.sender.send(msg.nativeMessage());
-  }
-
-  private static MetricsCollector.PublishDisposition mapToPublishDisposition(Status status) {
-    if (status == Status.ACCEPTED) {
-      return MetricsCollector.PublishDisposition.ACCEPTED;
-    } else if (status == Status.REJECTED) {
-      return MetricsCollector.PublishDisposition.REJECTED;
-    } else if (status == Status.RELEASED) {
-      return MetricsCollector.PublishDisposition.RELEASED;
-    } else {
-      return null;
-    }
   }
 
   void recoverAfterConnectionFailure() {

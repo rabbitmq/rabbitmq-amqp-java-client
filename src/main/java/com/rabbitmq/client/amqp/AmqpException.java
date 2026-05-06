@@ -91,4 +91,16 @@ public class AmqpException extends RuntimeException {
       super(message, cause);
     }
   }
+
+  /**
+   * Exception thrown when a message is rejected by the broker.
+   *
+   * @since 1.1.0
+   */
+  public static class AmqpMessageRejectedException extends AmqpException {
+
+    public AmqpMessageRejectedException(String message) {
+      super(message);
+    }
+  }
 }
