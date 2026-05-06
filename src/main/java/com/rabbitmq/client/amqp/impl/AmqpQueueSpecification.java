@@ -217,6 +217,12 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     return this.arguments;
   }
 
+  private static void validateNotNull(String key, Object value) {
+    if (value == null) {
+      throw new IllegalArgumentException(format("'%s' cannot be null", key));
+    }
+  }
+
   private static void validatePositive(String label, long value) {
     validatePositive(label, value, 0);
   }
@@ -285,6 +291,29 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     public Management.QuorumQueueSpecification initialMemberCount(int initialMemberCount) {
       validatePositive("x-quorum-initial-group-size", initialMemberCount);
       this.parent.arg("x-quorum-initial-group-size", initialMemberCount);
+      return this;
+    }
+
+    @Override
+    public Management.QuorumQueueSpecification delayedRetryType(Management.DelayedRetryType type) {
+      validateNotNull("x-delayed-retry-type", type);
+      this.parent.arg("x-delayed-retry-type", type.type());
+      return this;
+    }
+
+    @Override
+    public Management.QuorumQueueSpecification delayedRetryMin(Duration min) {
+      validateNotNull("x-delayed-retry-min", min);
+      validatePositive("x-delayed-retry-min", min.toMillis());
+      this.parent.arg("x-delayed-retry-min", min.toMillis());
+      return this;
+    }
+
+    @Override
+    public Management.QuorumQueueSpecification delayedRetryMax(Duration max) {
+      validateNotNull("x-delayed-retry-max", max);
+      validatePositive("x-delayed-retry-max", max.toMillis());
+      this.parent.arg("x-delayed-retry-max", max.toMillis());
       return this;
     }
 

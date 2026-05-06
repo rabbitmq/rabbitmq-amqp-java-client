@@ -345,11 +345,96 @@ public interface Management extends AutoCloseable {
     QuorumQueueSpecification initialMemberCount(int initialMemberCount);
 
     /**
+     * Set the delayed retry type.
+     *
+     * <p>Defines the conditions for delaying a message when it is returned to the queue.
+     *
+     * <p>The delay is calculated with linear back-off based on the message's delivery count: {@code
+     * min(min_delay * delivery_count, max_delay)}. A per-message explicit delivery time can also be
+     * set by adding the {@code x-opt-delivery-time} annotation (a Unix timestamp in milliseconds)
+     * when requeuing a message with annotations (with {@link
+     * com.rabbitmq.client.amqp.Consumer.Context#discard(java.util.Map)}.
+     *
+     * <p>You must use {@link #delayedRetryMin(java.time.Duration)} to set up the minimum retry
+     * delay.
+     *
+     * <p>Delayed retry support for quorum queues is available as of RabbitMQ 4.3.
+     *
+     * @param type delayed retry type
+     * @return quorum queue specification
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry</a>
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling">Delivery
+     *     Count</a>
+     * @see #delayedRetryMin(java.time.Duration)
+     */
+    QuorumQueueSpecification delayedRetryType(DelayedRetryType type);
+
+    /**
+     * Set the minimum delay for delayed retry.
+     *
+     * @param min minimum delay
+     * @return quorum queue specification
+     * @see #delayedRetryType(DelayedRetryType)
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry</a>
+     */
+    QuorumQueueSpecification delayedRetryMin(Duration min);
+
+    /**
+     * Set the maximum delay for delayed retry.
+     *
+     * @param max maximum delay
+     * @return quorum queue specification
+     * @see #delayedRetryType(DelayedRetryType)
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry</a>
+     */
+    QuorumQueueSpecification delayedRetryMax(Duration max);
+
+    /**
      * Go back to the queue specification.
      *
      * @return queue specification
      */
     QueueSpecification queue();
+  }
+
+  /**
+   * Conditions for delaying a message.
+   *
+   * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry</a>
+   * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling">Delivery
+   *     Count</a>
+   */
+  enum DelayedRetryType {
+    /** Delayed retry is not applied (default). */
+    DISABLED("disabled"),
+    /**
+     * All returned messages are delayed, regardless of whether the delivery count was incremented.
+     */
+    ALL("all"),
+    /**
+     * Only messages with incremented {@code delivery-count} are delayed.
+     *
+     * <p>This happens for example when discarding a message with {@link Consumer.Context#discard()}
+     * or {@link Consumer.Context#discard(java.util.Map)}.
+     */
+    FAILED("failed"),
+    /**
+     * Only messages without incremented {@code delivery-count} are delayed.
+     *
+     * <p>This happens for example when requeuing a message with {@link Consumer.Context#requeue()}
+     * or {@link Consumer.Context#requeue(java.util.Map)}.
+     */
+    RETURNED("returned");
+
+    private final String type;
+
+    DelayedRetryType(String type) {
+      this.type = type;
+    }
+
+    public String type() {
+      return this.type;
+    }
   }
 
   /**
