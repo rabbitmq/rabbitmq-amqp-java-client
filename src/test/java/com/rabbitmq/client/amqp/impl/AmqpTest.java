@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
+import static com.rabbitmq.client.amqp.Management.OverflowStrategy.REJECT_PUBLISH;
 import static com.rabbitmq.client.amqp.Management.QueueType.CLASSIC;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
@@ -41,6 +42,7 @@ import static org.assertj.core.api.Fail.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpEntityDoesNotExistException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpMessageRejectedException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceInvalidStateException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
@@ -82,6 +84,7 @@ public class AmqpTest {
   Connection connection;
   Environment environment;
   String name;
+  String brokerVersion;
 
   private static String uuid() {
     return UUID.randomUUID().toString();
@@ -791,15 +794,13 @@ public class AmqpTest {
     String q = TestUtils.name(info);
     int maxLength = 10;
     try {
-      management
-          .queue(q)
-          .maxLength(maxLength)
-          .overflowStrategy(Management.OverflowStrategy.REJECT_PUBLISH)
-          .declare();
+      management.queue(q).maxLength(maxLength).overflowStrategy(REJECT_PUBLISH).declare();
       CountDownLatch rejectedLatch = new CountDownLatch(1);
+      AtomicReference<Throwable> exception = new AtomicReference<>();
       Publisher.Callback callback =
           context -> {
             if (context.status() == Publisher.Status.REJECTED) {
+              exception.set(context.failureCause());
               rejectedLatch.countDown();
             }
           };
@@ -807,6 +808,14 @@ public class AmqpTest {
       IntStream.range(0, maxLength + 1)
           .forEach(ignored -> publisher.publish(publisher.message(), callback));
       assertThat(rejectedLatch).completes();
+      if (TestUtils.atLeastVersion("4.3.0", this.brokerVersion)) {
+        assertThat(exception.get())
+            .isNotNull()
+            .isInstanceOf(AmqpMessageRejectedException.class)
+            .hasMessageContaining(q)
+            .hasMessageContaining("exceeded")
+            .hasMessageContaining("length");
+      }
     } finally {
       management.queueDelete(q);
     }
