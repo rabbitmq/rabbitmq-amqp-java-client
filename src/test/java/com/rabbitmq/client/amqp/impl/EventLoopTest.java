@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,21 +30,21 @@ import org.junit.jupiter.api.Test;
 
 public class EventLoopTest {
 
-  ExecutorService executorService;
+  EventLoopGroup eventLoopGroup;
   EventLoop loop;
   EventLoop.Client<State> client;
 
   @BeforeEach
   void beforeEach() {
-    executorService = Executors.newSingleThreadExecutor();
-    loop = new EventLoop(executorService);
+    eventLoopGroup = new NioEventLoopGroup(1);
+    loop = new EventLoop(eventLoopGroup);
     client = loop.register(State::new);
   }
 
   @AfterEach
   void afterEach() {
     loop.close();
-    executorService.shutdownNow();
+    eventLoopGroup.shutdownGracefully();
   }
 
   @Test
