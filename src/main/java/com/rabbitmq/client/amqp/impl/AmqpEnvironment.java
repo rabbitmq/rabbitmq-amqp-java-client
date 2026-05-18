@@ -22,13 +22,13 @@ import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -63,7 +63,7 @@ class AmqpEnvironment implements Environment {
   private final ObservationCollector observationCollector;
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
-  private final ExecutorService recoveryEventLoopExecutorService;
+  private final EventLoopGroup recoveryEventLoopGroup;
   private final CredentialsManagerFactory credentialsManagerFactory =
       new CredentialsManagerFactory(this);
   private final IntConsumer readBytesConsumer, writtenBytesConsumer;
@@ -112,15 +112,9 @@ class AmqpEnvironment implements Environment {
     this.writtenBytesConsumer = this.metricsCollector::writtenBytes;
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
-    this.recoveryEventLoopExecutorService =
-        new ThreadPoolExecutor(
-            1,
-            1,
-            60,
-            TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            Utils.threadFactory(threadPrefix + "event-loop-"));
-    this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopExecutorService);
+    this.recoveryEventLoopGroup =
+        new NioEventLoopGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
+    this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopGroup);
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -151,7 +145,7 @@ class AmqpEnvironment implements Environment {
       this.connectionManager.close();
       this.client.close();
       this.recoveryEventLoop.close();
-      this.recoveryEventLoopExecutorService.shutdownNow();
+      this.recoveryEventLoopGroup.shutdownGracefully();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
       }
