@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Date;
 import java.util.UUID;
@@ -467,6 +468,8 @@ final class AmqpMessage implements Message {
         return (byte[]) value;
       } else if (value instanceof Binary) {
         return ((Binary) value).asByteArray();
+      } else if (value instanceof String) {
+        return ((String) value).getBytes(StandardCharsets.UTF_8);
       } else {
         throw new AmqpException("Unsupported body type: " + value.getClass().getName());
       }
