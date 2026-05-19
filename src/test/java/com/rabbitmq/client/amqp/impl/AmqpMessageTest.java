@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
 import org.apache.qpid.protonj2.client.impl.ClientMessageSupport;
@@ -67,6 +68,19 @@ public class AmqpMessageTest {
           ClientMessageSupport.decodeMessage(buffer, null);
       AmqpMessage message = new AmqpMessage(decoded);
       assertThat(message.body()).isEqualTo(payload);
+    }
+  }
+
+  @Test
+  void bodyShouldHandleAmqpValueWithString() throws Exception {
+    String payload = "hello world";
+    Encoder encoder = CodecFactory.getDefaultEncoder();
+    try (ProtonBuffer buffer = ProtonBufferAllocator.defaultAllocator().allocate(256)) {
+      encoder.writeObject(buffer, encoder.newEncoderState(), new AmqpValue<>(payload));
+      org.apache.qpid.protonj2.client.Message<?> decoded =
+          ClientMessageSupport.decodeMessage(buffer, null);
+      AmqpMessage message = new AmqpMessage(decoded);
+      assertThat(message.body()).isEqualTo(payload.getBytes(StandardCharsets.UTF_8));
     }
   }
 
