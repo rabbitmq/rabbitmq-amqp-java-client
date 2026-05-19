@@ -24,7 +24,10 @@ import com.rabbitmq.client.amqp.Message;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -38,6 +41,7 @@ import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.UnsignedShort;
 import org.apache.qpid.protonj2.types.messaging.Data;
+import org.apache.qpid.protonj2.types.messaging.Section;
 
 final class AmqpMessage implements Message {
 
@@ -458,21 +462,55 @@ final class AmqpMessage implements Message {
     return this;
   }
 
+  private static final Message.Converter<Object, byte[]> DEFAULT_CONVERTER =
+      value -> {
+        if (value == null) {
+          return null;
+        } else if (value instanceof byte[]) {
+          return (byte[]) value;
+        } else if (value instanceof Binary) {
+          return ((Binary) value).asByteArray();
+        } else if (value instanceof String) {
+          return ((String) value).getBytes(StandardCharsets.UTF_8);
+        } else {
+          throw new AmqpException("Unsupported body type: " + value.getClass().getName());
+        }
+      };
+
   @Override
   public byte[] body() {
     try {
       Object value = this.delegate.body();
-      if (value == null) {
-        return null;
-      } else if (value instanceof byte[]) {
-        return (byte[]) value;
-      } else if (value instanceof Binary) {
-        return ((Binary) value).asByteArray();
-      } else if (value instanceof String) {
-        return ((String) value).getBytes(StandardCharsets.UTF_8);
-      } else {
-        throw new AmqpException("Unsupported body type: " + value.getClass().getName());
+      return DEFAULT_CONVERTER.convert(value);
+    } catch (ClientException e) {
+      throw convert(e);
+    }
+  }
+
+  @Override
+  public <I, O> O body(Converter<I, O> converter) {
+    try {
+      @SuppressWarnings("unchecked")
+      I value = (I) this.delegate.body();
+      return converter.convert(value);
+    } catch (ClientException e) {
+      throw convert(e);
+    }
+  }
+
+  @Override
+  public <I, O> O body(SectionsConverter<I, O> converter) {
+    try {
+      Collection<Section<?>> sections = this.delegate.toAdvancedMessage().bodySections();
+      List<I> sectionValues = new ArrayList<>(sections.size());
+
+      for (Section<?> section : sections) {
+        @SuppressWarnings("unchecked")
+        I value = (I) section.getValue();
+        sectionValues.add(value);
       }
+
+      return converter.convert(sectionValues);
     } catch (ClientException e) {
       throw convert(e);
     }
