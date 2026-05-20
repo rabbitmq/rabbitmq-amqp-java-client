@@ -19,6 +19,7 @@ package com.rabbitmq.client.amqp;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 
@@ -585,11 +586,101 @@ public interface Message {
   Message body(byte[] body);
 
   /**
-   * Get the message body.
+   * Get the message body as bytes.
    *
-   * @return the message body
+   * <p>This is a convenience API for byte-oriented payload access. It is intended for message
+   * bodies that can be represented as a byte array, such as Data sections and compatible AmqpValue
+   * payloads (for example String values converted to UTF-8 bytes).
+   *
+   * <p>For AMQP body types that are not naturally byte-oriented, such as AmqpSequence or typed
+   * AmqpValue payloads, use {@link #body(Converter)} or {@link #body(SectionsConverter)}.
+   *
+   * @return the message body as bytes
+   * @throws AmqpException if the body cannot be represented as bytes
    */
   byte[] body();
+
+  /**
+   * Get the message body converted using the specified converter.
+   *
+   * <p>This method provides access to the message body content in its native AMQP 1.0 format,
+   * allowing applications to handle non-binary payloads and complex message body structures.
+   * According to the <a
+   * href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#section-message-format">AMQP
+   * 1.0 message format specification</a>, a message body can contain various section types
+   * including AmqpValue, AmqpSequence, and Data sections.
+   *
+   * <p>This method extracts the value from the <strong>first body section only</strong> and passes
+   * it to the converter. For messages with multiple body sections, use {@link
+   * #body(SectionsConverter)} instead.
+   *
+   * <p>The converter input type must match the runtime type of the value exposed by the underlying
+   * AMQP implementation for the first body section. For example, applications may receive {@code
+   * byte[]}, {@code String}, {@code List<?>}, or implementation-specific AMQP types such as {@code
+   * Binary}.
+   *
+   * <p>If the converter expects a type that does not match the runtime body value type, a {@link
+   * ClassCastException} may be thrown by the converter invocation.
+   *
+   * <p><strong>Implementation Note:</strong> This method exposes values coming from the underlying
+   * AMQP implementation (currently Qpid Proton-J2). Applications using this API should treat these
+   * values as implementation-coupled runtime types rather than stable library-defined model types.
+   * Changes in the underlying implementation may affect the concrete runtime types observed by
+   * applications using this API.
+   *
+   * @param <I> the input type expected by the converter (the type of the body section value)
+   * @param <O> the output type returned by the converter
+   * @param converter the converter to transform the body section value
+   * @return the converted body value
+   * @throws AmqpException if an error occurs while accessing the message body
+   * @see #body(SectionsConverter) for multi-section message bodies
+   * @see #body() for simple binary body access
+   */
+  <I, O> O body(Converter<I, O> converter);
+
+  /**
+   * Get the message body with access to all body sections using the specified sections converter.
+   *
+   * <p>This method provides complete access to multi-section message bodies as defined in the <a
+   * href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#section-message-format">AMQP
+   * 1.0 message format specification</a>. AMQP 1.0 messages can contain multiple body sections of
+   * the same type:
+   *
+   * <ul>
+   *   <li><strong>Multiple Data sections</strong> - Each containing binary data, typically
+   *       concatenated logically
+   *   <li><strong>Multiple AmqpSequence sections</strong> - Each containing a list of structured
+   *       values
+   *   <li><strong>Single AmqpValue section</strong> - Containing a single AMQP value of any type
+   * </ul>
+   *
+   * <p>The converter receives a list of all section values from the message body, allowing
+   * applications to process complex multi-section payloads that cannot be handled by the
+   * single-section {@link #body(Converter)} method.
+   *
+   * <p>The converter input type must match the runtime type of each section value exposed by the
+   * underlying AMQP implementation. All body sections in a valid AMQP message are expected to be of
+   * the same section kind, but applications should still treat the values as implementation exposed
+   * runtime objects.
+   *
+   * <p>If the converter expects a type that does not match the runtime section value type, a {@link
+   * ClassCastException} may be thrown by the converter invocation.
+   *
+   * <p><strong>Implementation Note:</strong> This method exposes values coming from the underlying
+   * AMQP implementation (currently Qpid Proton-J2). Applications using this API should treat these
+   * values as implementation-coupled runtime types rather than stable library-defined model types.
+   * Changes in the underlying implementation may affect the concrete runtime types observed by
+   * applications using this API.
+   *
+   * @param <I> the input type expected by the converter (the type of each body section value)
+   * @param <O> the output type returned by the converter
+   * @param converter the sections converter to transform all body section values
+   * @return the converted body value from all sections
+   * @throws AmqpException if an error occurs while accessing the message body sections
+   * @see #body(Converter) for single-section message bodies
+   * @see #body() for simple binary body access
+   */
+  <I, O> O body(SectionsConverter<I, O> converter);
 
   /**
    * Mark the message as durable or not.
@@ -748,5 +839,79 @@ public interface Message {
   interface MessageAddressBuilder extends AddressBuilder<MessageAddressBuilder> {
 
     Message message();
+  }
+
+  /**
+   * Functional interface for converting a single AMQP body section value.
+   *
+   * <p>This converter is used with {@link #body(Converter)} to transform the value from the first
+   * body section of an AMQP 1.0 message into a desired output type. The input type {@code I}
+   * corresponds to the native type of the body section value as exposed by
+   * the underlying AMQP implementation.
+   *
+   * <p><strong>Common Input Types:</strong>
+   *
+   * <ul>
+   *   <li>{@code byte[]} - for Data sections containing binary data
+   *   <li>{@code String} - for AmqpValue sections containing strings
+   *   <li>{@code List<?>} - for AmqpSequence sections containing lists
+   *   <li>Various AMQP types - for AmqpValue sections with typed content (Integer, UUID, Symbol,
+   *       etc.)
+   * </ul>
+   *
+   * @param <I> the input type (body section value type from the AMQP implementation)
+   * @param <O> the output type (application-specific converted type)
+   * @see #body(Converter)
+   */
+  @FunctionalInterface
+  interface Converter<I, O> {
+
+    /**
+     * Convert the given AMQP body section value to the desired output type.
+     *
+     * @param value the body section value from the AMQP message
+     * @return the converted value
+     */
+    O convert(I value);
+  }
+
+  /**
+   * Functional interface for converting multiple AMQP body section values.
+   *
+   * <p>This converter is used with {@link #body(SectionsConverter)} to process all body sections
+   * from an AMQP 1.0 message. According to the AMQP 1.0 specification, a message body can contain
+   * multiple sections of the same type, and this converter provides access to all of them.
+   *
+   * <p><strong>Multi-Section Scenarios:</strong>
+   *
+   * <ul>
+   *   <li><strong>Multiple Data sections</strong> - List of {@code byte[]} arrays, typically
+   *       concatenated
+   *   <li><strong>Multiple AmqpSequence sections</strong> - List of {@code List<?>} objects
+   *   <li><strong>Single AmqpValue section</strong> - List with one element of the AmqpValue type
+   * </ul>
+   *
+   * <p>The converter receives all section values as a list, allowing applications to aggregate,
+   * concatenate, or otherwise process complex multi-section message bodies that exceed the
+   * capabilities of single-section processing.
+   *
+   * @param <I> the input type (body section value type from the AMQP implementation)
+   * @param <O> the output type (application-specific converted type)
+   * @see #body(SectionsConverter)
+   */
+  @FunctionalInterface
+  interface SectionsConverter<I, O> {
+    /**
+     * Convert the given list of AMQP body section values to the desired output type.
+     *
+     * <p>The list contains all body sections from the message in their original order. For Data
+     * sections, this typically means multiple {@code byte[]} arrays. For AmqpSequence sections,
+     * this means multiple {@code List<?>} objects. For AmqpValue sections, this typically contains
+     * a single element.
+     *
+     * @param sections the list of body section values from the AMQP message
+     * @return the converted value
+     */
+    O convert(List<I> sections);
   }
 }

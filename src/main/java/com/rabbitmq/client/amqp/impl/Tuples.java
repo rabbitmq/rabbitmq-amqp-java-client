@@ -21,11 +21,15 @@ final class Tuples {
 
   private Tuples() {}
 
-  public static <A, B> Pair<A, B> pair(A v1, B v2) {
+  static <A, B> Pair<A, B> pair(A v1, B v2) {
     return new Pair<>(v1, v2);
   }
 
-  public static class Pair<A, B> {
+  static <A, B, C> Triple<A, B, C> triple(A v1, B v2, C v3) {
+    return new Triple<>(v1, v2, v3);
+  }
+
+  static class Pair<A, B> {
 
     private final A v1;
     private final B v2;
@@ -35,12 +39,37 @@ final class Tuples {
       this.v2 = v2;
     }
 
-    public A v1() {
+    A v1() {
       return this.v1;
     }
 
-    public B v2() {
+    B v2() {
       return this.v2;
+    }
+  }
+
+  static class Triple<A, B, C> {
+
+    private final A v1;
+    private final B v2;
+    private final C v3;
+
+    private Triple(A v1, B v2, C v3) {
+      this.v1 = v1;
+      this.v2 = v2;
+      this.v3 = v3;
+    }
+
+    A v1() {
+      return this.v1;
+    }
+
+    B v2() {
+      return this.v2;
+    }
+
+    C v3() {
+      return this.v3;
     }
   }
 }
