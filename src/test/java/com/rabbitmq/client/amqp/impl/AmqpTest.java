@@ -1522,4 +1522,53 @@ public class AmqpTest {
       connection.management().queueDelete(this.name);
     }
   }
+
+  @Test
+  void publisherShouldThrowOnMessageSizeExceedsMaximum() {
+    connection.management().queue(name).exclusive(true).declare();
+    try {
+      Publisher publisher = connection.publisherBuilder().queue(name).build();
+
+      // First small message should succeed
+      Sync firstConfirmSync = sync();
+      byte[] smallMessage = "small".getBytes(UTF_8);
+      publisher.publish(
+          publisher.message(smallMessage),
+          ctx -> {
+            if (ctx.status() == Publisher.Status.ACCEPTED) {
+              firstConfirmSync.down();
+            }
+          });
+      assertThat(firstConfirmSync).completes();
+
+      // Large message should trigger exception (16777216 is the default max, so use slightly
+      // bigger)
+      int maxMessageSize = 16777216;
+      byte[] largeMessage = new byte[maxMessageSize + 1000];
+      java.util.Arrays.fill(largeMessage, (byte) 'A');
+
+      assertThatThrownBy(() -> publisher.publish(publisher.message(largeMessage), ctx -> {}))
+          .isInstanceOf(AmqpException.AmqpInvalidMessageException.class)
+          .hasMessageContaining("Message size exceeds maximum allowed size");
+
+      // Second small message should succeed (publisher should still be valid)
+      Sync secondConfirmSync = sync();
+      byte[] anotherSmallMessage = "small2".getBytes(UTF_8);
+      publisher.publish(
+          publisher.message(anotherSmallMessage),
+          ctx -> {
+            if (ctx.status() == Publisher.Status.ACCEPTED) {
+              secondConfirmSync.down();
+            }
+          });
+      assertThat(secondConfirmSync).completes();
+
+      // Verify queue has exactly 2 messages using the CLI
+      assertThat(connection.management().queueInfo(name)).hasMessageCount(2);
+
+      publisher.close();
+    } finally {
+      connection.management().queueDelete(name);
+    }
+  }
 }

@@ -846,8 +846,8 @@ public interface Message {
    *
    * <p>This converter is used with {@link #body(Converter)} to transform the value from the first
    * body section of an AMQP 1.0 message into a desired output type. The input type {@code I}
-   * corresponds to the native type of the body section value as exposed by
-   * the underlying AMQP implementation.
+   * corresponds to the native type of the body section value as exposed by the underlying AMQP
+   * implementation.
    *
    * <p><strong>Common Input Types:</strong>
    *

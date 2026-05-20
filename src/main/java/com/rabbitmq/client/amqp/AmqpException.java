@@ -103,4 +103,27 @@ public class AmqpException extends RuntimeException {
       super(message);
     }
   }
+
+  /**
+   * Exception thrown when a message is invalid or violates message format constraints.
+   *
+   * <p>This exception is typically thrown when:
+   *
+   * <ul>
+   *   <li>A message exceeds the maximum allowed message size configured on the broker
+   *   <li>A message has an invalid format or structure
+   *   <li>A message violates broker-specific validation rules
+   * </ul>
+   *
+   * <p>Unlike other AMQP exceptions, this exception is often thrown on the client side before the
+   * message is sent to the broker, preventing connection or link closure that would occur if the
+   * broker rejected the message.
+   *
+   * @since 1.1.0
+   */
+  public static class AmqpInvalidMessageException extends AmqpException {
+    public AmqpInvalidMessageException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
 }

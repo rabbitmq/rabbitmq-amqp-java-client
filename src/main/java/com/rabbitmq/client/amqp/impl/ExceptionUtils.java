@@ -27,6 +27,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosed
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionSecurityException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientMessageFormatViolationException;
 import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 
@@ -110,6 +111,8 @@ abstract class ExceptionUtils {
       } else {
         result = new AmqpException(e.getMessage(), e);
       }
+    } else if (e instanceof ClientMessageFormatViolationException) {
+      result = new AmqpException.AmqpInvalidMessageException(e.getMessage(), e);
     } else {
       result = new AmqpException(message, e);
     }
