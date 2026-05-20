@@ -32,6 +32,7 @@ import org.apache.qpid.protonj2.client.SenderOptions;
 import org.apache.qpid.protonj2.client.Tracker;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientMessageFormatViolationException;
 import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
 import org.apache.qpid.protonj2.client.futures.ClientFuture;
@@ -51,6 +52,7 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
     private final Deque<ClientOutgoingEnvelope> blocked = new ArrayDeque<>();
     private final SenderOptions options;
     private final Consumer<ClientException> closeHandler;
+    private volatile long remoteMaxMessageSize = 0;
 
     ClientSender(ClientSession session, SenderOptions options, String senderId, org.apache.qpid.protonj2.engine.Sender protonSender) {
         super(session, senderId, options, protonSender);
@@ -157,6 +159,11 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
         final ClientFuture<Tracker> operation = session.getFutureFactory().createFuture();
         final ProtonBuffer buffer = message.encode(deliveryAnnotations, ProtonBufferAllocator.defaultAllocator());
 
+        if (this.remoteMaxMessageSize > 0 && buffer.getReadableBytes() > this.remoteMaxMessageSize) {
+            buffer.close();
+            throw new ClientMessageFormatViolationException("Message size exceeds maximum allowed size of " + this.remoteMaxMessageSize);
+        }
+
         executor.execute(() -> {
             if (notClosedOrFailed(operation)) {
                 try {
@@ -241,7 +248,9 @@ public final class ClientSender extends ClientSenderLinkType<Sender> implements 
 
     @Override
     protected void linkSpecificRemoteOpenHandler() {
-        // Nothing needed for sender handling
+        if (this.protonLink().getRemoteMaxMessageSize() != null) {
+            this.remoteMaxMessageSize = this.protonLink().getRemoteMaxMessageSize().longValue();
+        }
     }
 
     @Override

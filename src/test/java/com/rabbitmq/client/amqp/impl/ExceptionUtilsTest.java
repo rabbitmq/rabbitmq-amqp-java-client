@@ -33,6 +33,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosed
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
+import org.apache.qpid.protonj2.client.exceptions.ClientMessageFormatViolationException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.Test;
 
@@ -82,6 +83,10 @@ public class ExceptionUtilsTest {
                         "", errorCondition(ERROR_RESOURCE_DELETED)))))
         .isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class)
         .hasCauseInstanceOf(ClientLinkRemotelyClosedException.class);
+
+    assertThat(convert(new ClientMessageFormatViolationException("Message size exceeds limit")))
+        .isInstanceOf(AmqpException.AmqpInvalidMessageException.class)
+        .hasCauseInstanceOf(ClientMessageFormatViolationException.class);
   }
 
   @Test
