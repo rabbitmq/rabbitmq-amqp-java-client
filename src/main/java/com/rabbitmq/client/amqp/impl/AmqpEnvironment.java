@@ -23,7 +23,6 @@ import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -113,7 +112,7 @@ class AmqpEnvironment implements Environment {
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
     this.recoveryEventLoopGroup =
-        new NioEventLoopGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
+        Utils.eventLoopGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
     this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopGroup);
   }
 

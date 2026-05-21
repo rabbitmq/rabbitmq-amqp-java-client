@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +35,7 @@ public class EventLoopTest {
 
   @BeforeEach
   void beforeEach() {
-    eventLoopGroup = new NioEventLoopGroup(1);
+    eventLoopGroup = Utils.eventLoopGroup(1, null);
     loop = new EventLoop(eventLoopGroup);
     client = loop.register(State::new);
   }

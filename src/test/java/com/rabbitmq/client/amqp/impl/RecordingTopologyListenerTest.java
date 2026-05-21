@@ -21,7 +21,6 @@ import static com.rabbitmq.client.amqp.impl.RecordingTopologyListenerTest.Recove
 import static org.assertj.core.api.Assertions.fail;
 
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import org.assertj.core.api.AbstractObjectAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +33,7 @@ public class RecordingTopologyListenerTest {
 
   @BeforeEach
   void init() {
-    eventLoopGroup = new NioEventLoopGroup(1);
+    eventLoopGroup = Utils.eventLoopGroup(1, null);
     recovery = new RecordingTopologyListener("", new EventLoop(eventLoopGroup));
   }
 
