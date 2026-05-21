@@ -1576,7 +1576,7 @@ public class AmqpTest {
 
   @Test
   void asyncMessageAcceptanceWithExecutorService() {
-    int messageCount = 1_000;
+    int messageCount = 10_000;
     int executorThreads = 100;
 
     connection.management().queue(name).classic().queue().declare();
