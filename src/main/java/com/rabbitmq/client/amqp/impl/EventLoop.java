@@ -18,7 +18,8 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
-import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.EventExecutor;
+import io.netty.util.concurrent.EventExecutorGroup;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,11 +40,11 @@ final class EventLoop implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(EventLoop.class);
 
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final io.netty.channel.EventLoop nettyLoop;
+  private final EventExecutor eventExecutor;
   private final Map<Long, Object> activeClients = new HashMap<>();
 
-  EventLoop(EventLoopGroup eventLoopGroup) {
-    this.nettyLoop = eventLoopGroup.next();
+  EventLoop(EventExecutorGroup eventExecutorGroup) {
+    this.eventExecutor = eventExecutorGroup.next();
   }
 
   <S> Client<S> register(Supplier<S> stateSupplier) {
@@ -53,7 +54,7 @@ final class EventLoop implements AutoCloseable {
     Client<S> client = new Client<>(this);
     CountDownLatch latch = new CountDownLatch(1);
 
-    nettyLoop.execute(
+    eventExecutor.execute(
         () -> {
           try {
             S state = stateSupplier.get();
@@ -82,12 +83,12 @@ final class EventLoop implements AutoCloseable {
     if (this.closed.get()) {
       throw new IllegalStateException("Event loop is closed");
     }
-    if (nettyLoop.inEventLoop()) {
+    if (eventExecutor.inEventLoop()) {
       executeTask(client, task);
     } else {
       CountDownLatch latch = new CountDownLatch(1);
 
-      nettyLoop.execute(
+      eventExecutor.execute(
           () -> {
             try {
               executeTask(client, task);
@@ -128,7 +129,7 @@ final class EventLoop implements AutoCloseable {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      nettyLoop.execute(activeClients::clear);
+      eventExecutor.execute(activeClients::clear);
     }
   }
 

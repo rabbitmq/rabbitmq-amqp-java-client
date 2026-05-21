@@ -22,10 +22,6 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.nio.NioIoHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -51,7 +47,6 @@ final class Utils {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
-  static final boolean IS_NETTY_4_2;
   static final boolean VIRTUAL_THREADS_ON =
       Boolean.parseBoolean(System.getProperty("rabbitmq.stream.threads.virtual.enabled", "false"));
 
@@ -109,13 +104,6 @@ final class Utils {
       THREAD_FACTORY = Executors.defaultThreadFactory();
       EXECUTOR_SERVICE_FACTORY = prefix -> Executors.newCachedThreadPool(threadFactory(prefix));
     }
-    boolean netty4_2 = true;
-    try {
-      Class.forName("io.netty.channel.MultiThreadIoEventLoopGroup");
-    } catch (ClassNotFoundException e) {
-      netty4_2 = false;
-    }
-    IS_NETTY_4_2 = netty4_2;
   }
 
   private Utils() {}
@@ -126,15 +114,6 @@ final class Utils {
 
   static ExecutorService executorService(String prefixFormat, Object... args) {
     return EXECUTOR_SERVICE_FACTORY.apply(String.format(prefixFormat, args));
-  }
-
-  @SuppressWarnings("deprecation")
-  static EventLoopGroup eventLoopGroup(int nThreads, ThreadFactory threadFactory) {
-    if (IS_NETTY_4_2) {
-      return new MultiThreadIoEventLoopGroup(nThreads, threadFactory, NioIoHandler.newFactory());
-    } else {
-      return new NioEventLoopGroup(nThreads, threadFactory);
-    }
   }
 
   private static boolean isJava21OrMore() {

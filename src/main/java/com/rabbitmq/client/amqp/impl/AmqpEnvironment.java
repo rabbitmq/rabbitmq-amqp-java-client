@@ -22,7 +22,8 @@ import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
-import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.EventExecutorGroup;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -62,7 +63,7 @@ class AmqpEnvironment implements Environment {
   private final ObservationCollector observationCollector;
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
-  private final EventLoopGroup recoveryEventLoopGroup;
+  private final EventExecutorGroup recoveryEventExecutorGroup;
   private final CredentialsManagerFactory credentialsManagerFactory =
       new CredentialsManagerFactory(this);
   private final IntConsumer readBytesConsumer, writtenBytesConsumer;
@@ -111,9 +112,9 @@ class AmqpEnvironment implements Environment {
     this.writtenBytesConsumer = this.metricsCollector::writtenBytes;
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
-    this.recoveryEventLoopGroup =
-        Utils.eventLoopGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
-    this.recoveryEventLoop = new EventLoop(this.recoveryEventLoopGroup);
+    this.recoveryEventExecutorGroup =
+        new DefaultEventExecutorGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
+    this.recoveryEventLoop = new EventLoop(this.recoveryEventExecutorGroup);
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -144,7 +145,7 @@ class AmqpEnvironment implements Environment {
       this.connectionManager.close();
       this.client.close();
       this.recoveryEventLoop.close();
-      this.recoveryEventLoopGroup.shutdownGracefully();
+      this.recoveryEventExecutorGroup.shutdownGracefully();
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
       }

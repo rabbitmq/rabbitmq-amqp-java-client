@@ -20,7 +20,8 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.RecordingTopologyListenerTest.RecoveryAssert.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
-import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.EventExecutorGroup;
 import org.assertj.core.api.AbstractObjectAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,18 +30,18 @@ import org.junit.jupiter.api.Test;
 public class RecordingTopologyListenerTest {
 
   RecordingTopologyListener recovery;
-  EventLoopGroup eventLoopGroup;
+  EventExecutorGroup eventExecutorGroup;
 
   @BeforeEach
   void init() {
-    eventLoopGroup = Utils.eventLoopGroup(1, null);
-    recovery = new RecordingTopologyListener("", new EventLoop(eventLoopGroup));
+    eventExecutorGroup = new DefaultEventExecutorGroup(1);
+    recovery = new RecordingTopologyListener("", new EventLoop(eventExecutorGroup));
   }
 
   @AfterEach
   void tearDown() {
     recovery.close();
-    eventLoopGroup.shutdownGracefully();
+    eventExecutorGroup.shutdownGracefully();
   }
 
   @Test
