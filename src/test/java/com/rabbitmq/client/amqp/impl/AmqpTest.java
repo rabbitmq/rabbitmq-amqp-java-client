@@ -64,10 +64,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import net.jqwik.api.Arbitraries;
 import org.junit.jupiter.api.BeforeEach;
@@ -1568,6 +1570,70 @@ public class AmqpTest {
 
       publisher.close();
     } finally {
+      connection.management().queueDelete(name);
+    }
+  }
+
+  @Test
+  void asyncMessageAcceptanceWithExecutorService() {
+    int messageCount = 1_000;
+    int executorThreads = 100;
+
+    connection.management().queue(name).classic().queue().declare();
+    Publisher publisher = connection.publisherBuilder().queue(name).build();
+    Consumer consumer = null;
+
+    AtomicReference<ExecutorService> executorService = new AtomicReference<>();
+
+    try {
+      Sync publishSync = sync(messageCount);
+      range(0, messageCount)
+          .forEach(
+              ignored ->
+                  publisher.publish(
+                      publisher.message("hello".getBytes(UTF_8)), acceptedCallback(publishSync)));
+
+      assertThat(publishSync).completes();
+      publisher.close();
+
+      executorService.set(Executors.newFixedThreadPool(executorThreads));
+      Sync consumeSync = sync(messageCount);
+      long[] simulatedLatencies = new long[executorThreads];
+      Random random = new Random();
+      for (int i = 0; i < executorThreads; i++) {
+        simulatedLatencies[i] = random.nextInt(4) + 1;
+      }
+      AtomicInteger count = new AtomicInteger();
+      Supplier<Long> latency = () -> simulatedLatencies[count.getAndIncrement() % executorThreads];
+
+      consumer =
+          connection
+              .consumerBuilder()
+              .queue(name)
+              .messageHandler(
+                  (context, message) -> {
+                    executorService
+                        .get()
+                        .submit(
+                            () -> {
+                              TestUtils.simulateActivity(latency.get());
+                              context.accept();
+                              consumeSync.down();
+                            });
+                  })
+              .build();
+
+      assertThat(consumeSync).completes();
+
+      Management.QueueInfo queueInfo = connection.management().queueInfo(name);
+      assertThat(queueInfo).hasName(name).hasMessageCount(0);
+    } finally {
+      if (consumer != null) {
+        consumer.close();
+      }
+      if (executorService.get() != null) {
+        executorService.get().shutdownNow();
+      }
       connection.management().queueDelete(name);
     }
   }
