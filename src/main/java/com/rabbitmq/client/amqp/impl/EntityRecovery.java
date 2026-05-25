@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.Management;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,19 +103,33 @@ class EntityRecovery {
     }
   }
 
-  private void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
+  void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
     if (queue.exclusive() || queue.autoDelete()) {
       LOGGER.debug("Recovering queue {}", queue.name());
       try {
-        Management.QueueSpecification spec =
-            this.connection
-                .managementNoCheck()
-                .queue()
-                .name(queue.name())
-                .exclusive(queue.exclusive())
-                .autoDelete(queue.autoDelete());
-        queue.arguments().forEach(spec::argument);
-        spec.declare();
+        Callable<Void> queueCreation =
+            () -> {
+              Management.QueueSpecification spec =
+                  this.connection
+                      .managementNoCheck()
+                      .queue()
+                      .name(queue.name())
+                      .exclusive(queue.exclusive())
+                      .autoDelete(queue.autoDelete());
+              queue.arguments().forEach(spec::argument);
+              spec.declare();
+              return null;
+            };
+        if (queue.exclusive()) {
+          RetryUtils.callAndMaybeRetry(
+              queueCreation,
+              AmqpUtils.EXCLUSIVE_ACCESS_EXCEPTION_PREDICATE,
+              this.connection.recoveryBackOffDelayPolicy(),
+              "Declaring exclusive queue %s",
+              queue.name());
+        } else {
+          queueCreation.call();
+        }
         LOGGER.debug("Queue {} recovered", queue.name());
       } catch (Exception e) {
         LOGGER.warn("Error while recovering queue {}", queue.name(), e);
