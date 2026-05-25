@@ -121,6 +121,19 @@ public class ManagementTest {
     assertThat(m2).isSameAs(m1);
   }
 
+  @Test
+  void exclusiveQueueCreationShouldFailWhenTryingToCreateWithSameName() {
+    Management.QueueInfo firstQueueInfo =
+        connection.management().queue().exclusive(true).autoDelete(true).declare();
+    final String queueName = firstQueueInfo.name();
+
+    try (Connection c = environment.connectionBuilder().build()) {
+      assertThatThrownBy(() -> c.management().queue(queueName).exclusive(true).declare())
+          .isInstanceOf(AmqpException.class)
+          .matches(e -> AmqpUtils.EXCLUSIVE_ACCESS_EXCEPTION_PREDICATE.test((Exception) e));
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)

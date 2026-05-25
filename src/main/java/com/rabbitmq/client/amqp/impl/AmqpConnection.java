@@ -33,6 +33,7 @@ import static java.time.Duration.ofNanos;
 
 import com.rabbitmq.client.amqp.Address;
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.ConnectionSettings;
 import com.rabbitmq.client.amqp.Consumer;
@@ -135,6 +136,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private volatile Executor dispatchingExecutor;
   private final boolean privateDispatchingExecutor;
   private final CredentialsManager.Registration credentialsRegistration;
+  private final AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration;
 
   AmqpConnection(AmqpConnectionBuilder builder) {
     super(builder.listeners());
@@ -148,8 +150,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
             ? () -> new SessionHandler.SingleSessionSessionHandler(this)
             : () -> new SessionHandler.ConnectionNativeSessionSessionHandler(this);
     BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
-    AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration =
-        builder.recoveryConfiguration();
+    this.recoveryConfiguration = builder.recoveryConfiguration();
 
     Pair<TopologyListener, EntityRecovery> topologyInfra = createTopologyInfrastructure(builder);
     this.topologyListener = topologyInfra.v1();
@@ -167,8 +168,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
       this.dispatchingExecutor = de;
     }
 
-    if (recoveryConfiguration.activated()) {
-      disconnectHandler = recoveryDisconnectHandler(recoveryConfiguration, this.name());
+    if (this.recoveryConfiguration.activated()) {
+      disconnectHandler = recoveryDisconnectHandler(this.recoveryConfiguration, this.name());
     } else {
       disconnectHandler =
           (c, e) -> {
@@ -843,6 +844,10 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   MetricsCollector metricsCollector() {
     return this.environment.metricsCollector();
+  }
+
+  BackOffDelayPolicy recoveryBackOffDelayPolicy() {
+    return this.recoveryConfiguration.backOffDelayPolicy();
   }
 
   ObservationCollector observationCollector() {

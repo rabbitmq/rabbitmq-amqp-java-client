@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import java.util.function.Predicate;
 import org.apache.qpid.protonj2.client.DeliveryState;
 import org.apache.qpid.protonj2.client.Rejected;
 import org.slf4j.Logger;
@@ -27,14 +28,18 @@ import org.slf4j.LoggerFactory;
 
 final class AmqpUtils {
 
-  static final String INFO_FIELD_QUEUE = "queue";
-  static final String INFO_FIELD_REASON = "reason";
-  static final String INFO_FIELD_REASON_MAX_LENGTH = "maxlen";
-  static final String INFO_FIELD_REASON_UNAVAILABLE = "unavailable";
-
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpUtils.class);
 
   private AmqpUtils() {}
+
+  static final Predicate<Exception> EXCLUSIVE_ACCESS_EXCEPTION_PREDICATE =
+      e ->
+          e instanceof AmqpException
+              && e.getMessage() != null
+              && e.getMessage().contains("cannot obtain exclusive access to locked queue")
+              && e.getMessage()
+                  .contains(
+                      "the exclusive property value does not match that of the original declaration");
 
   static Publisher.Status mapDeliveryState(DeliveryState in) {
     if (in.isAccepted()) {
