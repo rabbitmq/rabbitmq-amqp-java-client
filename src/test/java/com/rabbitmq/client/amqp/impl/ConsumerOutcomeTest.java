@@ -240,14 +240,13 @@ public class ConsumerOutcomeTest {
     publisher.publish(publisher.message().messageId(messageID), ctx -> {});
     assertThat(deadLetteredSync).completes();
     Message message = deadLetteredMessage.get();
-    long expectedDeliveryCount = batch ? 0 : 1;
     assertThat(message)
         .hasId(messageID)
         .hasAnnotation(ANNOTATION_KEY, ANNOTATION_VALUE)
         .hasAnnotation(ANNOTATION_KEY_ARRAY, ANNOTATION_VALUE_ARRAY)
         .hasAnnotation(ANNOTATION_KEY_LIST, ANNOTATION_VALUE_LIST)
         .hasAnnotation(ANNOTATION_KEY_MAP, ANNOTATION_VALUE_MAP)
-        .hasDeliveryCount(expectedDeliveryCount);
+        .hasDeliveryCount(1);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
     waitAtMost(() -> management.queueInfo(dlq).messageCount() == 0);
   }

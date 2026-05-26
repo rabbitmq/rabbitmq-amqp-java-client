@@ -704,7 +704,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       annotations = annotations == null ? Collections.emptyMap() : annotations;
       Utils.checkMessageAnnotations(annotations);
       Modified state =
-          new Modified(false, true, ClientConversionSupport.toSymbolKeyedMap(annotations));
+          new Modified(true, true, ClientConversionSupport.toSymbolKeyedMap(annotations));
       this.settle(state, DISCARDED, "discard (modified)");
     }
 
