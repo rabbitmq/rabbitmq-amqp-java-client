@@ -531,6 +531,11 @@ final class AmqpMessage implements Message {
   }
 
   @Override
+  public long deliveryCount() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::deliveryCount);
+  }
+
+  @Override
   public Message priority(byte priority) {
     callOnDelegate(m -> m.priority(priority));
     return this;

@@ -99,8 +99,8 @@ public class DelayedRetryTest {
     Message message1 = messages.poll();
     Message message2 = messages.poll();
 
-    assertThat(message1).isNotNull();
-    assertThat(message2).isNotNull();
+    assertThat(message1).isNotNull().doesNotHaveAnnotation("x-acquired-count").hasDeliveryCount(0L);
+    assertThat(message2).isNotNull().hasAnnotation("x-acquired-count", 1L).hasDeliveryCount(0L);
 
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
 

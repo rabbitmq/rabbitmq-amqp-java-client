@@ -706,6 +706,26 @@ public interface Message {
   boolean durable();
 
   /**
+   * Get the delivery count of the message.
+   *
+   * <p>The delivery count tracks the number of failed delivery attempts for the message. This value
+   * is incremented when a delivery fails (e.g., consumer crashes, message is rejected, or AMQP 1.0
+   * {@code modify} disposition with {@code delivery_failed=true}). It is not incremented for
+   * successful requeues (e.g., {@code nack} or AMQP 1.0 {@code modify} with {@code
+   * delivery_failed=false}).
+   *
+   * @return the delivery count
+   * @see <a
+   *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-header">AMQP
+   *     1.0 Message Header</a>
+   * @see <a
+   *     href="https://www.rabbitmq.com/docs/quorum-queues#when-is-delivery-count-incremented">RabbitMQ
+   *     Quorum Queues: When is delivery count incremented?</a>
+   * @since 1.1.0
+   */
+  long deliveryCount();
+
+  /**
    * Set the priority of the message.
    *
    * @param priority message priority
