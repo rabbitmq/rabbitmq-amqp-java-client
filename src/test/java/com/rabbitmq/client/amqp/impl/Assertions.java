@@ -360,6 +360,10 @@ public final class Assertions {
       return this;
     }
 
+    MessageAssert hasDeliveryCount(long expectedDeliveryCount) {
+      return hasField("delivery-count", actual.deliveryCount(), expectedDeliveryCount);
+    }
+
     void isDurable(boolean durable) {
       isNotNull();
       if (actual.durable() != durable) {
