@@ -24,7 +24,7 @@ import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class EntityRecovery {
+final class EntityRecovery {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EntityRecovery.class);
 
@@ -125,7 +125,7 @@ class EntityRecovery {
               queueCreation,
               AmqpUtils.EXCLUSIVE_ACCESS_EXCEPTION_PREDICATE,
               this.connection.recoveryBackOffDelayPolicy(),
-              "Declaring exclusive queue %s",
+              "Recovering exclusive queue %s",
               queue.name());
         } else {
           queueCreation.call();

@@ -89,7 +89,11 @@ class AsyncRetry<V> {
             description);
     retryableTaskReference.set(retryableTask);
     Duration initialDelay = delayPolicy.delay(attempts.getAndIncrement());
-    LOGGER.debug("Scheduling task '{}' with policy {}", description, delayPolicy);
+    LOGGER.debug(
+        "Scheduling task '{}' with policy {}, initial delay {}",
+        description,
+        delayPolicy,
+        initialDelay);
     if (initialDelay.isZero()) {
       retryableTask.run();
     } else {

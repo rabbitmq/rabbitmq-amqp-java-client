@@ -37,7 +37,9 @@ import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Management.QueueSpecification;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
+import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -47,6 +49,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +60,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@TestUtils.DisabledIfRabbitMqCtlNotSet
+@DisabledIfRabbitMqCtlNotSet
 @AmqpTestInfrastructure
 public class TopologyRecoveryTest {
 
@@ -634,6 +637,21 @@ public class TopologyRecoveryTest {
     this.queueIsRecoveredNoConsumerBeforeRecovery(isolateResources, s -> s.exclusive(true));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void exclusiveClientNamedQueueShouldBeRecoveredWithShortBackoffPolicy(boolean isolateResources) {
+    this.queueIsRecovered(
+        () ->
+            connection(
+                this.connectionName,
+                isolateResources,
+                this.recoveredSync,
+                b -> {
+                  b.recovery().backOffDelayPolicy(BackOffDelayPolicy.fixed(Duration.ofMillis(1)));
+                }),
+        s -> s.exclusive(true));
+  }
+
   @Test
   void shouldRecoverEvenIfManagementIsClosed(TestInfo info) {
     try (Connection connection = connection()) {
@@ -753,7 +771,13 @@ public class TopologyRecoveryTest {
 
   private void queueIsRecovered(
       boolean isolateResources, java.util.function.Consumer<QueueSpecification> specCallback) {
-    try (Connection connection = connection(isolateResources)) {
+    this.queueIsRecovered(() -> connection(isolateResources), specCallback);
+  }
+
+  private void queueIsRecovered(
+      Supplier<Connection> connectionSupplier,
+      java.util.function.Consumer<QueueSpecification> specCallback) {
+    try (Connection connection = connectionSupplier.get()) {
       QueueSpecification spec = connection.management().queue();
       specCallback.accept(spec);
       Management.QueueInfo queueInfo = spec.declare();
