@@ -397,12 +397,37 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         this.metricsCollector.consume();
         pendingWorkItems.incrementAndGet();
         this.consumerWorkService.dispatch(this, () -> dispatchedRunnable.accept(delivery));
+      } else {
+        // Consumer is not open (RECOVERING, CLOSING, CLOSED), release delivery back to broker
+        // to prevent message loss and credit issues
+        try {
+          if (!this.preSettled) {
+            delivery.disposition(DeliveryState.released(), true);
+            LOGGER.debug(
+                "Released delivery when consumer {} is in state {}", this.id, this.state());
+          } else {
+            // For pre-settled deliveries, just log since they're already settled by broker
+            LOGGER.debug(
+                "Dropping pre-settled delivery when consumer {} is in state {}",
+                this.id,
+                this.state());
+          }
+        } catch (ClientException e) {
+          LOGGER.debug(
+              "Failed to release delivery when consumer {} is not open: {}",
+              this.id,
+              e.getMessage());
+        }
       }
     };
   }
 
   void recoverAfterConnectionFailure() {
-    this.nativeReceiver =
+    if (this.closed.get()) {
+      LOGGER.debug("Consumer {} is closed, skipping recovery", this.id);
+      return;
+    }
+    ClientReceiver newReceiver =
         RetryUtils.callAndMaybeRetry(
             () ->
                 createNativeReceiver(
@@ -422,6 +447,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             List.of(ofSeconds(1), ofSeconds(2), ofSeconds(3), BackOffDelayPolicy.TIMEOUT),
             "Create AMQP receiver to address '%s'",
             this.address);
+
+    // Check again after potentially long retry operation
+    if (this.closed.get()) {
+      LOGGER.debug("Consumer {} was closed during recovery, cleaning up new receiver", this.id);
+      try {
+        newReceiver.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing receiver during cleanup: {}", e.getMessage());
+      }
+      return;
+    }
+
+    this.nativeReceiver = newReceiver;
     try {
       this.directReplyToAddress = this.nativeReceiver.address();
       this.initStateFromNativeReceiver(this.nativeReceiver);

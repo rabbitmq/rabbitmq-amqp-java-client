@@ -153,9 +153,7 @@ class AmqpManagement implements Management {
     checkAvailable();
     Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
     this.topologyListener.queueDeleted(name);
-    if (!responseBody.containsKey("message_count")) {
-      throw new AmqpException("Response body should contain message_count");
-    }
+    validateMessageCount(responseBody);
   }
 
   @Override
@@ -191,11 +189,9 @@ class AmqpManagement implements Management {
 
   @Override
   public PurgeStatus queuePurge(String queue) {
+    checkAvailable();
     Map<String, Object> responseBody = delete(queueLocation(queue) + "/messages", CODE_200);
-    if (!responseBody.containsKey("message_count")
-        && !(responseBody.get("message_count") instanceof Number)) {
-      throw new AmqpException("Response body should contain message_count");
-    }
+    validateMessageCount(responseBody);
     return new DefaultPurgeStatus(((Number) responseBody.get("message_count")).longValue());
   }
 
@@ -377,13 +373,19 @@ class AmqpManagement implements Management {
   }
 
   private void failRequests(AmqpException exception) {
-    Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
-        this.outstandingRequests.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<UUID, OutstandingRequest> request = iterator.next();
-      LOGGER.info("Failing management request {}", request.getKey());
-      request.getValue().fail(exception);
-      iterator.remove();
+    // Coordinate with request() to ensure we see all requests and prevent new ones
+    initializationLock.lock();
+    try {
+      Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
+          this.outstandingRequests.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Map.Entry<UUID, OutstandingRequest> request = iterator.next();
+        LOGGER.info("Failing management request {}", request.getKey());
+        request.getValue().fail(exception);
+        iterator.remove();
+      }
+    } finally {
+      initializationLock.unlock();
     }
   }
 
@@ -412,7 +414,18 @@ class AmqpManagement implements Management {
   QueueInfo declareQueue(String name, Map<String, Object> body) {
     if (name == null || name.isBlank()) {
       QueueInfo info = null;
+      int attempts = 0;
+      final int maxAttempts = 10;
       while (info == null) {
+        if (Thread.currentThread().isInterrupted()) {
+          throw new AmqpException("Queue declaration interrupted");
+        }
+        if (++attempts > maxAttempts) {
+          throw new AmqpException(
+              String.format(
+                  "Could not declare queue after %d attempts (name collisions with generated names)",
+                  maxAttempts));
+        }
         name = this.nameSupplier.get();
         Response<Map<String, Object>> response =
             this.declare(body, queueLocation(name), CODE_200, CODE_201, CODE_409);
@@ -460,7 +473,17 @@ class AmqpManagement implements Management {
     request.messageId(requestId).replyTo(REPLY_TO);
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
     LOGGER.debug("Enqueueing request {}", requestId);
-    this.outstandingRequests.put(requestId, outstandingRequest);
+
+    // Coordinate with failRequests() to prevent race conditions during resource release
+    initializationLock.lock();
+    try {
+      // Check again after acquiring lock in case management became unavailable
+      checkAvailable();
+      this.outstandingRequests.put(requestId, outstandingRequest);
+    } finally {
+      initializationLock.unlock();
+    }
+
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
     // FIXME use async callback for management responses
@@ -891,6 +914,13 @@ class AmqpManagement implements Management {
     @Override
     public long messageCount() {
       return this.messageCount;
+    }
+  }
+
+  private static void validateMessageCount(Map<String, Object> responseBody) {
+    if (!responseBody.containsKey("message_count")
+        || !(responseBody.get("message_count") instanceof Number)) {
+      throw new AmqpException("Response body should contain message_count");
     }
   }
 

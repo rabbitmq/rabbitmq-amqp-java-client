@@ -785,6 +785,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
     this.instanceLock.lock();
     try {
+      if (this.closed.get()) {
+        throw new AmqpException.AmqpResourceClosedException("Connection is closed");
+      }
       if (this.nativeSession == null) {
         this.nativeSession = this.openSession(this.nativeConnection);
       }
@@ -824,6 +827,9 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
     this.instanceLock.lock();
     try {
+      if (this.closed.get()) {
+        throw new AmqpException.AmqpResourceClosedException("Connection is closed");
+      }
       if (this.consumerWorkService == null) {
         if (this.privateDispatchingExecutor) {
           this.dispatchingExecutor =
@@ -992,19 +998,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
       for (AmqpConsumer consumer : this.consumers) {
         safeClose.accept("consumer", () -> consumer.close(cause));
       }
-      // Best-effort lock acquisition to coordinate with nativeSession() initialization.
-      // If we can't acquire the lock within 1 second, we proceed with closing anyway
-      // to avoid hanging the close operation. This may race with session initialization
-      // but ensures close() always completes in a bounded time.
-      boolean locked = false;
-      try {
-        locked = this.instanceLock.tryLock(1, TimeUnit.SECONDS);
-        if (!locked) {
-          LOGGER.info("Could not acquire connection lock during closing");
-        }
-      } catch (InterruptedException e) {
-        LOGGER.info("Interrupted while waiting for connection lock");
-      }
+      // With closed-state checks in nativeSession() and consumerWorkService(),
+      // we can safely acquire the lock normally without timeout workarounds
       if (this.consumerWorkService != null) {
         try {
           this.consumerWorkService.close();
@@ -1015,36 +1010,26 @@ final class AmqpConnection extends ResourceBase implements Connection {
               e.getMessage());
         }
       }
-      try {
-        if (this.privateDispatchingExecutor) {
-          Executor es = this.dispatchingExecutor;
-          if (es instanceof ExecutorService) {
-            try {
-              ((ExecutorService) es).shutdownNow();
-            } catch (Exception e) {
-              LOGGER.info(
-                  "Error while shutting down dispatching executor service for connection '{}': {}",
-                  this.name(),
-                  e.getMessage());
-            }
-          }
-        }
-        try {
-          org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;
-          if (nc != null) {
-            nc.close();
-          }
-        } catch (Exception e) {
-          LOGGER.warn("Error while closing native connection", e);
-        }
-      } finally {
-        if (locked) {
+      if (this.privateDispatchingExecutor) {
+        Executor es = this.dispatchingExecutor;
+        if (es instanceof ExecutorService) {
           try {
-            this.instanceLock.unlock();
+            ((ExecutorService) es).shutdownNow();
           } catch (Exception e) {
-            LOGGER.debug("Error while releasing connection lock: {}", e.getMessage());
+            LOGGER.info(
+                "Error while shutting down dispatching executor service for connection '{}': {}",
+                this.name(),
+                e.getMessage());
           }
         }
+      }
+      try {
+        org.apache.qpid.protonj2.client.Connection nc = this.nativeConnection;
+        if (nc != null) {
+          nc.close();
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing native connection", e);
       }
       this.state(CLOSED, cause);
       this.environment.metricsCollector().closeConnection();

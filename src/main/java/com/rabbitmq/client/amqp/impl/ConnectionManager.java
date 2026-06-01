@@ -68,6 +68,9 @@ final class ConnectionManager {
     AtomicReference<AmqpConnection> connectionReference = new AtomicReference<>(connection);
     doOnConnections(
         conns -> {
+          if (this.closed.get()) {
+            throw new IllegalStateException("ConnectionManager is closed");
+          }
           conns.add(connectionReference.get());
         });
     return connection;
@@ -84,14 +87,26 @@ final class ConnectionManager {
 
   void close() {
     if (this.closed.compareAndSet(false, true)) {
-      for (AmqpConnection connection : this.connections) {
+      // Snapshot connections under lock to avoid concurrent modification
+      Set<AmqpConnection> connectionsToClose =
+          doOnConnections(
+              conns -> {
+                return Set.copyOf(conns);
+              });
+
+      for (AmqpConnection connection : connectionsToClose) {
         try {
           connection.close();
         } catch (Exception e) {
           LOGGER.warn("Error while closing connection", e);
         }
       }
-      this.connections.clear();
+
+      // Clear the original set under lock
+      doOnConnections(
+          conns -> {
+            conns.clear();
+          });
     }
   }
 

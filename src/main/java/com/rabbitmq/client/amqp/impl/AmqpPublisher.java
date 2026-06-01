@@ -75,13 +75,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.sessionHandler = this.connection.createSessionHandler();
     this.nativeCloseHandler =
         e -> {
-          this.connection
-              .consumerWorkService()
-              .dispatch(
-                  () -> {
-                    // get result to make spotbugs happy
-                    boolean ignored = maybeCloseConsumerOnException(this, e);
-                  });
+          this.executorService.submit(
+              () -> {
+                // get result to make spotbugs happy
+                boolean ignored = maybeCloseResourceOnException(this, e);
+              });
         };
     this.sender =
         this.createSender(
@@ -154,13 +152,30 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   }
 
   void recoverAfterConnectionFailure() {
+    if (this.closed.get()) {
+      LOGGER.debug("Publisher {} is closed, skipping recovery", this.id);
+      return;
+    }
     this.connectionInfo = new Utils.ObservationConnectionInfo(this.connection.connectionAddress());
-    this.sender =
+    Sender newSender =
         this.createSender(
             this.sessionHandler.sessionNoCheck(),
             this.address,
             this.publishTimeout,
             this.nativeCloseHandler);
+
+    // Check again after sender creation
+    if (this.closed.get()) {
+      LOGGER.debug("Publisher {} was closed during recovery, cleaning up new sender", this.id);
+      try {
+        newSender.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing sender during cleanup: {}", e.getMessage());
+      }
+      return;
+    }
+
+    this.sender = newSender;
   }
 
   @Override
@@ -210,7 +225,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private static boolean maybeCloseConsumerOnException(AmqpPublisher publisher, Exception ex) {
+  private static boolean maybeCloseResourceOnException(AmqpPublisher publisher, Exception ex) {
     return ExceptionUtils.maybeCloseOnException(publisher::close, ex);
   }
 
