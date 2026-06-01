@@ -397,6 +397,27 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         this.metricsCollector.consume();
         pendingWorkItems.incrementAndGet();
         this.consumerWorkService.dispatch(this, () -> dispatchedRunnable.accept(delivery));
+      } else {
+        // Consumer is not open (RECOVERING, CLOSING, CLOSED), release delivery back to broker
+        // to prevent message loss and credit issues
+        try {
+          if (!this.preSettled) {
+            delivery.disposition(DeliveryState.released(), true);
+            LOGGER.debug(
+                "Released delivery when consumer {} is in state {}", this.id, this.state());
+          } else {
+            // For pre-settled deliveries, just log since they're already settled by broker
+            LOGGER.debug(
+                "Dropping pre-settled delivery when consumer {} is in state {}",
+                this.id,
+                this.state());
+          }
+        } catch (ClientException e) {
+          LOGGER.debug(
+              "Failed to release delivery when consumer {} is not open: {}",
+              this.id,
+              e.getMessage());
+        }
       }
     };
   }
