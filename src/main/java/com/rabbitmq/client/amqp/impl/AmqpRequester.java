@@ -172,7 +172,24 @@ final class AmqpRequester implements Requester {
     long time = this.clock.time();
     CompletableFuture<Message> future = new CompletableFuture<>();
     this.outstandingRequests.put(correlationId, new OutstandingRequest(future, time));
-    this.publisher.publish(message, NO_OP_CALLBACK);
+    this.publisher.publish(
+        message,
+        ctx -> {
+          if (ctx.status() != Publisher.Status.ACCEPTED) {
+            // Publish failed, remove from outstanding requests and fail the future
+            OutstandingRequest request = this.outstandingRequests.remove(correlationId);
+            if (request != null) {
+              Throwable cause = ctx.failureCause();
+              if (cause == null) {
+                cause =
+                    new AmqpException(
+                        "Request message publish failed with status: " + ctx.status());
+              }
+              request.future.completeExceptionally(cause);
+            }
+          }
+          // If ACCEPTED, let the response handler complete the future normally
+        });
     return future;
   }
 

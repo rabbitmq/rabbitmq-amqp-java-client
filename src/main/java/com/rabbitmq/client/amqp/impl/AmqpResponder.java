@@ -199,7 +199,7 @@ final class AmqpResponder implements Responder {
           RESPONSE_SENDING_RETRY_WAIT_TIMES,
           "Responder Response");
     } catch (Exception e) {
-      LOGGER.info("Error while processing request: {}", e.getMessage());
+      LOGGER.info("Error while sending response: {}", e.getMessage());
     }
   }
 
