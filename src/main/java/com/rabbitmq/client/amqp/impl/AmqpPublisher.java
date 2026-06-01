@@ -75,13 +75,11 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.sessionHandler = this.connection.createSessionHandler();
     this.nativeCloseHandler =
         e -> {
-          this.connection
-              .consumerWorkService()
-              .dispatch(
-                  () -> {
-                    // get result to make spotbugs happy
-                    boolean ignored = maybeCloseConsumerOnException(this, e);
-                  });
+          this.executorService.submit(
+              () -> {
+                // get result to make spotbugs happy
+                boolean ignored = maybeCloseResourceOnException(this, e);
+              });
         };
     this.sender =
         this.createSender(
@@ -210,7 +208,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
   }
 
-  private static boolean maybeCloseConsumerOnException(AmqpPublisher publisher, Exception ex) {
+  private static boolean maybeCloseResourceOnException(AmqpPublisher publisher, Exception ex) {
     return ExceptionUtils.maybeCloseOnException(publisher::close, ex);
   }
 
