@@ -146,6 +146,9 @@ class AmqpEnvironment implements Environment {
       this.client.close();
       this.recoveryEventLoop.close();
       this.recoveryEventExecutorGroup.shutdownGracefully();
+      if (this.clockRefreshFuture != null) {
+        this.clockRefreshFuture.cancel(false);
+      }
       if (this.internalExecutor) {
         this.executorService.shutdownNow();
       }
@@ -155,10 +158,6 @@ class AmqpEnvironment implements Environment {
       if (this.internalPublisherExecutor) {
         this.publisherExecutorService.shutdownNow();
       }
-      if (this.clockRefreshFuture != null) {
-        this.clockRefreshFuture.cancel(false);
-      }
-      this.scheduledExecutorService.shutdownNow();
       LOGGER.debug("Environment {} has been closed", this);
     }
   }

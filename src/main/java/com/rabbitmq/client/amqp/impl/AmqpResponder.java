@@ -206,10 +206,10 @@ final class AmqpResponder implements Responder {
   private void maybeWaitForUnsettledMessages() {
     if (this.closeTimeout.toNanos() > 0) {
       Duration waited = Duration.ZERO;
-      Duration waitStep = Duration.ofMillis(10);
+      Duration waitStep = Duration.ofMillis(100);
       while (this.consumer.unsettledMessageCount() > 0 && waited.compareTo(this.closeTimeout) < 0) {
         try {
-          Thread.sleep(100);
+          Thread.sleep(waitStep.toMillis());
           waited = waited.plus(waitStep);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();

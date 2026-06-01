@@ -153,9 +153,7 @@ class AmqpManagement implements Management {
     checkAvailable();
     Map<String, Object> responseBody = delete(queueLocation(name), CODE_200);
     this.topologyListener.queueDeleted(name);
-    if (!responseBody.containsKey("message_count")) {
-      throw new AmqpException("Response body should contain message_count");
-    }
+    validateMessageCount(responseBody);
   }
 
   @Override
@@ -191,11 +189,9 @@ class AmqpManagement implements Management {
 
   @Override
   public PurgeStatus queuePurge(String queue) {
+    checkAvailable();
     Map<String, Object> responseBody = delete(queueLocation(queue) + "/messages", CODE_200);
-    if (!responseBody.containsKey("message_count")
-        && !(responseBody.get("message_count") instanceof Number)) {
-      throw new AmqpException("Response body should contain message_count");
-    }
+    validateMessageCount(responseBody);
     return new DefaultPurgeStatus(((Number) responseBody.get("message_count")).longValue());
   }
 
@@ -891,6 +887,13 @@ class AmqpManagement implements Management {
     @Override
     public long messageCount() {
       return this.messageCount;
+    }
+  }
+
+  private static void validateMessageCount(Map<String, Object> responseBody) {
+    if (!responseBody.containsKey("message_count")
+        || !(responseBody.get("message_count") instanceof Number)) {
+      throw new AmqpException("Response body should contain message_count");
     }
   }
 
