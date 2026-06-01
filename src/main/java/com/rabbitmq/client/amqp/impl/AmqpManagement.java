@@ -373,13 +373,19 @@ class AmqpManagement implements Management {
   }
 
   private void failRequests(AmqpException exception) {
-    Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
-        this.outstandingRequests.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<UUID, OutstandingRequest> request = iterator.next();
-      LOGGER.info("Failing management request {}", request.getKey());
-      request.getValue().fail(exception);
-      iterator.remove();
+    // Coordinate with request() to ensure we see all requests and prevent new ones
+    initializationLock.lock();
+    try {
+      Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
+          this.outstandingRequests.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Map.Entry<UUID, OutstandingRequest> request = iterator.next();
+        LOGGER.info("Failing management request {}", request.getKey());
+        request.getValue().fail(exception);
+        iterator.remove();
+      }
+    } finally {
+      initializationLock.unlock();
     }
   }
 
@@ -467,7 +473,17 @@ class AmqpManagement implements Management {
     request.messageId(requestId).replyTo(REPLY_TO);
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
     LOGGER.debug("Enqueueing request {}", requestId);
-    this.outstandingRequests.put(requestId, outstandingRequest);
+
+    // Coordinate with failRequests() to prevent race conditions during resource release
+    initializationLock.lock();
+    try {
+      // Check again after acquiring lock in case management became unavailable
+      checkAvailable();
+      this.outstandingRequests.put(requestId, outstandingRequest);
+    } finally {
+      initializationLock.unlock();
+    }
+
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
     // FIXME use async callback for management responses
