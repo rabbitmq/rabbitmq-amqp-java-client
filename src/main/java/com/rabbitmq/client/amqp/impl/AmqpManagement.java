@@ -408,7 +408,18 @@ class AmqpManagement implements Management {
   QueueInfo declareQueue(String name, Map<String, Object> body) {
     if (name == null || name.isBlank()) {
       QueueInfo info = null;
+      int attempts = 0;
+      final int maxAttempts = 10;
       while (info == null) {
+        if (Thread.currentThread().isInterrupted()) {
+          throw new AmqpException("Queue declaration interrupted");
+        }
+        if (++attempts > maxAttempts) {
+          throw new AmqpException(
+              String.format(
+                  "Could not declare queue after %d attempts (name collisions with generated names)",
+                  maxAttempts));
+        }
         name = this.nameSupplier.get();
         Response<Map<String, Object>> response =
             this.declare(body, queueLocation(name), CODE_200, CODE_201, CODE_409);
