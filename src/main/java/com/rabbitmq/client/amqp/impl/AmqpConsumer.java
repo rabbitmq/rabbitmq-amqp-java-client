@@ -423,7 +423,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void recoverAfterConnectionFailure() {
-    this.nativeReceiver =
+    if (this.closed.get()) {
+      LOGGER.debug("Consumer {} is closed, skipping recovery", this.id);
+      return;
+    }
+    ClientReceiver newReceiver =
         RetryUtils.callAndMaybeRetry(
             () ->
                 createNativeReceiver(
@@ -443,6 +447,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             List.of(ofSeconds(1), ofSeconds(2), ofSeconds(3), BackOffDelayPolicy.TIMEOUT),
             "Create AMQP receiver to address '%s'",
             this.address);
+
+    // Check again after potentially long retry operation
+    if (this.closed.get()) {
+      LOGGER.debug("Consumer {} was closed during recovery, cleaning up new receiver", this.id);
+      try {
+        newReceiver.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing receiver during cleanup: {}", e.getMessage());
+      }
+      return;
+    }
+
+    this.nativeReceiver = newReceiver;
     try {
       this.directReplyToAddress = this.nativeReceiver.address();
       this.initStateFromNativeReceiver(this.nativeReceiver);
