@@ -124,10 +124,10 @@ public class UtilsTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"tanzu+rabbitmq", "not-a-version", "abc"})
-  void versionCheckReturnsTrueWhenVersionCannotBeParsed(String brokerVersion) {
-    assertThat(Utils.is4_0_OrMore(brokerVersion)).isTrue();
-    assertThat(Utils.is4_1_OrMore(brokerVersion)).isTrue();
-    assertThat(Utils.is4_2_OrMore(brokerVersion)).isTrue();
+  void versionCheckReturnsFalseWhenVersionCannotBeParsed(String brokerVersion) {
+    assertThat(Utils.is4_0_OrMore(brokerVersion)).isFalse();
+    assertThat(Utils.is4_1_OrMore(brokerVersion)).isFalse();
+    assertThat(Utils.is4_2_OrMore(brokerVersion)).isFalse();
   }
 
   @ParameterizedTest

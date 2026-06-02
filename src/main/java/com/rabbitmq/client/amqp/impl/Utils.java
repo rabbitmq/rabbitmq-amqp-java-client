@@ -271,8 +271,9 @@ final class Utils {
     try {
       return versionCompare(currentVersion(brokerVersion), expectedVersion) >= 0;
     } catch (Exception e) {
-      LOGGER.debug("Unable to parse broker version {}", brokerVersion, e);
-      return true;
+      LOGGER.warn(
+          "Unable to parse broker version '{}', defaulting to not supported", brokerVersion, e);
+      return false;
     }
   }
 

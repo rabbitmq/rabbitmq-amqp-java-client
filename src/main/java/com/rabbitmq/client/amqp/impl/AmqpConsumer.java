@@ -191,6 +191,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           Thread.currentThread().interrupt();
         }
       } catch (Exception e) {
+        LOGGER.warn("Exception while pausing consumer: {}", e.getMessage(), e);
         this.pauseStatus.set(PauseStatus.UNPAUSED);
       }
     }
