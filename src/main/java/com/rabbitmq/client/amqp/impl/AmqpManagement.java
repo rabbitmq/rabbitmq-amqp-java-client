@@ -219,8 +219,18 @@ class AmqpManagement implements Management {
   @Override
   public void close() {
     if (this.initializing) {
-      throw new AmqpException.AmqpResourceInvalidStateException(
-          "Management is initializing, retry closing later.");
+      try {
+        // Wait up to 2 seconds for init() to finish its work and release the lock
+        if (!this.initializationLock.tryLock(2, java.util.concurrent.TimeUnit.SECONDS)) {
+          throw new AmqpException.AmqpResourceInvalidStateException(
+              "Management is initializing, retry closing later.");
+        }
+        // Instantly release it so releaseResources() below can acquire it
+        this.initializationLock.unlock();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AmqpException("Interrupted while waiting to close management", e);
+      }
     }
     if (this.closed.compareAndSet(false, true)) {
       this.releaseResources(null, CLOSED);

@@ -91,8 +91,10 @@ class AmqpEnvironment implements Environment {
       this.internalExecutor = false;
     }
     if (scheduledExecutorService == null) {
+      int schedulerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
       this.scheduledExecutorService =
-          Executors.newScheduledThreadPool(1, Utils.threadFactory(threadPrefix + "scheduler-"));
+          Executors.newScheduledThreadPool(
+              schedulerThreads, Utils.threadFactory(threadPrefix + "scheduler-"));
       this.internalScheduledExecutor = true;
     } else {
       this.scheduledExecutorService = scheduledExecutorService;
