@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -54,6 +55,7 @@ import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.slf4j.LoggerFactory;
+import wiremock.org.apache.commons.lang3.RandomStringUtils;
 
 public abstract class TestUtils {
 
@@ -675,5 +677,24 @@ public abstract class TestUtils {
     public String toString() {
       return this.description;
     }
+  }
+
+  static String randomString(int minLength, int maxLength) {
+    return RandomStringUtils.randomAlphanumeric(minLength, maxLength + 1);
+  }
+
+  static byte[] randomBytes(int minSize, int maxSize) {
+    int size = ThreadLocalRandom.current().nextInt(minSize, maxSize + 1);
+    byte[] bytes = new byte[size];
+    ThreadLocalRandom.current().nextBytes(bytes);
+    return bytes;
+  }
+
+  static float randomFloat() {
+    return ThreadLocalRandom.current().nextFloat();
+  }
+
+  static double randomDouble() {
+    return ThreadLocalRandom.current().nextDouble();
   }
 }

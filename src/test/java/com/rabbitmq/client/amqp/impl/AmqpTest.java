@@ -71,7 +71,6 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
-import net.jqwik.api.Arbitraries;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -866,8 +865,8 @@ public class AmqpTest {
             publishSync.down();
           }
         };
-    float fValue = Arbitraries.floats().sample();
-    double dValue = Arbitraries.doubles().sample();
+    float fValue = TestUtils.randomFloat();
+    double dValue = TestUtils.randomDouble();
     Publisher publisher = connection.publisherBuilder().queue(q).build();
     publisher.publish(
         publisher

@@ -54,10 +54,8 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.arbitraries.ArrayArbitrary;
-import net.jqwik.api.arbitraries.StringArbitrary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,15 +71,15 @@ public class SourceFiltersTest {
 
   Connection connection;
   String name;
-  ArrayArbitrary<Byte, byte[]> binaryArbitrary;
-  StringArbitrary stringArbitrary;
+  Supplier<byte[]> binaryArbitrary;
+  Supplier<String> stringArbitrary;
 
   @BeforeEach
   void init(TestInfo info) {
     this.name = TestUtils.name(info);
     connection.management().queue(this.name).type(STREAM).declare();
-    binaryArbitrary = Arbitraries.bytes().array(byte[].class).ofMinSize(10).ofMaxSize(20);
-    stringArbitrary = Arbitraries.strings().ofMinLength(10).ofMaxLength(20);
+    binaryArbitrary = () -> TestUtils.randomBytes(10, 20);
+    stringArbitrary = () -> TestUtils.randomString(10, 20);
   }
 
   @AfterEach
@@ -496,12 +494,12 @@ public class SourceFiltersTest {
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionsPropertiesAndApplicationProperties() {
     int messageCount = 10;
-    String subject = stringArbitrary.sample();
-    String appKey = stringArbitrary.sample();
+    String subject = stringArbitrary.get();
+    String appKey = stringArbitrary.get();
     int appValue = new Random().nextInt();
-    byte[] body1 = binaryArbitrary.sample();
-    byte[] body2 = binaryArbitrary.sample();
-    byte[] body3 = binaryArbitrary.sample();
+    byte[] body1 = binaryArbitrary.get();
+    byte[] body2 = binaryArbitrary.get();
+    byte[] body3 = binaryArbitrary.get();
 
     publish(messageCount, msg -> msg.subject(subject).body(body1));
     publish(messageCount, msg -> msg.property(appKey, appValue).body(body2));
@@ -527,7 +525,7 @@ public class SourceFiltersTest {
   @Test
   @BrokerVersionAtLeast(RABBITMQ_4_1_0)
   void filterExpressionFilterFewMessagesFromManyToTestFlowControl() {
-    String groupId = stringArbitrary.sample();
+    String groupId = stringArbitrary.get();
     publish(1, m -> m.groupId(groupId));
     publish(1000);
     publish(1, m -> m.groupId(groupId));
