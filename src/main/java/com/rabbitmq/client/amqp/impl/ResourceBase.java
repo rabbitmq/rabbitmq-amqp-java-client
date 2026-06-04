@@ -25,6 +25,7 @@ import static com.rabbitmq.client.amqp.Resource.State.OPENING;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Resource;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 
 abstract class ResourceBase implements Resource {
@@ -33,8 +34,8 @@ abstract class ResourceBase implements Resource {
   private final StateEventSupport stateEventSupport;
   private volatile Throwable closeReason;
 
-  ResourceBase(List<StateListener> listeners) {
-    this.stateEventSupport = new StateEventSupport(listeners);
+  ResourceBase(List<StateListener> listeners, Executor executor) {
+    this.stateEventSupport = new StateEventSupport(listeners, executor);
     this.state(OPENING);
   }
 
@@ -64,6 +65,9 @@ abstract class ResourceBase implements Resource {
       if ((state == CLOSING || state == CLOSED) && this.closeReason == null) {
         this.closeReason = failureCause;
       }
+      // TODO some resources like connection may need an executor to dispatch events
+      // as they use an event loop and the state can only be changed from the event
+      // loop and there can be no longer-running tasks (from listeners) in the event loop
       this.dispatch(previousState, state, failureCause);
     }
   }

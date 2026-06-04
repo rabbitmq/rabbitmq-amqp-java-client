@@ -46,6 +46,11 @@ final class Tuples {
     B v2() {
       return this.v2;
     }
+
+    @Override
+    public String toString() {
+      return "Pair{" + "v1=" + v1 + ", v2=" + v2 + '}';
+    }
   }
 
   static class Triple<A, B, C> {

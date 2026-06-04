@@ -64,6 +64,8 @@ class AmqpEnvironment implements Environment {
   private final ConnectionUtils.AffinityCache affinityCache = new ConnectionUtils.AffinityCache();
   private final EventLoop recoveryEventLoop;
   private final EventExecutorGroup recoveryEventExecutorGroup;
+  private final EventLoop connectionStateEventLoop;
+  private final EventExecutorGroup connectionStateEventExecutorGroup;
   private final CredentialsManagerFactory credentialsManagerFactory =
       new CredentialsManagerFactory(this);
   private final IntConsumer readBytesConsumer, writtenBytesConsumer;
@@ -117,6 +119,11 @@ class AmqpEnvironment implements Environment {
     this.recoveryEventExecutorGroup =
         new DefaultEventExecutorGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
     this.recoveryEventLoop = new EventLoop(this.recoveryEventExecutorGroup);
+    // FIXME ponder the number of threads for connection state loops
+    this.connectionStateEventExecutorGroup =
+        new DefaultEventExecutorGroup(
+            1, Utils.threadFactory(threadPrefix + "connection-state-loop-"));
+    this.connectionStateEventLoop = new EventLoop(this.connectionStateEventExecutorGroup);
   }
 
   DefaultConnectionSettings<?> connectionSettings() {
@@ -146,6 +153,8 @@ class AmqpEnvironment implements Environment {
       LOGGER.debug("Closing environment {}", this);
       this.connectionManager.close();
       this.client.close();
+      this.connectionStateEventLoop.close();
+      this.recoveryEventExecutorGroup.shutdownGracefully();
       this.recoveryEventLoop.close();
       this.recoveryEventExecutorGroup.shutdownGracefully();
       if (this.clockRefreshFuture != null) {
@@ -207,6 +216,10 @@ class AmqpEnvironment implements Environment {
 
   EventLoop recoveryEventLoop() {
     return this.recoveryEventLoop;
+  }
+
+  EventLoop connectionStateEventLoop() {
+    return this.connectionStateEventLoop;
   }
 
   AmqpConnection connection(AmqpConnectionBuilder builder) {

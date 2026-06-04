@@ -199,7 +199,9 @@ public class TopologyRecoveryTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void resourceListenersShouldBeCalled(boolean isolateResources) {
-    List<String> events = new CopyOnWriteArrayList<>();
+    List<String> connEvents = new CopyOnWriteArrayList<>();
+    List<String> pubEvents = new CopyOnWriteArrayList<>();
+    List<String> consEvents = new CopyOnWriteArrayList<>();
     try (Connection connection =
         connection(
             this.connectionName,
@@ -207,7 +209,7 @@ public class TopologyRecoveryTest {
             this.recoveredSync,
             b ->
                 b.listeners(
-                    context -> events.add("connection " + context.currentState().name())))) {
+                    context -> connEvents.add("connection " + context.currentState().name())))) {
       assertThat(connectionAttemptCount).hasValue(1);
       String e = exchange();
       String q = queue();
@@ -220,36 +222,38 @@ public class TopologyRecoveryTest {
           .publisherBuilder()
           .exchange(e)
           .key("foo")
-          .listeners(ctx -> events.add("publisher " + ctx.currentState().name()))
+          .listeners(ctx -> pubEvents.add("publisher " + ctx.currentState().name()))
           .build();
       connection
           .consumerBuilder()
           .queue(q)
           .messageHandler((context, message) -> {})
-          .listeners(ctx -> events.add("consumer " + ctx.currentState().name()))
+          .listeners(ctx -> consEvents.add("consumer " + ctx.currentState().name()))
           .build();
 
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
 
-      String[] expectedStates =
+      String[] expectedConnStates =
           new String[] {
-            "connection OPENING",
-            "connection OPEN",
-            "publisher OPENING",
-            "publisher OPEN",
-            "consumer OPENING",
-            "consumer OPEN",
-            "connection RECOVERING",
-            "publisher RECOVERING",
-            "consumer RECOVERING",
-            "consumer OPEN",
-            "publisher OPEN",
-            "connection OPEN"
+            "connection OPENING", "connection OPEN", "connection RECOVERING", "connection OPEN"
           };
 
-      waitAtMost(() -> events.size() == expectedStates.length);
-      assertThat(events).containsExactly(expectedStates);
+      String[] expectedPubStates =
+          new String[] {
+            "publisher OPENING", "publisher OPEN", "publisher RECOVERING", "publisher OPEN",
+          };
+
+      String[] expectedConsStates =
+          new String[] {
+            "consumer OPENING", "consumer OPEN", "consumer RECOVERING", "consumer OPEN",
+          };
+      waitAtMost(() -> connEvents.size() == expectedConnStates.length);
+      assertThat(connEvents).containsExactly(expectedConnStates);
+      waitAtMost(() -> pubEvents.size() == expectedPubStates.length);
+      assertThat(pubEvents).containsExactly(expectedPubStates);
+      waitAtMost(() -> consEvents.size() == expectedConsStates.length);
+      assertThat(consEvents).containsExactly(expectedConsStates);
     }
   }
 

@@ -19,6 +19,10 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Resource;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,9 +31,13 @@ class StateEventSupport {
   private static final Logger LOGGER = LoggerFactory.getLogger(StateEventSupport.class);
 
   private final List<Resource.StateListener> listeners;
+  private final Executor executor;
+  private final Queue<Resource.Context> queue = new ConcurrentLinkedQueue<>();
+  private final AtomicBoolean draining = new AtomicBoolean(false);
 
-  StateEventSupport(List<Resource.StateListener> listeners) {
+  StateEventSupport(List<Resource.StateListener> listeners, Executor executor) {
     this.listeners = List.copyOf(listeners);
+    this.executor = executor;
   }
 
   void dispatch(
@@ -37,17 +45,47 @@ class StateEventSupport {
       Throwable failureCause,
       Resource.State previousState,
       Resource.State currentState) {
-    if (!this.listeners.isEmpty()) {
-      Resource.Context context =
-          new DefaultContext(resource, failureCause, previousState, currentState);
-      this.listeners.forEach(
-          l -> {
-            try {
-              l.handle(context);
-            } catch (Exception e) {
-              LOGGER.warn("Error in resource listener", e);
-            }
-          });
+    if (this.listeners.isEmpty()) {
+      return;
+    }
+
+    this.queue.add(new DefaultContext(resource, failureCause, previousState, currentState));
+    scheduleDrain();
+  }
+
+  private void scheduleDrain() {
+    // The atomic lock ensures only one thread drains the queue at a time
+    if (this.draining.compareAndSet(false, true)) {
+      try {
+        this.executor.execute(this::drain);
+      } catch (Exception e) {
+        // If the executor rejects the task (e.g., during JVM shutdown), release the lock
+        this.draining.set(false);
+        LOGGER.debug("Could not schedule state event dispatching", e);
+      }
+    }
+  }
+
+  private void drain() {
+    try {
+      Resource.Context context;
+      // Drain strictly chronologically
+      while ((context = this.queue.poll()) != null) {
+        for (Resource.StateListener listener : this.listeners) {
+          try {
+            listener.handle(context);
+          } catch (Exception e) {
+            LOGGER.warn("Error in resource listener", e);
+          }
+        }
+      }
+    } finally {
+      // Release the lock
+      this.draining.set(false);
+      // Double-check to prevent race conditions if an event was added right as we finished
+      if (!this.queue.isEmpty()) {
+        scheduleDrain();
+      }
     }
   }
 
