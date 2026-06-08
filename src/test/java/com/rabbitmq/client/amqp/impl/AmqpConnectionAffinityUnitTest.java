@@ -219,17 +219,17 @@ public class AmqpConnectionAffinityUnitTest {
 
   AmqpConnection.NativeConnectionWrapper leaderConnection() {
     return new AmqpConnection.NativeConnectionWrapper(
-        this.nativeConnection, LEADER_NODENAME, LEADER_ADDRESS);
+        this.nativeConnection, null, LEADER_NODENAME, LEADER_ADDRESS);
   }
 
   AmqpConnection.NativeConnectionWrapper follower1Connection() {
     return new AmqpConnection.NativeConnectionWrapper(
-        this.nativeConnection, FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+        this.nativeConnection, null, FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
   }
 
   AmqpConnection.NativeConnectionWrapper follower2Connection() {
     return new AmqpConnection.NativeConnectionWrapper(
-        this.nativeConnection, FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
+        this.nativeConnection, null, FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
   }
 
   static ConnectionUtils.AffinityContext affinity() {

@@ -163,7 +163,6 @@ final class EventLoop implements AutoCloseable {
           });
     }
 
-    // for testing
     <R> R query(Function<S, R> queryFunction) {
       AtomicReference<R> result = new AtomicReference<>();
       this.loop.submit(
@@ -184,6 +183,10 @@ final class EventLoop implements AutoCloseable {
           // event loop already closed
         }
       }
+    }
+
+    boolean isClosed() {
+      return this.closed.get();
     }
   }
 }

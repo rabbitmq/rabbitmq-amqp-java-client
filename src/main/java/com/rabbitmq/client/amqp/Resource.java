@@ -34,7 +34,22 @@ public interface Resource {
   /**
    * Application listener for a {@link Resource}.
    *
-   * <p>They are usually registered at creation time.
+   * <p>Listeners are usually registered at creation time.
+   *
+   * <p><b>Dispatching Guarantees:</b>
+   *
+   * <ul>
+   *   <li><b>Sequential:</b> Listeners are invoked sequentially for a given resource. The library
+   *       guarantees that state transitions are observed in the exact chronological order they
+   *       occurred (e.g., a {@code CLOSING} event will never be dispatched before its preceding
+   *       {@code OPEN} event).
+   * </ul>
+   *
+   * *
+   *
+   * <p><b>Implementation Note:</b> Implementations should avoid long-running or blocking
+   * operations. Blocking a listener will stall subsequent state notifications for that specific
+   * resource.
    *
    * @see ConnectionBuilder#listeners(StateListener...)
    * @see PublisherBuilder#listeners(StateListener...)

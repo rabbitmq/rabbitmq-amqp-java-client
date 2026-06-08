@@ -65,7 +65,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
 
   AmqpPublisher(AmqpPublisherBuilder builder) {
-    super(builder.listeners());
+    super(builder.listeners(), builder.connection().environment().executorService());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.executorService = builder.connection().environment().publisherExecutorService();
     this.address = builder.address();

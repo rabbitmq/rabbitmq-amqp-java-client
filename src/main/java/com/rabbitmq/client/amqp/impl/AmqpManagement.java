@@ -28,21 +28,18 @@ import com.rabbitmq.client.amqp.Management;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -96,18 +93,11 @@ class AmqpManagement implements Management {
   private volatile Session session;
   private volatile Sender sender;
   private volatile Receiver receiver;
-  private final AtomicBoolean closed = new AtomicBoolean(false);
   private final Duration rpcTimeout = Duration.ofSeconds(10);
-  private final ConcurrentMap<UUID, OutstandingRequest> outstandingRequests =
-      new ConcurrentHashMap<>();
-  private volatile Future<?> receiveLoop;
   private final TopologyListener topologyListener;
   private final Supplier<String> nameSupplier;
-  private final AtomicReference<State> state = new AtomicReference<>(CREATED);
-  private volatile boolean initializing = false;
-  private final Lock initializationLock = new ReentrantLock();
   private final Duration receiveLoopIdleTimeout;
-  private final Lock instanceLock = new ReentrantLock();
+  private final EventLoop.Client<ManagementState> stateClient;
 
   AmqpManagement(AmqpManagementParameters parameters) {
     this.id = ID_SEQUENCE.getAndIncrement();
@@ -121,6 +111,8 @@ class AmqpManagement implements Management {
         parameters.receiveLoopIdleTimeout() == null
             ? Duration.ofSeconds(20)
             : parameters.receiveLoopIdleTimeout();
+    this.stateClient =
+        this.connection.environment().connectionStateEventLoop().register(ManagementState::new);
   }
 
   @Override
@@ -218,115 +210,182 @@ class AmqpManagement implements Management {
 
   @Override
   public void close() {
-    if (this.initializing) {
-      try {
-        // Wait up to 2 seconds for init() to finish its work and release the lock
-        if (!this.initializationLock.tryLock(2, java.util.concurrent.TimeUnit.SECONDS)) {
-          throw new AmqpException.AmqpResourceInvalidStateException(
-              "Management is initializing, retry closing later.");
-        }
-        // Instantly release it so releaseResources() below can acquire it
-        this.initializationLock.unlock();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new AmqpException("Interrupted while waiting to close management", e);
-      }
+    if (this.stateClient.isClosed()) {
+      return; // Already permanently destroyed
     }
-    if (this.closed.compareAndSet(false, true)) {
+
+    try {
+      // 1. Transactional gatekeeper
+      boolean shouldClose =
+          this.stateClient.query(
+              s -> {
+                if (s.state == CLOSED) return false;
+                s.state = CLOSED;
+                return true;
+              });
+
+      if (!shouldClose) return;
+
       this.releaseResources(null, CLOSED);
-      if (this.receiver != null) {
-        try {
-          this.receiver.close();
-        } catch (Exception e) {
-          LOGGER.debug("Error while closing management receiver: {}", e.getMessage());
-        }
-      }
-      if (this.sender != null) {
-        try {
-          this.sender.close();
-        } catch (Exception e) {
-          LOGGER.debug("Error while closing management sender: {}", e.getMessage());
-        }
-      }
-      if (this.session != null) {
-        try {
-          this.session.close();
-        } catch (Exception e) {
-          LOGGER.debug("Error while closing management session: {}", e.getMessage());
-        }
+      this.closeNativeResources();
+
+    } catch (IllegalStateException e) {
+      // Event loop is dead, meaning it's permanently destroyed.
+      // Idempotent close just returns safely.
+      LOGGER.debug("Error while closing management: {}", e.getMessage());
+    }
+  }
+
+  void destroy() {
+    this.close(); // Suspend first
+    if (this.stateClient != null) {
+      try {
+        this.stateClient.close(); // Kill the loop client
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing management event loop: {}", e.getMessage());
       }
     }
   }
 
+  private void closeNativeResources() {
+    if (this.receiver != null) {
+      try {
+        this.receiver.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing receiver: {}", e.getMessage());
+      }
+    }
+    if (this.sender != null) {
+      try {
+        this.sender.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing sender: {}", e.getMessage());
+      }
+    }
+    if (this.session != null) {
+      try {
+        this.session.close();
+      } catch (Exception e) {
+        LOGGER.debug("Error while closing session: {}", e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Safely initializes the underlying AMQP session, sender, and receiver. It coordinates concurrent
+   * callers so that exactly one thread (leader) performs the actual network I/O, while any other
+   * calling threads (followers) safely wait for that initialization to complete.
+   */
   void init() {
     String cName = this.connection.name();
-    LOGGER.debug("Trying to initialize management for connection {}", cName);
-    State state = this.state();
-    if (state != OPEN) {
-      if (!this.initializing) {
-        try {
-          initializationLock.lock();
-          boolean initInProgress = this.initializing;
-          state = this.state();
-          if (!initInProgress && state != OPEN) {
-            this.initializing = true;
-            LOGGER.debug("Initializing management for connection {} ({}).", cName, this);
-            this.markUnavailable();
-            try {
-              if (this.receiveLoop != null) {
-                this.receiveLoop.cancel(true);
-                this.receiveLoop = null;
-              }
-              LOGGER.debug("Creating management session ({}).", this);
-              this.session = this.connection.nativeConnection().openSession(Utils.sessionOptions());
-              String linkPairName = "management-link-pair";
-              Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
-              LOGGER.debug("Creating management sender ({}).", this);
-              this.sender =
-                  session.openSender(
-                      MANAGEMENT_NODE_ADDRESS,
-                      new SenderOptions()
-                          .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                          .linkName(linkPairName)
-                          .properties(properties));
+    ElectionResult election;
 
-              LOGGER.debug("Creating management receiver ({}).", this);
-              this.receiver =
-                  session.openReceiver(
-                      MANAGEMENT_NODE_ADDRESS,
-                      new ReceiverOptions()
-                          .deliveryMode(DeliveryMode.AT_MOST_ONCE)
-                          .linkName(linkPairName)
-                          .properties(properties)
-                          .creditWindow(100));
+    try {
+      election =
+          this.stateClient.query(
+              s -> {
+                // Fast path: already open
+                if (s.state == OPEN) {
+                  return new ElectionResult(false, CompletableFuture.completedFuture(null));
+                }
+                // Someone else is already initializing it; we are a Follower
+                if (s.initFuture != null) {
+                  return new ElectionResult(false, s.initFuture);
+                }
 
-              this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-              LOGGER.debug("Management sender created ({}).", this);
-              this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
-              LOGGER.debug("Management receiver created ({}).", this);
-              this.state(OPEN);
-              this.closed.set(false);
-            } catch (Exception e) {
-              LOGGER.info("Error during management {} initialization: {}", cName, e.getMessage());
-              throw ExceptionUtils.convert(e);
-            } finally {
-              this.initializing = false;
-            }
-          } else {
-            LOGGER.debug(
-                "Not initializing management {}: init in progress {}, state {}",
-                cName,
-                initInProgress,
-                state);
-          }
-        } finally {
-          initializationLock.unlock();
-        }
-      } else {
-        LOGGER.debug("Not initializing management {} because it is already initializing", cName);
-      }
+                // We are the Leader! Claim the initialization process.
+                s.initFuture = new CompletableFuture<>();
+
+                if (s.receiveLoop != null) {
+                  s.receiveLoop.cancel(true);
+                  s.receiveLoop = null;
+                }
+                return new ElectionResult(true, s.initFuture);
+              });
+    } catch (IllegalStateException e) {
+      throw new AmqpException.AmqpResourceClosedException("Management is closed");
+    }
+
+    if (!election.isLeader) {
+      waitForLeader(election.future, cName);
     } else {
-      LOGGER.debug("Not initializing management {} because state is {}", cName, state);
+      performLeaderInitialization(election.future, cName);
+    }
+  }
+
+  private void waitForLeader(CompletableFuture<Void> future, String connectionName) {
+    try {
+      LOGGER.debug("Waiting for management initialization by another thread ({}).", connectionName);
+      future.get(this.rpcTimeout.toMillis(), MILLISECONDS);
+    } catch (Exception e) {
+      throw ExceptionUtils.convert(e);
+    }
+  }
+
+  private void performLeaderInitialization(
+      CompletableFuture<Void> leaderFuture, String connectionName) {
+    try {
+      this.closeNativeResources(); // Ensure a clean slate
+
+      LOGGER.debug("Creating management session ({}).", this);
+      this.session = this.connection.nativeConnection().openSession(Utils.sessionOptions());
+      String linkPairName = "management-link-pair";
+      Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
+
+      LOGGER.debug("Creating management sender ({}).", this);
+      this.sender =
+          session.openSender(
+              MANAGEMENT_NODE_ADDRESS,
+              new SenderOptions()
+                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                  .linkName(linkPairName)
+                  .properties(properties));
+
+      LOGGER.debug("Creating management receiver ({}).", this);
+      this.receiver =
+          session.openReceiver(
+              MANAGEMENT_NODE_ADDRESS,
+              new ReceiverOptions()
+                  .deliveryMode(DeliveryMode.AT_MOST_ONCE)
+                  .linkName(linkPairName)
+                  .properties(properties)
+                  .creditWindow(100));
+
+      this.sender.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+      LOGGER.debug("Management sender created ({}).", this);
+      this.receiver.openFuture().get(this.rpcTimeout.toMillis(), MILLISECONDS);
+      LOGGER.debug("Management receiver created ({}).", this);
+
+      // 1. Tell Event Loop to officially open
+      try {
+        this.stateClient.submit(
+            s -> {
+              s.state = OPEN;
+              s.initFuture = null; // Reset for next lifecycle
+            });
+      } catch (IllegalStateException e) {
+        // Event loop was closed concurrently, ignore.
+        LOGGER.debug("Error in event loop: {}", e.getMessage());
+      } finally {
+        // 2. NOW unblock the followers
+        leaderFuture.complete(null);
+      }
+
+    } catch (Exception e) {
+      LOGGER.info("Error during management {} initialization: {}", connectionName, e.getMessage());
+      AmqpException amqpEx = ExceptionUtils.convert(e);
+
+      // Clean up the loop state on failure
+      try {
+        this.stateClient.submit(s -> s.initFuture = null);
+      } catch (IllegalStateException ex) {
+        LOGGER.debug("Error in event loop: {}", ex.getMessage());
+      } finally {
+        // GUARANTEE followers receive the error
+        leaderFuture.completeExceptionally(amqpEx);
+      }
+
+      throw amqpEx;
     }
   }
 
@@ -341,7 +400,8 @@ class AmqpManagement implements Management {
             idleTime = 0;
             Object correlationId = delivery.message().correlationId();
             if (correlationId instanceof UUID) {
-              OutstandingRequest request = outstandingRequests.remove(correlationId);
+              OutstandingRequest request =
+                  this.stateClient.query(s -> s.outstandingRequests.remove(correlationId));
               if (request != null) {
                 request.complete(delivery.message());
               } else {
@@ -356,7 +416,7 @@ class AmqpManagement implements Management {
               LOGGER.debug(
                   "Management receive loop has been idle for more than {}, finishing it.",
                   this.receiveLoopIdleTimeout);
-              this.receiveLoop = null;
+              this.stateClient.submit(s -> s.receiveLoop = null);
               return;
             }
           }
@@ -370,33 +430,20 @@ class AmqpManagement implements Management {
         this.failRequests(exception);
         if (exception instanceof AmqpException.AmqpSecurityException) {
           LOGGER.debug(
-              "Recovering AMQP management because the failure was a security exception ({}).",
+              "AMQP management resources closed because of security exception ({}). It will "
+                  + "be restored on next call.",
               this);
-          this.init();
         }
       } catch (ClientException e) {
         java.util.function.Consumer<String> log =
-            this.closed.get() ? m -> LOGGER.debug(m, e) : m -> LOGGER.info(m, e);
+            this.isClosed() ? m -> LOGGER.debug(m, e) : m -> LOGGER.info(m, e);
         log.accept("Error while polling AMQP receiver");
       }
     };
   }
 
   private void failRequests(AmqpException exception) {
-    // Coordinate with request() to ensure we see all requests and prevent new ones
-    initializationLock.lock();
-    try {
-      Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
-          this.outstandingRequests.entrySet().iterator();
-      while (iterator.hasNext()) {
-        Map.Entry<UUID, OutstandingRequest> request = iterator.next();
-        LOGGER.info("Failing management request {}", request.getKey());
-        request.getValue().fail(exception);
-        iterator.remove();
-      }
-    } finally {
-      initializationLock.unlock();
-    }
+    this.stateClient.submit(s -> s.failRequests(exception));
   }
 
   void releaseResources(AmqpException e) {
@@ -404,21 +451,24 @@ class AmqpManagement implements Management {
   }
 
   void releaseResources(AmqpException e, State state) {
-    initializationLock.lock();
-    try {
-      if (state == null) {
-        this.markUnavailable();
-      } else {
-        this.state(state);
+    if (!this.stateClient.isClosed()) {
+      try {
+        this.stateClient.submit(
+            s -> {
+              // If explicitly passed a state (like CLOSED from close()), use it.
+              // Otherwise, it's a network drop: only downgrade to UNAVAILABLE if not already
+              // CLOSED.
+              s.state = state != null ? state : (s.state == CLOSED ? CLOSED : UNAVAILABLE);
+              if (s.receiveLoop != null) {
+                s.receiveLoop.cancel(true);
+                s.receiveLoop = null;
+              }
+              s.failRequests(e);
+            });
+      } catch (IllegalStateException ex) {
+        // ignore, loop is dead
       }
-      if (this.receiveLoop != null) {
-        this.receiveLoop.cancel(true);
-        this.receiveLoop = null;
-      }
-    } finally {
-      initializationLock.unlock();
     }
-    this.failRequests(e);
   }
 
   QueueInfo declareQueue(String name, Map<String, Object> body) {
@@ -484,34 +534,32 @@ class AmqpManagement implements Management {
     OutstandingRequest outstandingRequest = new OutstandingRequest(this.rpcTimeout);
     LOGGER.debug("Enqueueing request {}", requestId);
 
-    // Coordinate with failRequests() to prevent race conditions during resource release
-    initializationLock.lock();
-    try {
-      // Check again after acquiring lock in case management became unavailable
-      checkAvailable();
-      this.outstandingRequests.put(requestId, outstandingRequest);
-    } finally {
-      initializationLock.unlock();
+    // Strict, lock-free transactional registration
+    boolean registered =
+        this.stateClient.query(
+            s -> {
+              if (s.state != OPEN) {
+                return false;
+              }
+              s.outstandingRequests.put(requestId, outstandingRequest);
+              return true;
+            });
+
+    if (!registered) {
+      checkAvailable(); // This will throw the correct AmqpException if closed/unavailable
     }
 
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
     // FIXME use async callback for management responses
-    Future<?> loop = this.receiveLoop;
-    if (loop == null) {
-      this.instanceLock.lock();
-      try {
-        loop = this.receiveLoop;
-        if (loop == null) {
-          Runnable receiveTask = receiveTask();
-          LOGGER.debug("Starting management receive loop ({}).", this);
-          this.receiveLoop = this.connection.environment().executorService().submit(receiveTask);
-          LOGGER.debug("Management initialized ({}).", this);
-        }
-      } finally {
-        this.instanceLock.unlock();
-      }
-    }
+    this.stateClient.submit(
+        s -> {
+          if (s.receiveLoop == null) {
+            LOGGER.debug("Starting management receive loop ({}).", this);
+            s.receiveLoop = this.connection.environment().executorService().submit(receiveTask());
+            LOGGER.debug("Management initialized ({}).", this);
+          }
+        });
     return outstandingRequest;
   }
 
@@ -740,7 +788,7 @@ class AmqpManagement implements Management {
 
   // for testing
   boolean hasReceiveLoop() {
-    return this.receiveLoop != null;
+    return this.stateClient.query(s -> s.receiveLoop != null);
   }
 
   private static class DefaultQueueInfo implements QueueInfo {
@@ -895,11 +943,27 @@ class AmqpManagement implements Management {
   }
 
   private State state() {
-    return this.state.get();
+    if (this.stateClient.isClosed()) {
+      return CLOSED;
+    }
+    try {
+      return this.stateClient.query(s -> s.state);
+    } catch (IllegalStateException e) {
+      // The event loop or client was closed concurrently
+      return CLOSED;
+    }
   }
 
   private void state(State state) {
-    this.state.set(state);
+    try {
+      this.stateClient.submit(s -> s.state = state);
+    } catch (IllegalStateException e) {
+      // ignore, loop is dead
+    }
+  }
+
+  boolean isClosed() {
+    return this.state() == CLOSED;
   }
 
   void markUnavailable() {
@@ -934,7 +998,41 @@ class AmqpManagement implements Management {
     }
   }
 
-  boolean isClosed() {
-    return this.closed.get();
+  private static class ManagementState {
+    private State state = CREATED;
+    private final Map<UUID, OutstandingRequest> outstandingRequests = new HashMap<>();
+    // Tracks the ongoing initialization
+    private CompletableFuture<Void> initFuture;
+    private Future<?> receiveLoop;
+
+    void failRequests(AmqpException exception) {
+      Iterator<Map.Entry<UUID, OutstandingRequest>> iterator =
+          this.outstandingRequests.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Map.Entry<UUID, OutstandingRequest> request = iterator.next();
+        LOGGER.info("Failing management request {}", request.getKey());
+        request.getValue().fail(exception);
+        iterator.remove();
+      }
+
+      if (this.initFuture != null && !this.initFuture.isDone()) {
+        this.initFuture.completeExceptionally(
+            exception != null
+                ? exception
+                : new AmqpException("Management released during initialization"));
+        this.initFuture = null;
+      }
+    }
+  }
+
+  /** Helper class for the init method. */
+  private static class ElectionResult {
+    private final boolean isLeader;
+    private final CompletableFuture<Void> future;
+
+    private ElectionResult(boolean isLeader, CompletableFuture<Void> future) {
+      this.isLeader = isLeader;
+      this.future = future;
+    }
   }
 }

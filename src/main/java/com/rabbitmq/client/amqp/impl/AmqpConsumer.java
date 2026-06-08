@@ -111,7 +111,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private ProtonLinkCreditState creditState;
 
   AmqpConsumer(AmqpConsumerBuilder builder) {
-    super(builder.listeners());
+    super(builder.listeners(), builder.connection().environment().executorService());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
     this.preSettled = builder.isPreSettled() || builder.directReplyTo();
