@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Resource;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -113,6 +114,7 @@ class StateEventSupport {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public Throwable failureCause() {
       return this.failureCause;
     }

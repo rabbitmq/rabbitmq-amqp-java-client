@@ -38,7 +38,7 @@ import org.apache.qpid.protonj2.client.ClientOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class AmqpEnvironment implements Environment {
+final class AmqpEnvironment implements Environment {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);

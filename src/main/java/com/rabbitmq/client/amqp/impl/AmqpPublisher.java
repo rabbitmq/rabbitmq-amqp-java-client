@@ -25,6 +25,7 @@ import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -242,6 +243,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public Message message() {
       return this.message;
     }
@@ -252,6 +254,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public Throwable failureCause() {
       return this.failureCause;
     }

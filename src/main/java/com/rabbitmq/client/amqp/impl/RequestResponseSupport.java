@@ -22,6 +22,7 @@ import com.rabbitmq.client.amqp.Requester;
 import com.rabbitmq.client.amqp.RequesterBuilder;
 import com.rabbitmq.client.amqp.Responder;
 import com.rabbitmq.client.amqp.ResponderBuilder;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -50,6 +51,7 @@ final class RequestResponseSupport {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public RequesterAddressBuilder requestAddress() {
       return this.requestAddressBuilder;
     }
