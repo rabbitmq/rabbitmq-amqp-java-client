@@ -33,7 +33,7 @@ interface SessionHandler extends AutoCloseable {
 
   void close();
 
-  class ConnectionNativeSessionSessionHandler implements SessionHandler {
+  final class ConnectionNativeSessionSessionHandler implements SessionHandler {
 
     private final AmqpConnection connection;
 
@@ -55,7 +55,7 @@ interface SessionHandler extends AutoCloseable {
     public void close() {}
   }
 
-  class SingleSessionSessionHandler implements SessionHandler {
+  final class SingleSessionSessionHandler implements SessionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SingleSessionSessionHandler.class);
 

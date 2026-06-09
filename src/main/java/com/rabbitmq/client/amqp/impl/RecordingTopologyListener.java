@@ -187,7 +187,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     LOGGER.debug("Topology listener '{}' visitor, topology visited...", this.label);
   }
 
-  static class ExchangeSpec {
+  static final class ExchangeSpec {
 
     private final String name;
     private final String type;
@@ -218,7 +218,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     }
   }
 
-  static class QueueSpec {
+  static final class QueueSpec {
 
     private final String name;
     private final boolean exclusive;
@@ -249,7 +249,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     }
   }
 
-  static class BindingSpec {
+  static final class BindingSpec {
 
     private final String source;
     private final String destination;

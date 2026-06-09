@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -639,6 +640,7 @@ final class AmqpMessage implements Message {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public Message message() {
       this.buildCallback.accept(this.message, this.address());
       return this.message;

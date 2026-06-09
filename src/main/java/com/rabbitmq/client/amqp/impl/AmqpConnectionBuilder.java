@@ -25,6 +25,7 @@ import com.rabbitmq.client.amqp.CredentialsProvider;
 import com.rabbitmq.client.amqp.OAuth2Settings;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -236,6 +237,7 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
     }
 
     @Override
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public ConnectionBuilder connectionBuilder() {
       return this.connectionBuilder;
     }
