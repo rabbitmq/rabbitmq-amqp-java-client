@@ -221,9 +221,17 @@ public interface Message {
   Message userId(byte[] userId);
 
   /**
-   * Set the to field.
+   * Sets the "to" property of the message, which identifies the intended destination node.
    *
    * <p>Prefer using {@link #toAddress()} to build the target address.
+   *
+   * <p><b>Broker Routing Note:</b> This field is only utilized for dynamic routing by RabbitMQ when
+   * the message is dispatched through an <b>Anonymous Sender</b> (Anonymous Terminus).
+   *
+   * <p>If you transmit this message over a publisher that was already configured with a specific
+   * target address, this property is ignored for routing purposes. The message will land in the
+   * link's target destination, though the "to" property will still be delivered to the final
+   * consumer as immutable metadata.
    *
    * @param address to address
    * @return the message
@@ -842,7 +850,16 @@ public interface Message {
   Message forEachAnnotation(BiConsumer<String, Object> action);
 
   /**
-   * {@link AddressBuilder} for the {@link #to()} field.
+   * {@link AddressBuilder} for the {@link #to()} field, which identifies the intended destination
+   * node.
+   *
+   * <p><b>Broker Routing Note:</b> This field is only utilized for dynamic routing by RabbitMQ when
+   * the message is dispatched through an <b>Anonymous Sender</b> (Anonymous Terminus).
+   *
+   * <p>If you transmit this message over a publisher that was already configured with a specific
+   * target address, this property is ignored for routing purposes. The message will land in the
+   * link's target destination, though the "to" property will still be delivered to the final
+   * consumer as immutable metadata.
    *
    * @return the address builder
    */
