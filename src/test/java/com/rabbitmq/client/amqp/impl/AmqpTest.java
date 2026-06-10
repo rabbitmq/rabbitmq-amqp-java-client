@@ -26,6 +26,8 @@ import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_0_3;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_3_0;
+import static com.rabbitmq.client.amqp.impl.TestUtils.simulateActivity;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitUntilStable;
@@ -55,6 +57,7 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersionAtLeast;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfAddressV1Permitted;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +68,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -1052,6 +1056,54 @@ public class AmqpTest {
       assertThat(consumeSync).completes();
       Message message = messageRef.get();
       assertThat(message).isDurable(durable);
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_3_0)
+  void timedOutMessageMessageShouldBeRedeliveredOnceAcceptedWithConsumerTimeoutEnabled() {
+    Duration timeout = Duration.ofSeconds(1);
+    try {
+      connection.management().queue(name).quorum().consumerTimeout(timeout).queue().declare();
+      int messageCount = 10;
+      Publisher publisher = connection.publisherBuilder().queue(name).build();
+      Sync publishSync = sync(messageCount);
+      range(0, messageCount)
+          .forEach(
+              i -> publisher.publish(publisher.message().messageId(i), ctx -> publishSync.down()));
+      assertThat(publishSync).completes();
+
+      AtomicBoolean oneTimedOut = new AtomicBoolean(false);
+
+      Sync consumeSync = sync(messageCount + 1);
+      AmqpConsumer consumer =
+          (AmqpConsumer)
+              connection
+                  .consumerBuilder()
+                  .queue(name)
+                  .messageHandler(
+                      (ctx, msg) -> {
+                        if (oneTimedOut.compareAndSet(false, true)) {
+                          new Thread(
+                                  () -> {
+                                    simulateActivity(timeout.plus(Duration.ofSeconds(1)));
+                                    ctx.accept();
+                                  })
+                              .start();
+                        } else {
+                          ctx.accept();
+                        }
+                        consumeSync.down();
+                      })
+                  .build();
+
+      assertThat(consumeSync).completes();
+
+      consumer.close();
+      waitAtMost(() -> connection.management().queueInfo(name).messageCount() == 0);
+      assertThat(connection.management().queueInfo(name)).isEmpty();
     } finally {
       connection.management().queueDelete(this.name);
     }
