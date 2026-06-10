@@ -211,6 +211,10 @@ public abstract class TestUtils {
     }
   }
 
+  static void simulateActivity(Duration time) {
+    simulateActivity(time.toMillis());
+  }
+
   static void simulateActivity(long timeInMs) {
     try {
       Thread.sleep(timeInMs);

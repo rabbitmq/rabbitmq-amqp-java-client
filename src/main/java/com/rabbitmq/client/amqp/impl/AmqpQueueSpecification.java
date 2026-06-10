@@ -318,6 +318,14 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     }
 
     @Override
+    public Management.QuorumQueueSpecification consumerTimeout(Duration timeout) {
+      validateNotNull("x-consumer-timeout", timeout);
+      validatePositive("x-consumer-timeout", timeout.toMillis());
+      this.parent.arg("x-consumer-timeout", timeout.toMillis());
+      return this;
+    }
+
+    @Override
     public Management.QueueSpecification queue() {
       return parent;
     }

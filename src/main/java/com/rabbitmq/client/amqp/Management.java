@@ -390,6 +390,26 @@ public interface Management extends AutoCloseable {
     QuorumQueueSpecification delayedRetryMax(Duration max);
 
     /**
+     * Set the consumer timeout for the quorum queue.
+     *
+     * <p>Quorum queues support configurable consumer timeouts to handle slow or stuck consumers.
+     * When a consumer holds unacknowledged messages beyond the configured timeout period, the
+     * messages are automatically returned to the queue and become available for redelivery by
+     * another consumer.
+     *
+     * <p>When a consumer timeout fires, for AMQP 1.0 clients, the broker sends a DISPOSITION frame
+     * with state=released instead of detaching the link. This allows the client to auto-settle the
+     * delivery and potentially recover without needing to re-establish the link. Until the consumer
+     * settles the timed out message it will not be assigned any further messages.
+     *
+     * @param timeout the consumer timeout duration
+     * @return quorum queue specification
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#consumer-timeout">Consumer
+     *     Timeout</a>
+     */
+    QuorumQueueSpecification consumerTimeout(Duration timeout);
+
+    /**
      * Go back to the queue specification.
      *
      * @return queue specification
