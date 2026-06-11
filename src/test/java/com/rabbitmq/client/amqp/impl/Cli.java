@@ -152,8 +152,10 @@ abstract class Cli {
   private static Process executeCommandProcess(String command) {
     String[] finalCommand;
     if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+      command = command.replace("'", "\"");
       finalCommand = new String[4];
-      finalCommand[0] = "C:\\winnt\\system32\\cmd.exe";
+      String comSpec = System.getenv("ComSpec");
+      finalCommand[0] = comSpec != null && !comSpec.isEmpty() ? comSpec : "cmd.exe";
       finalCommand[1] = "/y";
       finalCommand[2] = "/c";
       finalCommand[3] = command;
