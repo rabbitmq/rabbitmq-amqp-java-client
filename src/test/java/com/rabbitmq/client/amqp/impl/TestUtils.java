@@ -44,6 +44,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
@@ -700,5 +703,12 @@ public abstract class TestUtils {
 
   static double randomDouble() {
     return ThreadLocalRandom.current().nextDouble();
+  }
+
+  static Level newLoggerLevel(Class<?> c, Level level) {
+    org.apache.logging.log4j.Logger logger = LogManager.getLogger(c);
+    Level initialLevel = logger.getLevel();
+    Configurator.setLevel(c.getName(), level);
+    return initialLevel;
   }
 }

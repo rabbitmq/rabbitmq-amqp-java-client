@@ -270,15 +270,16 @@ public class TopologyRecoveryTest {
 
       Sync consumeSync = TestUtils.sync();
       Publisher publisher = connection.publisherBuilder().exchange(e).key("foo").build();
-      connection
-          .consumerBuilder()
-          .queue(q)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                consumeSync.down();
-              })
-          .build();
+      Consumer consumer =
+          connection
+              .consumerBuilder()
+              .queue(q)
+              .messageHandler(
+                  (context, message) -> {
+                    context.accept();
+                    consumeSync.down();
+                  })
+              .build();
 
       publisher.publish(publisher.message(), context -> {});
 
@@ -291,6 +292,8 @@ public class TopologyRecoveryTest {
 
       publisher.publish(publisher.message(), context -> {});
       assertThat(consumeSync).completes();
+      publisher.close();
+      consumer.close();
     }
   }
 
