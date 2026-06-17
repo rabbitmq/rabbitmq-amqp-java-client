@@ -22,12 +22,14 @@ import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CON
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.newLoggerLevel;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMostNoException;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Environment;
@@ -55,7 +57,9 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import org.apache.logging.log4j.Level;
 import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,9 +86,12 @@ public class RecoveryClusterTest {
   AmqpConnection connection;
   Management management;
   TestInfo testInfo;
+  static List<Level> logLevels;
+  static List<Class<?>> logClasses = List.of(AmqpConnection.class, AmqpConsumer.class);
 
   @BeforeAll
   static void initAll() {
+    logLevels = logClasses.stream().map(c -> newLoggerLevel(c, Level.DEBUG)).collect(toList());
     nodes = Cli.nodes();
     LOGGER.info("Available processor(s): {}", Utils.AVAILABLE_PROCESSORS);
   }
@@ -109,6 +116,14 @@ public class RecoveryClusterTest {
   void tearDown() {
     environment.close();
     dispatchingExecutorService.shutdown();
+  }
+
+  @AfterAll
+  static void tearDownAll() {
+    if (logLevels != null) {
+      Streams.zip(logClasses.stream(), logLevels.stream(), Tuples::pair)
+          .forEach(t -> newLoggerLevel(t.v1(), t.v2()));
+    }
   }
 
   private static class QueueConfiguration {
@@ -303,8 +318,8 @@ public class RecoveryClusterTest {
           p -> {
             try {
               System.out.printf(
-                  "  queue %s, is on leader? %s, last exception '%s', last failed status '%s'%n",
-                  p.queue, p.isOnLeader(), p.lastException(), p.lastFailedStatus());
+                  "  queue %s, is on leader? %s, state %s, last exception '%s', last failed status '%s'%n",
+                  p.queue, p.isOnLeader(), p.state(), p.lastException(), p.lastFailedStatus());
             } catch (Exception ex) {
               LOGGER.info(
                   "Error while checking publisher '{}' is on leader node: {}", p, ex.getMessage());
@@ -313,12 +328,13 @@ public class RecoveryClusterTest {
 
       System.out.println("Consumers:");
       consumerStates.forEach(
-          p -> {
+          c -> {
             try {
-              System.out.printf("  queue %s, is on member? %s%n", p.queue, p.isOnMember());
+              System.out.printf("  queue %s, is on member? %s%n", c.queue, c.isOnMember());
+              System.out.println(c.consumer.diagnosticState());
             } catch (Exception ex) {
               LOGGER.info(
-                  "Error while checking consumer '{}' is on a member node: {}", p, ex.getMessage());
+                  "Error while checking consumer '{}' is on a member node: {}", c, ex.getMessage());
             }
           });
 

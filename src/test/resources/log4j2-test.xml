@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="STDOUT" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{1} - %msg%n"/>
+    </Console>
+
+    <File name="FILE" fileName="target/test.log" append="false">
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{1} - %msg%n"/>
+    </File>
+  </Appenders>
+
+  <Loggers>
+    <Logger name="com.rabbitmq.client.amqp.AmqpClientTestExtension" level="warn" />
+    <Logger name="com.rabbitmq.client.amqp" level="warn" />
+    <Logger name="org.apache.qpid" level="error" />
+    <Logger name="com.rabbitmq.client.amqp.perf" level="info" />
+<!--    <Logger name="com.rabbitmq.client.amqp.impl.RecoveryClusterTest" level="debug" />-->
+<!--    <Logger name="com.rabbitmq.client.amqp.impl.AmqpConnection" level="debug" />-->
+<!--    <Logger name="com.rabbitmq.client.amqp.impl.AmqpConsumer" level="debug" />-->
+
+    <Root level="warn">
+      <AppenderRef ref="STDOUT" />
+<!--      <AppenderRef ref="FILE" />-->
+    </Root>
+  </Loggers>
+</Configuration>

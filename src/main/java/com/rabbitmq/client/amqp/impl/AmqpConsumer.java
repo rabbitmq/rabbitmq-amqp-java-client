@@ -34,6 +34,7 @@ import com.rabbitmq.client.amqp.ConsumerBuilder;
 import com.rabbitmq.client.amqp.ConsumerBuilder.StreamOptions;
 import com.rabbitmq.client.amqp.ConsumerBuilder.SubscriptionListener;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -388,7 +389,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             } finally {
               // Decrement on proton executor so replenishCreditIfNeeded sees
               // a consistent pendingWorkItems value when it runs
-              protonExecutor.execute(() -> pendingWorkItems.decrementAndGet());
+              try {
+                protonExecutor.execute(() -> pendingWorkItems.decrementAndGet());
+              } catch (RejectedExecutionException ex) {
+                // The executor is dead, meaning the connection dropped.
+                // The race condition with replenishCreditIfNeeded is irrelevant now.
+                // Safely decrement the atomic counter directly so we don't leak work items.
+                pendingWorkItems.decrementAndGet();
+              }
             }
           };
     }
@@ -851,5 +859,37 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
     return ExceptionUtils.maybeCloseOnException(consumer::close, ex);
+  }
+
+  // for testing
+  @SuppressFBWarnings("REC_CATCH_EXCEPTION")
+  String diagnosticState() {
+    int nativeCredits = -1;
+    Scheduler exec = this.protonExecutor;
+    ProtonReceiver receiver = this.protonReceiver;
+
+    if (exec != null && !exec.isShutdown() && receiver != null) {
+      try {
+        java.util.concurrent.CompletableFuture<Integer> creditFuture =
+            new java.util.concurrent.CompletableFuture<>();
+
+        exec.execute(() -> creditFuture.complete(receiver.getCredit()));
+
+        // Block briefly to retrieve the value from the proton thread
+        nativeCredits = creditFuture.get(2, java.util.concurrent.TimeUnit.SECONDS);
+      } catch (Exception e) {
+        nativeCredits = -2; // -2 indicates we failed to read the credits safely
+      }
+    }
+
+    return String.format(
+        "Consumer-%d | queue='%s' | state=%s | pauseStatus=%s | unsettledCount=%d | pendingWorkItems=%d | nativeCredits=%d",
+        this.id,
+        this.queue == null ? "<direct-reply-to>" : this.queue,
+        this.state(),
+        this.pauseStatus.get(),
+        this.unsettledMessageCount.get(),
+        this.pendingWorkItems.get(),
+        nativeCredits);
   }
 }
