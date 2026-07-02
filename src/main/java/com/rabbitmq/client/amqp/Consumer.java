@@ -85,9 +85,10 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message cannot be processed because it is invalid, the broker can drop it
      * or dead-letter it if it is configured.
      *
-     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
-     * </code>.
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = true, undeliverable-here = true}</code> outcome.
@@ -118,9 +119,10 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message has not been processed and the broker can requeue it and deliver it
      * to the same or a different consumer.
      *
-     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
-     * </code>.
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = false, undeliverable-here = false}</code> outcome.
@@ -143,9 +145,10 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message has not been processed and the broker can requeue it and deliver it
      * to the same or a different consumer.
      *
-     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
-     * </code>.
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome.
