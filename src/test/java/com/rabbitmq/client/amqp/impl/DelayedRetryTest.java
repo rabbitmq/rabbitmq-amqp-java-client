@@ -24,10 +24,12 @@ import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.Publisher;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -37,6 +39,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
 public class DelayedRetryTest {
@@ -108,8 +113,10 @@ public class DelayedRetryTest {
         .isCloseTo(retryDelay, retryDelay.dividedBy(5));
   }
 
-  @Test
-  void explicitDeliveryTimeInMessageShouldOverrideRetryDelay() {
+  @ParameterizedTest
+  @EnumSource(ExplicitDeliveryTimeStrategy.class)
+  void explicitDeliveryTimeInMessageShouldOverrideRetryDelay(
+      ExplicitDeliveryTimeStrategy strategy) {
     Duration retryDelay = ofMillis(100);
     Duration deliveryTimeOffset = ofMillis(1000);
     this.management
@@ -122,9 +129,8 @@ public class DelayedRetryTest {
         .declare();
 
     Publisher publisher = this.connection.publisherBuilder().queue(q).build();
-    AtomicInteger deliveryCount = new AtomicInteger();
+    AtomicInteger count = new AtomicInteger();
     TestUtils.Sync redeliveredSync = TestUtils.sync();
-    Queue<Message> messages = new ArrayBlockingQueue<>(2);
     AtomicLong timeBetweenDeliveriesNs = new AtomicLong();
 
     this.connection
@@ -132,15 +138,94 @@ public class DelayedRetryTest {
         .queue(q)
         .messageHandler(
             (context, message) -> {
-              deliveryCount.incrementAndGet();
-              messages.offer(message);
-              if (deliveryCount.get() == 1) {
+              if (count.incrementAndGet() == 1) {
                 timeBetweenDeliveriesNs.set(System.nanoTime());
-                long time = System.currentTimeMillis() + deliveryTimeOffset.toMillis();
-                context.requeue(Map.of("x-opt-delivery-time", time));
+                strategy.apply(context, deliveryTimeOffset);
               } else {
-                long now = System.nanoTime();
-                timeBetweenDeliveriesNs.set(now - timeBetweenDeliveriesNs.get());
+                timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
+                context.accept();
+                redeliveredSync.down();
+              }
+            })
+        .build();
+
+    publisher.publish(publisher.message(), ctx -> {});
+    assertThat(redeliveredSync).completes();
+    waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
+
+    assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
+        .isCloseTo(deliveryTimeOffset, deliveryTimeOffset.dividedBy(5));
+  }
+
+  @ParameterizedTest
+  @EnumSource(DelayedRetryStrategy.class)
+  void delayedRetryShouldRedeliver(DelayedRetryStrategy strategy) {
+    Duration retryDelay = ofMillis(1000);
+    this.management
+        .queue()
+        .name(q)
+        .quorum()
+        .delayedRetryType(ALL)
+        .delayedRetryMin(retryDelay)
+        .queue()
+        .declare();
+
+    Publisher publisher = this.connection.publisherBuilder().queue(q).build();
+    AtomicInteger count = new AtomicInteger();
+    TestUtils.Sync redeliveredSync = TestUtils.sync();
+    AtomicLong timeBetweenDeliveriesNs = new AtomicLong();
+
+    this.connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (context, message) -> {
+              if (count.incrementAndGet() == 1) {
+                timeBetweenDeliveriesNs.set(System.nanoTime());
+                strategy.apply(context, retryDelay);
+              } else {
+                timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
+                context.accept();
+                redeliveredSync.down();
+              }
+            })
+        .build();
+
+    publisher.publish(publisher.message(), ctx -> {});
+    assertThat(redeliveredSync).completes();
+    waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
+
+    assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
+        .isCloseTo(retryDelay, retryDelay.dividedBy(5));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void deliveryFailedFlagShouldControlDeliveryCount(boolean deliveryFailed) {
+    Duration retryDelay = ofMillis(500);
+    this.management
+        .queue()
+        .name(q)
+        .quorum()
+        .delayedRetryType(ALL)
+        .delayedRetryMin(retryDelay)
+        .queue()
+        .declare();
+
+    Publisher publisher = this.connection.publisherBuilder().queue(q).build();
+    AtomicInteger count = new AtomicInteger();
+    TestUtils.Sync redeliveredSync = TestUtils.sync();
+    Queue<Message> messages = new ArrayBlockingQueue<>(1);
+
+    this.connection
+        .consumerBuilder()
+        .queue(q)
+        .messageHandler(
+            (context, message) -> {
+              if (count.incrementAndGet() == 1) {
+                context.delayedRetry(retryDelay, deliveryFailed);
+              } else {
+                messages.offer(message);
                 context.accept();
                 redeliveredSync.down();
               }
@@ -150,14 +235,73 @@ public class DelayedRetryTest {
     publisher.publish(publisher.message(), ctx -> {});
     assertThat(redeliveredSync).completes();
 
-    Message message1 = messages.poll();
-    Message message2 = messages.poll();
-
-    assertThat(message1).isNotNull();
-    assertThat(message2).isNotNull();
-
+    Message redelivered = messages.poll();
+    assertThat(redelivered).isNotNull().hasDeliveryCount(deliveryFailed ? 1L : 0L);
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
-    assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
-        .isCloseTo(deliveryTimeOffset, deliveryTimeOffset.dividedBy(5));
+  }
+
+  enum ExplicitDeliveryTimeStrategy {
+    REQUEUE_WITH_ANNOTATION {
+      @Override
+      public void apply(Consumer.Context ctx, Duration deliveryTimeOffset) {
+        long time = System.currentTimeMillis() + deliveryTimeOffset.toMillis();
+        ctx.requeue(Map.of("x-opt-delivery-time", time));
+      }
+    },
+    DELAYED_RETRY_DURATION {
+      @Override
+      public void apply(Consumer.Context ctx, Duration deliveryTimeOffset) {
+        ctx.delayedRetry(deliveryTimeOffset);
+      }
+    },
+    DELAYED_RETRY_INSTANT {
+      @Override
+      public void apply(Consumer.Context ctx, Duration deliveryTimeOffset) {
+        ctx.delayedRetry(Instant.now().plus(deliveryTimeOffset));
+      }
+    };
+
+    public abstract void apply(Consumer.Context ctx, Duration deliveryTimeOffset);
+  }
+
+  enum DelayedRetryStrategy {
+    DURATION {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(delay);
+      }
+    },
+    DURATION_NO_FAILURE {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(delay, false);
+      }
+    },
+    DURATION_DELIVERY_FAILED {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(delay, true);
+      }
+    },
+    INSTANT {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(Instant.now().plus(delay));
+      }
+    },
+    INSTANT_NO_FAILURE {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(Instant.now().plus(delay), false);
+      }
+    },
+    INSTANT_DELIVERY_FAILED {
+      @Override
+      public void apply(Consumer.Context ctx, Duration delay) {
+        ctx.delayedRetry(Instant.now().plus(delay), true);
+      }
+    };
+
+    public abstract void apply(Consumer.Context ctx, Duration delay);
   }
 }
