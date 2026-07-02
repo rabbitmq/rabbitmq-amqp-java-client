@@ -109,15 +109,15 @@ public class UtilsTest {
 
   @ParameterizedTest
   @CsvSource({
-      "4.3.0,4.3.0",
-      "3.13.6,3.13.6",
-      "3.13.6.2,3.13.6",
-      "3.13.6-alpha.0,3.13.6",
-      "3.13.6~beta-1,3.13.6",
-      "3.13.6+funky-metadata-1,3.13.6",
-      "3.7.0+rc.1.4.gedc5d96,3.7.0",
-      "tanzu+rabbitmq.v4.3.0.dev.1.179.g335e26b,4.3.0",
-      "4.2.8+9.gc3f3491,4.2.8"
+    "4.3.0,4.3.0",
+    "3.13.6,3.13.6",
+    "3.13.6.2,3.13.6",
+    "3.13.6-alpha.0,3.13.6",
+    "3.13.6~beta-1,3.13.6",
+    "3.13.6+funky-metadata-1,3.13.6",
+    "3.7.0+rc.1.4.gedc5d96,3.7.0",
+    "tanzu+rabbitmq.v4.3.0.dev.1.179.g335e26b,4.3.0",
+    "4.2.8+9.gc3f3491,4.2.8"
   })
   void currentVersionExtraction(String input, String expected) {
     assertThat(Utils.currentVersion(input)).isEqualTo(expected);
