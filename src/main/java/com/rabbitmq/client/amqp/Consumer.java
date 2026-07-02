@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -83,9 +85,10 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message cannot be processed because it is invalid, the broker can drop it
      * or dead-letter it if it is configured.
      *
-     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
-     * </code>.
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = true, undeliverable-here = true}</code> outcome.
@@ -116,9 +119,10 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p>This means the message has not been processed and the broker can requeue it and deliver it
      * to the same or a different consumer.
      *
-     * <p>Application-specific annotation keys must start with the <code>x-opt-</code> prefix.
-     * Annotation keys the broker understands start with <code>x-</code>, but not with <code>x-opt-
-     * </code>.
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
      *
      * <p>This maps to the AMQP 1.0 <code>
      * modified{delivery-failed = false, undeliverable-here = false}</code> outcome.
@@ -134,6 +138,119 @@ public interface Consumer extends AutoCloseable, Resource {
      *     in RabbitMQ</a>
      */
     void requeue(Map<String, Object> annotations);
+
+    /**
+     * Requeue the message with annotations to combine with the existing message annotations.
+     *
+     * <p>This means the message has not been processed and the broker can requeue it and deliver it
+     * to the same or a different consumer.
+     *
+     * <p>Custom application-specific annotation keys should start with the <code>x-opt-</code>
+     * prefix so they are safely ignored if not understood. Keys starting with <code>x-</code> (but
+     * not <code>x-opt-</code>) are reserved for broker-specific features, and unrecognized keys
+     * will cause a protocol error.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome.
+     *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
+     * @param annotations message annotations to combine with existing ones
+     * @param deliveryFailed if true, the delivery count of the message is incremented
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     */
+    void requeue(Map<String, Object> annotations, boolean deliveryFailed);
+
+    /**
+     * Requeue the message for redelivery after the specified delay.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to <code>now + delay</code>.
+     *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
+     * @param delay delivery delay from now
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry in
+     *     RabbitMQ</a>
+     */
+    void delayedRetry(Duration delay);
+
+    /**
+     * Requeue the message for redelivery after the specified delay.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to <code>now + delay</code>.
+     *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
+     * @param delay delivery delay from now
+     * @param deliveryFailed if true, the delivery count of the message is incremented
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry in
+     *     RabbitMQ</a>
+     */
+    void delayedRetry(Duration delay, boolean deliveryFailed);
+
+    /**
+     * Requeue the message for redelivery at the specified time.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to the specified time.
+     *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
+     * @param deliveryTime absolute delivery time
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry in
+     *     RabbitMQ</a>
+     */
+    void delayedRetry(Instant deliveryTime);
+
+    /**
+     * Requeue the message for redelivery at the specified time.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to the specified time.
+     *
+     * <p><b>Only quorum queues support the modification of message annotations with the <code>
+     * modified</code> outcome.</b>
+     *
+     * @param deliveryTime absolute delivery time
+     * @param deliveryFailed if true, the delivery count of the message is incremented
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see <a href="https://www.rabbitmq.com/docs/quorum-queues#delayed-retry">Delayed Retry in
+     *     RabbitMQ</a>
+     */
+    void delayedRetry(Instant deliveryTime, boolean deliveryFailed);
 
     /**
      * Create a batch context to accumulate message contexts and settle them at once.

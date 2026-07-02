@@ -23,6 +23,8 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Message;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -150,6 +152,31 @@ public class BatchDispositionTest {
       dispose();
     }
 
+    @Override
+    public void requeue(Map<String, Object> annotations, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Duration delay) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime) {
+      dispose();
+    }
+
     private void dispose() {
       dispositionFrameCount.inc();
       dispositionRangeSize.update(1);
@@ -203,6 +230,31 @@ public class BatchDispositionTest {
 
     @Override
     public void requeue(Map<String, Object> annotations) {
+      dispose();
+    }
+
+    @Override
+    public void requeue(Map<String, Object> annotations, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Duration delay) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
       dispose();
     }
 

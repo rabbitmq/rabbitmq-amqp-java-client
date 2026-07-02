@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
 import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.AmqpConsumerBuilder.NO_OP_SUBSCRIPTION_LISTENER;
+import static com.rabbitmq.client.amqp.impl.Assert.notNull;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.ACCEPTED;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.DISCARDED;
 import static com.rabbitmq.client.amqp.metrics.MetricsCollector.ConsumeDisposition.REQUEUED;
@@ -35,8 +36,11 @@ import com.rabbitmq.client.amqp.ConsumerBuilder.StreamOptions;
 import com.rabbitmq.client.amqp.ConsumerBuilder.SubscriptionListener;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -640,10 +644,41 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public void requeue(Map<String, Object> annotations) {
+      this.requeue(annotations, false);
+    }
+
+    @Override
+    public void requeue(Map<String, Object> annotations, boolean deliveryFailed) {
       annotations = annotations == null ? Collections.emptyMap() : annotations;
       Utils.checkMessageAnnotations(annotations);
       this.settle(
-          DeliveryState.modified(false, false, annotations), REQUEUED, "requeue (modified)");
+          DeliveryState.modified(deliveryFailed, false, annotations),
+          REQUEUED,
+          "requeue (modified)");
+    }
+
+    @Override
+    public void delayedRetry(Duration delay) {
+      this.delayedRetry(delay, false);
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed) {
+      notNull(delay, "Delay");
+      this.delayedRetry(Instant.now().plus(delay), deliveryFailed);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime) {
+      this.delayedRetry(deliveryTime, false);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      notNull(deliveryTime, "Delivery time");
+      Map<String, Object> annotations =
+          Collections.singletonMap(AmqpUtils.ANN_DELIVERY_TIME, Date.from(deliveryTime));
+      this.requeue(annotations, deliveryFailed);
     }
 
     @Override
@@ -770,6 +805,39 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
+    public void requeue(Map<String, Object> annotations, boolean deliveryFailed) {
+      annotations = annotations == null ? Collections.emptyMap() : annotations;
+      Utils.checkMessageAnnotations(annotations);
+      Modified state =
+          new Modified(
+              deliveryFailed, false, ClientConversionSupport.toSymbolKeyedMap(annotations));
+      this.settle(state, REQUEUED, "requeue (modified)");
+    }
+
+    @Override
+    public void delayedRetry(Duration delay) {
+      this.delayedRetry(delay, false);
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed) {
+      this.delayedRetry(Instant.now().plus(delay), deliveryFailed);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime) {
+      this.delayedRetry(deliveryTime, false);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      notNull(deliveryTime, "Delivery time");
+      Map<String, Object> annotations =
+          Collections.singletonMap(AmqpUtils.ANN_DELIVERY_TIME, Date.from(deliveryTime));
+      this.requeue(annotations, deliveryFailed);
+    }
+
+    @Override
     public BatchContext batch(int batchSizeHint) {
       return this;
     }
@@ -834,6 +902,31 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public void requeue(Map<String, Object> annotations) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void requeue(Map<String, Object> annotations, boolean deliveryFailed) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Duration delay) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime) {
       throw new UnsupportedOperationException("auto-settle on, message is already disposed");
     }
 
