@@ -82,9 +82,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @AmqpTestInfrastructure
 public class AmqpTest {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpTest.class);
 
   Connection connection;
   Environment environment;
@@ -1636,6 +1640,12 @@ public class AmqpTest {
 
     AtomicReference<ExecutorService> executorService = new AtomicReference<>();
 
+    Sync consumeSync = sync(messageCount);
+    AtomicInteger received = new AtomicInteger();
+    AtomicInteger dispatched = new AtomicInteger();
+    AtomicInteger executed = new AtomicInteger();
+    AtomicInteger processed = new AtomicInteger();
+    AtomicInteger accepted = new AtomicInteger();
     try {
       Sync publishSync = sync(messageCount);
       range(0, messageCount)
@@ -1646,9 +1656,9 @@ public class AmqpTest {
 
       assertThat(publishSync).completes();
       publisher.close();
+      LOGGER.debug("Published {} messages in queue '{}'", messageCount, name);
 
       executorService.set(Executors.newFixedThreadPool(executorThreads));
-      Sync consumeSync = sync(messageCount);
       long[] simulatedLatencies = new long[executorThreads];
       Random random = new Random();
       for (int i = 0; i < executorThreads; i++) {
@@ -1656,21 +1666,25 @@ public class AmqpTest {
       }
       AtomicInteger count = new AtomicInteger();
       Supplier<Long> latency = () -> simulatedLatencies[count.getAndIncrement() % executorThreads];
-
       consumer =
           connection
               .consumerBuilder()
               .queue(name)
               .messageHandler(
                   (context, message) -> {
+                    received.incrementAndGet();
                     executorService
                         .get()
                         .submit(
                             () -> {
+                              executed.incrementAndGet();
                               TestUtils.simulateActivity(latency.get());
+                              processed.incrementAndGet();
                               context.accept();
+                              accepted.incrementAndGet();
                               consumeSync.down();
                             });
+                    dispatched.incrementAndGet();
                   })
               .build();
 
@@ -1679,6 +1693,19 @@ public class AmqpTest {
       Management.QueueInfo queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasName(name).hasMessageCount(0);
     } finally {
+      if (consumer != null) {
+        LOGGER.debug("Consumer state: '{}'", ((AmqpConsumer) consumer).diagnosticState());
+      }
+      LOGGER.debug(
+          "Counters: received={}, dispatched={}, executed={}, processed={}, accepted={}",
+          received.get(),
+          dispatched.get(),
+          executed.get(),
+          processed.get(),
+          accepted.get());
+      LOGGER.debug("Consume latch: {}", consumeSync.count());
+      LOGGER.debug("Queue info: {}", connection.management().queueInfo(name));
+
       if (consumer != null) {
         consumer.close();
       }

@@ -680,6 +680,10 @@ public abstract class TestUtils {
       return this.latch.get().getCount() == 0;
     }
 
+    long count() {
+      return this.latch.get().getCount();
+    }
+
     @Override
     public String toString() {
       return this.description;

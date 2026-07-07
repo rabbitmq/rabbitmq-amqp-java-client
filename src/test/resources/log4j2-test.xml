@@ -12,6 +12,7 @@
 
   <Loggers>
     <Logger name="com.rabbitmq.client.amqp.AmqpClientTestExtension" level="warn" />
+    <Logger name="com.rabbitmq.client.amqp.impl.AmqpTest" level="debug" />
     <Logger name="com.rabbitmq.client.amqp" level="warn" />
     <Logger name="org.apache.qpid" level="error" />
     <Logger name="com.rabbitmq.client.amqp.perf" level="info" />
