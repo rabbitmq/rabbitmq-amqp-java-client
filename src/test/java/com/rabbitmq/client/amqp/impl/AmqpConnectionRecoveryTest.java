@@ -152,11 +152,11 @@ public class AmqpConnectionRecoveryTest {
               publishSync.down();
             }
           };
+      waitAtMost(() -> publisherOpenCount.get() == 1);
       p.publish(p.message().messageId(UUID.randomUUID()), outboundMessageCallback);
-      assertThat(publisherOpenCount).hasValue(1);
       assertThat(publishSync).completes();
 
-      assertThat(consumerOpenCount).hasValue(1);
+      waitAtMost(() -> consumerOpenCount.get() == 1);
       assertThat(consumeSync).completes();
       assertThat(receivedMessageIds)
           .hasSameSizeAs(publishedMessageIds)
