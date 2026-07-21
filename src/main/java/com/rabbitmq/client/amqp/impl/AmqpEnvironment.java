@@ -116,10 +116,11 @@ final class AmqpEnvironment implements Environment {
     this.writtenBytesConsumer = this.metricsCollector::writtenBytes;
     this.observationCollector =
         observationCollector == null ? Utils.NO_OP_OBSERVATION_COLLECTOR : observationCollector;
+    // using only 1 thread for each event loop, they don't deal with high-frequency requests
+    // and they just update small-scale states, without blocking calls.
     this.recoveryEventExecutorGroup =
         new DefaultEventExecutorGroup(1, Utils.threadFactory(threadPrefix + "event-loop-"));
     this.recoveryEventLoop = new EventLoop(this.recoveryEventExecutorGroup);
-    // FIXME ponder the number of threads for connection state loops
     this.connectionStateEventExecutorGroup =
         new DefaultEventExecutorGroup(
             1, Utils.threadFactory(threadPrefix + "connection-state-loop-"));
@@ -156,7 +157,7 @@ final class AmqpEnvironment implements Environment {
       this.connectionStateEventLoop.close();
       this.recoveryEventExecutorGroup.shutdownGracefully();
       this.recoveryEventLoop.close();
-      this.recoveryEventExecutorGroup.shutdownGracefully();
+      this.connectionStateEventExecutorGroup.shutdownGracefully();
       if (this.clockRefreshFuture != null) {
         this.clockRefreshFuture.cancel(false);
       }
