@@ -28,8 +28,7 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -163,6 +162,8 @@ final class ConnectionState {
     try {
       org.apache.qpid.protonj2.client.Connection nc = connection.nativeConnection();
       if (nc != null) {
+        // FIXME this call can block and block the event loop
+        // call closeAsync()? This is best-effort after all
         nc.close();
       }
     } catch (Exception e) {
@@ -210,12 +211,16 @@ final class ConnectionState {
       this.client = eventLoop.register(() -> new ConnectionState(connection));
     }
 
-    void submit(Consumer<ConnectionState> task) {
-      this.client.submit(task);
+    void executeInLoop(Runnable runnable) {
+      this.client.submit(unused -> runnable.run());
     }
 
-    <R> R query(Function<ConnectionState, R> queryFunction) {
-      return this.client.query(queryFunction);
+    <R> R executeInLoop(Supplier<R> runnable) {
+      return this.client.query(unused -> runnable.get());
+    }
+
+    long epoch() {
+      return this.client.query(ConnectionState::epoch);
     }
 
     List<AmqpConsumer> consumers() {
@@ -233,6 +238,8 @@ final class ConnectionState {
     List<Responder> responders() {
       return this.client.query(state -> new ArrayList<>(state.responders));
     }
+
+    // connection-state-related methods
 
     boolean registerPublisher(AmqpPublisher publisher) {
       return this.client.query(

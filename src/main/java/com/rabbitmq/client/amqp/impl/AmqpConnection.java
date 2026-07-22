@@ -162,8 +162,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
             this.environment.connectionStateEventLoop(), this);
 
     if (this.recoveryConfiguration.activated()) {
-      disconnectHandler =
-          createDisconnectHandler(this.connectionStateClient.query(ConnectionState::epoch));
+      disconnectHandler = createDisconnectHandler(this.connectionStateClient.epoch());
     } else {
       disconnectHandler =
           (c, e) -> {
@@ -225,7 +224,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
     this.directReplyToSupported = supportDirectReplyTo(brokerVersion);
     LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
-    this.connectionStateClient.submit(s -> this.updateState(OPEN));
+    this.connectionStateClient.executeInLoop(() -> this.updateState(OPEN));
     this.environment.metricsCollector().openConnection();
   }
 
@@ -385,13 +384,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
   }
 
-  void sync(NativeConnectionWrapper wrapper) {
-    this.connectionAddress = wrapper.address();
-    this.connectionNodename = wrapper.nodename();
-    this.nativeConnection = wrapper.connection();
-    this.nativeSession = wrapper.session();
-  }
-
   String brokerVersion() {
     return brokerVersion(this.nativeConnection);
   }
@@ -426,87 +418,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return (conn, event) -> {
       this.connectionStateClient.handleDisconnect(attemptEpoch, event);
     };
-  }
-
-  void dispatchNativeRecovery(long attemptEpoch) {
-    if (this.closed.get()) {
-      LOGGER.debug("Discarding recovery dispatching, connection '{}' is closed.", this.name());
-      return;
-    }
-
-    LOGGER.debug("Scheduling connection attempt for '{}'.", this.name());
-
-    CompletableFuture<NativeConnectionWrapper> ncwFuture =
-        recoverNativeConnection(this.recoveryConfiguration, this.name(), attemptEpoch);
-
-    ncwFuture
-        .thenAcceptAsync(
-            ncw -> {
-              // Phase 1 complete. Hand the new socket back to the Event Loop.
-              this.connectionStateClient.handleNativeRecoverySuccess(ncw, attemptEpoch);
-            },
-            this.environment.executorService())
-        .exceptionally(
-            t -> {
-              if (t instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-              }
-              LOGGER.warn(
-                  "Native connection recovery for '{}' failed fundamentally: {}",
-                  this.name(),
-                  t.getMessage());
-              this.close(t);
-              return null;
-            });
-  }
-
-  void dispatchTopologyRecovery(long attemptEpoch) {
-    if (this.closed.get()) {
-      LOGGER.debug(
-          "Discarding topology recovery dispatching, connection '{}' is closed.", this.name());
-      return;
-    }
-
-    try {
-      boolean managementPreviouslyClosed = this.management.isClosed();
-      LOGGER.debug("Recovering topology of connection '{}'...", this.name());
-
-      // Safely resurrect management via its Event Loop
-      this.managementNoCheck();
-
-      this.recoverTopology();
-      this.recoverConsumers();
-      this.recoverPublishers();
-
-      LOGGER.debug("Recovered topology of connection '{}'.", this.name());
-
-      if (managementPreviouslyClosed) {
-        LOGGER.debug("Management was closed before recovery, closing it again");
-        try {
-          this.closeManagement();
-        } catch (Exception e) {
-          LOGGER.info("Error while (re)closing management after recovery");
-        }
-      }
-
-      // Phase 2 complete. Report success to the Event Loop.
-      this.connectionStateClient.handleTopologyRecoverySuccess(attemptEpoch);
-
-    } catch (Exception ex) {
-      AmqpException amqpException = ExceptionUtils.convert(ex);
-      if (ex instanceof InterruptedException) {
-        LOGGER.debug("Topology recovery interrupted for connection '{}'", this.name());
-        Thread.currentThread().interrupt();
-        this.close(amqpException);
-      } else {
-        LOGGER.warn(
-            "Error while recovering topology for connection '{}': {}",
-            this.name(),
-            ex.getMessage());
-        // Phase 2 failed mid-flight. Report failure to the Event Loop.
-        this.connectionStateClient.handleTopologyRecoveryFailure(attemptEpoch);
-      }
-    }
   }
 
   private CompletableFuture<NativeConnectionWrapper> recoverNativeConnection(
@@ -654,18 +565,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.management.close();
   }
 
-  void releaseManagementResources(AmqpException e) {
-    if (this.management != null) {
-      this.management.releaseResources(e);
-    }
-  }
-
-  void resetNativeResources() {
-    this.nativeConnection = null;
-    this.nativeSession = null;
-    this.connectionAddress = null;
-  }
-
   Session nativeSession() {
     return nativeSession(true);
   }
@@ -679,14 +578,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
       throw new AmqpException.AmqpResourceInvalidStateException("Native session is not available");
     }
     return result;
-  }
-
-  private Session openSession(org.apache.qpid.protonj2.client.Connection connection) {
-    try {
-      return connection.openSession(Utils.sessionOptions());
-    } catch (ClientException e) {
-      throw convert(e, "Error while opening session");
-    }
   }
 
   org.apache.qpid.protonj2.client.Connection nativeConnection() {
@@ -711,8 +602,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
 
     // Slow-path initialization serialized in the Event Loop
-    return this.connectionStateClient.query(
-        state -> {
+    return this.connectionStateClient.executeInLoop(
+        () -> {
           if (this.state() == CLOSED || this.state() == CLOSING) {
             throw new AmqpException.AmqpResourceClosedException("Connection is closed");
           }
@@ -816,14 +707,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
     this.connectionStateClient.removeResponder(responder);
   }
 
-  private String currentConnectionLabel() {
-    if (this.connectionAddress == null) {
-      return "<null>";
-    } else {
-      return this.connectionAddress.host() + ":" + this.connectionAddress.port();
-    }
-  }
-
   Address connectionAddress() {
     return this.connectionAddress;
   }
@@ -865,7 +748,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       LOGGER.debug("Closing connection {}", this);
       try {
         this.connectionStateClient.markClosed(cause);
-        this.connectionStateClient.submit(s -> this.state(CLOSING, cause));
+        this.connectionStateClient.executeInLoop(() -> this.state(CLOSING, cause));
       } catch (IllegalStateException e) {
         LOGGER.debug("Error in event loop: {}", e.getMessage());
       }
@@ -929,7 +812,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
       } catch (Exception e) {
         LOGGER.warn("Error while closing native connection", e);
       }
-      this.connectionStateClient.submit(s -> this.state(CLOSED, cause));
+      this.connectionStateClient.executeInLoop(() -> this.state(CLOSED, cause));
       safeClose.accept("state", this.connectionStateClient::close);
       this.environment.metricsCollector().closeConnection();
       LOGGER.debug("Connection {} has been closed", this);
@@ -956,10 +839,6 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   void updateState(Resource.State state) {
     this.state(state);
-  }
-
-  void updateState(Resource.State state, Throwable failureCause) {
-    this.state(state, failureCause);
   }
 
   static class NativeConnectionWrapper {
@@ -1044,6 +923,112 @@ final class AmqpConnection extends ResourceBase implements Connection {
     @Override
     public String name() {
       return AmqpConnection.this.name();
+    }
+  }
+
+  // connection-state-related callbacks
+
+  void releaseManagementResources(AmqpException e) {
+    if (this.management != null) {
+      this.management.releaseResources(e);
+    }
+  }
+
+  void updateState(Resource.State state, Throwable failureCause) {
+    this.state(state, failureCause);
+  }
+
+  void resetNativeResources() {
+    this.nativeConnection = null;
+    this.nativeSession = null;
+    this.connectionAddress = null;
+  }
+
+  void dispatchNativeRecovery(long attemptEpoch) {
+    if (this.closed.get()) {
+      LOGGER.debug("Discarding recovery dispatching, connection '{}' is closed.", this.name());
+      return;
+    }
+
+    LOGGER.debug("Scheduling connection attempt for '{}'.", this.name());
+
+    CompletableFuture<NativeConnectionWrapper> ncwFuture =
+        recoverNativeConnection(this.recoveryConfiguration, this.name(), attemptEpoch);
+
+    ncwFuture
+        .thenAcceptAsync(
+            ncw -> {
+              // Phase 1 complete. Hand the new socket back to the Event Loop.
+              this.connectionStateClient.handleNativeRecoverySuccess(ncw, attemptEpoch);
+            },
+            this.environment.executorService())
+        .exceptionally(
+            t -> {
+              if (t instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+              }
+              LOGGER.warn(
+                  "Native connection recovery for '{}' failed fundamentally: {}",
+                  this.name(),
+                  t.getMessage());
+              this.close(t);
+              return null;
+            });
+  }
+
+  void sync(NativeConnectionWrapper wrapper) {
+    this.connectionAddress = wrapper.address();
+    this.connectionNodename = wrapper.nodename();
+    this.nativeConnection = wrapper.connection();
+    this.nativeSession = wrapper.session();
+  }
+
+  void dispatchTopologyRecovery(long attemptEpoch) {
+    if (this.closed.get()) {
+      LOGGER.debug(
+          "Discarding topology recovery dispatching, connection '{}' is closed.", this.name());
+      return;
+    }
+
+    try {
+      boolean managementPreviouslyClosed = this.management.isClosed();
+      LOGGER.debug("Recovering topology of connection '{}'...", this.name());
+
+      // Safely resurrect management via its Event Loop
+      this.managementNoCheck();
+
+      this.recoverTopology();
+      this.recoverConsumers();
+      this.recoverPublishers();
+
+      LOGGER.debug("Recovered topology of connection '{}'.", this.name());
+
+      if (managementPreviouslyClosed) {
+        LOGGER.debug("Management was closed before recovery, closing it again");
+        try {
+          this.closeManagement();
+        } catch (Exception e) {
+          LOGGER.info("Error while (re)closing management after recovery");
+        }
+      }
+
+      // Phase 2 complete. Report success to the Event Loop.
+      this.connectionStateClient.handleTopologyRecoverySuccess(attemptEpoch);
+
+    } catch (Exception ex) {
+      AmqpException amqpException = ExceptionUtils.convert(ex);
+      if (ex instanceof InterruptedException) {
+        LOGGER.debug("Topology recovery interrupted for connection '{}'", this.name());
+        Thread.currentThread().interrupt();
+        this.close(amqpException);
+      } else {
+        LOGGER.warn(
+            "Error while recovering topology for connection '{}': {}",
+            this.name(),
+            ex.getMessage());
+        // Phase 2 failed mid-flight. Report failure to the Event Loop.
+        this.connectionStateClient.handleTopologyRecoveryFailure(attemptEpoch);
+      }
     }
   }
 }
