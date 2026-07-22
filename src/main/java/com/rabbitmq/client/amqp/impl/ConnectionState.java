@@ -162,9 +162,9 @@ final class ConnectionState {
     try {
       org.apache.qpid.protonj2.client.Connection nc = connection.nativeConnection();
       if (nc != null) {
-        // FIXME this call can block and block the event loop
-        // call closeAsync()? This is best-effort after all
-        nc.close();
+        // best effort to close failed connection
+        // using async variant to avoid blocking the event loop
+        nc.closeAsync();
       }
     } catch (Exception e) {
       LOGGER.debug(
