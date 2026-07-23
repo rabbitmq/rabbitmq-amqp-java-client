@@ -28,6 +28,7 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.slf4j.Logger;
@@ -37,7 +38,7 @@ final class ConnectionStateClient implements AutoCloseable {
 
   private final EventLoop.Client<ConnectionState> client;
 
-  ConnectionStateClient(EventLoop eventLoop, AmqpConnection connection) {
+  ConnectionStateClient(EventLoop eventLoop, RecoverableConnection connection) {
     this.client = eventLoop.register(() -> new ConnectionState(connection));
   }
 
@@ -162,14 +163,14 @@ final class ConnectionStateClient implements AutoCloseable {
 
     private InternalState internalState = InternalState.INITIAL;
     private long epoch = 1;
-    private final AmqpConnection connection;
+    private final RecoverableConnection connection;
 
     private final List<AmqpPublisher> publishers = new ArrayList<>();
     private final List<AmqpConsumer> consumers = new ArrayList<>();
     private final List<Requester> requesters = new ArrayList<>();
     private final List<Responder> responders = new ArrayList<>();
 
-    private ConnectionState(AmqpConnection connection) {
+    private ConnectionState(RecoverableConnection connection) {
       this.connection = connection;
     }
 
@@ -225,13 +226,7 @@ final class ConnectionStateClient implements AutoCloseable {
         connection.resetNativeResources();
 
         // Dispatch Phase 1: Native Recovery
-        connection
-            .environment()
-            .executorService()
-            .submit(
-                () -> {
-                  connection.dispatchNativeRecovery(newEpoch);
-                });
+        connection.recoveryExecutor().submit(() -> connection.dispatchNativeRecovery(newEpoch));
 
       } else {
         connection.close(exception);
@@ -257,13 +252,7 @@ final class ConnectionStateClient implements AutoCloseable {
       connection.sync(ncw);
 
       // Dispatch Phase 2: Topology Recovery
-      connection
-          .environment()
-          .executorService()
-          .submit(
-              () -> {
-                connection.dispatchTopologyRecovery(attemptEpoch);
-              });
+      connection.recoveryExecutor().submit(() -> connection.dispatchTopologyRecovery(attemptEpoch));
     }
 
     void handleTopologyRecoverySuccess(long attemptEpoch) {
@@ -271,7 +260,7 @@ final class ConnectionStateClient implements AutoCloseable {
 
       LOGGER.info("Recovered topology for connection '{}'", connection.name());
       this.internalState = InternalState.CONNECTED;
-      connection.updateState(OPEN);
+      connection.updateState(OPEN, null);
     }
 
     void handleTopologyRecoveryFailure(long attemptEpoch) {
@@ -299,13 +288,7 @@ final class ConnectionStateClient implements AutoCloseable {
 
       connection.resetNativeResources();
 
-      connection
-          .environment()
-          .executorService()
-          .submit(
-              () -> {
-                connection.dispatchNativeRecovery(newEpoch);
-              });
+      connection.recoveryExecutor().submit(() -> connection.dispatchNativeRecovery(newEpoch));
     }
 
     // A helper method for safely marking the internal state closed from AmqpConnection.close()
@@ -331,5 +314,32 @@ final class ConnectionStateClient implements AutoCloseable {
     RECOVERING_CONNECTION,
     RECOVERING_TOPOLOGY,
     CLOSED
+  }
+
+  // Narrow view of AmqpConnection driven by ConnectionStateClient, so the state machine can be
+  // exercised with a test double instead of a real (network-opening) AmqpConnection.
+  interface RecoverableConnection {
+
+    Resource.State state();
+
+    String name();
+
+    void updateState(Resource.State state, Throwable cause);
+
+    void releaseManagementResources(AmqpException e);
+
+    void resetNativeResources();
+
+    void sync(AmqpConnection.NativeConnectionWrapper wrapper);
+
+    org.apache.qpid.protonj2.client.Connection nativeConnection();
+
+    void dispatchNativeRecovery(long attemptEpoch);
+
+    void dispatchTopologyRecovery(long attemptEpoch);
+
+    void close(Throwable cause);
+
+    ExecutorService recoveryExecutor();
   }
 }

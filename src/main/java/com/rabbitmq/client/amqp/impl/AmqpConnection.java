@@ -75,7 +75,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class AmqpConnection extends ResourceBase implements Connection {
+final class AmqpConnection extends ResourceBase implements Connection, ConnectionStateClient.RecoverableConnection {
 
   private static final int DEFAULT_NUM_THREADS = Math.max(1, Utils.AVAILABLE_PROCESSORS);
 
@@ -579,8 +579,19 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return result;
   }
 
-  org.apache.qpid.protonj2.client.Connection nativeConnection() {
+  @Override
+  public org.apache.qpid.protonj2.client.Connection nativeConnection() {
     return this.nativeConnection;
+  }
+
+  @Override
+  public Resource.State state() {
+    return super.state();
+  }
+
+  @Override
+  public ExecutorService recoveryExecutor() {
+    return this.environment.executorService();
   }
 
   AmqpEnvironment environment() {
@@ -714,7 +725,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.connectionNodename;
   }
 
-  String name() {
+  @Override
+  public String name() {
     return this.name == null ? "<no-name>" : this.name;
   }
 
@@ -742,7 +754,8 @@ final class AmqpConnection extends ResourceBase implements Connection {
     return this.id;
   }
 
-  void close(Throwable cause) {
+  @Override
+  public void close(Throwable cause) {
     if (this.closed.compareAndSet(false, true)) {
       LOGGER.debug("Closing connection {}", this);
       try {
@@ -927,23 +940,27 @@ final class AmqpConnection extends ResourceBase implements Connection {
 
   // connection-state-related callbacks
 
-  void releaseManagementResources(AmqpException e) {
+  @Override
+  public void releaseManagementResources(AmqpException e) {
     if (this.management != null) {
       this.management.releaseResources(e);
     }
   }
 
-  void updateState(Resource.State state, Throwable failureCause) {
+  @Override
+  public void updateState(Resource.State state, Throwable failureCause) {
     this.state(state, failureCause);
   }
 
-  void resetNativeResources() {
+  @Override
+  public void resetNativeResources() {
     this.nativeConnection = null;
     this.nativeSession = null;
     this.connectionAddress = null;
   }
 
-  void dispatchNativeRecovery(long attemptEpoch) {
+  @Override
+  public void dispatchNativeRecovery(long attemptEpoch) {
     if (this.closed.get()) {
       LOGGER.debug("Discarding recovery dispatching, connection '{}' is closed.", this.name());
       return;
@@ -975,14 +992,16 @@ final class AmqpConnection extends ResourceBase implements Connection {
             });
   }
 
-  void sync(NativeConnectionWrapper wrapper) {
+  @Override
+  public void sync(NativeConnectionWrapper wrapper) {
     this.connectionAddress = wrapper.address();
     this.connectionNodename = wrapper.nodename();
     this.nativeConnection = wrapper.connection();
     this.nativeSession = wrapper.session();
   }
 
-  void dispatchTopologyRecovery(long attemptEpoch) {
+  @Override
+  public void dispatchTopologyRecovery(long attemptEpoch) {
     if (this.closed.get()) {
       LOGGER.debug(
           "Discarding topology recovery dispatching, connection '{}' is closed.", this.name());
