@@ -75,7 +75,8 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class AmqpConnection extends ResourceBase implements Connection, ConnectionStateClient.RecoverableConnection {
+final class AmqpConnection extends ResourceBase
+    implements Connection, ConnectionStateClient.RecoverableConnection {
 
   private static final int DEFAULT_NUM_THREADS = Math.max(1, Utils.AVAILABLE_PROCESSORS);
 
@@ -590,8 +591,8 @@ final class AmqpConnection extends ResourceBase implements Connection, Connectio
   }
 
   @Override
-  public ExecutorService recoveryExecutor() {
-    return this.environment.executorService();
+  public void submitRecoveryTask(Runnable task) {
+    this.environment.executorService().submit(task);
   }
 
   AmqpEnvironment environment() {

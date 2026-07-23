@@ -28,7 +28,6 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.slf4j.Logger;
@@ -226,7 +225,7 @@ final class ConnectionStateClient implements AutoCloseable {
         connection.resetNativeResources();
 
         // Dispatch Phase 1: Native Recovery
-        connection.recoveryExecutor().submit(() -> connection.dispatchNativeRecovery(newEpoch));
+        connection.submitRecoveryTask(() -> connection.dispatchNativeRecovery(newEpoch));
 
       } else {
         connection.close(exception);
@@ -252,7 +251,7 @@ final class ConnectionStateClient implements AutoCloseable {
       connection.sync(ncw);
 
       // Dispatch Phase 2: Topology Recovery
-      connection.recoveryExecutor().submit(() -> connection.dispatchTopologyRecovery(attemptEpoch));
+      connection.submitRecoveryTask(() -> connection.dispatchTopologyRecovery(attemptEpoch));
     }
 
     void handleTopologyRecoverySuccess(long attemptEpoch) {
@@ -288,7 +287,7 @@ final class ConnectionStateClient implements AutoCloseable {
 
       connection.resetNativeResources();
 
-      connection.recoveryExecutor().submit(() -> connection.dispatchNativeRecovery(newEpoch));
+      connection.submitRecoveryTask(() -> connection.dispatchNativeRecovery(newEpoch));
     }
 
     // A helper method for safely marking the internal state closed from AmqpConnection.close()
@@ -340,6 +339,6 @@ final class ConnectionStateClient implements AutoCloseable {
 
     void close(Throwable cause);
 
-    ExecutorService recoveryExecutor();
+    void submitRecoveryTask(Runnable task);
   }
 }
