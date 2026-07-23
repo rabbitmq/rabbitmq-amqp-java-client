@@ -118,7 +118,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
   private final boolean privateDispatchingExecutor;
   private final CredentialsManager.Registration credentialsRegistration;
   private final AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration;
-  private final ConnectionState.ConnectionStateClient connectionStateClient;
+  private final ConnectionStateClient connectionStateClient;
   private volatile org.apache.qpid.protonj2.client.Connection nativeConnection;
   private volatile Address connectionAddress;
   private volatile String connectionNodename;
@@ -158,8 +158,7 @@ final class AmqpConnection extends ResourceBase implements Connection {
     }
 
     this.connectionStateClient =
-        new ConnectionState.ConnectionStateClient(
-            this.environment.connectionStateEventLoop(), this);
+        new ConnectionStateClient(this.environment.connectionStateEventLoop(), this);
 
     if (this.recoveryConfiguration.activated()) {
       disconnectHandler = createDisconnectHandler(this.connectionStateClient.epoch());
