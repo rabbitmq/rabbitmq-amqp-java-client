@@ -69,8 +69,8 @@ final class EventLoop implements AutoCloseable {
     try {
       boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
       if (!completed) {
-        LOGGER.warn(
-            "Event loop registration did not complete in {} second(s)", TIMEOUT.toSeconds());
+        throw new AmqpException(
+            "Event loop registration did not complete in " + TIMEOUT.toSeconds() + " second(s)");
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -100,7 +100,8 @@ final class EventLoop implements AutoCloseable {
       try {
         boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         if (!completed) {
-          LOGGER.warn("Event loop task did not complete in {} second(s)", TIMEOUT.toSeconds());
+          throw new AmqpException(
+              "Event loop task did not complete in " + TIMEOUT.toSeconds() + " second(s)");
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();

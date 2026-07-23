@@ -240,7 +240,7 @@ final class ConnectionStateClient implements AutoCloseable {
 
     void handleNativeRecoverySuccess(
         AmqpConnection.NativeConnectionWrapper ncw, long attemptEpoch) {
-      if (this.epoch() != attemptEpoch || this.internalState == InternalState.CLOSED) {
+      if (this.isStale(attemptEpoch)) {
         // We are a zombie thread. Tear down the socket we just created to avoid leaks.
         try {
           ncw.connection().close();
@@ -267,7 +267,7 @@ final class ConnectionStateClient implements AutoCloseable {
     }
 
     void handleTopologyRecoverySuccess(long attemptEpoch) {
-      if (this.epoch() != attemptEpoch || this.internalState == InternalState.CLOSED) return;
+      if (this.isStale(attemptEpoch)) return;
 
       LOGGER.info("Recovered topology for connection '{}'", connection.name());
       this.internalState = InternalState.CONNECTED;
@@ -275,7 +275,7 @@ final class ConnectionStateClient implements AutoCloseable {
     }
 
     void handleTopologyRecoveryFailure(long attemptEpoch) {
-      if (this.epoch() != attemptEpoch || this.internalState == InternalState.CLOSED) return;
+      if (this.isStale(attemptEpoch)) return;
 
       // 1. Manually trigger the next cycle
       this.incrementEpoch();
@@ -313,6 +313,10 @@ final class ConnectionStateClient implements AutoCloseable {
       this.internalState = InternalState.CLOSED;
       this.incrementEpoch(); // Invalidate any pending IO tasks instantly
       connection.updateState(CLOSING, cause);
+    }
+
+    private boolean isStale(long attemptEpoch) {
+      return this.epoch() != attemptEpoch || this.internalState == InternalState.CLOSED;
     }
 
     private void updateStateOfResources(Resource.State newState, Throwable failure) {
