@@ -56,7 +56,7 @@ abstract class TlsTestUtils {
 
   static String caCertificateFile() {
     return tlsArtefactPath(
-        System.getProperty("ca.certificate", "/tmp/tls-gen/basic/result/ca_certificate.pem"));
+        System.getProperty("ca.certificate", "./tls-gen/basic/result/ca_certificate.pem"));
   }
 
   static X509Certificate clientCertificate() throws Exception {
@@ -67,7 +67,7 @@ abstract class TlsTestUtils {
     return tlsArtefactPath(
         System.getProperty(
             "client.certificate",
-            "/tmp/tls-gen/basic/result/client_" + hostname() + "_certificate.pem"));
+            "./tls-gen/basic/result/client_" + hostname() + "_certificate.pem"));
   }
 
   static PrivateKey clientKey() throws Exception {
@@ -94,7 +94,7 @@ abstract class TlsTestUtils {
   static String clientKeyFile() {
     return tlsArtefactPath(
         System.getProperty(
-            "client.key", "/tmp/tls-gen/basic/result/client_" + hostname() + "_key.pem"));
+            "client.key", "./tls-gen/basic/result/client_" + hostname() + "_key.pem"));
   }
 
   static X509Certificate loadCertificate(String file) throws Exception {

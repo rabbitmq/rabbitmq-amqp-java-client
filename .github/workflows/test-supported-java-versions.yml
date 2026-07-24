@@ -38,9 +38,6 @@ jobs:
       - name: Test
         run: |
           ./mvnw verify -Drabbitmqctl.bin=DOCKER:rabbitmq --no-transfer-progress \
-            -Dca.certificate=./tls-gen/basic/result/ca_certificate.pem \
-            -Dclient.certificate=./tls-gen/basic/result/client_$(hostname)_certificate.pem \
-            -Dclient.key=./tls-gen/basic/result/client_$(hostname)_key.pem \
             -Dnet.bytebuddy.experimental=true -Dspotbugs.skip=true
       - name: Stop toxiproxy
         run: docker stop toxiproxy && docker rm toxiproxy
