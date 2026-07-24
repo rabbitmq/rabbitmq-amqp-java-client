@@ -192,6 +192,19 @@ public class TopologyRecoveryTest {
       connection.management().queue(q).autoDelete(false).exclusive(true).declare();
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
+      // make sure the exclusive queue does not exist
+      waitAtMost(
+          () -> {
+            try {
+              connection.management().queueInfo(q);
+              return false;
+            } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+              return true;
+            } catch (Exception e) {
+              return false;
+            }
+          });
+      // try to re-create it for the new underlying connection
       connection.management().queue(q).autoDelete(true).exclusive(true).declare();
     }
   }
