@@ -27,7 +27,10 @@ import com.rabbitmq.client.amqp.Requester;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.slf4j.Logger;
@@ -177,101 +180,168 @@ final class ConnectionStateClient implements AutoCloseable {
       return this.epoch;
     }
 
-    void incrementEpoch() {
-      this.epoch++;
-    }
-
     void handleDisconnect(long eventEpoch, DisconnectionEvent event) {
-      if (eventEpoch < this.epoch()) {
-        LOGGER.debug(
-            "Ignoring stale disconnect from epoch {} for connection {}",
-            eventEpoch,
-            this.connection.name());
-        return;
-      }
-
-      if (this.internalState == InternalState.CLOSED) {
-        return;
-      }
-
       AmqpException exception = ExceptionUtils.convert(event.failureCause());
-
-      if (RECOVERY_PREDICATE.test(exception)) {
-        if (this.internalState == InternalState.RECOVERING_CONNECTION) {
-          LOGGER.debug(
-              "Mid-native-recovery disconnect for epoch {}. AsyncRetry will handle it.",
-              eventEpoch);
-          LOGGER.debug(
-              "Mid-recovery disconnect for epoch {}. Relying on IO exceptions to trigger retry.",
-              eventEpoch);
-          // this will unblock pending RPCs
-          connection.releaseManagementResources(exception);
-          return;
-        }
-
-        // If we are in CONNECTED or RECOVERING_TOPOLOGY, a disconnect is a hard failure.
-        // We must transition back to RECOVERING_CONNECTION and start over.
-        LOGGER.debug("Valid disconnect detected, initiating recovery...");
-        this.incrementEpoch();
-        final long newEpoch = this.epoch();
-        this.internalState = InternalState.RECOVERING_CONNECTION;
-
-        // Synchronize public state safely inside the loop
-        connection.updateState(RECOVERING, exception);
-        this.updateStateOfResources(RECOVERING, exception);
-        connection.releaseManagementResources(exception);
-
-        // Null out native resources
-        connection.resetNativeResources();
-
-        // Dispatch Phase 1: Native Recovery
-        connection.submitRecoveryTask(() -> connection.dispatchNativeRecovery(newEpoch));
-
-      } else {
-        connection.close(exception);
-      }
+      apply(
+          onDisconnect(
+              this.internalState, this.epoch, eventEpoch, exception, this.connection.name()));
     }
 
     void handleNativeRecoverySuccess(
         AmqpConnection.NativeConnectionWrapper ncw, long attemptEpoch) {
-      if (this.isStale(attemptEpoch)) {
-        // We are a zombie thread. Tear down the socket we just created to avoid leaks.
-        try {
-          ncw.connection().close();
-        } catch (Exception e) {
-          LOGGER.debug(
-              "Error while closing native connection in 'handleNativeRecoverySuccess': {}",
-              e.getMessage());
-        }
-        return;
-      }
-
-      LOGGER.debug("Reconnected '{}' to {}", connection.name(), ncw.address());
-      this.internalState = InternalState.RECOVERING_TOPOLOGY;
-      connection.sync(ncw);
-
-      // Dispatch Phase 2: Topology Recovery
-      connection.submitRecoveryTask(() -> connection.dispatchTopologyRecovery(attemptEpoch));
+      apply(
+          onNativeRecoverySuccess(
+              this.internalState, this.epoch, attemptEpoch, ncw, this.connection.name()));
     }
 
     void handleTopologyRecoverySuccess(long attemptEpoch) {
-      if (this.isStale(attemptEpoch)) return;
-
-      LOGGER.info("Recovered topology for connection '{}'", connection.name());
-      this.internalState = InternalState.CONNECTED;
-      connection.updateState(OPEN, null);
+      apply(
+          onTopologyRecoverySuccess(
+              this.internalState, this.epoch, attemptEpoch, this.connection.name()));
     }
 
     void handleTopologyRecoveryFailure(long attemptEpoch) {
-      if (this.isStale(attemptEpoch)) return;
+      apply(onTopologyRecoveryFailure(this.internalState, this.epoch, attemptEpoch));
+    }
 
-      // 1. Manually trigger the next cycle
-      this.incrementEpoch();
-      final long newEpoch = this.epoch();
-      this.internalState = InternalState.RECOVERING_CONNECTION;
+    // A helper method for safely marking the internal state closed from AmqpConnection.close()
+    void markClosed(Throwable cause) {
+      apply(onMarkClosed(this.epoch, cause));
+    }
+
+    // Pure decision logic: no I/O, no access to `connection` or the resource lists, so it can be
+    // unit-tested (including property-based) without an EventLoop, a fake, or a real connection.
+
+    private static TransitionResult onDisconnect(
+        InternalState state,
+        long epoch,
+        long eventEpoch,
+        AmqpException exception,
+        String connectionName) {
+
+      if (eventEpoch < epoch) {
+        LOGGER.debug(
+            "Ignoring stale disconnect from epoch {} for connection {}",
+            eventEpoch,
+            connectionName);
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      if (state == InternalState.CLOSED) {
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      if (!RECOVERY_PREDICATE.test(exception)) {
+        return TransitionResult.of(state, epoch, s -> s.connection.close(exception));
+      }
+
+      if (state == InternalState.RECOVERING_CONNECTION) {
+        LOGGER.debug(
+            "Mid-native-recovery disconnect for epoch {}. AsyncRetry will handle it.", eventEpoch);
+        // this will unblock pending RPCs
+        return TransitionResult.of(
+            state, epoch, s -> s.connection.releaseManagementResources(exception));
+      }
+
+      // If we are in CONNECTED or RECOVERING_TOPOLOGY, a disconnect is a hard failure.
+      // We must transition back to RECOVERING_CONNECTION and start over.
+      LOGGER.debug("Valid disconnect detected, initiating recovery...");
+      long newEpoch = epoch + 1;
+      return TransitionResult.of(
+          InternalState.RECOVERING_CONNECTION,
+          newEpoch,
+          // Synchronize public state safely inside the loop
+          s -> s.connection.updateState(RECOVERING, exception),
+          s -> s.updateStateOfResources(RECOVERING, exception),
+          s -> s.connection.releaseManagementResources(exception),
+          // Null out native resources
+          s -> s.connection.resetNativeResources(),
+          // Dispatch Phase 1: Native Recovery
+          s ->
+              s.connection.submitRecoveryTask(() -> s.connection.dispatchNativeRecovery(newEpoch)));
+    }
+
+    private static TransitionResult onNativeRecoverySuccess(
+        InternalState state,
+        long epoch,
+        long attemptEpoch,
+        AmqpConnection.NativeConnectionWrapper ncw,
+        String connectionName) {
+
+      if (isStale(state, epoch, attemptEpoch)) {
+        // We are a zombie thread. Tear down the socket we just created to avoid leaks.
+        return TransitionResult.of(state, epoch, s -> s.closeZombieConnection(ncw));
+      }
+
+      LOGGER.debug("Reconnected '{}' to {}", connectionName, ncw.address());
+      return TransitionResult.of(
+          InternalState.RECOVERING_TOPOLOGY,
+          epoch,
+          s -> s.connection.sync(ncw),
+          // Dispatch Phase 2: Topology Recovery
+          s ->
+              s.connection.submitRecoveryTask(
+                  () -> s.connection.dispatchTopologyRecovery(attemptEpoch)));
+    }
+
+    private static TransitionResult onTopologyRecoverySuccess(
+        InternalState state, long epoch, long attemptEpoch, String connectionName) {
+      if (isStale(state, epoch, attemptEpoch)) {
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      LOGGER.info("Recovered topology for connection '{}'", connectionName);
+      return TransitionResult.of(
+          InternalState.CONNECTED, epoch, s -> s.connection.updateState(OPEN, null));
+    }
+
+    private static TransitionResult onTopologyRecoveryFailure(
+        InternalState state, long epoch, long attemptEpoch) {
+      if (isStale(state, epoch, attemptEpoch)) {
+        return TransitionResult.noChange(state, epoch);
+      }
 
       LOGGER.debug(
           "Error during topology recovery, tearing down native connection to trigger clean retry.");
+      long newEpoch = epoch + 1;
+      return TransitionResult.of(
+          InternalState.RECOVERING_CONNECTION,
+          newEpoch,
+          s -> s.tearDownFailedNativeConnection(),
+          s -> s.connection.resetNativeResources(),
+          s ->
+              s.connection.submitRecoveryTask(() -> s.connection.dispatchNativeRecovery(newEpoch)));
+    }
+
+    private static TransitionResult onMarkClosed(long epoch, Throwable cause) {
+      // Invalidate any pending IO tasks instantly
+      return TransitionResult.of(
+          InternalState.CLOSED, epoch + 1, s -> s.connection.updateState(CLOSING, cause));
+    }
+
+    private static boolean isStale(InternalState state, long epoch, long attemptEpoch) {
+      return epoch != attemptEpoch || state == InternalState.CLOSED;
+    }
+
+    // Imperative shell: applies a decision, running its effects against the real connection.
+
+    private void apply(TransitionResult result) {
+      this.internalState = result.state;
+      this.epoch = result.epoch;
+      result.effects.forEach(effect -> effect.accept(this));
+    }
+
+    private void closeZombieConnection(AmqpConnection.NativeConnectionWrapper ncw) {
+      try {
+        ncw.connection().close();
+      } catch (Exception e) {
+        LOGGER.debug(
+            "Error while closing native connection in 'handleNativeRecoverySuccess': {}",
+            e.getMessage());
+      }
+    }
+
+    private void tearDownFailedNativeConnection() {
       try {
         org.apache.qpid.protonj2.client.Connection nc = connection.nativeConnection();
         if (nc != null) {
@@ -284,21 +354,6 @@ final class ConnectionStateClient implements AutoCloseable {
             "Error while closing native connection in 'handleTopologyRecoveryFailure': {}",
             e.getMessage());
       }
-
-      connection.resetNativeResources();
-
-      connection.submitRecoveryTask(() -> connection.dispatchNativeRecovery(newEpoch));
-    }
-
-    // A helper method for safely marking the internal state closed from AmqpConnection.close()
-    void markClosed(Throwable cause) {
-      this.internalState = InternalState.CLOSED;
-      this.incrementEpoch(); // Invalidate any pending IO tasks instantly
-      connection.updateState(CLOSING, cause);
-    }
-
-    private boolean isStale(long attemptEpoch) {
-      return this.epoch() != attemptEpoch || this.internalState == InternalState.CLOSED;
     }
 
     private void updateStateOfResources(Resource.State newState, Throwable failure) {
@@ -313,6 +368,32 @@ final class ConnectionStateClient implements AutoCloseable {
     RECOVERING_CONNECTION,
     RECOVERING_TOPOLOGY,
     CLOSED
+  }
+
+  // The outcome of a pure transition: the next internal state/epoch, and the side effects (if
+  // any) the imperative shell must run to make it so.
+  private static final class TransitionResult {
+
+    private final InternalState state;
+    private final long epoch;
+    private final List<Consumer<ConnectionState>> effects;
+
+    private TransitionResult(
+        InternalState state, long epoch, List<Consumer<ConnectionState>> effects) {
+      this.state = state;
+      this.epoch = epoch;
+      this.effects = effects;
+    }
+
+    private static TransitionResult noChange(InternalState state, long epoch) {
+      return new TransitionResult(state, epoch, Collections.emptyList());
+    }
+
+    @SafeVarargs
+    private static TransitionResult of(
+        InternalState state, long epoch, Consumer<ConnectionState>... effects) {
+      return new TransitionResult(state, epoch, Arrays.asList(effects));
+    }
   }
 
   // Narrow view of AmqpConnection driven by ConnectionStateClient, so the state machine can be
