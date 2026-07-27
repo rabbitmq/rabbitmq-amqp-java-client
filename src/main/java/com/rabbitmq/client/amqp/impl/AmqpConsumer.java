@@ -51,7 +51,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 import org.apache.qpid.protonj2.client.Delivery;
 import org.apache.qpid.protonj2.client.DeliveryMode;
@@ -103,7 +102,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
   private final AtomicLong unsettledMessageCount = new AtomicLong(0);
-  private final IntConsumer replenishCreditOperation = this::replenishCreditIfNeeded;
+  private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
   private final java.util.function.Consumer<Delivery> nativeHandler;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
   private final ConsumerWorkService consumerWorkService;
@@ -330,7 +329,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               protonExecutor.execute(
                   () -> {
                     pendingWorkItems.decrementAndGet();
-                    replenishCreditIfNeeded(0);
+                    replenishCreditIfNeeded();
                   });
               return;
             }
@@ -345,7 +344,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             protonExecutor.execute(
                 () -> {
                   pendingWorkItems.decrementAndGet();
-                  replenishCreditIfNeeded(0);
+                  replenishCreditIfNeeded();
                 });
           };
     } else {
@@ -368,10 +367,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               protonExecutor.execute(
                   () -> {
                     pendingWorkItems.decrementAndGet();
-                    replenishCreditIfNeeded(0);
+                    replenishCreditIfNeeded();
                   });
               return;
             }
+            // Tracks whether pendingWorkItems has already been decremented for this
+            // delivery, so it happens exactly once whichever comes first: the handler
+            // returning (below) or the application settling the message (see settle()).
+            // Guessing which one comes first is not reliable: it depends on whether the
+            // application settles synchronously from the handler or defers it elsewhere.
+            AtomicBoolean pendingWorkItemDecremented = new AtomicBoolean(false);
             Consumer.Context context =
                 new DeliveryContext(
                     delivery,
@@ -380,6 +385,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.metricsCollector,
                     this.unsettledMessageCount,
                     this.replenishCreditOperation,
+                    pendingWorkItemDecremented,
                     this);
             try {
               handler.handle(context, message);
@@ -392,14 +398,17 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               }
             } finally {
               // Decrement on proton executor so replenishCreditIfNeeded sees
-              // a consistent pendingWorkItems value when it runs
+              // a consistent pendingWorkItems value when it runs. Credit is only
+              // replenished when the application settles the message (see settle()
+              // below), not merely because the handler returned.
               try {
-                protonExecutor.execute(() -> pendingWorkItems.decrementAndGet());
+                protonExecutor.execute(
+                    () -> decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented));
               } catch (RejectedExecutionException ex) {
                 // The executor is dead, meaning the connection dropped.
                 // The race condition with replenishCreditIfNeeded is irrelevant now.
                 // Safely decrement the atomic counter directly so we don't leak work items.
-                pendingWorkItems.decrementAndGet();
+                decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented);
               }
             }
           };
@@ -548,17 +557,22 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void replenishCreditIfNeeded(int settledCount) {
+  // Must run on the proton executor, like replenishCreditIfNeeded, so the two never
+  // interleave with each other for the same delivery.
+  private void decrementPendingWorkItemIfNeeded(AtomicBoolean pendingWorkItemDecremented) {
+    if (pendingWorkItemDecremented.compareAndSet(false, true)) {
+      pendingWorkItems.decrementAndGet();
+    }
+  }
+
+  private void replenishCreditIfNeeded() {
     if (!this.pausedOrPausing() && this.state() == OPEN) {
       int creditWindow = this.initialCredits;
       // number of available credits for the link
       // this is the number of messages that may be on their way from the broker to the consumer
       int currentCredit = protonReceiver.getCredit();
       if (currentCredit <= creditWindow * 0.5) {
-        // settledCount compensates for items whose pendingWorkItems decrement is queued
-        // on the proton executor after this task (e.g. the handler's finally block)
-        int pendingInWorkPool = Math.max(0, this.pendingWorkItems.get() - settledCount);
-        int totalInFlight = currentCredit + pendingInWorkPool;
+        int totalInFlight = currentCredit + this.pendingWorkItems.get();
         if (totalInFlight <= creditWindow * 0.7) {
           // totalInFlight getting low, we'll provide some credits
           // trying to top up back to the initial credits
@@ -600,7 +614,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
-    private final IntConsumer replenishCreditOperation;
+    private final Runnable replenishCreditOperation;
+    private final AtomicBoolean pendingWorkItemDecremented;
     private final AmqpConsumer consumer;
 
     private DeliveryContext(
@@ -609,7 +624,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
-        IntConsumer replenishCreditOperation,
+        Runnable replenishCreditOperation,
+        AtomicBoolean pendingWorkItemDecremented,
         AmqpConsumer consumer) {
       this.delivery = delivery;
       this.protonExecutor = protonExecutor;
@@ -617,6 +633,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       this.metricsCollector = metricsCollector;
       this.unsettledMessageCount = unsettledMessageCount;
       this.replenishCreditOperation = replenishCreditOperation;
+      this.pendingWorkItemDecremented = pendingWorkItemDecremented;
       this.consumer = consumer;
     }
 
@@ -697,7 +714,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         DeliveryState state, MetricsCollector.ConsumeDisposition disposition, String label) {
       if (settled.compareAndSet(false, true)) {
         try {
-          protonExecutor.execute(() -> replenishCreditOperation.accept(1));
+          protonExecutor.execute(
+              () -> {
+                consumer.decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented);
+                replenishCreditOperation.run();
+              });
           delivery.disposition(state, true);
           unsettledMessageCount.decrementAndGet();
           metricsCollector.consumeDisposition(disposition);
@@ -727,7 +748,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final ProtonReceiver protonReceiver;
     private final MetricsCollector metricsCollector;
     private final AtomicLong unsettledMessageCount;
-    private final IntConsumer replenishCreditOperation;
+    private final Runnable replenishCreditOperation;
     private final AmqpConsumer consumer;
 
     private BatchDeliveryContext(
@@ -736,7 +757,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ProtonReceiver protonReceiver,
         MetricsCollector metricsCollector,
         AtomicLong unsettledMessageCount,
-        IntConsumer replenishCreditOperation,
+        Runnable replenishCreditOperation,
         AmqpConsumer consumer) {
       this.contexts = new ArrayList<>(batchSizeHint);
       this.protonExecutor = protonExecutor;
@@ -849,9 +870,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         int batchSize = this.contexts.size();
         try {
-          // settledCount = 1: only the current handler's pendingWorkItems decrement
-          // is still queued behind this task on the proton executor
-          protonExecutor.execute(() -> replenishCreditOperation.accept(1));
+          protonExecutor.execute(
+              () -> {
+                this.contexts.forEach(
+                    dctx ->
+                        consumer.decrementPendingWorkItemIfNeeded(dctx.pendingWorkItemDecremented));
+                replenishCreditOperation.run();
+              });
           long[][] ranges =
               SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
           this.protonExecutor.execute(
