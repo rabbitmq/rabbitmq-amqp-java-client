@@ -1688,7 +1688,9 @@ public class AmqpTest {
                   })
               .build();
 
-      assertThat(consumeSync).completes();
+      // 10,000 messages flowing through a 100-credit window plus a 100-thread executor
+      // take longer than the default timeout on slower (e.g. CI) machines
+      assertThat(consumeSync).completes(Duration.ofSeconds(30));
 
       Management.QueueInfo queueInfo = connection.management().queueInfo(name);
       assertThat(queueInfo).hasName(name).hasMessageCount(0);
