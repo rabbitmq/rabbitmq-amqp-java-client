@@ -20,9 +20,12 @@ package com.rabbitmq.client.amqp.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class WorkPoolConsumerWorkService implements ConsumerWorkService {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(WorkPoolConsumerWorkService.class);
   private static final int MAX_RUNNABLE_BLOCK_SIZE = 256;
 
   private final Executor executor;
@@ -73,7 +76,12 @@ final class WorkPoolConsumerWorkService implements ConsumerWorkService {
         }
         try {
           for (Runnable runnable : block) {
-            runnable.run();
+            // isolate each item so one failure doesn't discard the rest of the block
+            try {
+              runnable.run();
+            } catch (RuntimeException e) {
+              LOGGER.warn("Error while running work item", e);
+            }
           }
         } finally {
           if (WorkPoolConsumerWorkService.this.workPool.finishWorkBlock(key)) {
