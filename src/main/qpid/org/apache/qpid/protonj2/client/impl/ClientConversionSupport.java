@@ -45,7 +45,20 @@ public abstract class ClientConversionSupport {
         if (stringArray != null) {
             result = new Symbol[stringArray.length];
             for (int i = 0; i < stringArray.length; ++i) {
-                result[i] = Symbol.valueOf(stringArray[i]);
+                result[i] = Symbol.getSymbol(stringArray[i]);
+            }
+        }
+
+        return result;
+    }
+
+    public static Symbol[] toSASLSymbolArray(String[] stringArray) {
+        Symbol[] result = null;
+
+        if (stringArray != null) {
+            result = new Symbol[stringArray.length];
+            for (int i = 0; i < stringArray.length; ++i) {
+                result[i] = Symbol.getSASLSymbol(stringArray[i]);
             }
         }
 
@@ -71,7 +84,22 @@ public abstract class ClientConversionSupport {
         if (stringsMap != null) {
             result = new HashMap<>(stringsMap.size());
             stringsMap.forEach((key, value) -> {
-                result.put(Symbol.valueOf(key), value);
+                result.put(Symbol.getSymbol(key), value);
+            });
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    public static Map<Symbol, Object> toSASLSymbolKeyedMap(Map<String, ?> stringsMap) {
+        final Map<Symbol, Object> result;
+
+        if (stringsMap != null) {
+            result = new HashMap<>(stringsMap.size());
+            stringsMap.forEach((key, value) -> {
+                result.put(Symbol.getSASLSymbol(key), value);
             });
         } else {
             result = null;
@@ -102,7 +130,23 @@ public abstract class ClientConversionSupport {
             result = new Symbol[stringsSet.size()];
             int index = 0;
             for (String entry : stringsSet) {
-                result[index++] = Symbol.valueOf(entry);
+                result[index++] = Symbol.getSymbol(entry);
+            }
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    public static Symbol[] toSASLSymbolArray(Set<String> stringsSet) {
+        final Symbol[] result;
+
+        if (stringsSet != null) {
+            result = new Symbol[stringsSet.size()];
+            int index = 0;
+            for (String entry : stringsSet) {
+                result[index++] = Symbol.getSASLSymbol(entry);
             }
         } else {
             result = null;
@@ -117,7 +161,22 @@ public abstract class ClientConversionSupport {
         if (stringsSet != null) {
             result = new LinkedHashSet<>(stringsSet.size());
             stringsSet.forEach((entry) -> {
-                result.add(Symbol.valueOf(entry));
+                result.add(Symbol.getSymbol(entry));
+            });
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    public static Set<Symbol> toSASLSymbolSet(Set<String> stringsSet) {
+        final Set<Symbol> result;
+
+        if (stringsSet != null) {
+            result = new LinkedHashSet<>(stringsSet.size());
+            stringsSet.forEach((entry) -> {
+                result.add(Symbol.getSASLSymbol(entry));
             });
         } else {
             result = null;

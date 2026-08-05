@@ -18,7 +18,6 @@ package org.apache.qpid.protonj2.codec.encoders;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
-import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.TypeEncoder;
 import org.apache.qpid.protonj2.types.DeliveryTag;
 
@@ -26,6 +25,8 @@ import org.apache.qpid.protonj2.types.DeliveryTag;
  * Custom encoder for writing DeliveryTag types to a {@link ProtonBuffer}.
  */
 public final class DeliveryTagEncoder implements TypeEncoder<DeliveryTag> {
+
+    public static final DeliveryTagEncoder INSTANCE = new DeliveryTagEncoder();
 
     @Override
     public Class<DeliveryTag> getTypeClass() {
@@ -39,17 +40,7 @@ public final class DeliveryTagEncoder implements TypeEncoder<DeliveryTag> {
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, DeliveryTag value) {
-        final int tagLength = value.tagLength();
-
-        if (tagLength > 255) {
-            buffer.writeByte(EncodingCodes.VBIN32);
-            buffer.writeInt(tagLength);
-        } else {
-            buffer.writeByte(EncodingCodes.VBIN8);
-            buffer.writeByte((byte) tagLength);
-        }
-
-        value.writeTo(buffer);
+        ProtonEncodings.writeDeliveryTag(buffer, value);
     }
 
     @Override

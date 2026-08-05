@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.transactions.Coordinator;
  */
 public final class CoordinatorTypeEncoder extends AbstractDescribedListTypeEncoder<Coordinator> {
 
+    public static final CoordinatorTypeEncoder INSTANCE = new CoordinatorTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return Coordinator.DESCRIPTOR_CODE;
@@ -46,14 +48,8 @@ public final class CoordinatorTypeEncoder extends AbstractDescribedListTypeEncod
     }
 
     @Override
-    public void writeElement(Coordinator coordinator, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeArray(buffer, state, coordinator.getCapabilities());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Coordinator value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return 1;
     }
 
     @Override
@@ -67,10 +63,11 @@ public final class CoordinatorTypeEncoder extends AbstractDescribedListTypeEncod
 
     @Override
     public int getElementCount(Coordinator coordinator) {
-        if (coordinator.getCapabilities() != null) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return coordinator.getCapabilities() == null ? 0 : 1;
+    }
+
+    @Override
+    public void writeElements(Coordinator coordinator, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        encoder.writeArray(buffer, state, coordinator.getCapabilities());
     }
 }

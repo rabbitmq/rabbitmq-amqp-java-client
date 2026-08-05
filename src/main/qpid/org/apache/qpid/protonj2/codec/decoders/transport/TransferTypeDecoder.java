@@ -25,11 +25,8 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedByte;
 import org.apache.qpid.protonj2.types.UnsignedLong;
@@ -41,6 +38,8 @@ import org.apache.qpid.protonj2.types.transport.Transfer;
  * Decoder of AMQP Transfer type values from a byte stream
  */
 public final class TransferTypeDecoder extends AbstractDescribedListTypeDecoder<Transfer> {
+
+    public static final TransferTypeDecoder INSTANCE = new TransferTypeDecoder();
 
     private static final int MIN_TRANSFER_LIST_ENTRIES = 1;
     private static final int MAX_TRANSFER_LIST_ENTRIES = 11;
@@ -61,39 +60,18 @@ public final class TransferTypeDecoder extends AbstractDescribedListTypeDecoder<
     }
 
     @Override
-    public Transfer readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readTransfer(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_TRANSFER_LIST_ENTRIES;
     }
 
     @Override
-    public Transfer[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Transfer[] result = new Transfer[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readTransfer(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_TRANSFER_LIST_ENTRIES;
     }
 
-    private Transfer readTransfer(ProtonBuffer buffer, Decoder decoder, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Transfer readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Transfer transfer = new Transfer();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_TRANSFER_LIST_ENTRIES) {
-            throw new DecodeException("The handle field cannot be omitted");
-        }
-
-        if (count > MAX_TRANSFER_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Transfer list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // Peek ahead and see if there is a null in the next slot, if so we don't call
@@ -150,39 +128,8 @@ public final class TransferTypeDecoder extends AbstractDescribedListTypeDecoder<
     }
 
     @Override
-    public Transfer readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readTransfer(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Transfer[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Transfer[] result = new Transfer[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readTransfer(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Transfer readTransfer(InputStream stream, StreamDecoder decoder, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Transfer readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Transfer transfer = new Transfer();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_TRANSFER_LIST_ENTRIES) {
-            throw new DecodeException("The handle field cannot be omitted");
-        }
-
-        if (count > MAX_TRANSFER_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Transfer list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // If the stream allows we peek ahead and see if there is a null in the next slot,

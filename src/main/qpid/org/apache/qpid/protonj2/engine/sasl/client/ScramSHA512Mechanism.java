@@ -31,7 +31,7 @@ public class ScramSHA512Mechanism extends AbstractScramSHAMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol SCRAM_SHA_512 = Symbol.valueOf("SCRAM-SHA-512");
+    public static final Symbol SCRAM_SHA_512 = Symbol.getSASLSymbol("SCRAM-SHA-512");
 
     /**
      * Creates an instance of the {@link ScramSHA512Mechanism} with a generated client Nonce.

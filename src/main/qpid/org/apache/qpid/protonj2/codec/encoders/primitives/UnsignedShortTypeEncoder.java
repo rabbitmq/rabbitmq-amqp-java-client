@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.types.UnsignedShort;
  */
 public final class UnsignedShortTypeEncoder extends AbstractPrimitiveTypeEncoder<UnsignedShort> {
 
+    public static final UnsignedShortTypeEncoder INSTANCE = new UnsignedShortTypeEncoder();
+
     @Override
     public Class<UnsignedShort> getTypeClass() {
         return UnsignedShort.class;

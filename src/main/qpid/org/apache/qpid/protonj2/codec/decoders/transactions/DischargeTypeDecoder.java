@@ -20,12 +20,15 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
 import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.primitives.BinaryTypeDecoder;
+import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transactions.Discharge;
@@ -34,6 +37,8 @@ import org.apache.qpid.protonj2.types.transactions.Discharge;
  * Decoder of AMQP Discharge type values from a byte stream.
  */
 public final class DischargeTypeDecoder extends AbstractDescribedListTypeDecoder<Discharge> {
+
+    public static final DischargeTypeDecoder INSTANCE = new DischargeTypeDecoder();
 
     private static final int MIN_DISCHARGE_LIST_ENTRIES = 1;
     private static final int MAX_DISCHARGE_LIST_ENTRIES = 2;
@@ -54,98 +59,52 @@ public final class DischargeTypeDecoder extends AbstractDescribedListTypeDecoder
     }
 
     @Override
-    public Discharge readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readDischarge(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_DISCHARGE_LIST_ENTRIES;
     }
 
     @Override
-    public Discharge[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Discharge[] result = new Discharge[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDischarge(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_DISCHARGE_LIST_ENTRIES;
     }
 
-    private Discharge readDischarge(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Discharge readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Discharge discharge = new Discharge();
+        final TypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_DISCHARGE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Discharge list encoding: " + count);
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            discharge.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(buffer, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the Discharge");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
 
-        if (count > MAX_DISCHARGE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Discharge list encoding: " + count);
-        }
-
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    discharge.setTxnId(state.getDecoder().readBinary(buffer, state));
-                    break;
-                case 1:
-                    discharge.setFail(state.getDecoder().readBoolean(buffer, state, false));
-                    break;
-            }
+        if (count == 2) {
+            discharge.setFail(state.getDecoder().readBoolean(buffer, state, false));
         }
 
         return discharge;
     }
 
     @Override
-    public Discharge readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readDischarge(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Discharge[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Discharge[] result = new Discharge[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDischarge(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Discharge readDischarge(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Discharge readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Discharge discharge = new Discharge();
+        final StreamTypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_DISCHARGE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Discharge list encoding: " + count);
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            discharge.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(stream, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the Discharge");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
 
-        if (count > MAX_DISCHARGE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Discharge list encoding: " + count);
-        }
-
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    discharge.setTxnId(state.getDecoder().readBinary(stream, state));
-                    break;
-                case 1:
-                    discharge.setFail(state.getDecoder().readBoolean(stream, state, false));
-                    break;
-            }
+        if (count == 2) {
+            discharge.setFail(state.getDecoder().readBoolean(stream, state, false));
         }
 
         return discharge;

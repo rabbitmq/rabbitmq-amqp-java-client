@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transactions;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transactions.Declared;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transactions.Declared;
  * Encoder of AMQP Declared type values to a byte stream.
  */
 public final class DeclaredTypeEncoder extends AbstractDescribedListTypeEncoder<Declared> {
+
+    public static final DeclaredTypeEncoder INSTANCE = new DeclaredTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,26 +50,6 @@ public final class DeclaredTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(Declared declared, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeBinary(buffer, state, declared.getTxnId());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Declared value index: " + index);
-        }
-    }
-
-    @Override
-    public byte getListEncoding(Declared value) {
-        if (value.getTxnId() != null && value.getTxnId().getLength() > 255) {
-            return EncodingCodes.LIST32;
-        } else {
-            return EncodingCodes.LIST8;
-        }
-    }
-
-    @Override
     public int getElementCount(Declared declared) {
         return 1;
     }
@@ -73,5 +57,30 @@ public final class DeclaredTypeEncoder extends AbstractDescribedListTypeEncoder<
     @Override
     public int getMinElementCount() {
         return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 1;
+    }
+
+    @Override
+    public byte getListEncoding(Declared value) {
+        if (value.getTxnId() != null && value.getTxnId().getLength() > 240) {
+            return EncodingCodes.LIST32;
+        } else {
+            return EncodingCodes.LIST8;
+        }
+    }
+
+    @Override
+    public void writeElements(Declared declared, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        final Binary txnId = declared.getTxnId();
+
+        if (txnId != null && txnId.getLength() > 0) {
+            encoder.writeBinary(buffer, state, txnId);
+        } else {
+            throw new EncodeException("Cannot write a Declared instance without a transaction Id assigned");
+        }
     }
 }

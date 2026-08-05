@@ -52,7 +52,28 @@ public class StringUtils {
         if (stringArray != null) {
             result = new Symbol[stringArray.length];
             for (int i = 0; i < stringArray.length; ++i) {
-                result[i] = Symbol.valueOf(stringArray[i]);
+                result[i] = Symbol.getSymbol(stringArray[i]);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Converts the given String[] into a Symbol[] array using the SASL Symbol cache.
+     *
+     * @param stringArray
+     * 		The given String[] to convert.
+     *
+     * @return a new Symbol array that contains Symbol versions of the input Strings.
+     */
+    public static Symbol[] toSASLSymbolArray(String[] stringArray) {
+        Symbol[] result = null;
+
+        if (stringArray != null) {
+            result = new Symbol[stringArray.length];
+            for (int i = 0; i < stringArray.length; ++i) {
+                result[i] = Symbol.getSASLSymbol(stringArray[i]);
             }
         }
 
@@ -94,7 +115,31 @@ public class StringUtils {
         if (stringsMap != null) {
             result = new HashMap<>(stringsMap.size());
             stringsMap.forEach((key, value) -> {
-                result.put(Symbol.valueOf(key), value);
+                result.put(Symbol.getSymbol(key), value);
+            });
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    /**
+     * Converts the given String keyed {@link Map} into a matching Symbol keyed {@link Map} using
+     * the SASL Symbol cache.
+     *
+     * @param stringsMap
+     * 		The given String keyed {@link Map} to convert.
+     *
+     * @return a new Symbol keyed {@link Map} that contains Symbol versions of the input String keys.
+     */
+    public static Map<Symbol, Object> toSASLSymbolKeyedMap(Map<String, Object> stringsMap) {
+        final Map<Symbol, Object> result;
+
+        if (stringsMap != null) {
+            result = new HashMap<>(stringsMap.size());
+            stringsMap.forEach((key, value) -> {
+                result.put(Symbol.getSASLSymbol(key), value);
             });
         } else {
             result = null;
@@ -141,7 +186,31 @@ public class StringUtils {
             result = new Symbol[stringsSet.size()];
             int index = 0;
             for (String entry : stringsSet) {
-                result[index++] = Symbol.valueOf(entry);
+                result[index++] = Symbol.getSymbol(entry);
+            }
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    /**
+     * Converts the given String {@link Collection} into a Symbol array using the SASL Symbol cache.
+     *
+     * @param stringsSet
+     * 		The given String {@link Collection} to convert.
+     *
+     * @return a new Symbol array that contains String versions of the input Symbols.
+     */
+    public static Symbol[] toSASLSymbolArray(Collection<String> stringsSet) {
+        final Symbol[] result;
+
+        if (stringsSet != null) {
+            result = new Symbol[stringsSet.size()];
+            int index = 0;
+            for (String entry : stringsSet) {
+                result[index++] = Symbol.getSASLSymbol(entry);
             }
         } else {
             result = null;
@@ -164,7 +233,30 @@ public class StringUtils {
         if (stringsSet != null) {
             result = new LinkedHashSet<>(stringsSet.size());
             stringsSet.forEach((entry) -> {
-                result.add(Symbol.valueOf(entry));
+                result.add(Symbol.getSymbol(entry));
+            });
+        } else {
+            result = null;
+        }
+
+        return result;
+    }
+
+    /**
+     * Converts the given String {@link Collection} into a matching Symbol {@link Set} from the SASL Symbol cache.
+     *
+     * @param stringsSet
+     * 		The given String {@link Collection} to convert.
+     *
+     * @return a new Symbol {@link Set} that contains String versions of the input Symbols.
+     */
+    public static Set<Symbol> toSASLSymbolSet(Collection<String> stringsSet) {
+        final Set<Symbol> result;
+
+        if (stringsSet != null) {
+            result = new LinkedHashSet<>(stringsSet.size());
+            stringsSet.forEach((entry) -> {
+                result.add(Symbol.getSASLSymbol(entry));
             });
         } else {
             result = null;

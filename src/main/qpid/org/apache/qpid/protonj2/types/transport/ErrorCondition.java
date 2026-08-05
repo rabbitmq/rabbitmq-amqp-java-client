@@ -18,6 +18,7 @@ package org.apache.qpid.protonj2.types.transport;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
@@ -26,6 +27,12 @@ public final class ErrorCondition {
 
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x000000000000001dL);
     public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:error:list");
+
+    private static final int CONDITION = 1;
+    private static final int DESCRIPTION = 2;
+    private static final int INFO = 4;
+
+    private int elements = 0;
 
     private final Symbol condition;
     private final String description;
@@ -44,9 +51,40 @@ public final class ErrorCondition {
     }
 
     public ErrorCondition(Symbol condition, String description, Map<Symbol, Object> info) {
+        Objects.requireNonNull(condition, "An error condition must have an assigned condition");
+
         this.condition = condition;
         this.description = description;
         this.info = info != null ? Collections.unmodifiableMap(info) : null;
+
+        elements |= CONDITION;
+
+        if (description != null) {
+            elements |= DESCRIPTION;
+        }
+        if (info != null) {
+            elements |= INFO;
+        }
+    }
+
+    public boolean isEmpty() {
+        return elements == 0;
+    }
+
+    public int getElementCount() {
+        return 32 - Integer.numberOfLeadingZeros(elements);
+    }
+
+    public boolean hasCondition() {
+        return (elements & CONDITION) == CONDITION;
+    }
+
+    public boolean hasDescription() {
+        return (elements & DESCRIPTION) == DESCRIPTION;
+    }
+
+    public boolean hasInfo() {
+        return (elements & INFO) == INFO;
     }
 
     public Symbol getCondition() {

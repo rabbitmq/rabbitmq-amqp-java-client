@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DescribedTypeEncoder;
@@ -70,35 +71,40 @@ import org.apache.qpid.protonj2.types.UnsignedShort;
  */
 public final class ProtonEncoder implements Encoder {
 
+    protected enum EncoderMode {
+        SASL,
+        DEFAULT
+    }
+
     // The encoders for primitives are fixed and cannot be altered by users who want
     // to register custom encoders, these encoders are stateless so they can be safely
     // made static to reduce overhead of creating and destroying this type.
-    private static final ArrayTypeEncoder arrayEncoder = new ArrayTypeEncoder();
-    private static final BinaryTypeEncoder binaryEncoder = new BinaryTypeEncoder();
-    private static final BooleanTypeEncoder booleanEncoder = new BooleanTypeEncoder();
-    private static final ByteTypeEncoder byteEncoder = new ByteTypeEncoder();
-    private static final CharacterTypeEncoder charEncoder = new CharacterTypeEncoder();
-    private static final Decimal32TypeEncoder decimal32Encoder = new Decimal32TypeEncoder();
-    private static final Decimal64TypeEncoder decimal64Encoder = new Decimal64TypeEncoder();
-    private static final Decimal128TypeEncoder decimal128Encoder = new Decimal128TypeEncoder();
-    private static final DoubleTypeEncoder doubleEncoder = new DoubleTypeEncoder();
-    private static final FloatTypeEncoder floatEncoder = new FloatTypeEncoder();
-    private static final IntegerTypeEncoder integerEncoder = new IntegerTypeEncoder();
-    private static final ListTypeEncoder listEncoder = new ListTypeEncoder();
-    private static final LongTypeEncoder longEncoder = new LongTypeEncoder();
-    private static final MapTypeEncoder mapEncoder = new MapTypeEncoder();
-    private static final NullTypeEncoder nullEncoder = new NullTypeEncoder();
-    private static final ShortTypeEncoder shortEncoder = new ShortTypeEncoder();
-    private static final StringTypeEncoder stringEncoder = new StringTypeEncoder();
-    private static final SymbolTypeEncoder symbolEncoder = new SymbolTypeEncoder();
-    private static final TimestampTypeEncoder timestampEncoder = new TimestampTypeEncoder();
-    private static final UnknownDescribedTypeEncoder unknownTypeEncoder = new UnknownDescribedTypeEncoder();
-    private static final UUIDTypeEncoder uuidEncoder = new UUIDTypeEncoder();
-    private static final UnsignedByteTypeEncoder ubyteEncoder = new UnsignedByteTypeEncoder();
-    private static final UnsignedShortTypeEncoder ushortEncoder = new UnsignedShortTypeEncoder();
-    private static final UnsignedIntegerTypeEncoder uintEncoder = new UnsignedIntegerTypeEncoder();
-    private static final UnsignedLongTypeEncoder ulongEncoder = new UnsignedLongTypeEncoder();
-    private static final DeliveryTagEncoder deliveryTagEncoder = new DeliveryTagEncoder();
+    private static final ArrayTypeEncoder arrayEncoder = ArrayTypeEncoder.INSTANCE;
+    private static final BinaryTypeEncoder binaryEncoder = BinaryTypeEncoder.INSTANCE;
+    private static final BooleanTypeEncoder booleanEncoder = BooleanTypeEncoder.INSTANCE;
+    private static final ByteTypeEncoder byteEncoder = ByteTypeEncoder.INSTANCE;
+    private static final CharacterTypeEncoder charEncoder = CharacterTypeEncoder.INSTANCE;
+    private static final Decimal32TypeEncoder decimal32Encoder = Decimal32TypeEncoder.INSTANCE;
+    private static final Decimal64TypeEncoder decimal64Encoder = Decimal64TypeEncoder.INSTANCE;
+    private static final Decimal128TypeEncoder decimal128Encoder = Decimal128TypeEncoder.INSTANCE;
+    private static final DoubleTypeEncoder doubleEncoder = DoubleTypeEncoder.INSTANCE;
+    private static final FloatTypeEncoder floatEncoder = FloatTypeEncoder.INSTANCE;
+    private static final IntegerTypeEncoder integerEncoder = IntegerTypeEncoder.INSTANCE;
+    private static final ListTypeEncoder listEncoder = ListTypeEncoder.INSTANCE;
+    private static final LongTypeEncoder longEncoder = LongTypeEncoder.INSTANCE;
+    private static final MapTypeEncoder mapEncoder = MapTypeEncoder.INSTANCE;
+    private static final NullTypeEncoder nullEncoder = NullTypeEncoder.INSTANCE;
+    private static final ShortTypeEncoder shortEncoder = ShortTypeEncoder.INSTANCE;
+    private static final StringTypeEncoder stringEncoder = StringTypeEncoder.INSTANCE;
+    private static final SymbolTypeEncoder symbolEncoder = SymbolTypeEncoder.INSTANCE;
+    private static final TimestampTypeEncoder timestampEncoder = TimestampTypeEncoder.INSTANCE;
+    private static final UnknownDescribedTypeEncoder unknownTypeEncoder = UnknownDescribedTypeEncoder.INSTANCE;
+    private static final UUIDTypeEncoder uuidEncoder = UUIDTypeEncoder.INSTANCE;
+    private static final UnsignedByteTypeEncoder ubyteEncoder = UnsignedByteTypeEncoder.INSTANCE;
+    private static final UnsignedShortTypeEncoder ushortEncoder = UnsignedShortTypeEncoder.INSTANCE;
+    private static final UnsignedIntegerTypeEncoder uintEncoder = UnsignedIntegerTypeEncoder.INSTANCE;
+    private static final UnsignedLongTypeEncoder ulongEncoder = UnsignedLongTypeEncoder.INSTANCE;
+    private static final DeliveryTagEncoder deliveryTagEncoder = DeliveryTagEncoder.INSTANCE;
 
     private ProtonEncoderState singleThreadedState;
 
@@ -130,6 +136,20 @@ public final class ProtonEncoder implements Encoder {
         typeEncoders.put(uintEncoder.getTypeClass(), uintEncoder);
         typeEncoders.put(ulongEncoder.getTypeClass(), ulongEncoder);
         typeEncoders.put(deliveryTagEncoder.getTypeClass(), deliveryTagEncoder);
+    }
+
+    private final Function<String, Symbol> stringToSymbolSupplier;
+
+    public ProtonEncoder() {
+        this(EncoderMode.DEFAULT);
+    }
+
+    public ProtonEncoder(EncoderMode mode) {
+        if (EncoderMode.SASL.equals(mode)) {
+            stringToSymbolSupplier = Symbol::getSASLSymbol;
+        } else {
+            stringToSymbolSupplier = Symbol::getSymbol;
+        }
     }
 
     @Override
@@ -457,7 +477,7 @@ public final class ProtonEncoder implements Encoder {
         if (value == null) {
             buffer.writeByte(EncodingCodes.NULL);
         } else {
-            symbolEncoder.writeType(buffer, state, Symbol.valueOf(value));
+            symbolEncoder.writeType(buffer, state, stringToSymbolSupplier.apply(value));
         }
     }
 

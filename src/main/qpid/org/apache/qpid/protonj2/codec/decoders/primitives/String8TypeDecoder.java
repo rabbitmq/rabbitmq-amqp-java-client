@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class String8TypeDecoder extends AbstractStringTypeDecoder {
 
+    public static final String8TypeDecoder INSTANCE = new String8TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.STR8 & 0xff;
@@ -42,6 +44,6 @@ public final class String8TypeDecoder extends AbstractStringTypeDecoder {
 
     @Override
     public int readSize(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return ProtonStreamUtils.readByte(stream);
+        return ProtonStreamUtils.readByte(stream) & 0xff;
     }
 }

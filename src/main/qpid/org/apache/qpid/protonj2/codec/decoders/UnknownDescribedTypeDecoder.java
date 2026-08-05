@@ -56,29 +56,48 @@ public abstract class UnknownDescribedTypeDecoder extends AbstractDescribedTypeD
 
     @Override
     public final DescribedType readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-        Object described = decoder.readValue(buffer, state);
+        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
 
-        return new UnknownDescribedType(getDescriptor(), described);
+        if (!decoder.isPrimitive()) {
+            throw new DecodeException("The described value must be an AMQP primitive type.");
+        }
+
+        return new UnknownDescribedType(getDescriptor(), decoder.readValue(buffer, state));
     }
 
     @Override
     public final DescribedType readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-        Object described = decoder.readValue(stream, state);
+        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
 
-        return new UnknownDescribedType(getDescriptor(), described);
+        if (!decoder.isPrimitive()) {
+            throw new DecodeException("The described value must be an AMQP primitive type.");
+        }
+
+        return new UnknownDescribedType(getDescriptor(), decoder.readValue(stream, state));
     }
 
     @Override
     public final DescribedType[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
+        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
 
-        UnknownDescribedType[] result = new UnknownDescribedType[count];
+        if (!decoder.isPrimitive()) {
+            throw new DecodeException("The described value must be an AMQP primitive type.");
+        } else if (((PrimitiveTypeDecoder<?>) decoder).isZeroWidth()) {
+            if (count > state.getMaxZeroWidthArrayElements()) {
+                throw new DecodeException(String.format(
+                    "Array element count %d is specified to be greater than limit for zero sized encoded array types (%d)",
+                    count, state.getMaxZeroWidthArrayElements()));
+            }
+        }  else if (count > buffer.getReadableBytes()) {
+            throw new DecodeException(String.format(
+                "Array encoded element count %d is specified to be greater than the amount " +
+                "of data available (%d)", count, buffer.getReadableBytes()));
+        }
+
+        final UnknownDescribedType[] result = new UnknownDescribedType[count];
 
         for (int i = 0; i < count; ++i) {
-            Object described = decoder.readValue(buffer, state);
-            result[i] = new UnknownDescribedType(getDescriptor(), described);
+            result[i] = new UnknownDescribedType(getDescriptor(), decoder.readValue(buffer, state));
         }
 
         return result;
@@ -86,13 +105,26 @@ public abstract class UnknownDescribedTypeDecoder extends AbstractDescribedTypeD
 
     @Override
     public final DescribedType[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
+        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
 
-        UnknownDescribedType[] result = new UnknownDescribedType[count];
+        if (!decoder.isPrimitive()) {
+            throw new DecodeException("The described value must be an AMQP primitive type.");
+        } else if (((PrimitiveTypeDecoder<?>) decoder).isZeroWidth()) {
+            if (count > state.getMaxZeroWidthArrayElements()) {
+                throw new DecodeException(String.format(
+                    "Array element count %d is specified to be greater than limit for zero sized encoded array types (%d)",
+                    count, state.getMaxZeroWidthArrayElements()));
+            }
+        } else if (count > state.getMaxArraySize()) {
+            throw new DecodeException(String.format(
+                "Array encoded length %d is specified to be greater than the amount " +
+                "of the configured max array length (%d)", count, state.getMaxStringSize()));
+        }
+
+        final UnknownDescribedType[] result = new UnknownDescribedType[count];
 
         for (int i = 0; i < count; ++i) {
-            Object described = decoder.readValue(stream, state);
-            result[i] = new UnknownDescribedType(getDescriptor(), described);
+            result[i] = new UnknownDescribedType(getDescriptor(), decoder.readValue(stream, state));
         }
 
         return result;
@@ -100,11 +132,23 @@ public abstract class UnknownDescribedTypeDecoder extends AbstractDescribedTypeD
 
     @Override
     public final void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        state.getDecoder().readNextTypeDecoder(buffer, state).skipValue(buffer, state);
+        state.increaseDepth();
+
+        try {
+            state.getDecoder().readNextTypeDecoder(buffer, state).skipValue(buffer, state);
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public final void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        state.getDecoder().readNextTypeDecoder(stream, state).skipValue(stream, state);
+        state.increaseDepth();
+
+        try {
+            state.getDecoder().readNextTypeDecoder(stream, state).skipValue(stream, state);
+        } finally {
+            state.decreaseDepth();
+        }
     }
 }

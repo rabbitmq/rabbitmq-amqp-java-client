@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Array32TypeDecoder extends AbstractArrayTypeDecoder {
 
+    public static final Array32TypeDecoder INSTANCE = new Array32TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.ARRAY32 & 0xff;

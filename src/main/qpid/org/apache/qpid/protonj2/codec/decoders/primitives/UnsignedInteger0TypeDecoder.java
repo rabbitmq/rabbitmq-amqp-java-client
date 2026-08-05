@@ -31,9 +31,16 @@ import org.apache.qpid.protonj2.types.UnsignedInteger;
  */
 public final class UnsignedInteger0TypeDecoder extends AbstractPrimitiveTypeDecoder<UnsignedInteger> {
 
+    public static final UnsignedInteger0TypeDecoder INSTANCE = new UnsignedInteger0TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.UINT0 & 0xff;
+    }
+
+    @Override
+    public boolean isZeroWidth() {
+        return true;
     }
 
     @Override

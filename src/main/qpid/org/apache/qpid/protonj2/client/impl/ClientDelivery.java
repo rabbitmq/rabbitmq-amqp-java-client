@@ -18,9 +18,11 @@ package org.apache.qpid.protonj2.client.impl;
 
 import java.io.InputStream;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferInputStream;
+import org.apache.qpid.protonj2.client.DecodeOptions;
 import org.apache.qpid.protonj2.client.Delivery;
 import org.apache.qpid.protonj2.client.Message;
 import org.apache.qpid.protonj2.client.Receiver;
@@ -83,6 +85,25 @@ public final class ClientDelivery extends ClientDeliverable<ClientDelivery, Clie
         return message;
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <E> Message<E> message(DecodeOptions options) throws ClientException {
+        if (rawInputStream != null) {
+            throw new ClientIllegalStateException("Cannot access Delivery Annotations API after requesting an InputStream");
+        }
+
+        Objects.requireNonNull(options, "Provided decode options instance cannot be null");
+
+        Message<E> message = (Message<E>) cachedMessage;
+        if (message == null && payload.isReadable()) {
+            try (payload) {
+                message = (Message<E>)(cachedMessage = ClientMessageSupport.decodeMessage(payload, this::deliveryAnnotations, options));
+            }
+        }
+
+        return message;
+    }
+
     @Override
     public InputStream rawInputStream() throws ClientException {
         if (cachedMessage != null) {
@@ -101,6 +122,17 @@ public final class ClientDelivery extends ClientDeliverable<ClientDelivery, Clie
     @Override
     public Map<String, Object> annotations() throws ClientException {
         message();
+
+        if (deliveryAnnotations != null && deliveryAnnotations.getValue() != null) {
+            return StringUtils.toStringKeyedMap(deliveryAnnotations.getValue());
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public Map<String, Object> annotations(DecodeOptions options) throws ClientException {
+        message(options);
 
         if (deliveryAnnotations != null && deliveryAnnotations.getValue() != null) {
             return StringUtils.toStringKeyedMap(deliveryAnnotations.getValue());

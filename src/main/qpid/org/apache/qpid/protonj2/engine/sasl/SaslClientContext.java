@@ -96,7 +96,7 @@ public interface SaslClientContext extends SaslContext {
      * @throws EngineStateException if the {@link Engine} has been shut down or a failure occurs processing this mechanism.
      */
     default SaslClientContext sendChosenMechanism(String mechanism, String host, ProtonBuffer initialResponse) throws EngineStateException {
-        return sendChosenMechanism(Symbol.getSymbol(mechanism), host, initialResponse);
+        return sendChosenMechanism(Symbol.getSASLSymbol(mechanism), host, initialResponse);
     }
 
     /**

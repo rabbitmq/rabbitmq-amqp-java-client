@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Attach;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transport.Attach;
  * Encoder of AMQP Attach type values to a byte stream.
  */
 public final class AttachTypeEncoder extends AbstractDescribedListTypeEncoder<Attach> {
+
+    public static final AttachTypeEncoder INSTANCE = new AttachTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,23 +50,59 @@ public final class AttachTypeEncoder extends AbstractDescribedListTypeEncoder<At
     }
 
     @Override
-    public void writeElement(Attach attach, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (attach.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    encoder.writeString(buffer, state, attach.getName());
-                    break;
-                case 1:
-                    encoder.writeUnsignedInteger(buffer, state, attach.getHandle());
-                    break;
-                case 2:
-                    buffer.writeByte(attach.getRole().encodingCode());
-                    break;
+    public byte getListEncoding(Attach value) {
+        return EncodingCodes.LIST32;
+    }
+
+    @Override
+    public int getElementCount(Attach attach) {
+        return attach.getElementCount();
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 3;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 14;
+    }
+
+    @Override
+    public void writeElements(Attach attach, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (attach.hasName()) {
+            ProtonEncodings.writeString(buffer, state, attach.getName());
+        } else {
+            throw new EncodeException("Cannot write an Attach that does not have a name assigned.");
+        }
+
+        if (attach.hasHandle()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, attach.getHandle());
+        } else {
+            throw new EncodeException("Cannot write an Attach that does not have a handle assigned.");
+        }
+
+        if (attach.hasRole()) {
+            buffer.writeByte(attach.getRole().encodingCode());
+        } else {
+            throw new EncodeException("Cannot write an Attach that does not have a Role assigned.");
+        }
+
+        for (int i = 3; i < count; ++i) {
+            if (!attach.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
                 case 3:
-                    encoder.writeUnsignedByte(buffer, state, attach.getSenderSettleMode().byteValue());
+                    buffer.writeByte(EncodingCodes.UBYTE);
+                    buffer.writeByte(attach.getSenderSettleMode().byteValue());
                     break;
                 case 4:
-                    encoder.writeUnsignedByte(buffer, state, attach.getReceiverSettleMode().byteValue());
+                    buffer.writeByte(EncodingCodes.UBYTE);
+                    buffer.writeByte(attach.getReceiverSettleMode().byteValue());
                     break;
                 case 5:
                     encoder.writeObject(buffer, state, attach.getSource());
@@ -77,10 +117,10 @@ public final class AttachTypeEncoder extends AbstractDescribedListTypeEncoder<At
                     buffer.writeByte(attach.getIncompleteUnsettled() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
                     break;
                 case 9:
-                    encoder.writeUnsignedInteger(buffer, state, attach.getInitialDeliveryCount());
+                    ProtonEncodings.writeUnsignedInteger(buffer, attach.getInitialDeliveryCount());
                     break;
                 case 10:
-                    encoder.writeUnsignedLong(buffer, state, attach.getMaxMessageSize());
+                    ProtonEncodings.writeUnsignedLong(buffer, attach.getMaxMessageSize().longValue());
                     break;
                 case 11:
                     encoder.writeArray(buffer, state, attach.getOfferedCapabilities());
@@ -91,26 +131,7 @@ public final class AttachTypeEncoder extends AbstractDescribedListTypeEncoder<At
                 case 13:
                     encoder.writeMap(buffer, state, attach.getProperties());
                     break;
-                default:
-                    throw new IllegalArgumentException("Unknown Attach value index: " + index);
             }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
         }
-    }
-
-    @Override
-    public byte getListEncoding(Attach value) {
-        return EncodingCodes.LIST32;
-    }
-
-    @Override
-    public int getElementCount(Attach attach) {
-        return attach.getElementCount();
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 3;
     }
 }

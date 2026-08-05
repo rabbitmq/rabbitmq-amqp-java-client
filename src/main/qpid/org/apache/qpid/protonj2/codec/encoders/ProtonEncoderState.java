@@ -107,7 +107,7 @@ public final class ProtonEncoderState implements EncoderState {
 
     private static int extendedEncodeUTF8Sequence(ProtonBuffer buffer, CharSequence value, int index, int position) {
         // Size buffer to what we know we will need to complete this encode.
-        buffer.ensureWritable(calculateUTF8Length(index, value));
+        buffer.ensureWritable(index + calculateUTF8Length(index, value));
 
         int remaining = value.length();
 
@@ -148,7 +148,7 @@ public final class ProtonEncoderState implements EncoderState {
         int encodedSize = sequence.length();
         final int length = encodedSize;
 
-        for (int i = 0; i < length; i++) {
+        for (int i = startPos; i < length; i++) {
             int c = sequence.charAt(i);
 
             // U+0080..

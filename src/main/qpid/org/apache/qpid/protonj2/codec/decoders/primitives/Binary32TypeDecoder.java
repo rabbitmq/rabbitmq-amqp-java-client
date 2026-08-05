@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Binary32TypeDecoder extends AbstractBinaryTypeDecoder {
 
+    public static final Binary32TypeDecoder INSTANCE = new Binary32TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.VBIN32 & 0xff;

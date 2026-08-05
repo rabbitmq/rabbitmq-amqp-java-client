@@ -37,7 +37,7 @@ public class XOauth2Mechanism extends AbstractMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol XOAUTH2 = Symbol.valueOf("XOAUTH2");
+    public static final Symbol XOAUTH2 = Symbol.getSASLSymbol("XOAUTH2");
 
     private String additionalFailureInformation;
 

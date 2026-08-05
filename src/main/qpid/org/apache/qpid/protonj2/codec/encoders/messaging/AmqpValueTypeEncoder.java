@@ -31,6 +31,8 @@ import org.apache.qpid.protonj2.types.messaging.AmqpValue;
 @SuppressWarnings({ "rawtypes" })
 public final class AmqpValueTypeEncoder extends AbstractDescribedTypeEncoder<AmqpValue> {
 
+    public static final AmqpValueTypeEncoder INSTANCE = new AmqpValueTypeEncoder();
+
     private static final byte[] VALUE_PREAMBLE = new byte[] {
             EncodingCodes.DESCRIBED_TYPE_INDICATOR, EncodingCodes.SMALLULONG, AmqpValue.DESCRIPTOR_CODE.byteValue()
         };
@@ -65,8 +67,7 @@ public final class AmqpValueTypeEncoder extends AbstractDescribedTypeEncoder<Amq
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         writeRawArray(buffer, state, values);
 
@@ -84,7 +85,8 @@ public final class AmqpValueTypeEncoder extends AbstractDescribedTypeEncoder<Amq
     @Override
     public void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        state.getEncoder().writeUnsignedLong(buffer, state, getDescriptorCode());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(AmqpValue.DESCRIPTOR_CODE.byteValue());
 
         Object[] elements = new Object[values.length];
 

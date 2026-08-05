@@ -49,17 +49,6 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
     }
 
     /**
-     * Returns false when the value to be encoded has no Map body and can be
-     * written as a Null body type instead of a Map type.
-     *
-     * @param value
-     *		the value which be encoded as a map type.
-     *
-     * @return true if the type to be encoded has a Map body, false otherwise.
-     */
-    public abstract boolean hasMap(M value);
-
-    /**
      * Gets the number of elements that will result when this type is encoded
      * into an AMQP Map type.
      *
@@ -91,24 +80,18 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
         final Encoder encoder = state.getEncoder();
 
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        encoder.writeUnsignedLong(buffer, state, getDescriptorCode().byteValue());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(getDescriptorCode().byteValue());
 
-        if (hasMap(value)) {
-            final int count = getMapSize(value);
-            final byte encodingCode = getMapEncoding(value);
+        final int count = getMapSize(value);
+        final byte encodingCode = getMapEncoding(value);
 
-            buffer.writeByte(encodingCode);
+        buffer.writeByte(encodingCode);
 
-            switch (encodingCode) {
-                case EncodingCodes.MAP8:
-                    writeSmallType(buffer, encoder, state, value, count);
-                    break;
-                case EncodingCodes.MAP32:
-                    writeLargeType(buffer, encoder, state, value, count);
-                    break;
-            }
+        if (encodingCode == EncodingCodes.MAP32) {
+            writeLargeType(buffer, encoder, state, value, count);
         } else {
-            buffer.writeByte(EncodingCodes.NULL);
+            writeSmallType(buffer, encoder, state, value, count);
         }
     }
 
@@ -116,8 +99,7 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeByte((byte) 0);
-        buffer.writeByte((byte) (elementCount * 2));
+        buffer.writeShort((short) (elementCount * 2));
 
         writeMapEntries(buffer, encoder, state, value);
 
@@ -131,8 +113,7 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(elementCount * 2);
+        buffer.writeLong(elementCount * 2);
 
         writeMapEntries(buffer, encoder, state, value);
 
@@ -150,11 +131,10 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
-
+        buffer.writeLong(values.length);
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        state.getEncoder().writeUnsignedLong(buffer, state, getDescriptorCode());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(getDescriptorCode().byteValue());
 
         writeRawArray(buffer, state, values);
 
@@ -179,8 +159,7 @@ public abstract class AbstractDescribedMapTypeEncoder<K, V, M> extends AbstractD
             final int mapStartIndex = buffer.getWriteOffset();
 
             // Reserve space for the size and write the count of list elements.
-            buffer.writeInt(0);
-            buffer.writeInt(count * 2);
+            buffer.writeLong(count * 2);
 
             writeMapEntries(buffer, state.getEncoder(), state, map);
 

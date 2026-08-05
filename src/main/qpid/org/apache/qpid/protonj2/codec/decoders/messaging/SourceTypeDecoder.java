@@ -20,12 +20,13 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.EncodingCodes;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.UnsignedLong;
@@ -38,6 +39,8 @@ import org.apache.qpid.protonj2.types.messaging.TerminusExpiryPolicy;
  * Decoder of AMQP Source type values from a byte stream.
  */
 public final class SourceTypeDecoder extends AbstractDescribedListTypeDecoder<Source> {
+
+    public static final SourceTypeDecoder INSTANCE = new SourceTypeDecoder();
 
     private static final int MIN_SOURCE_LIST_ENTRIES = 0;
     private static final int MAX_SOURCE_LIST_ENTRIES = 11;
@@ -58,76 +61,61 @@ public final class SourceTypeDecoder extends AbstractDescribedListTypeDecoder<So
     }
 
     @Override
-    public Source readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readSource(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_SOURCE_LIST_ENTRIES;
     }
 
     @Override
-    public Source[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Source[] result = new Source[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readSource(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_SOURCE_LIST_ENTRIES;
     }
 
-    private Source readSource(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Source readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Source source = new Source();
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count < MIN_SOURCE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Source list encoding: " + count);
-        }
-
-        if (count > MAX_SOURCE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Source list encoding: " + count);
-        }
-
         for (int index = 0; index < count; ++index) {
+            if (buffer.peekByte() == EncodingCodes.NULL) {
+                buffer.advanceReadOffset(1);
+                continue;
+            }
+
             switch (index) {
                 case 0:
-                    source.setAddress(state.getDecoder().readString(buffer, state));
+                    source.setAddress(decoder.readString(buffer, state));
                     break;
                 case 1:
-                    final long durability = state.getDecoder().readUnsignedInteger(buffer, state, 0);
+                    final long durability = decoder.readUnsignedInteger(buffer, state, 0);
                     source.setDurable(TerminusDurability.valueOf(durability));
                     break;
                 case 2:
-                    final Symbol expiryPolicy = state.getDecoder().readSymbol(buffer, state);
+                    final Symbol expiryPolicy = decoder.readSymbol(buffer, state);
                     source.setExpiryPolicy(expiryPolicy == null ? TerminusExpiryPolicy.SESSION_END : TerminusExpiryPolicy.valueOf(expiryPolicy));
                     break;
                 case 3:
-                    final UnsignedInteger timeout = state.getDecoder().readUnsignedInteger(buffer, state);
+                    final UnsignedInteger timeout = decoder.readUnsignedInteger(buffer, state);
                     source.setTimeout(timeout == null ? UnsignedInteger.ZERO : timeout);
                     break;
                 case 4:
-                    source.setDynamic(state.getDecoder().readBoolean(buffer, state, false));
+                    source.setDynamic(decoder.readBoolean(buffer, state, false));
                     break;
                 case 5:
-                    source.setDynamicNodeProperties(state.getDecoder().readMap(buffer, state));
+                    source.setDynamicNodeProperties(decoder.readMap(buffer, state));
                     break;
                 case 6:
-                    source.setDistributionMode(state.getDecoder().readSymbol(buffer, state));
+                    source.setDistributionMode(decoder.readSymbol(buffer, state));
                     break;
                 case 7:
-                    source.setFilter(state.getDecoder().readMap(buffer, state));
+                    source.setFilter(decoder.readMap(buffer, state));
                     break;
                 case 8:
-                    source.setDefaultOutcome(state.getDecoder().readObject(buffer, state, Outcome.class));
+                    source.setDefaultOutcome(decoder.readObject(buffer, state, Outcome.class));
                     break;
                 case 9:
-                    source.setOutcomes(state.getDecoder().readMultiple(buffer, state, Symbol.class));
+                    source.setOutcomes(decoder.readMultiple(buffer, state, Symbol.class));
                     break;
                 case 10:
-                    source.setCapabilities(state.getDecoder().readMultiple(buffer, state, Symbol.class));
+                    source.setCapabilities(decoder.readMultiple(buffer, state, Symbol.class));
                     break;
             }
         }
@@ -136,76 +124,58 @@ public final class SourceTypeDecoder extends AbstractDescribedListTypeDecoder<So
     }
 
     @Override
-    public Source readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readSource(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Source[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Source[] result = new Source[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readSource(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Source readSource(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Source readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Source source = new Source();
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count < MIN_SOURCE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Source list encoding: " + count);
-        }
-
-        if (count > MAX_SOURCE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Source list encoding: " + count);
-        }
-
         for (int index = 0; index < count; ++index) {
+            // If the stream allows we peek ahead and see if there is a null in the next slot,
+            // if so we don't call the setter for that entry to ensure the returned type reflects
+            // the encoded state in the modification entry.
+            if (stream.markSupported()) {
+                stream.mark(1);
+                if (ProtonStreamUtils.readByte(stream) == EncodingCodes.NULL) {
+                    continue;
+                } else {
+                    ProtonStreamUtils.reset(stream);
+                }
+            }
+
             switch (index) {
                 case 0:
-                    source.setAddress(state.getDecoder().readString(stream, state));
+                    source.setAddress(decoder.readString(stream, state));
                     break;
                 case 1:
-                    final long durability = state.getDecoder().readUnsignedInteger(stream, state, 0);
+                    final long durability = decoder.readUnsignedInteger(stream, state, 0);
                     source.setDurable(TerminusDurability.valueOf(durability));
                     break;
                 case 2:
-                    final Symbol expiryPolicy = state.getDecoder().readSymbol(stream, state);
+                    final Symbol expiryPolicy = decoder.readSymbol(stream, state);
                     source.setExpiryPolicy(expiryPolicy == null ? TerminusExpiryPolicy.SESSION_END : TerminusExpiryPolicy.valueOf(expiryPolicy));
                     break;
                 case 3:
-                    final UnsignedInteger timeout = state.getDecoder().readUnsignedInteger(stream, state);
+                    final UnsignedInteger timeout = decoder.readUnsignedInteger(stream, state);
                     source.setTimeout(timeout == null ? UnsignedInteger.ZERO : timeout);
                     break;
                 case 4:
-                    source.setDynamic(state.getDecoder().readBoolean(stream, state, false));
+                    source.setDynamic(decoder.readBoolean(stream, state, false));
                     break;
                 case 5:
-                    source.setDynamicNodeProperties(state.getDecoder().readMap(stream, state));
+                    source.setDynamicNodeProperties(decoder.readMap(stream, state));
                     break;
                 case 6:
-                    source.setDistributionMode(state.getDecoder().readSymbol(stream, state));
+                    source.setDistributionMode(decoder.readSymbol(stream, state));
                     break;
                 case 7:
-                    source.setFilter(state.getDecoder().readMap(stream, state));
+                    source.setFilter(decoder.readMap(stream, state));
                     break;
                 case 8:
-                    source.setDefaultOutcome(state.getDecoder().readObject(stream, state, Outcome.class));
+                    source.setDefaultOutcome(decoder.readObject(stream, state, Outcome.class));
                     break;
                 case 9:
-                    source.setOutcomes(state.getDecoder().readMultiple(stream, state, Symbol.class));
+                    source.setOutcomes(decoder.readMultiple(stream, state, Symbol.class));
                     break;
                 case 10:
-                    source.setCapabilities(state.getDecoder().readMultiple(stream, state, Symbol.class));
+                    source.setCapabilities(decoder.readMultiple(stream, state, Symbol.class));
                     break;
             }
         }

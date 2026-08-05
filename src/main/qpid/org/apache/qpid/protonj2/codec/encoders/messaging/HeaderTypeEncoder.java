@@ -21,6 +21,7 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Header;
@@ -29,6 +30,10 @@ import org.apache.qpid.protonj2.types.messaging.Header;
  * Encoder of AMQP Header type values to a byte stream
  */
 public final class HeaderTypeEncoder extends AbstractDescribedListTypeEncoder<Header> {
+
+    public static final HeaderTypeEncoder INSTANCE = new HeaderTypeEncoder();
+
+    private static final int MAX_HEADER_ENTRIES = 5;
 
     @Override
     public Class<Header> getTypeClass() {
@@ -51,53 +56,60 @@ public final class HeaderTypeEncoder extends AbstractDescribedListTypeEncoder<He
     }
 
     @Override
-    public void writeElement(Header header, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        // When encoding ensure that values that were never set are omitted and a simple
-        // NULL entry is written in the slot instead (don't write defaults).
-
-        switch (index) {
-            case 0:
-                if (header.hasDurable()) {
-                    buffer.writeByte(header.isDurable() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                } else {
-                    buffer.writeByte(EncodingCodes.NULL);
-                }
-                break;
-            case 1:
-                if (header.hasPriority()) {
-                    encoder.writeUnsignedByte(buffer, state, header.getPriority());
-                } else {
-                    buffer.writeByte(EncodingCodes.NULL);
-                }
-                break;
-            case 2:
-                if (header.hasTimeToLive()) {
-                    encoder.writeUnsignedInteger(buffer, state, header.getTimeToLive());
-                } else {
-                    buffer.writeByte(EncodingCodes.NULL);
-                }
-                break;
-            case 3:
-                if (header.hasFirstAcquirer()) {
-                    buffer.writeByte(header.isFirstAcquirer() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                } else {
-                    buffer.writeByte(EncodingCodes.NULL);
-                }
-                break;
-            case 4:
-                if (header.hasDeliveryCount()) {
-                    encoder.writeUnsignedInteger(buffer, state, header.getDeliveryCount());
-                } else {
-                    buffer.writeByte(EncodingCodes.NULL);
-                }
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Header value index: " + index);
-        }
+    public int getElementCount(Header header) {
+        return header.getElementCount();
     }
 
     @Override
-    public int getElementCount(Header header) {
-        return header.getElementCount();
+    public int getMaxElementCount() {
+        return MAX_HEADER_ENTRIES;
+    }
+
+    @Override
+    public void writeElements(Header header, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (header.hasDurable()) {
+            buffer.writeByte(header.isDurable() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+        } else {
+            buffer.writeByte(EncodingCodes.NULL);
+        }
+
+        if (count >= 2) {
+            if (header.hasPriority()) {
+                buffer.writeByte(EncodingCodes.UBYTE);
+                buffer.writeByte(header.getPriority());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        if (count >= 3) {
+            if (header.hasTimeToLive()) {
+                ProtonEncodings.writeUnsignedInteger(buffer, header.getTimeToLive());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        if (count >= 4) {
+            if (header.hasFirstAcquirer()) {
+                buffer.writeByte(header.isFirstAcquirer() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        if (count == 5) {
+            if (header.hasDeliveryCount()) {
+                ProtonEncodings.writeUnsignedInteger(buffer, header.getDeliveryCount());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        }
     }
 }

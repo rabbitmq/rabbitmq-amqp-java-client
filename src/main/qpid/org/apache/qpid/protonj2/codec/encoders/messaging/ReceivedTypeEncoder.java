@@ -21,6 +21,7 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Received;
@@ -29,6 +30,10 @@ import org.apache.qpid.protonj2.types.messaging.Received;
  * Encoder of AMQP Received type values from a byte stream.
  */
 public final class ReceivedTypeEncoder extends AbstractDescribedListTypeEncoder<Received> {
+
+    public static final ReceivedTypeEncoder INSTANCE = new ReceivedTypeEncoder();
+
+    private static final int REQUIRED_LIST_ELEMENTS = 2;
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,37 +51,28 @@ public final class ReceivedTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(Received source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeUnsignedInteger(buffer, state, source.getSectionNumber());
-                break;
-            case 1:
-                encoder.writeUnsignedLong(buffer, state, source.getSectionOffset());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Received value index: " + index);
-        }
-    }
-
-    @Override
     public byte getListEncoding(Received value) {
         return EncodingCodes.LIST8;
     }
 
     @Override
     public int getElementCount(Received value) {
-        if (value.getSectionOffset() != null) {
-            return 2;
-        } else if (value.getSectionNumber() != null) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return value.getElementCount();
     }
 
     @Override
     public int getMinElementCount() {
-        return 2;
+        return REQUIRED_LIST_ELEMENTS;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return REQUIRED_LIST_ELEMENTS;
+    }
+
+    @Override
+    public void writeElements(Received source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        ProtonEncodings.writeUnsignedInteger(buffer, source.getSectionNumber().intValue());
+        ProtonEncodings.writeUnsignedLong(buffer, source.getSectionOffset().longValue());
     }
 }

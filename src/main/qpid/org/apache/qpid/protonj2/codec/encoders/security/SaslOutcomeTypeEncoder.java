@@ -21,6 +21,7 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslOutcome;
@@ -29,6 +30,8 @@ import org.apache.qpid.protonj2.types.security.SaslOutcome;
  * Encoder of AMQP SaslOutcome type values to a byte stream
  */
 public final class SaslOutcomeTypeEncoder extends AbstractDescribedListTypeEncoder<SaslOutcome> {
+
+    public static final SaslOutcomeTypeEncoder INSTANCE = new SaslOutcomeTypeEncoder();
 
     @Override
     public Class<SaslOutcome> getTypeClass() {
@@ -46,16 +49,22 @@ public final class SaslOutcomeTypeEncoder extends AbstractDescribedListTypeEncod
     }
 
     @Override
-    public void writeElement(SaslOutcome outcome, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeUnsignedByte(buffer, state, outcome.getCode().getValue());
-                break;
-            case 1:
-                encoder.writeBinary(buffer, state, outcome.getAdditionalData());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown SaslOutcome value index: " + index);
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 2;
+    }
+
+    @Override
+    public void writeElements(SaslOutcome outcome, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        buffer.writeByte(EncodingCodes.UBYTE);
+        buffer.writeByte(outcome.getCode().byteValue());
+
+        if (count == 2) {
+            ProtonEncodings.writeBinary(buffer, outcome.getAdditionalData());
         }
     }
 
@@ -72,13 +81,10 @@ public final class SaslOutcomeTypeEncoder extends AbstractDescribedListTypeEncod
     public int getElementCount(SaslOutcome outcome) {
         if (outcome.getAdditionalData() != null) {
             return 2;
-        } else {
+        } else if (outcome.getCode() != null) {
             return 1;
+        } else {
+            return 0;
         }
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 1;
     }
 }

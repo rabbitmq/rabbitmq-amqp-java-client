@@ -26,7 +26,7 @@ public class AnonymousMechanism extends AbstractMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol ANONYMOUS = Symbol.valueOf("ANONYMOUS");
+    public static final Symbol ANONYMOUS = Symbol.getSASLSymbol("ANONYMOUS");
 
     @Override
     public Symbol getName() {

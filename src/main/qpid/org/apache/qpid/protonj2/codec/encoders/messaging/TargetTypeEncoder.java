@@ -21,17 +21,19 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
-import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Target;
-import org.apache.qpid.protonj2.types.messaging.TerminusDurability;
-import org.apache.qpid.protonj2.types.messaging.TerminusExpiryPolicy;
 
 /**
  * Encoder of AMQP Target type values to a byte stream.
  */
 public final class TargetTypeEncoder extends AbstractDescribedListTypeEncoder<Target> {
+
+    public static final TargetTypeEncoder INSTANCE = new TargetTypeEncoder();
+
+    private static final int MAX_LIST_ENCODINGS = 7;
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -49,32 +51,8 @@ public final class TargetTypeEncoder extends AbstractDescribedListTypeEncoder<Ta
     }
 
     @Override
-    public void writeElement(Target target, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeString(buffer, state, target.getAddress());
-                break;
-            case 1:
-                encoder.writeUnsignedInteger(buffer, state, target.getDurable().getValue());
-                break;
-            case 2:
-                encoder.writeSymbol(buffer, state, target.getExpiryPolicy().getPolicy());
-                break;
-            case 3:
-                encoder.writeUnsignedInteger(buffer, state, target.getTimeout());
-                break;
-            case 4:
-                buffer.writeByte(target.isDynamic() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                break;
-            case 5:
-                encoder.writeMap(buffer, state, target.getDynamicNodeProperties());
-                break;
-            case 6:
-                encoder.writeArray(buffer, state, target.getCapabilities());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Target value index: " + index);
-        }
+    public int getElementCount(Target target) {
+        return target.getElementCount();
     }
 
     @Override
@@ -83,23 +61,41 @@ public final class TargetTypeEncoder extends AbstractDescribedListTypeEncoder<Ta
     }
 
     @Override
-    public int getElementCount(Target target) {
-        if (target.getCapabilities() != null) {
-            return 7;
-        } else if (target.getDynamicNodeProperties() != null) {
-            return 6;
-        } else if (target.isDynamic()) {
-            return 5;
-        } else if (target.getTimeout() != null && !target.getTimeout().equals(UnsignedInteger.ZERO)) {
-            return 4;
-        } else if (target.getExpiryPolicy() != null && target.getExpiryPolicy() != TerminusExpiryPolicy.SESSION_END) {
-            return 3;
-        } else if (target.getDurable() != null && target.getDurable() != TerminusDurability.NONE) {
-            return 2;
-        } else if (target.getAddress() != null) {
-            return 1;
-        } else {
-            return 0;
+    public int getMaxElementCount() {
+        return MAX_LIST_ENCODINGS;
+    }
+
+    @Override
+    public void writeElements(Target target, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        for (int index = 0; index < count; ++index) {
+            if (!target.hasElement(index)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (index) {
+                case 0:
+                    ProtonEncodings.writeString(buffer, state, target.getAddress());
+                    break;
+                case 1:
+                    ProtonEncodings.writeUnsignedInteger(buffer, target.getDurable().getValue().intValue());
+                    break;
+                case 2:
+                    ProtonEncodings.writeSymbol(buffer, target.getExpiryPolicy().getPolicy());
+                    break;
+                case 3:
+                    ProtonEncodings.writeUnsignedInteger(buffer, target.getTimeout().intValue());
+                    break;
+                case 4:
+                    buffer.writeByte(target.isDynamic() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+                    break;
+                case 5:
+                    encoder.writeMap(buffer, state, target.getDynamicNodeProperties());
+                    break;
+                case 6:
+                    encoder.writeArray(buffer, state, target.getCapabilities());
+                    break;
+            }
         }
     }
 }

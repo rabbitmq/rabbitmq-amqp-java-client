@@ -17,10 +17,11 @@
 package org.apache.qpid.protonj2.codec.encoders.messaging;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedMapTypeEncoder;
-import org.apache.qpid.protonj2.codec.encoders.primitives.SymbolTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.MessageAnnotations;
@@ -30,7 +31,7 @@ import org.apache.qpid.protonj2.types.messaging.MessageAnnotations;
  */
 public final class MessageAnnotationsTypeEncoder extends AbstractDescribedMapTypeEncoder<Symbol, Object, MessageAnnotations> {
 
-    private static final SymbolTypeEncoder SYMBOL_ENCODER = new SymbolTypeEncoder();
+    public static final MessageAnnotationsTypeEncoder INSTANCE = new MessageAnnotationsTypeEncoder();
 
     @Override
     public Class<MessageAnnotations> getTypeClass() {
@@ -48,16 +49,11 @@ public final class MessageAnnotationsTypeEncoder extends AbstractDescribedMapTyp
     }
 
     @Override
-    public boolean hasMap(MessageAnnotations value) {
-        return value.getValue() != null;
-    }
-
-    @Override
     public int getMapSize(MessageAnnotations value) {
         if (value.getValue() != null) {
             return value.getValue().size();
         } else {
-            return 0;
+            throw new EncodeException("MessageAnnotations must have an assigned Map payload");
         }
     }
 
@@ -65,7 +61,7 @@ public final class MessageAnnotationsTypeEncoder extends AbstractDescribedMapTyp
     public void writeMapEntries(ProtonBuffer buffer, Encoder encoder, EncoderState state, MessageAnnotations annotations) {
         // Write the Map elements and then compute total size written.
         annotations.getValue().forEach((key, value) -> {
-            SYMBOL_ENCODER.writeType(buffer, state, key);
+            ProtonEncodings.writeSymbol(buffer, key);
             encoder.writeObject(buffer, state, value);
         });
     }

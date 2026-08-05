@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.types.Decimal32;
  */
 public final class Decimal32TypeEncoder extends AbstractPrimitiveTypeEncoder<Decimal32> {
 
+    public static final Decimal32TypeEncoder INSTANCE = new Decimal32TypeEncoder();
+
     @Override
     public Class<Decimal32> getTypeClass() {
         return Decimal32.class;

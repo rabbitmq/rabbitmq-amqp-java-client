@@ -26,6 +26,7 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
 import org.apache.qpid.protonj2.types.Binary;
 
 /**
@@ -50,13 +51,14 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      *
      * @throws DecodeException if an error occurs while reading the Binary value.
      */
+    @Override
     public ProtonBuffer readValueAsBuffer(ProtonBuffer buffer, DecoderState state) throws DecodeException {
         final int length = readSize(buffer, state);
 
-        if (length > buffer.getReadableBytes()) {
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
             throw new DecodeException(
                 String.format("Binary data size %d is specified to be greater than the amount " +
-                              "of data available (%d)", length, buffer.getReadableBytes()));
+                              "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
         }
 
         final ProtonBuffer payload = buffer.copy(buffer.getReadOffset(), length, true);
@@ -78,13 +80,14 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      *
      * @throws DecodeException if an error occurs while reading the Binary value.
      */
+    @Override
     public byte[] readValueAsArray(ProtonBuffer buffer, DecoderState state) throws DecodeException {
         final int length = readSize(buffer, state);
 
-        if (length > buffer.getReadableBytes()) {
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
             throw new DecodeException(
                 String.format("Binary data size %d is specified to be greater than the amount " +
-                              "of data available (%d)", length, buffer.getReadableBytes()));
+                              "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
         }
 
         final byte[] payload = new byte[length];
@@ -92,6 +95,19 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
         buffer.readBytes(payload, 0, payload.length);
 
         return payload;
+    }
+
+    @Override
+    public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
+        final int length = readSize(buffer, state);
+
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException(
+                String.format("Binary data size %d is specified to be greater than the amount " +
+                              "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
+        }
+
+        buffer.advanceReadOffset(length);
     }
 
     @Override
@@ -111,6 +127,7 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      *
      * @throws DecodeException if an error occurs while reading the Binary value.
      */
+    @Override
     public ProtonBuffer readValueAsBuffer(InputStream stream, StreamDecoderState state) throws DecodeException {
         return ProtonBufferAllocator.defaultAllocator().copy(readValueAsArray(stream, state)).convertToReadOnly();
     }
@@ -127,8 +144,16 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      *
      * @throws DecodeException if an error occurs while reading the Binary value.
      */
+    @Override
     public byte[] readValueAsArray(InputStream stream, StreamDecoderState state) throws DecodeException {
         final int length = readSize(stream, state);
+
+        if (Integer.compareUnsigned(length, state.getMaxBinarySize()) > 0) {
+            throw new DecodeException(String.format(
+                "Binary encoded length is specified to be greater than maximum allowed " +
+                "l:(%d) m:(%d)", Integer.toUnsignedLong(length), state.getMaxBinarySize()));
+        }
+
         final byte[] payload = new byte[length];
 
         try {
@@ -141,24 +166,15 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
     }
 
     @Override
-    public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final int length = readSize(buffer, state);
-
-        if (length > buffer.getReadableBytes()) {
-            throw new DecodeException(
-                String.format("Binary data size %d is specified to be greater than the amount " +
-                              "of data available (%d)", length, buffer.getReadableBytes()));
-        }
-
-        buffer.advanceReadOffset(length);
-    }
-
-    @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        try {
-            stream.skip(readSize(stream, state));
-        } catch (IOException ex) {
-            throw new DecodeException("Error while reading Binary payload bytes", ex);
+        final int length = readSize(stream, state);
+
+        if (Integer.compareUnsigned(length, state.getMaxBinarySize()) > 0) {
+            throw new DecodeException(String.format(
+                "Binary encoded length is specified to be greater than maximum allowed " +
+                "l:(%d) m:(%d)", Integer.toUnsignedLong(length), state.getMaxBinarySize()));
         }
+
+        ProtonStreamUtils.skipBytes(stream, length);
     }
 }

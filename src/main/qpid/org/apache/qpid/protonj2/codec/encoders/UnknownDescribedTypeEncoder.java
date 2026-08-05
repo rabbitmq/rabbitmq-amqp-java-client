@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.types.DescribedType;
  */
 public final class UnknownDescribedTypeEncoder implements TypeEncoder<DescribedType> {
 
+    public static final UnknownDescribedTypeEncoder INSTANCE = new UnknownDescribedTypeEncoder();
+
     @Override
     public Class<DescribedType> getTypeClass() {
         return DescribedType.class;

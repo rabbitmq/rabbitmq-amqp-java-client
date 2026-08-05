@@ -26,6 +26,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class NullTypeEncoder extends AbstractPrimitiveTypeEncoder<Void> {
 
+    public static final NullTypeEncoder INSTANCE = new NullTypeEncoder();
+
     @Override
     public Class<Void> getTypeClass() {
         return Void.class;

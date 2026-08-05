@@ -21,6 +21,7 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.ErrorCondition;
@@ -29,6 +30,11 @@ import org.apache.qpid.protonj2.types.transport.ErrorCondition;
  * Encoder of AMQP ErrorCondition type values to a byte stream
  */
 public final class ErrorConditionTypeEncoder extends AbstractDescribedListTypeEncoder<ErrorCondition> {
+
+    public static final ErrorConditionTypeEncoder INSTANCE = new ErrorConditionTypeEncoder();
+
+    private static final int MAX_LIST_ELEMENTS = 3;
+    private static final int MIN_LIST_ELEMENTS = 1;
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,35 +52,35 @@ public final class ErrorConditionTypeEncoder extends AbstractDescribedListTypeEn
     }
 
     @Override
-    public void writeElement(ErrorCondition error, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeSymbol(buffer, state, error.getCondition());
-                break;
-            case 1:
-                encoder.writeString(buffer, state, error.getDescription());
-                break;
-            case 2:
-                encoder.writeMap(buffer, state, error.getInfo());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown ErrorCondition value index: " + index);
-        }
-    }
-
-    @Override
     public byte getListEncoding(ErrorCondition value) {
         return EncodingCodes.LIST32;
     }
 
     @Override
+    public int getMaxElementCount() {
+        return MAX_LIST_ELEMENTS;
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return MIN_LIST_ELEMENTS;
+    }
+
+    @Override
     public int getElementCount(ErrorCondition error) {
-        if (error.getInfo() != null) {
-            return 3;
-        } else if (error.getDescription() != null) {
-            return 2;
-        } else {
-            return 1;
+        return error.getElementCount();
+    }
+
+    @Override
+    public void writeElements(ErrorCondition error, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        ProtonEncodings.writeSymbol(buffer, error.getCondition());
+
+        if (count >= 2) {
+            ProtonEncodings.writeString(buffer, state, error.getDescription());
+        }
+
+        if (count == 3) {
+            encoder.writeMap(buffer, state, error.getInfo());
         }
     }
 }

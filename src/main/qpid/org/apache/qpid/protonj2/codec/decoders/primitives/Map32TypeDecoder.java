@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Map32TypeDecoder extends AbstractMapTypeDecoder {
 
+    public static final Map32TypeDecoder INSTANCE = new Map32TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.MAP32 & 0xff;

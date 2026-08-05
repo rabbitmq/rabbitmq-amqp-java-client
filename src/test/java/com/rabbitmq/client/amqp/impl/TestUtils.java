@@ -22,6 +22,7 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Resource;
 import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
@@ -46,6 +47,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.qpid.protonj2.client.Client;
 import org.apache.qpid.protonj2.client.Connection;
@@ -61,6 +63,8 @@ import org.slf4j.LoggerFactory;
 import wiremock.org.apache.commons.lang3.RandomStringUtils;
 
 public abstract class TestUtils {
+
+  private static final Logger LOGGER = LogManager.getLogger(TestUtils.class);
 
   static final Duration DEFAULT_CONDITION_TIMEOUT = Duration.ofSeconds(10);
   static final Duration DEFAULT_WAIT_TIME = Duration.ofMillis(100);
@@ -714,5 +718,14 @@ public abstract class TestUtils {
     Level initialLevel = logger.getLevel();
     Configurator.setLevel(c.getName(), level);
     return initialLevel;
+  }
+
+  static void safeManagementOperation(
+      com.rabbitmq.client.amqp.Connection c, Consumer<Management> op) {
+    try {
+      op.accept(c.management());
+    } catch (Exception e) {
+      LOGGER.error("Management exception failed: {}", e.getMessage());
+    }
   }
 }

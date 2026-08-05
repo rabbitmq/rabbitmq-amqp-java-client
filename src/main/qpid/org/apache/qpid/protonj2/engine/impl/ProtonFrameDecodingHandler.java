@@ -381,7 +381,17 @@ public class ProtonFrameDecodingHandler implements EngineHandler, SaslPerformati
 
         private void handleAMQPPerformative(EngineHandlerContext context, short channel, int frameBodySize, ProtonBuffer input) {
             final int startReadIndex = input.getReadOffset();
-            final Performative performative = decoder.readObject(input, decoderState, Performative.class);
+            final Performative performative;
+
+            try {
+                performative = decoder.readObject(input, decoderState, Performative.class);
+            } catch (DecodeException de) {
+                throw de;
+            } catch (Exception e) {
+                throw new DecodeException("Error while decoding AMQP performative", e);
+            } finally {
+                decoderState.reset();
+            }
 
             // Copy the payload portion of the incoming bytes for now as the incoming may be from a
             // wrapped pooled buffer and for now we have no way of retaining or otherwise ensuring
@@ -414,7 +424,17 @@ public class ProtonFrameDecodingHandler implements EngineHandler, SaslPerformati
         }
 
         private void handleSASLPerformative(EngineHandlerContext context, ProtonBuffer input) {
-            final SaslPerformative performative = (SaslPerformative) decoder.readObject(input, decoderState);;
+            final SaslPerformative performative;
+
+            try {
+                performative = decoder.readObject(input, decoderState, SaslPerformative.class);
+            } catch (DecodeException de) {
+                throw de;
+            } catch (Exception e) {
+                throw new DecodeException("Error while decoding SASL performative", e);
+            } finally {
+                decoderState.reset();
+            }
 
             transitionToFrameSizeParsingStage();
             // Ensure we process transition from SASL to AMQP header state

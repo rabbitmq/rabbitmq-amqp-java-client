@@ -16,7 +16,6 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,63 +40,103 @@ import org.apache.qpid.protonj2.codec.decoders.StreamScanningContext;
 @SuppressWarnings("rawtypes")
 public abstract class AbstractMapTypeDecoder extends AbstractPrimitiveTypeDecoder<Map> implements MapTypeDecoder {
 
+    private static final int MAX_MAP_PREALLOCATION = 256;
+
     @Override
     public Map<Object, Object> readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
+        state.increaseDepth();
+
+        try {
+            final int size = readSize(buffer, state);
+            final int expectedEndPos = buffer.getReadOffset() + size;
+
+            if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
+                throw new DecodeException(String.format(
+                        "Map encoded size %d is specified to be greater than the amount " +
+                        "of data available (%d)", Integer.toUnsignedLong(size), buffer.getReadableBytes()));
+            }
+
+            final int count = readCount(buffer, state);
+
+            if (Integer.compareUnsigned(count, size) > 0) {
+                throw new DecodeException(String.format(
+                        "Map encoded Map entries count %d is specified to be greater than the encoded " +
+                        "size of the map (%d)", count, Integer.toUnsignedLong(size)));
+            }
+
+            if (count % 2 != 0) {
+                throw new DecodeException(String.format(
+                    "Map encoded number of elements %d is not an even number.", count));
+            }
+
+            final Decoder decoder = state.getDecoder();
+            final int elementCount = count / 2;
+
+            // Count include both key and value so we must include that in the loop
+            final Map<Object, Object> map = new LinkedHashMap<>(Math.min(MAX_MAP_PREALLOCATION, elementCount));
+
+            for (int i = 0; i < elementCount; i++) {
+                map.put(decoder.readObject(buffer, state), decoder.readObject(buffer, state));
+            }
+
+            if (buffer.getReadOffset() != expectedEndPos) {
+                throw new DecodeException("Map decoding did not read the expected amount of bytes: " + size);
+            }
+
+            return map;
+        } finally {
+            state.decreaseDepth();
+        }
+    }
+
+    @Override
+    public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
         final int size = readSize(buffer, state);
 
-        if (size > buffer.getReadableBytes()) {
+        if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
             throw new DecodeException(String.format(
                     "Map encoded size %d is specified to be greater than the amount " +
-                    "of data available (%d)", size, buffer.getReadableBytes()));
+                    "of data available (%d)", Integer.toUnsignedLong(size), buffer.getReadableBytes()));
         }
 
+        state.increaseDepth();
+
+        try {
+            buffer.advanceReadOffset(size);
+        } finally {
+            state.decreaseDepth();
+        }
+    }
+
+    @Override
+    public <KeyType> void scanKeys(ProtonBuffer buffer, DecoderState state, ScanningContext<KeyType> context, BiConsumer<KeyType, Object> matchConsumer) throws DecodeException {
+        final Decoder decoder = state.getDecoder();
+        final int size = readSize(buffer, state);
+
+        if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException(String.format(
+                "Map encoded size %d is specified to be greater than the amount " +
+                "of data available (%d)", Integer.toUnsignedLong(size), buffer.getReadableBytes()));
+        }
+
+        final int completionOffset = buffer.getReadOffset() + size;
         final int count = readCount(buffer, state);
+
+        if (Integer.compareUnsigned(count, size) > 0) {
+            throw new DecodeException(String.format(
+                    "Map encoded Map entries count %d is specified to be greater than the encoded " +
+                    "size of the map (%d)", count, Integer.toUnsignedLong(size)));
+        }
 
         if (count % 2 != 0) {
             throw new DecodeException(String.format(
                 "Map encoded number of elements %d is not an even number.", count));
         }
 
-        final Decoder decoder = state.getDecoder();
-
-        // Count include both key and value so we must include that in the loop
-        final Map<Object, Object> map = new LinkedHashMap<>(count);
-        for (int i = 0; i < count / 2; i++) {
-            Object key = decoder.readObject(buffer, state);
-            Object value = decoder.readObject(buffer, state);
-
-            map.put(key, value);
-        }
-
-        return map;
-    }
-
-    @Override
-    public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        buffer.advanceReadOffset(readSize(buffer, state));
-    }
-
-    @Override
-    public <KeyType> void scanKeys(ProtonBuffer buffer, DecoderState state, ScanningContext<KeyType> context, BiConsumer<KeyType, Object> matchConsumer) throws DecodeException {
-        final Decoder decoder = state.getDecoder();
-        final int encodedSize = readSize(buffer, state);
-
-        if (encodedSize > buffer.getReadableBytes()) {
-            throw new DecodeException(String.format(
-                "Map encoded size %d is specified to be greater than the amount " +
-                "of data available (%d)", encodedSize, buffer.getReadableBytes()));
-        }
-
-        final int completionOffset = buffer.getReadOffset() + encodedSize;
-        final int encodedEntries = readCount(buffer, state);
-
-        if (encodedEntries % 2 != 0) {
-            throw new DecodeException(String.format(
-                "Map encoded number of elements %d is not an even number.", encodedEntries));
-        }
+        final int elementCount = count / 2;
 
         try {
-            for (int i = 0; i < encodedEntries / 2 && !context.isComplete(); ++i) {
+            for (int i = 0; i < elementCount && !context.isComplete(); ++i) {
                 final TypeDecoder<?> keyDecoder = state.getDecoder().readNextTypeDecoder(buffer, state);
                 final int keySize = keyDecoder.readSize(buffer, state);
 
@@ -127,34 +166,62 @@ public abstract class AbstractMapTypeDecoder extends AbstractPrimitiveTypeDecode
 
     @Override
     public Map<Object, Object> readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        readSize(stream, state);
-        final int count = readCount(stream, state);
+        state.increaseDepth();
 
-        if (count % 2 != 0) {
-            throw new DecodeException(String.format(
-                "Map encoded number of elements %d is not an even number.", count));
+        try {
+            final int size = readSize(stream, state);
+
+            if (Integer.compareUnsigned(size, state.getMaxMapSize()) > 0) {
+                throw new DecodeException(String.format(
+                        "Map encoded size is specified to be greater than maximum allowed " +
+                        "s:(%d) m:(%d)", Integer.toUnsignedLong(size), state.getMaxMapSize()));
+            }
+
+            final int count = readCount(stream, state);
+
+            if (Integer.compareUnsigned(count, size) > 0) {
+                throw new DecodeException(String.format(
+                        "Map encoded Map entries count %d is specified to be greater than the encoded " +
+                        "size of the map (%d)", Integer.toUnsignedLong(count), Integer.toUnsignedLong(size)));
+            }
+
+            if (count % 2 != 0) {
+                throw new DecodeException(String.format(
+                    "Map encoded number of elements %d is not an even number.", Integer.toUnsignedLong(count)));
+            }
+
+            final StreamDecoder decoder = state.getDecoder();
+            final int elementCount = count / 2;
+
+            // Count include both key and value so we must include that in the loop
+            final Map<Object, Object> map = new LinkedHashMap<>(Math.min(MAX_MAP_PREALLOCATION, elementCount));
+
+            for (int i = 0; i < elementCount; i++) {
+                map.put(decoder.readObject(stream, state), decoder.readObject(stream, state));
+            }
+
+            return map;
+        } finally {
+            state.decreaseDepth();
         }
-
-        final StreamDecoder decoder = state.getDecoder();
-
-        // Count include both key and value so we must include that in the loop
-        final Map<Object, Object> map = new LinkedHashMap<>(count);
-        for (int i = 0; i < count / 2; i++) {
-            Object key = decoder.readObject(stream, state);
-            Object value = decoder.readObject(stream, state);
-
-            map.put(key, value);
-        }
-
-        return map;
     }
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
+        final int size = readSize(stream, state);
+
+        if (Integer.compareUnsigned(size, state.getMaxMapSize()) > 0) {
+            throw new DecodeException(String.format(
+                    "Map encoded size is specified to be greater than maximum allowed " +
+                    "s:(%d) m:(%d)", Integer.toUnsignedLong(size), state.getMaxMapSize()));
+        }
+
+        state.increaseDepth();
+
         try {
-            stream.skip(readSize(stream, state));
-        } catch (IOException ex) {
-            throw new DecodeException("Error while reading Map payload bytes", ex);
+            ProtonStreamUtils.skipBytes(stream, size);
+        } finally {
+            state.decreaseDepth();
         }
     }
 
@@ -162,17 +229,31 @@ public abstract class AbstractMapTypeDecoder extends AbstractPrimitiveTypeDecode
     public <KeyType> void scanKeys(InputStream stream, StreamDecoderState state, StreamScanningContext<KeyType> context, BiConsumer<KeyType, Object> matchConsumer) throws DecodeException {
         final StreamDecoder decoder = state.getDecoder();
 
-        @SuppressWarnings("unused")
-        final int encodedSize = readSize(stream, state);
-        final int encodedEntries = readCount(stream, state);
+        final int size = readSize(stream, state);
 
-        if (encodedEntries % 2 != 0) {
+        if (Integer.compareUnsigned(size, state.getMaxMapSize()) > 0) {
             throw new DecodeException(String.format(
-                "Map encoded number of elements %d is not an even number.", encodedEntries));
+                    "Map encoded size is specified to be greater than maximum allowed " +
+                    "s:(%d) m:(%d)", Integer.toUnsignedLong(size), state.getMaxMapSize()));
         }
 
+        final int count = readCount(stream, state);
+
+        if (Integer.compareUnsigned(count, size) > 0) {
+            throw new DecodeException(String.format(
+                    "Map encoded Map entries count %d is specified to be greater than the encoded " +
+                    "size of the map (%d)", Integer.toUnsignedLong(count), Integer.toUnsignedLong(size)));
+        }
+
+        if (count % 2 != 0) {
+            throw new DecodeException(String.format(
+                "Map encoded number of elements %d is not an even number.", Integer.toUnsignedLong(count)));
+        }
+
+        final int elementCount = count / 2;
+
         try {
-            for (int i = 0; i < encodedEntries / 2; ++i) {
+            for (int i = 0; i < elementCount && !context.isComplete(); ++i) {
                 final StreamTypeDecoder<?> keyDecoder = state.getDecoder().readNextTypeDecoder(stream, state);
                 final int keySize = keyDecoder.readSize(stream, state);
 

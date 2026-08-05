@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.types.UnsignedByte;
  */
 public final class UnsignedByteTypeEncoder extends AbstractPrimitiveTypeEncoder<UnsignedByte> {
 
+    public static final UnsignedByteTypeEncoder INSTANCE = new UnsignedByteTypeEncoder();
+
     @Override
     public Class<UnsignedByte> getTypeClass() {
         return UnsignedByte.class;

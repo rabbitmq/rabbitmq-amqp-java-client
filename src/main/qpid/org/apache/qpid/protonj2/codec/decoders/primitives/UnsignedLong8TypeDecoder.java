@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.UnsignedLong;
  */
 public final class UnsignedLong8TypeDecoder extends AbstractPrimitiveTypeDecoder<UnsignedLong> {
 
+    public static final UnsignedLong8TypeDecoder INSTANCE = new UnsignedLong8TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.SMALLULONG & 0xff;

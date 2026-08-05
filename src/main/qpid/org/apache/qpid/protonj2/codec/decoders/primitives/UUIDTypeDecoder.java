@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class UUIDTypeDecoder extends AbstractPrimitiveTypeDecoder<UUID> {
 
+    public static final UUIDTypeDecoder INSTANCE = new UUIDTypeDecoder();
+
     private static final int BYTES = Long.BYTES * 2;
 
     @Override

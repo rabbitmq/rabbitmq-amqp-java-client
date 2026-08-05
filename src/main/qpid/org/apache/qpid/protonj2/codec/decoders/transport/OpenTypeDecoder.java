@@ -25,11 +25,8 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Open;
@@ -38,6 +35,8 @@ import org.apache.qpid.protonj2.types.transport.Open;
  * Decoder of AMQP Open type values from a byte stream.
  */
 public final class OpenTypeDecoder extends AbstractDescribedListTypeDecoder<Open> {
+
+    public static final OpenTypeDecoder INSTANCE = new OpenTypeDecoder();
 
     private static final int MIN_OPEN_LIST_ENTRIES = 1;
     private static final int MAX_OPEN_LIST_ENTRIES = 10;
@@ -58,38 +57,18 @@ public final class OpenTypeDecoder extends AbstractDescribedListTypeDecoder<Open
     }
 
     @Override
-    public Open readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readOpen(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_OPEN_LIST_ENTRIES;
     }
 
     @Override
-    public Open[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Open[] result = new Open[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readOpen(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_OPEN_LIST_ENTRIES;
     }
 
-    private Open readOpen(ProtonBuffer buffer, Decoder decoder, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Open readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Open open = new Open();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count < MIN_OPEN_LIST_ENTRIES) {
-            throw new DecodeException("The container-id field cannot be omitted from the Open");
-        }
-
-        if (count > MAX_OPEN_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Open list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // Peek ahead and see if there is a null in the next slot, if so we don't call
@@ -142,38 +121,8 @@ public final class OpenTypeDecoder extends AbstractDescribedListTypeDecoder<Open
     }
 
     @Override
-    public Open readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readOpen(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Open[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Open[] result = new Open[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readOpen(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Open readOpen(InputStream stream, StreamDecoder decoder, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Open readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Open open = new Open();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count < MIN_OPEN_LIST_ENTRIES) {
-            throw new DecodeException("The container-id field cannot be omitted from the Open");
-        }
-
-        if (count > MAX_OPEN_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Open list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // If the stream allows we peek ahead and see if there is a null in the next slot,

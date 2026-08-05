@@ -16,14 +16,11 @@
  */
 package org.apache.qpid.protonj2.codec.decoders;
 
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CoderResult;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.buffer.ProtonBufferComponent;
+import org.apache.qpid.protonj2.buffer.ProtonBufferComponentAccessor;
 import org.apache.qpid.protonj2.codec.DecodeException;
 import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
@@ -35,11 +32,27 @@ public final class ProtonDecoderState implements DecoderState {
 
     private static final int MAX_CHAR_BUFFER_CACHE_SIZE = 100;
 
-    private final CharsetDecoder STRING_DECODER = StandardCharsets.UTF_8.newDecoder();
-    private final ProtonDecoder decoder;
-    private final char[] decodeCache = new char[MAX_CHAR_BUFFER_CACHE_SIZE];
+    /**
+     * The default maximum depth the decoder will allow before triggering an {@link DecodeException}
+     * when the state depth value is increased during a decode process of complex types that can next
+     * objects.
+     */
+    public static final int DEFAULT_MAX_DECODE_DEPTH = 32;
 
+    /**
+     * The default maximum number of zero width array elements that controls the size of an zero width
+     * array type that can be decoded without throwing an DecodeException.
+     */
+    public static final int DEFAULT_MAX_ZERO_WIDTH_ARRAY_ELEMENTS = 0;
+
+    private final ProtonDecoder decoder;
+    private final byte[] decodeCache = new byte[MAX_CHAR_BUFFER_CACHE_SIZE];
+
+    private int maxDecodeDepth = DEFAULT_MAX_DECODE_DEPTH;
     private UTF8Decoder stringDecoder;
+    private int maxZeroWidthArrayElemets = DEFAULT_MAX_ZERO_WIDTH_ARRAY_ELEMENTS;
+
+    private int decodeDepth;
 
     /**
      * Create a new {@link DecoderState} instance that is joined forever to the given {@link Decoder}.
@@ -58,7 +71,7 @@ public final class ProtonDecoderState implements DecoderState {
 
     @Override
     public ProtonDecoderState reset() {
-        // No intermediate state to reset
+        decodeDepth = 0;
         return this;
     }
 
@@ -85,9 +98,79 @@ public final class ProtonDecoderState implements DecoderState {
     }
 
     @Override
+    public int getMaxZeroWidthArrayElements() {
+        return maxZeroWidthArrayElemets;
+    }
+
+    @Override
+    public ProtonDecoderState setMaxZeroWidthArrayElements(int maxElements) {
+        this.maxZeroWidthArrayElemets = Math.max(0, maxElements);
+        return this;
+    }
+
+    @Override
+    public ProtonDecoderState setDepthLimit(int limit) {
+        this.maxDecodeDepth = Math.max(0, limit);
+        return this;
+    }
+
+    @Override
+    public int getDepthLimit() {
+        return maxDecodeDepth;
+    }
+
+    @Override
+    public ProtonDecoderState increaseDepth() throws DecodeException {
+        if (++decodeDepth > maxDecodeDepth) {
+            --decodeDepth; // Unwind decrement to ensure the depth returns to zero.
+            throw new DecodeException(
+                "The nesting of types in the object being decoded exceeded the configured limit: " + maxDecodeDepth);
+        }
+
+        return this;
+    }
+
+    @Override
+    public ProtonDecoderState decreaseDepth() {
+        decodeDepth = Math.max(0, decodeDepth - 1);
+        return this;
+    }
+
+    @Override
     public String decodeUTF8(ProtonBuffer buffer, int length) throws DecodeException {
+        if (length < 0) {
+            throw new DecodeException("Specified UTF length:" + length + " cannot be negative.");
+        }
+
+        if (length > buffer.getReadableBytes()) {
+            throw new DecodeException(String.format(
+                "String encoded size %d is specified to be greater than the amount " +
+                "of data available (%d)", length, buffer.getReadableBytes()));
+        }
+
         if (stringDecoder == null) {
-            return internalDecode(buffer, length, STRING_DECODER, length > MAX_CHAR_BUFFER_CACHE_SIZE ? new char[length] : decodeCache);
+            if (buffer.readableComponentCount() == 1) {
+                try (ProtonBufferComponentAccessor accessor = buffer.componentAccessor()) {
+                    final ProtonBufferComponent component = accessor.first();
+
+                    // Optimal fast path no copy for buffers that are array backed.
+                    if (component.hasReadbleArray()) {
+                        final String result = new String(component.getReadableArray(),
+                                                         component.getReadableArrayOffset(),
+                                                         length, StandardCharsets.UTF_8);
+
+                        buffer.advanceReadOffset(length);
+
+                        return result;
+                    }
+                }
+            }
+
+            final byte[] target = length > MAX_CHAR_BUFFER_CACHE_SIZE ? new byte[length] : decodeCache;
+
+            buffer.readBytes(target, 0, length);
+
+            return new String(target, 0, length, StandardCharsets.UTF_8);
         } else {
             final int originalPosition = buffer.getReadOffset();
 
@@ -98,76 +181,6 @@ public final class ProtonDecoderState implements DecoderState {
             } finally {
                 buffer.setReadOffset(originalPosition + length);
             }
-        }
-    }
-
-    private static String internalDecode(ProtonBuffer buffer, final int length, CharsetDecoder decoder, char[] scratch) {
-        final int bufferInitialPosition = buffer.getReadOffset();
-
-        if (length < 0) {
-            throw new IllegalArgumentException("Specified UTF length:" + length + " cannot be negative.");
-        }
-
-        int offset = 0;
-
-        for (; offset < length; offset++) {
-            final byte b = buffer.getByte(bufferInitialPosition + offset);
-            if (b < 0) {
-                break;
-            }
-            scratch[offset] = (char) b;
-        }
-
-        buffer.setReadOffset(bufferInitialPosition + offset);
-
-        if (offset == length) {
-            return new String(scratch, 0, length);
-        } else {
-            return internalDecodeUTF8(buffer, length, scratch, offset, decoder);
-        }
-    }
-
-    private static String internalDecodeUTF8(final ProtonBuffer buffer, final int length, final char[] chars, final int offset, final CharsetDecoder decoder) {
-        final CharBuffer out = CharBuffer.wrap(chars);
-        final int remaining = length - offset;
-
-        if (offset < 0) {
-            throw new IllegalArgumentException("Specified offset:" + offset + " cannot be negative.");
-        }
-
-        if (remaining < 0) {
-            throw new IllegalArgumentException("Remaining UTF8 Bytes size cannot be negative, was " + remaining);
-        }
-
-        out.position(offset);
-
-        // Create a buffer from the remaining portion of the buffer and then use the decoder to complete the work
-        // remember to move the main buffer position to consume the data processed.
-        ByteBuffer byteBuffer = ByteBuffer.allocate(remaining);
-
-        buffer.copyInto(buffer.getReadOffset(), byteBuffer, 0, remaining);
-        buffer.advanceReadOffset(remaining);
-
-        try {
-            for (;;) {
-                CoderResult cr = byteBuffer.hasRemaining() ? decoder.decode(byteBuffer, out, true) : CoderResult.UNDERFLOW;
-                if (cr.isUnderflow()) {
-                    cr = decoder.flush(out);
-                }
-                if (cr.isUnderflow()) {
-                    break;
-                }
-
-                // The char buffer should have been sufficient here but wasn't so we know
-                // that there was some encoding issue on the other end.
-                cr.throwException();
-            }
-
-            return out.flip().toString();
-        } catch (CharacterCodingException e) {
-            throw new DecodeException("Cannot parse encoded UTF8 String", e);
-        } finally {
-            decoder.reset();
         }
     }
 }

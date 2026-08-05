@@ -20,6 +20,7 @@ import java.util.Map;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncodeException;
+import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.TypeEncoder;
@@ -30,6 +31,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public final class MapTypeEncoder extends AbstractPrimitiveTypeEncoder<Map> {
+
+    public static final MapTypeEncoder INSTANCE = new MapTypeEncoder();
 
     @Override
     public Class<Map> getTypeClass() {
@@ -50,30 +53,28 @@ public final class MapTypeEncoder extends AbstractPrimitiveTypeEncoder<Map> {
         }
     }
 
-    private void writeValue(ProtonBuffer buffer, EncoderState state, Map value) {
+    private void writeValue(ProtonBuffer buffer, EncoderState state, Map map) {
         final int startIndex = buffer.getWriteOffset();
-
-        // Reserve space for the size
-        buffer.writeInt(0);
+        final Encoder encoder = state.getEncoder();
 
         // Record the count of elements which include both key and value in the count.
-        buffer.writeInt(value.size() * 2);
+        buffer.writeLong(map.size() * 2);
 
         // Write the list elements and then compute total size written.
-        value.forEach((key, entry) -> {
-            TypeEncoder keyEncoder = state.getEncoder().getTypeEncoder(key);
+        map.forEach((key, value) -> {
+            TypeEncoder keyEncoder = encoder.getTypeEncoder(key);
             if (keyEncoder == null) {
                 throw new EncodeException("Cannot find encoder for type " + key);
             }
 
             keyEncoder.writeType(buffer, state, key);
 
-            TypeEncoder valueEncoder = state.getEncoder().getTypeEncoder(entry);
+            TypeEncoder valueEncoder = encoder.getTypeEncoder(value);
             if (valueEncoder == null) {
-                throw new EncodeException("Cannot find encoder for type " + entry);
+                throw new EncodeException("Cannot find encoder for type " + value);
             }
 
-            valueEncoder.writeType(buffer, state, entry);
+            valueEncoder.writeType(buffer, state, value);
         });
 
         // Move back and write the size

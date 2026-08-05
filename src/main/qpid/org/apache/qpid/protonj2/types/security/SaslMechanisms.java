@@ -24,7 +24,7 @@ import org.apache.qpid.protonj2.types.UnsignedLong;
 public final class SaslMechanisms implements SaslPerformative {
 
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x0000000000000040L);
-    public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:sasl-mechanisms:list");
+    public static final Symbol DESCRIPTOR_SYMBOL = Symbol.getSASLSymbol("amqp:sasl-mechanisms:list");
 
     private Symbol[] saslServerMechanisms;
 

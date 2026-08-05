@@ -16,6 +16,8 @@
  */
 package org.apache.qpid.protonj2.codec.decoders;
 
+import static org.apache.qpid.protonj2.codec.decoders.PrimitiveArrayTypeDecoder.validateArrayConstraints;
+
 import java.io.InputStream;
 import java.lang.reflect.Array;
 
@@ -50,7 +52,10 @@ public abstract class AbstractPrimitiveTypeDecoder<V> implements PrimitiveTypeDe
     @SuppressWarnings("unchecked")
     @Override
     public V[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        V[] array = (V[]) Array.newInstance(getTypeClass(), count);
+        validateArrayConstraints(count, buffer, state, this);
+
+        final V[] array = (V[]) Array.newInstance(getTypeClass(), count);
+
         for (int i = 0; i < count; ++i) {
             array[i] = readValue(buffer, state);
         }
@@ -61,7 +66,10 @@ public abstract class AbstractPrimitiveTypeDecoder<V> implements PrimitiveTypeDe
     @SuppressWarnings("unchecked")
     @Override
     public V[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        V[] array = (V[]) Array.newInstance(getTypeClass(), count);
+        validateArrayConstraints(count, stream, state, this);
+
+        final V[] array = (V[]) Array.newInstance(getTypeClass(), count);
+
         for (int i = 0; i < count; ++i) {
             array[i] = readValue(stream, state);
         }

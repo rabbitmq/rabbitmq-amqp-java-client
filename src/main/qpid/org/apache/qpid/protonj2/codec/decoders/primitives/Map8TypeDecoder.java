@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Map8TypeDecoder extends AbstractMapTypeDecoder {
 
+    public static final Map8TypeDecoder INSTANCE = new Map8TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.MAP8 & 0xff;
@@ -47,11 +49,11 @@ public final class Map8TypeDecoder extends AbstractMapTypeDecoder {
 
     @Override
     public int readSize(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return ProtonStreamUtils.readByte(stream);
+        return ProtonStreamUtils.readByte(stream) & 0xff;
     }
 
     @Override
     public int readCount(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return ProtonStreamUtils.readByte(stream);
+        return ProtonStreamUtils.readByte(stream) & 0xff;
     }
 }

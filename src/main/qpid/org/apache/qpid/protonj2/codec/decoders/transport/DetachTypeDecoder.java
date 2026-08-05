@@ -25,11 +25,8 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Detach;
@@ -39,6 +36,8 @@ import org.apache.qpid.protonj2.types.transport.ErrorCondition;
  * Decoder of AMQP Detach type values from a byte stream
  */
 public final class DetachTypeDecoder extends AbstractDescribedListTypeDecoder<Detach> {
+
+    public static final DetachTypeDecoder INSTANCE = new DetachTypeDecoder();
 
     private static final int MIN_DETACH_LIST_ENTRIES = 1;
     private static final int MAX_DETACH_LIST_ENTRIES = 3;
@@ -59,38 +58,18 @@ public final class DetachTypeDecoder extends AbstractDescribedListTypeDecoder<De
     }
 
     @Override
-    public Detach readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readDetach(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_DETACH_LIST_ENTRIES;
     }
 
     @Override
-    public Detach[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Detach[] result = new Detach[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDetach(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_DETACH_LIST_ENTRIES;
     }
 
-    private Detach readDetach(ProtonBuffer buffer, Decoder decoder, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Detach readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Detach detach = new Detach();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count < MIN_DETACH_LIST_ENTRIES) {
-            throw new DecodeException("The handle field is mandatory");
-        }
-
-        if (count > MAX_DETACH_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Detach list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // Peek ahead and see if there is a null in the next slot, if so we don't call
@@ -121,38 +100,8 @@ public final class DetachTypeDecoder extends AbstractDescribedListTypeDecoder<De
     }
 
     @Override
-    public Detach readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readDetach(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Detach[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Detach[] result = new Detach[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDetach(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Detach readDetach(InputStream stream, StreamDecoder decoder, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Detach readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Detach detach = new Detach();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count < MIN_DETACH_LIST_ENTRIES) {
-            throw new DecodeException("The handle field is mandatory in a Detach");
-        }
-
-        if (count > MAX_DETACH_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Detach list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // If the stream allows we peek ahead and see if there is a null in the next slot,

@@ -45,6 +45,20 @@ public final class Symbols {
     }
 
     /**
+     * Look up a set of {@link Symbol} instances that matches the given {@link String}
+     * array names of the {@link Symbol} values and return them as a new {@link Symbol}
+     * array.
+     *
+     * @param stringValues
+     * 		The {@link String} array version of the {@link Symbol} values.
+     *
+     * @return a {@link Symbol} array that matches the given {@link String} array values.
+     */
+    public static Symbol[] getSASLSymbols(String[] stringValues) {
+        return StringUtils.toSASLSymbolArray(stringValues);
+    }
+
+    /**
      * Given an array of {@link Symbol} values search for a specific value and
      * return <code>true</code> if the value is found in the array.
      *

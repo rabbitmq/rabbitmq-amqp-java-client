@@ -16,6 +16,7 @@
  */
 package org.apache.qpid.protonj2.codec.decoders;
 
+import org.apache.qpid.protonj2.codec.decoders.ProtonDecoder.DecoderMode;
 import org.apache.qpid.protonj2.codec.decoders.messaging.AcceptedTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.messaging.AmqpSequenceTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.messaging.AmqpValueTypeDecoder;
@@ -69,7 +70,7 @@ public final class ProtonDecoderFactory {
      * @return a new {@link ProtonDecoder} instance that only decodes AMQP types.
      */
     public static ProtonDecoder create() {
-        ProtonDecoder decoder = new ProtonDecoder();
+        final ProtonDecoder decoder = new ProtonDecoder();
 
         addMessagingTypeDecoders(decoder);
         addTransactionTypeDecoders(decoder);
@@ -82,62 +83,62 @@ public final class ProtonDecoderFactory {
      * @return a new {@link ProtonDecoder} instance that only decodes SASL types.
      */
     public static ProtonDecoder createSasl() {
-        ProtonDecoder decoder = new ProtonDecoder();
+        final ProtonDecoder decoder = new ProtonDecoder(DecoderMode.SASL);
 
         addSaslTypeDecoders(decoder);
 
         return decoder;
     }
 
-    private static void addMessagingTypeDecoders(ProtonDecoder Decoder) {
-        Decoder.registerDescribedTypeDecoder(new AcceptedTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new AmqpSequenceTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new AmqpValueTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new ApplicationPropertiesTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DataTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeleteOnCloseTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeleteOnNoLinksOrMessagesTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeleteOnNoLinksTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeleteOnNoMessagesTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeliveryAnnotationsTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new FooterTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new HeaderTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new MessageAnnotationsTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new ModifiedTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new PropertiesTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new ReceivedTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new RejectedTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new ReleasedTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new SourceTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new TargetTypeDecoder());
+    private static void addMessagingTypeDecoders(ProtonDecoder decoder) {
+        decoder.registerDescribedTypeDecoder(AcceptedTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(AmqpSequenceTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(AmqpValueTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(ApplicationPropertiesTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DataTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeleteOnCloseTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeleteOnNoLinksOrMessagesTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeleteOnNoLinksTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeleteOnNoMessagesTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeliveryAnnotationsTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(FooterTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(HeaderTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(MessageAnnotationsTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(ModifiedTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(PropertiesTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(ReceivedTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(RejectedTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(ReleasedTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(SourceTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(TargetTypeDecoder.INSTANCE);
     }
 
-    private static void addTransactionTypeDecoders(ProtonDecoder Decoder) {
-        Decoder.registerDescribedTypeDecoder(new CoordinatorTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeclaredTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DeclareTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DischargeTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new TransactionStateTypeDecoder());
+    private static void addTransactionTypeDecoders(ProtonDecoder decoder) {
+        decoder.registerDescribedTypeDecoder(CoordinatorTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeclaredTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DeclareTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DischargeTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(TransactionStateTypeDecoder.INSTANCE);
     }
 
-    private static void addTransportTypeDecoders(ProtonDecoder Decoder) {
-        Decoder.registerDescribedTypeDecoder(new AttachTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new BeginTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new CloseTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DetachTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new DispositionTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new EndTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new ErrorConditionTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new FlowTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new OpenTypeDecoder());
-        Decoder.registerDescribedTypeDecoder(new TransferTypeDecoder());
+    private static void addTransportTypeDecoders(ProtonDecoder decoder) {
+        decoder.registerDescribedTypeDecoder(AttachTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(BeginTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(CloseTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DetachTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(DispositionTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(EndTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(ErrorConditionTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(FlowTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(OpenTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(TransferTypeDecoder.INSTANCE);
     }
 
     private static void addSaslTypeDecoders(ProtonDecoder decoder) {
-        decoder.registerDescribedTypeDecoder(new SaslChallengeTypeDecoder());
-        decoder.registerDescribedTypeDecoder(new SaslInitTypeDecoder());
-        decoder.registerDescribedTypeDecoder(new SaslMechanismsTypeDecoder());
-        decoder.registerDescribedTypeDecoder(new SaslOutcomeTypeDecoder());
-        decoder.registerDescribedTypeDecoder(new SaslResponseTypeDecoder());
+        decoder.registerDescribedTypeDecoder(SaslChallengeTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(SaslInitTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(SaslMechanismsTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(SaslOutcomeTypeDecoder.INSTANCE);
+        decoder.registerDescribedTypeDecoder(SaslResponseTypeDecoder.INSTANCE);
     }
 }

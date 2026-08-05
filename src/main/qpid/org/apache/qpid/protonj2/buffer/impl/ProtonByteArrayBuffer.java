@@ -827,7 +827,7 @@ public final class ProtonByteArrayBuffer extends SharedResource<ProtonBuffer> im
 
     @Override
     public int getReadableArrayOffset() {
-        return arrayOffset;
+        return arrayOffset + readOffset;
     }
 
     @Override

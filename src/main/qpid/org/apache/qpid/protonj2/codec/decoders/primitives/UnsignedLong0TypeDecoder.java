@@ -31,9 +31,16 @@ import org.apache.qpid.protonj2.types.UnsignedLong;
  */
 public final class UnsignedLong0TypeDecoder extends AbstractPrimitiveTypeDecoder<UnsignedLong> {
 
+    public static final UnsignedLong0TypeDecoder INSTANCE = new UnsignedLong0TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.ULONG0 & 0xff;
+    }
+
+    @Override
+    public boolean isZeroWidth() {
+        return true;
     }
 
     @Override

@@ -16,6 +16,8 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
+import static org.apache.qpid.protonj2.codec.decoders.PrimitiveArrayTypeDecoder.validateArrayConstraints;
+
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -30,6 +32,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  * Decoder of AMQP Double values from a byte stream
  */
 public final class DoubleTypeDecoder extends AbstractPrimitiveTypeDecoder<Double> {
+
+    public static final DoubleTypeDecoder INSTANCE = new DoubleTypeDecoder();
 
     @Override
     public boolean isJavaPrimitive() {
@@ -108,4 +112,29 @@ public final class DoubleTypeDecoder extends AbstractPrimitiveTypeDecoder<Double
         return Double.BYTES;
     }
 
+    @Override
+    public double[] readPrimitiveArray(ProtonBuffer buffer, DecoderState state, int count) {
+        validateArrayConstraints(count, buffer, state, this);
+
+        final double[] array = new double[count];
+
+        for (int i = 0; i < count; i++) {
+            array[i] = readPrimitiveValue(buffer, state);
+        }
+
+        return array;
+    }
+
+    @Override
+    public double[] readPrimitiveArray(InputStream stream, StreamDecoderState state, int count) {
+        validateArrayConstraints(count, stream, state, this);
+
+        final double[] array = new double[count];
+
+        for (int i = 0; i < count; i++) {
+            array[i] = readPrimitiveValue(stream, state);
+        }
+
+        return array;
+    }
 }

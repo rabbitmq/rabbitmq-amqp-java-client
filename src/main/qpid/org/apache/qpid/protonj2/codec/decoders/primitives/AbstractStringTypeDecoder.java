@@ -16,7 +16,6 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
-import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -24,6 +23,7 @@ import org.apache.qpid.protonj2.codec.DecodeException;
 import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
 
 /**
  * Base for the various String type Decoders used to read AMQP String values.
@@ -34,10 +34,10 @@ public abstract class AbstractStringTypeDecoder extends AbstractPrimitiveTypeDec
     public String readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
         final int length = readSize(buffer, state);
 
-        if (length > buffer.getReadableBytes()) {
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
             throw new DecodeException(String.format(
                     "String encoded size %d is specified to be greater than the amount " +
-                    "of data available (%d)", length, buffer.getReadableBytes()));
+                    "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
         }
 
         if (length != 0) {
@@ -51,6 +51,12 @@ public abstract class AbstractStringTypeDecoder extends AbstractPrimitiveTypeDec
     public String readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
         final int length = readSize(stream, state);
 
+        if (Integer.compareUnsigned(length, state.getMaxStringSize()) > 0) {
+            throw new DecodeException(String.format(
+                    "String encoded size %d is specified to be greater than the amount " +
+                    "of the configured max string length (%d)", Integer.toUnsignedLong(length), state.getMaxStringSize()));
+        }
+
         if (length != 0) {
             return state.decodeUTF8(stream, length);
         } else {
@@ -60,15 +66,27 @@ public abstract class AbstractStringTypeDecoder extends AbstractPrimitiveTypeDec
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        buffer.advanceReadOffset(readSize(buffer, state));
+        final int length = readSize(buffer, state);
+
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException(String.format(
+                "String encoded size %d is specified to be greater than the amount " +
+                "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
+        }
+
+        buffer.advanceReadOffset(length);
     }
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        try {
-            stream.skip(readSize(stream, state));
-        } catch (IOException ex) {
-            throw new DecodeException("Error while reading String payload bytes", ex);
+        final int length = readSize(stream, state);
+
+        if (Integer.compareUnsigned(length, state.getMaxStringSize()) > 0) {
+            throw new DecodeException(String.format(
+                "String encoded size %d is specified to be greater than the amount " +
+                "of the configured max string length (%d)", Integer.toUnsignedLong(length), state.getMaxStringSize()));
         }
+
+        ProtonStreamUtils.skipBytes(stream, length);
     }
 }

@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.qpid.protonj2.buffer.ProtonCompositeBuffer;
+import org.apache.qpid.protonj2.client.StreamDecodeOptions;
 import org.apache.qpid.protonj2.client.StreamDelivery;
 import org.apache.qpid.protonj2.client.exceptions.ClientDeliveryAbortedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
@@ -88,12 +89,19 @@ public final class ClientStreamDelivery extends ClientDeliverable<ClientStreamDe
 
     @Override
     public ClientStreamReceiverMessage message() throws ClientException {
+        return message(StreamDecodeOptions.defaultOptions());
+    }
+
+    @Override
+    public ClientStreamReceiverMessage message(StreamDecodeOptions options) throws ClientException {
         if (rawInputStream != null && message == null) {
             throw new ClientIllegalStateException("Cannot access Delivery Message API after requesting an InputStream");
         }
 
+        Objects.requireNonNull(options, "The stream decode options instance cannot be null");
+
         if (message == null) {
-            message = new ClientStreamReceiverMessage(receiver, this, rawInputStream = new RawDeliveryInputStream());
+            message = new ClientStreamReceiverMessage(receiver, this, options, rawInputStream = new RawDeliveryInputStream());
         }
 
         return message;
@@ -101,11 +109,18 @@ public final class ClientStreamDelivery extends ClientDeliverable<ClientStreamDe
 
     @Override
     public Map<String, Object> annotations() throws ClientException {
+        return annotations(StreamDecodeOptions.defaultOptions());
+    }
+
+    @Override
+    public Map<String, Object> annotations(StreamDecodeOptions options) throws ClientException {
         if (rawInputStream != null && message == null) {
             throw new ClientIllegalStateException("Cannot access Delivery Annotations API after requesting an InputStream");
         }
 
-        return StringUtils.toStringKeyedMap(message().deliveryAnnotations() != null ? message().deliveryAnnotations().getValue() : null);
+        Objects.requireNonNull(options, "The stream decode options instance cannot be null");
+
+        return StringUtils.toStringKeyedMap(message(options).deliveryAnnotations() != null ? message().deliveryAnnotations().getValue() : null);
     }
 
     @Override

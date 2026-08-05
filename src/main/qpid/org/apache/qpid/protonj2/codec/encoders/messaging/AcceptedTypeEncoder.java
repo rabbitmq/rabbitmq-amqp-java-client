@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.messaging.Accepted;
  */
 public final class AcceptedTypeEncoder extends AbstractDescribedListTypeEncoder<Accepted> {
 
+    public static final AcceptedTypeEncoder INSTANCE = new AcceptedTypeEncoder();
+
     private static final byte[] ACCEPTED_ENCODING = new byte[] {
         EncodingCodes.DESCRIBED_TYPE_INDICATOR,
         EncodingCodes.SMALLULONG,
@@ -54,7 +56,17 @@ public final class AcceptedTypeEncoder extends AbstractDescribedListTypeEncoder<
 
     @Override
     public byte getListEncoding(Accepted value) {
-        return EncodingCodes.LIST0 & 0xff;
+        return EncodingCodes.LIST0;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 0;
+    }
+
+    @Override
+    public int getElementCount(Accepted value) {
+        return 0;
     }
 
     @Override
@@ -63,11 +75,7 @@ public final class AcceptedTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(Accepted source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-    }
-
-    @Override
-    public int getElementCount(Accepted value) {
-        return 0;
+    public void writeElements(Accepted source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        throw new UnsupportedOperationException("This type should never have to write list elements");
     }
 }

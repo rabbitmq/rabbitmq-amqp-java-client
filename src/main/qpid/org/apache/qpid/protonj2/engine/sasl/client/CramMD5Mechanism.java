@@ -36,7 +36,7 @@ public class CramMD5Mechanism extends AbstractMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol CRAM_MD5 = Symbol.valueOf("CRAM-MD5");
+    public static final Symbol CRAM_MD5 = Symbol.getSASLSymbol("CRAM-MD5");
 
     private static final String ASCII = "ASCII";
     private static final String HMACMD5 = "HMACMD5";

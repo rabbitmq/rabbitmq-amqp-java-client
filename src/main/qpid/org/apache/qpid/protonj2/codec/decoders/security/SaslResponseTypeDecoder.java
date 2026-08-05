@@ -20,12 +20,11 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslResponse;
@@ -34,6 +33,8 @@ import org.apache.qpid.protonj2.types.security.SaslResponse;
  * Decoder of AMQP SaslResponse type values from a byte stream.
  */
 public final class SaslResponseTypeDecoder extends AbstractDescribedListTypeDecoder<SaslResponse> {
+
+    public static final SaslResponseTypeDecoder INSTANCE = new SaslResponseTypeDecoder();
 
     private static final int REQUIRED_LIST_ENTRIES = 1;
 
@@ -53,72 +54,36 @@ public final class SaslResponseTypeDecoder extends AbstractDescribedListTypeDeco
     }
 
     @Override
-    public SaslResponse readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected final int getMinListElements() {
+        return REQUIRED_LIST_ENTRIES;
     }
 
     @Override
-    public SaslResponse[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final SaslResponse[] result = new SaslResponse[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected final int getMaxListElements() {
+        return REQUIRED_LIST_ENTRIES;
     }
 
-    private SaslResponse readProperties(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected SaslResponse readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final SaslResponse response = new SaslResponse();
+        final ProtonBuffer responseBuffer = state.getDecoder().readBinaryAsBuffer(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count != REQUIRED_LIST_ENTRIES) {
-            throw new DecodeException("SASL Response must contain a single response binary: " + count);
-        } else {
-            response.setResponse(state.getDecoder().readBinaryAsBuffer(buffer, state));
+        if (responseBuffer == null) {
+            throw new DecodeException("The response field cannot be omitted from the SaslResponse");
         }
 
-        return response;
+        return response.setResponse(responseBuffer);
     }
 
     @Override
-    public SaslResponse readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public SaslResponse[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final SaslResponse[] result = new SaslResponse[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private SaslResponse readProperties(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected SaslResponse readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final SaslResponse response = new SaslResponse();
+        final ProtonBuffer responseBuffer = state.getDecoder().readBinaryAsBuffer(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count != REQUIRED_LIST_ENTRIES) {
-            throw new DecodeException("SASL Response must contain a single response binary: " + count);
-        } else {
-            response.setResponse(state.getDecoder().readBinaryAsBuffer(stream, state));
+        if (responseBuffer == null) {
+            throw new DecodeException("The response field cannot be omitted from the SaslResponse");
         }
 
-        return response;
+        return response.setResponse(responseBuffer);
     }
 }

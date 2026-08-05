@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.transport.End;
  */
 public final class EndTypeEncoder extends AbstractDescribedListTypeEncoder<End> {
 
+    public static final EndTypeEncoder INSTANCE = new EndTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return End.DESCRIPTOR_CODE;
@@ -46,14 +48,13 @@ public final class EndTypeEncoder extends AbstractDescribedListTypeEncoder<End> 
     }
 
     @Override
-    public void writeElement(End end, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeObject(buffer, state, end.getError());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown End value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return 1;
+    }
+
+    @Override
+    public void writeElements(End end, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        encoder.writeObject(buffer, state, end.getError());
     }
 
     @Override

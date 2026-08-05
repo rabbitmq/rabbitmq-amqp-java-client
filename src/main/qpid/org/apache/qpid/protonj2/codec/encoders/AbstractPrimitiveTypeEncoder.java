@@ -41,8 +41,7 @@ public abstract class AbstractPrimitiveTypeEncoder<V> implements PrimitiveTypeEn
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);

@@ -21,17 +21,19 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
-import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Source;
-import org.apache.qpid.protonj2.types.messaging.TerminusDurability;
-import org.apache.qpid.protonj2.types.messaging.TerminusExpiryPolicy;
 
 /**
  * Encoder of AMQP Source type values to a byte stream.
  */
 public final class SourceTypeEncoder extends AbstractDescribedListTypeEncoder<Source> {
+
+    public static final SourceTypeEncoder INSTANCE = new SourceTypeEncoder();
+
+    private static final int MAX_LIST_ELEMENTS = 11;
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -49,44 +51,8 @@ public final class SourceTypeEncoder extends AbstractDescribedListTypeEncoder<So
     }
 
     @Override
-    public void writeElement(Source source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeString(buffer, state, source.getAddress());
-                break;
-            case 1:
-                encoder.writeUnsignedInteger(buffer, state, source.getDurable().getValue());
-                break;
-            case 2:
-                encoder.writeSymbol(buffer, state, source.getExpiryPolicy().getPolicy());
-                break;
-            case 3:
-                encoder.writeUnsignedInteger(buffer, state, source.getTimeout());
-                break;
-            case 4:
-                buffer.writeByte(source.isDynamic() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                break;
-            case 5:
-                encoder.writeMap(buffer, state, source.getDynamicNodeProperties());
-                break;
-            case 6:
-                encoder.writeSymbol(buffer, state, source.getDistributionMode());
-                break;
-            case 7:
-                encoder.writeMap(buffer, state, source.getFilter());
-                break;
-            case 8:
-                encoder.writeObject(buffer, state, source.getDefaultOutcome());
-                break;
-            case 9:
-                encoder.writeArray(buffer, state, source.getOutcomes());
-                break;
-            case 10:
-                encoder.writeArray(buffer, state, source.getCapabilities());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Source value index: " + index);
-        }
+    public int getElementCount(Source source) {
+        return source.getElementCount();
     }
 
     @Override
@@ -95,31 +61,53 @@ public final class SourceTypeEncoder extends AbstractDescribedListTypeEncoder<So
     }
 
     @Override
-    public int getElementCount(Source source) {
-        if (source.getCapabilities() != null) {
-            return 11;
-        } else if (source.getOutcomes() != null) {
-            return 10;
-        } else if (source.getDefaultOutcome() != null) {
-            return 9;
-        } else if (source.getFilter() != null) {
-            return 8;
-        } else if (source.getDistributionMode() != null) {
-            return 7;
-        } else if (source.getDynamicNodeProperties() != null) {
-            return 6;
-        } else if (source.isDynamic()) {
-            return 5;
-        } else if (source.getTimeout() != null && !source.getTimeout().equals(UnsignedInteger.ZERO)) {
-            return 4;
-        } else if (source.getExpiryPolicy() != null && source.getExpiryPolicy() != TerminusExpiryPolicy.SESSION_END) {
-            return 3;
-        } else if (source.getDurable() != null && source.getDurable() != TerminusDurability.NONE) {
-            return 2;
-        } else if (source.getAddress() != null) {
-            return 1;
-        } else {
-            return 0;
+    public int getMaxElementCount() {
+        return MAX_LIST_ELEMENTS;
+    }
+
+    @Override
+    public void writeElements(Source source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        for (int index = 0; index < count; ++index) {
+            if (!source.hasElement(index)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (index) {
+                case 0:
+                    ProtonEncodings.writeString(buffer, state, source.getAddress());
+                    break;
+                case 1:
+                    ProtonEncodings.writeUnsignedInteger(buffer, source.getDurable().getValue().intValue());
+                    break;
+                case 2:
+                    ProtonEncodings.writeSymbol(buffer, source.getExpiryPolicy().getPolicy());
+                    break;
+                case 3:
+                    ProtonEncodings.writeUnsignedInteger(buffer, source.getTimeout().intValue());
+                    break;
+                case 4:
+                    buffer.writeByte(source.isDynamic() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+                    break;
+                case 5:
+                    encoder.writeMap(buffer, state, source.getDynamicNodeProperties());
+                    break;
+                case 6:
+                    ProtonEncodings.writeSymbol(buffer, source.getDistributionMode());
+                    break;
+                case 7:
+                    encoder.writeMap(buffer, state, source.getFilter());
+                    break;
+                case 8:
+                    encoder.writeObject(buffer, state, source.getDefaultOutcome());
+                    break;
+                case 9:
+                    encoder.writeArray(buffer, state, source.getOutcomes());
+                    break;
+                case 10:
+                    encoder.writeArray(buffer, state, source.getCapabilities());
+                    break;
+            }
         }
     }
 }

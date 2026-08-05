@@ -20,10 +20,10 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
@@ -34,6 +34,8 @@ import org.apache.qpid.protonj2.types.messaging.DeleteOnNoMessages;
  * Decoder of AMQP DeleteOnNoLinks type values from a byte stream
  */
 public final class DeleteOnNoMessagesTypeDecoder extends AbstractDescribedListTypeDecoder<DeleteOnNoMessages> {
+
+    public static final DeleteOnNoMessagesTypeDecoder INSTANCE = new DeleteOnNoMessagesTypeDecoder();
 
     @Override
     public Class<DeleteOnNoMessages> getTypeClass() {
@@ -51,56 +53,36 @@ public final class DeleteOnNoMessagesTypeDecoder extends AbstractDescribedListTy
     }
 
     @Override
-    public DeleteOnNoMessages readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
+    protected int getMinListElements() {
+        return 0;
+    }
 
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
+    @Override
+    protected int getMaxListElements() {
+        return 0;
+    }
 
-        decoder.skipValue(buffer, state);
+    @Override
+    protected DeleteOnNoMessages readSingle(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(buffer, state);
 
         return DeleteOnNoMessages.getInstance();
     }
 
     @Override
-    public DeleteOnNoMessages[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final DeleteOnNoMessages[] result = new DeleteOnNoMessages[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(buffer, state);
-            result[i] = DeleteOnNoMessages.getInstance();
-        }
-
-        return result;
-    }
-
-    @Override
-    public DeleteOnNoMessages readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        decoder.skipValue(stream, state);
+    protected DeleteOnNoMessages readSingle(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(stream, state);
 
         return DeleteOnNoMessages.getInstance();
     }
 
     @Override
-    public DeleteOnNoMessages[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
+    protected DeleteOnNoMessages readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
+    }
 
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final DeleteOnNoMessages[] result = new DeleteOnNoMessages[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(stream, state);
-            result[i] = DeleteOnNoMessages.getInstance();
-        }
-
-        return result;
+    @Override
+    protected DeleteOnNoMessages readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
     }
 }

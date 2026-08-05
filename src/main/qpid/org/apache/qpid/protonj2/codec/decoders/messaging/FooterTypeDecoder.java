@@ -23,15 +23,14 @@ import java.util.function.BiConsumer;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedMapTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonScanningContext;
 import org.apache.qpid.protonj2.codec.decoders.ScanningContext;
 import org.apache.qpid.protonj2.codec.decoders.StreamScanningContext;
-import org.apache.qpid.protonj2.codec.decoders.primitives.MapTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Footer;
@@ -39,7 +38,9 @@ import org.apache.qpid.protonj2.types.messaging.Footer;
 /**
  * Decoder of AMQP Footer type values from a byte stream.
  */
-public final class FooterTypeDecoder extends AbstractDescribedMapTypeDecoder<Footer> {
+public final class FooterTypeDecoder extends AbstractDescribedMapTypeDecoder<Footer, Symbol> {
+
+    public static final FooterTypeDecoder INSTANCE = new FooterTypeDecoder();
 
     @Override
     public Class<Footer> getTypeClass() {
@@ -56,78 +57,19 @@ public final class FooterTypeDecoder extends AbstractDescribedMapTypeDecoder<Foo
         return Footer.DESCRIPTOR_SYMBOL;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Footer readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        if (decoder.isNull()) {
-            return new Footer(null);
-        }
-
-        MapTypeDecoder mapDecoder = checkIsExpectedTypeAndCast(MapTypeDecoder.class, decoder);
-
-        return new Footer(mapDecoder.readValue(buffer, state));
+    protected Symbol readKey(ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
+        return decoder.readSymbol(buffer, state);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Footer[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Footer[] result = new Footer[count];
-
-        if (decoder.isNull()) {
-            for (int i = 0; i < count; ++i) {
-                result[i] = new Footer(null);
-            }
-            return result;
-        }
-
-        final MapTypeDecoder mapDecoder = checkIsExpectedTypeAndCast(MapTypeDecoder.class, decoder);
-
-        for (int i = 0; i < count; ++i) {
-            result[i] = new Footer(mapDecoder.readValue(buffer, state));
-        }
-
-        return result;
+    protected Symbol readKey(InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
+        return decoder.readSymbol(stream, state);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Footer readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        if (decoder.isNull()) {
-            return new Footer(null);
-        }
-
-        final MapTypeDecoder mapDecoder = checkIsExpectedTypeAndCast(MapTypeDecoder.class, decoder);
-
-        return new Footer(mapDecoder.readValue(stream, state));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public Footer[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Footer[] result = new Footer[count];
-
-        if (decoder.isNull()) {
-            for (int i = 0; i < count; ++i) {
-                result[i] = new Footer(null);
-            }
-            return result;
-        }
-
-        final MapTypeDecoder mapDecoder = checkIsExpectedTypeAndCast(MapTypeDecoder.class, decoder);
-
-        for (int i = 0; i < count; ++i) {
-            result[i] = new Footer(mapDecoder.readValue(stream, state));
-        }
-
-        return result;
+    protected Footer createDescribed(Map<Symbol, Object> map) {
+        return new Footer(map);
     }
 
     /**

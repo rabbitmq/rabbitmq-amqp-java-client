@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.transactions.Declare;
  */
 public final class DeclareTypeEncoder extends AbstractDescribedListTypeEncoder<Declare> {
 
+    public static final DeclareTypeEncoder INSTANCE = new DeclareTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return Declare.DESCRIPTOR_CODE;
@@ -46,14 +48,8 @@ public final class DeclareTypeEncoder extends AbstractDescribedListTypeEncoder<D
     }
 
     @Override
-    public void writeElement(Declare declare, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeObject(buffer, state, declare.getGlobalId());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Declare value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return 1;
     }
 
     @Override
@@ -67,10 +63,11 @@ public final class DeclareTypeEncoder extends AbstractDescribedListTypeEncoder<D
 
     @Override
     public int getElementCount(Declare declare) {
-        if (declare.getGlobalId() != null) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return declare.getGlobalId() == null ? 0 : 1;
+    }
+
+    @Override
+    public void writeElements(Declare declare, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        encoder.writeObject(buffer, state, declare.getGlobalId());
     }
 }

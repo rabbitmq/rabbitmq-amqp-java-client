@@ -23,6 +23,7 @@ import org.apache.qpid.protonj2.engine.EngineSaslDriver.SaslState;
 import org.apache.qpid.protonj2.logging.ProtonLogger;
 import org.apache.qpid.protonj2.logging.ProtonLoggerFactory;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
+import org.apache.qpid.protonj2.types.UnsignedShort;
 
 /**
  * Proton engine configuration API
@@ -31,12 +32,19 @@ public class ProtonEngineConfiguration implements EngineConfiguration {
 
     private static final ProtonLogger LOG = ProtonLoggerFactory.getLogger(ProtonEngineConfiguration.class);
 
+    /**
+     * Engine defined default value for the limit on Transfer frames per Delivery
+     */
+    public static final int DEFAULT_MAX_TRANSFERS_PER_DELIVERY = UnsignedShort.MAX_VALUE.intValue();
+
     private final ProtonEngine engine;
 
     private ProtonBufferAllocator allocator = ProtonBufferAllocator.defaultAllocator();
 
     private long effectiveMaxInboundFrameSize = ProtonConstants.MIN_MAX_AMQP_FRAME_SIZE;
     private long effectiveMaxOutboundFrameSize = ProtonConstants.MIN_MAX_AMQP_FRAME_SIZE;
+
+    private int maxTransfersPerDelivery = DEFAULT_MAX_TRANSFERS_PER_DELIVERY;
 
     ProtonEngineConfiguration(ProtonEngine engine) {
         this.engine = engine;
@@ -75,6 +83,17 @@ public class ProtonEngineConfiguration implements EngineConfiguration {
         } else {
             return false;
         }
+    }
+
+    @Override
+    public EngineConfiguration setMaxTransfersPerDelivery(int maxTransfers) {
+        this.maxTransfersPerDelivery = Math.max(0, maxTransfers);
+        return this;
+    }
+
+    @Override
+    public int getMaxTransfersPerDelivery() {
+        return maxTransfersPerDelivery;
     }
 
     //---- proton specific APIs

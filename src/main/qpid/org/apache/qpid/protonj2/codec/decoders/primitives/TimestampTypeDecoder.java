@@ -31,6 +31,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class TimestampTypeDecoder extends AbstractPrimitiveTypeDecoder<Long> {
 
+    public static final TimestampTypeDecoder INSTANCE = new TimestampTypeDecoder();
+
     @Override
     public Class<Long> getTypeClass() {
         return Long.class;

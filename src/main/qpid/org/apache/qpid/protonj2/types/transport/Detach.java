@@ -42,7 +42,7 @@ public final class Detach implements Performative {
     private boolean closed;
     private ErrorCondition error;
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Detach object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;

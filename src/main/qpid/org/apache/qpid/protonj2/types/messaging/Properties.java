@@ -87,10 +87,15 @@ public final class Properties implements Section<Properties> {
         return this;
     }
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Properties object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;
+    }
+
+    public boolean hasElement(int index) {
+        final int value = 1 << index;
+        return (modified & value) == value;
     }
 
     public int getElementCount() {
@@ -199,7 +204,7 @@ public final class Properties implements Section<Properties> {
     }
 
     public Properties setUserId(Binary userId) {
-        if (userId == null) {
+        if (userId == null || userId.getLength() == 0) {
             modified &= ~USER_ID;
         } else {
             modified |= USER_ID;

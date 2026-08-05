@@ -20,13 +20,13 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
+import org.apache.qpid.protonj2.types.UnsignedByte;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslCode;
 import org.apache.qpid.protonj2.types.security.SaslOutcome;
@@ -35,6 +35,8 @@ import org.apache.qpid.protonj2.types.security.SaslOutcome;
  * Decoder of AMQP SaslOutcome type values from a byte stream.
  */
 public final class SaslOutcomeTypeDecoder extends AbstractDescribedListTypeDecoder<SaslOutcome> {
+
+    public static final SaslOutcomeTypeDecoder INSTANCE = new SaslOutcomeTypeDecoder();
 
     private static final int MIN_SASL_OUTCOME_LIST_ENTRIES = 1;
     private static final int MAX_SASL_OUTCOME_LIST_ENTRIES = 2;
@@ -55,98 +57,46 @@ public final class SaslOutcomeTypeDecoder extends AbstractDescribedListTypeDecod
     }
 
     @Override
-    public SaslOutcome readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected final int getMinListElements() {
+        return MIN_SASL_OUTCOME_LIST_ENTRIES;
     }
 
     @Override
-    public SaslOutcome[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final SaslOutcome[] result = new SaslOutcome[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected final int getMaxListElements() {
+        return MAX_SASL_OUTCOME_LIST_ENTRIES;
     }
 
-    private SaslOutcome readProperties(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected SaslOutcome readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final SaslOutcome outcome = new SaslOutcome();
+        final UnsignedByte code = state.getDecoder().readUnsignedByte(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_SASL_OUTCOME_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in SASL Outcome list encoding: " + count);
+        if (code == null) {
+            throw new DecodeException("The code field cannot be omitted from the SaslOutcome");
         }
 
-        if (count > MAX_SASL_OUTCOME_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in SASL Outcome list encoding: " + count);
-        }
+        outcome.setCode(SaslCode.valueOf(code));
 
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    outcome.setCode(SaslCode.valueOf(state.getDecoder().readUnsignedByte(buffer, state)));
-                    break;
-                case 1:
-                    outcome.setAdditionalData(state.getDecoder().readBinaryAsBuffer(buffer, state));
-                    break;
-            }
+        if (count == 2) {
+            outcome.setAdditionalData(state.getDecoder().readBinaryAsBuffer(buffer, state));
         }
 
         return outcome;
     }
 
     @Override
-    public SaslOutcome readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public SaslOutcome[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final SaslOutcome[] result = new SaslOutcome[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private SaslOutcome readProperties(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected SaslOutcome readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final SaslOutcome outcome = new SaslOutcome();
+        final UnsignedByte code = state.getDecoder().readUnsignedByte(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_SASL_OUTCOME_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in SASL Outcome list encoding: " + count);
+        if (code == null) {
+            throw new DecodeException("The code field cannot be omitted from the SaslOutcome");
         }
 
-        if (count > MAX_SASL_OUTCOME_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in SASL Outcome list encoding: " + count);
-        }
+        outcome.setCode(SaslCode.valueOf(code));
 
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    outcome.setCode(SaslCode.valueOf(state.getDecoder().readUnsignedByte(stream, state)));
-                    break;
-                case 1:
-                    outcome.setAdditionalData(state.getDecoder().readBinaryAsBuffer(stream, state));
-                    break;
-            }
+        if (count == 2) {
+            outcome.setAdditionalData(state.getDecoder().readBinaryAsBuffer(stream, state));
         }
 
         return outcome;

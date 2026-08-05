@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class List32TypeDecoder extends AbstractListTypeDecoder {
 
+    public static final List32TypeDecoder INSTANCE = new List32TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.LIST32 & 0xff;

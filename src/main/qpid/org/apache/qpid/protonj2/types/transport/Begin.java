@@ -86,7 +86,7 @@ public final class Begin implements Performative {
         return copy;
     }
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Begin object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;

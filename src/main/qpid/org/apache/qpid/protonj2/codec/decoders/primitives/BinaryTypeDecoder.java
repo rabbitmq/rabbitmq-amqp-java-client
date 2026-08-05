@@ -16,6 +16,13 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
+import java.io.InputStream;
+
+import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.EncoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.decoders.PrimitiveTypeDecoder;
 import org.apache.qpid.protonj2.types.Binary;
 
@@ -28,4 +35,61 @@ public interface BinaryTypeDecoder extends PrimitiveTypeDecoder<Binary> {
     default Class<Binary> getTypeClass() {
         return Binary.class;
     }
+
+    /**
+     * Read and decode an AMQP {@link Binary} into a {@link ProtonBuffer} instance and return it.
+     *
+     * @param buffer
+     * 		The {@link ProtonBuffer} where the {@link Binary} encoding should be read from.
+     * @param state
+     * 		The {@link EncoderState} that can be used when reading the encoded value.
+     *
+     * @return the bytes that comprise the encoded Binary wrapped in a {@link ProtonBuffer} instance.
+     *
+     * @throws DecodeException if an error occurs while reading the Binary value.
+     */
+    public ProtonBuffer readValueAsBuffer(ProtonBuffer buffer, DecoderState state) throws DecodeException;
+
+    /**
+     * Read and decode an AMQP {@link Binary} into a byte array instance and return it.
+     *
+     * @param buffer
+     * 		The {@link ProtonBuffer} where the {@link Binary} encoding should be read from.
+     * @param state
+     * 		The {@link EncoderState} that can be used when reading the encoded value.
+     *
+     * @return the bytes that comprise the encoded Binary copied into a byte array instance.
+     *
+     * @throws DecodeException if an error occurs while reading the Binary value.
+     */
+    public byte[] readValueAsArray(ProtonBuffer buffer, DecoderState state) throws DecodeException;
+
+    /**
+     * Read and decode an AMQP {@link Binary} into a {@link ProtonBuffer} instance and return it.
+     *
+     * @param stream
+     * 		The {@link InputStream} where the {@link Binary} encoding should be read from.
+     * @param state
+     * 		The {@link EncoderState} that can be used when reading the encoded value.
+     *
+     * @return the bytes that comprise the encoded Binary wrapped in a {@link ProtonBuffer} instance.
+     *
+     * @throws DecodeException if an error occurs while reading the Binary value.
+     */
+    public ProtonBuffer readValueAsBuffer(InputStream stream, StreamDecoderState state) throws DecodeException;
+
+    /**
+     * Read and decode an AMQP {@link Binary} into a byte array instance and return it.
+     *
+     * @param stream
+     * 		The {@link InputStream} where the {@link Binary} encoding should be read from.
+     * @param state
+     * 		The {@link EncoderState} that can be used when reading the encoded value.
+     *
+     * @return the bytes that comprise the encoded Binary copied into a byte array instance.
+     *
+     * @throws DecodeException if an error occurs while reading the Binary value.
+     */
+    public byte[] readValueAsArray(InputStream stream, StreamDecoderState state) throws DecodeException;
+
 }

@@ -28,6 +28,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class UUIDTypeEncoder extends AbstractPrimitiveTypeEncoder<UUID> {
 
+    public static final UUIDTypeEncoder INSTANCE = new UUIDTypeEncoder();
+
     @Override
     public Class<UUID> getTypeClass() {
         return UUID.class;

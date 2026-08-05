@@ -17,10 +17,11 @@
 package org.apache.qpid.protonj2.codec.encoders.messaging;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedMapTypeEncoder;
-import org.apache.qpid.protonj2.codec.encoders.primitives.StringTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.ApplicationProperties;
@@ -30,7 +31,7 @@ import org.apache.qpid.protonj2.types.messaging.ApplicationProperties;
  */
 public final class ApplicationPropertiesTypeEncoder extends AbstractDescribedMapTypeEncoder<String, Object, ApplicationProperties> {
 
-    private static final StringTypeEncoder STRING_ENCODER = new StringTypeEncoder();
+    public static final ApplicationPropertiesTypeEncoder INSTANCE = new ApplicationPropertiesTypeEncoder();
 
     @Override
     public Class<ApplicationProperties> getTypeClass() {
@@ -48,16 +49,11 @@ public final class ApplicationPropertiesTypeEncoder extends AbstractDescribedMap
     }
 
     @Override
-    public boolean hasMap(ApplicationProperties value) {
-        return value.getValue() != null;
-    }
-
-    @Override
     public int getMapSize(ApplicationProperties value) {
         if (value.getValue() != null) {
             return value.getValue().size();
         } else {
-            return 0;
+            throw new EncodeException("ApplicationProperties must have an assigned Map payload");
         }
     }
 
@@ -65,7 +61,7 @@ public final class ApplicationPropertiesTypeEncoder extends AbstractDescribedMap
     public void writeMapEntries(ProtonBuffer buffer, Encoder encoder, EncoderState state, ApplicationProperties properties) {
         // Write the Map elements and then compute total size written.
         properties.getValue().forEach((key, value) -> {
-            STRING_ENCODER.writeType(buffer, state, key);
+            ProtonEncodings.writeString(buffer, state, key);
             encoder.writeObject(buffer, state, value);
         });
     }

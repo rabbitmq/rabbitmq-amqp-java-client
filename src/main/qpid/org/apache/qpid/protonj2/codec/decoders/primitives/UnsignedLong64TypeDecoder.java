@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.UnsignedLong;
  */
 public final class UnsignedLong64TypeDecoder extends AbstractPrimitiveTypeDecoder<UnsignedLong> {
 
+    public static final UnsignedLong64TypeDecoder INSTANCE = new UnsignedLong64TypeDecoder();
+
     @Override
     public Class<UnsignedLong> getTypeClass() {
         return UnsignedLong.class;

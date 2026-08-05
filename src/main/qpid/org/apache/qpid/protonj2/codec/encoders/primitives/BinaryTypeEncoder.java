@@ -20,12 +20,15 @@ import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Binary;
 
 /**
  * Encoder of AMQP Binary type values to a byte stream.
  */
 public final class BinaryTypeEncoder extends AbstractPrimitiveTypeEncoder<Binary> {
+
+    public static final BinaryTypeEncoder INSTANCE = new BinaryTypeEncoder();
 
     @Override
     public Class<Binary> getTypeClass() {
@@ -34,7 +37,7 @@ public final class BinaryTypeEncoder extends AbstractPrimitiveTypeEncoder<Binary
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, Binary value) {
-        writeType(buffer, state, value.asProtonBuffer());
+        ProtonEncodings.writeBinary(buffer, value.asProtonBuffer());
     }
 
     /**
@@ -50,18 +53,7 @@ public final class BinaryTypeEncoder extends AbstractPrimitiveTypeEncoder<Binary
      * 		The {@link ProtonBuffer} instance that is to be encoded.
      */
     public void writeType(ProtonBuffer buffer, EncoderState state, ProtonBuffer value) {
-        if (value.getReadableBytes() > 255) {
-            buffer.ensureWritable(value.getReadableBytes() + Long.BYTES);
-            buffer.writeByte(EncodingCodes.VBIN32);
-            buffer.writeInt(value.getReadableBytes());
-        } else {
-            buffer.ensureWritable(value.getReadableBytes() + Short.BYTES);
-            buffer.writeByte(EncodingCodes.VBIN8);
-            buffer.writeByte((byte) value.getReadableBytes());
-        }
-
-        value.copyInto(value.getReadOffset(), buffer, buffer.getWriteOffset(), value.getReadableBytes());
-        buffer.advanceWriteOffset(value.getReadableBytes());
+        ProtonEncodings.writeBinary(buffer, value);
     }
 
     /**

@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Accepted;
@@ -31,6 +33,8 @@ import org.apache.qpid.protonj2.types.transport.Disposition;
  * Encoder of AMQP Disposition type values to a byte stream
  */
 public final class DispositionTypeEncoder extends AbstractDescribedListTypeEncoder<Disposition> {
+
+    public static final DispositionTypeEncoder INSTANCE = new DispositionTypeEncoder();
 
     private static final byte[] ACCEPTED_ENCODING = new byte[] {
         EncodingCodes.DESCRIBED_TYPE_INDICATOR,
@@ -54,33 +58,44 @@ public final class DispositionTypeEncoder extends AbstractDescribedListTypeEncod
         return Disposition.class;
     }
 
-    /*
-     * This assumes that the value was already check be the setter in Disposition
-     */
-    private static void writeCheckedUnsignedInteger(final long value, final ProtonBuffer buffer) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (value <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) value);
-        } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt((int) value);
-        }
+    @Override
+    public int getElementCount(Disposition disposition) {
+        return disposition.getElementCount();
     }
 
     @Override
-    public void writeElement(Disposition disposition, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (disposition.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    buffer.writeByte(disposition.getRole().encodingCode());
-                    break;
-                case 1:
-                    writeCheckedUnsignedInteger(disposition.getFirst(), buffer);
-                    break;
+    public int getMinElementCount() {
+        return 2;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 6;
+    }
+
+    @Override
+    public void writeElements(Disposition disposition, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (disposition.hasRole()) {
+            buffer.writeByte(disposition.getRole().encodingCode());
+        } else {
+            throw new EncodeException("Cannot write an Disposition that does not have a role assigned.");
+        }
+
+        if (disposition.hasFirst()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, disposition.getFirst());
+        } else {
+            throw new EncodeException("Cannot write an Disposition that does not have a first value assigned.");
+        }
+
+        for (int i = 2; i < count; ++i) {
+            if (!disposition.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
                 case 2:
-                    writeCheckedUnsignedInteger(disposition.getLast(), buffer);
+                    ProtonEncodings.writeUnsignedInteger(buffer, disposition.getLast());
                     break;
                 case 3:
                     buffer.writeByte(disposition.getSettled() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
@@ -95,11 +110,7 @@ public final class DispositionTypeEncoder extends AbstractDescribedListTypeEncod
                 case 5:
                     buffer.writeByte(disposition.getBatchable() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
                     break;
-                default:
-                    throw new IllegalArgumentException("Unknown Disposition value index: " + index);
             }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
         }
     }
 
@@ -112,15 +123,5 @@ public final class DispositionTypeEncoder extends AbstractDescribedListTypeEncod
         } else {
             return EncodingCodes.LIST32;
         }
-    }
-
-    @Override
-    public int getElementCount(Disposition disposition) {
-        return disposition.getElementCount();
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 2;
     }
 }

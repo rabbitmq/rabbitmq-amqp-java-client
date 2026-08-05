@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Flow;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transport.Flow;
  * Encoder of AMQP Flow type values to a byte stream.
  */
 public final class FlowTypeEncoder extends AbstractDescribedListTypeEncoder<Flow> {
+
+    public static final FlowTypeEncoder INSTANCE = new FlowTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -45,64 +49,19 @@ public final class FlowTypeEncoder extends AbstractDescribedListTypeEncoder<Flow
         return Flow.class;
     }
 
-    /*
-     * This assumes that the value was already check be the setter in Flow
-     */
-    private static void writeCheckedUnsignedInteger(final long value, final ProtonBuffer buffer) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (value <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) value);
-        } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt((int) value);
-        }
+    @Override
+    public int getElementCount(Flow flow) {
+        return flow.getElementCount();
     }
 
     @Override
-    public void writeElement(Flow flow, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (flow.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    writeCheckedUnsignedInteger(flow.getNextIncomingId(), buffer);
-                    break;
-                case 1:
-                    writeCheckedUnsignedInteger(flow.getIncomingWindow(), buffer);
-                    break;
-                case 2:
-                    writeCheckedUnsignedInteger(flow.getNextOutgoingId(), buffer);
-                    break;
-                case 3:
-                    writeCheckedUnsignedInteger(flow.getOutgoingWindow(), buffer);
-                    break;
-                case 4:
-                    writeCheckedUnsignedInteger(flow.getHandle(), buffer);
-                    break;
-                case 5:
-                    writeCheckedUnsignedInteger(flow.getDeliveryCount(), buffer);
-                    break;
-                case 6:
-                    writeCheckedUnsignedInteger(flow.getLinkCredit(), buffer);
-                    break;
-                case 7:
-                    writeCheckedUnsignedInteger(flow.getAvailable(), buffer);
-                    break;
-                case 8:
-                    buffer.writeByte(flow.getDrain() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                    break;
-                case 9:
-                    buffer.writeByte(flow.getEcho() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                    break;
-                case 10:
-                    encoder.writeMap(buffer, state, flow.getProperties());
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown Flow value index: " + index);
-            }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
-        }
+    public int getMinElementCount() {
+        return 4;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 11;
     }
 
     @Override
@@ -115,12 +74,60 @@ public final class FlowTypeEncoder extends AbstractDescribedListTypeEncoder<Flow
     }
 
     @Override
-    public int getElementCount(Flow flow) {
-        return flow.getElementCount();
-    }
+    public void writeElements(Flow flow, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (flow.hasNextIncomingId()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, flow.getNextIncomingId());
+        } else {
+            buffer.writeByte(EncodingCodes.NULL);
+        }
 
-    @Override
-    public int getMinElementCount() {
-        return 4;
+        if (flow.hasIncomingWindow()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, flow.getIncomingWindow());
+        } else {
+            throw new EncodeException("Cannot write an Flow that does not have a incoming window assigned.");
+        }
+
+        if (flow.hasNextOutgoingId()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, flow.getNextOutgoingId());
+        } else {
+            throw new EncodeException("Cannot write an Flow that does not have a next outgoing id assigned.");
+        }
+
+        if (flow.hasOutgoingWindow()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, flow.getOutgoingWindow());
+        } else {
+            throw new EncodeException("Cannot write an Flow that does not have a outgoing window assigned.");
+        }
+
+        for (int i = 4; i < count; ++i) {
+            if (!flow.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
+                case 4:
+                    ProtonEncodings.writeUnsignedInteger(buffer, flow.getHandle());
+                    break;
+                case 5:
+                    ProtonEncodings.writeUnsignedInteger(buffer, flow.getDeliveryCount());
+                    break;
+                case 6:
+                    ProtonEncodings.writeUnsignedInteger(buffer, flow.getLinkCredit());
+                    break;
+                case 7:
+                    ProtonEncodings.writeUnsignedInteger(buffer, flow.getAvailable());
+                    break;
+                case 8:
+                    buffer.writeByte(flow.getDrain() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+                    break;
+                case 9:
+                    buffer.writeByte(flow.getEcho() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+                    break;
+                case 10:
+                    encoder.writeMap(buffer, state, flow.getProperties());
+                    break;
+            }
+        }
     }
 }

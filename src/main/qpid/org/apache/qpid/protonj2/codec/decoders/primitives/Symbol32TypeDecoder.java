@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Symbol32TypeDecoder extends AbstractSymbolTypeDecoder {
 
+    public static final Symbol32TypeDecoder INSTANCE = new Symbol32TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.SYM32 & 0xff;

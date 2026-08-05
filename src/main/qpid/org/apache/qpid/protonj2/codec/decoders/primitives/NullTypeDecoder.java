@@ -30,8 +30,15 @@ import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
  */
 public final class NullTypeDecoder extends AbstractPrimitiveTypeDecoder<Void> {
 
+    public static final NullTypeDecoder INSTANCE = new NullTypeDecoder();
+
     @Override
     public boolean isNull() {
+        return true;
+    }
+
+    @Override
+    public boolean isZeroWidth() {
         return true;
     }
 

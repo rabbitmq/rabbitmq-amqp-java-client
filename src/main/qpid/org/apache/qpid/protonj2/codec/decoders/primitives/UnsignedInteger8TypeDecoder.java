@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.UnsignedInteger;
  */
 public class UnsignedInteger8TypeDecoder extends AbstractPrimitiveTypeDecoder<UnsignedInteger> {
 
+    public static final UnsignedInteger8TypeDecoder INSTANCE = new UnsignedInteger8TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.SMALLUINT & 0xff;
