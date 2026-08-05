@@ -110,7 +110,7 @@ public final class Attach implements Performative {
         return copy;
     }
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Attach object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;

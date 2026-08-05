@@ -48,12 +48,13 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
     }
 
     /**
-     * Instructs the encoder to write the element identified with the given index
+     * Instructs the encoder to write the elements identified with the given count which
+     * should match what it reports as the required number needed for this encoding.
      *
      * @param source
      *      the source of the list elements to write
-     * @param index
-     *      the element index that needs to be written
+     * @param count
+     *      the number of elements that are to be encoded for this type
      * @param buffer
      *      the buffer to write the element to
      * @param encoder
@@ -61,7 +62,7 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
      * @param state
      *      the current EncoderState value to use.
      */
-    public abstract void writeElement(V source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state);
+    public abstract void writeElements(V source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state);
 
     /**
      * Gets the number of elements that will result when this type is encoded
@@ -84,12 +85,21 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
         return 0;
     }
 
+    /**
+     * Returns the maximum number of elements the list body of the described type can
+     * carry and is used as a sanity check during encode.
+     *
+     * @return the maximum number of elements the described type can carry.
+     */
+    public abstract int getMaxElementCount();
+
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, V value) {
         final Encoder encoder = state.getEncoder();
 
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        encoder.writeUnsignedLong(buffer, state, getDescriptorCode().byteValue());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(getDescriptorCode().byteValue());
 
         final int count = getElementCount(value);
         final byte encodingCode = getListEncoding(value);
@@ -98,15 +108,18 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
             throw new EncodeException("Incomplete Type cannot be encoded");
         }
 
+        if (count > getMaxElementCount()) {
+            throw new EncodeException("Type reported more elements than its encoding allows");
+        }
+
         buffer.writeByte(encodingCode);
 
-        switch (encodingCode) {
-            case EncodingCodes.LIST8:
-                writeSmallType(buffer, encoder, state, value, count);
-                break;
-            case EncodingCodes.LIST32:
-                writeLargeType(buffer, encoder, state, value, count);
-                break;
+        // List0 types never invoke the write elements API
+
+        if (encodingCode == EncodingCodes.LIST8) {
+            writeSmallType(buffer, encoder, state, value, count);
+        } else if (encodingCode == EncodingCodes.LIST32) {
+            writeLargeType(buffer, encoder, state, value, count);
         }
     }
 
@@ -114,12 +127,11 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeByte((byte) 0);
-        buffer.writeByte((byte) elementCount);
+        buffer.writeShort((short) elementCount);
 
         // Write the list elements and then compute total size written.
-        for (int i = 0; i < elementCount; ++i) {
-            writeElement(value, i, buffer, encoder, state);
+        if (elementCount > 0) {
+            writeElements(value, elementCount, buffer, encoder, state);
         }
 
         // Move back and write the size
@@ -132,12 +144,11 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(elementCount);
+        buffer.writeLong(elementCount);
 
         // Write the list elements and then compute total size written.
-        for (int i = 0; i < elementCount; ++i) {
-            writeElement(value, i, buffer, encoder, state);
+        if (elementCount > 0) {
+            writeElements(value, elementCount, buffer, encoder, state);
         }
 
         // Move back and write the size
@@ -147,18 +158,18 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
     }
 
     @Override
-    public void writeArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
+    public final void writeArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         // Write the Array Type encoding code, we don't optimize here.
         buffer.writeByte(EncodingCodes.ARRAY32);
 
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        state.getEncoder().writeUnsignedLong(buffer, state, getDescriptorCode());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(getDescriptorCode().byteValue());
 
         writeRawArray(buffer, state, values);
 
@@ -174,7 +185,7 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
 
     @SuppressWarnings("unchecked")
     @Override
-    public void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
+    public final void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         buffer.writeByte(EncodingCodes.LIST32);
 
         final Encoder encoder = state.getEncoder();
@@ -185,12 +196,11 @@ public abstract class AbstractDescribedListTypeEncoder<V> extends AbstractDescri
             final int elementStartIndex = buffer.getWriteOffset();
 
             // Reserve space for the size and write the count of list elements.
-            buffer.writeInt(0);
-            buffer.writeInt(count);
+            buffer.writeLong(count);
 
             // Write the list elements and then compute total size written.
-            for (int j = 0; j < count; ++j) {
-                writeElement(listType, j, buffer, encoder, state);
+            if (count > 0) {
+                writeElements(listType, count, buffer, encoder, state);
             }
 
             // Move back and write the size

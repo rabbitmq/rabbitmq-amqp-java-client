@@ -19,16 +19,12 @@ package org.apache.qpid.protonj2.codec.decoders.messaging;
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
-import org.apache.qpid.protonj2.codec.DecodeEOFException;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
-import org.apache.qpid.protonj2.codec.EncodingCodes;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.List32TypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.List8TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
@@ -39,8 +35,7 @@ import org.apache.qpid.protonj2.types.messaging.Accepted;
  */
 public final class AcceptedTypeDecoder extends AbstractDescribedListTypeDecoder<Accepted> {
 
-    private static final ListTypeDecoder SMALL_LIST_TYPE_DECODER = new List8TypeDecoder();
-    private static final ListTypeDecoder LARGE_LIST_TYPE_DECODER = new List32TypeDecoder();
+    public static final AcceptedTypeDecoder INSTANCE = new AcceptedTypeDecoder();
 
     @Override
     public Class<Accepted> getTypeClass() {
@@ -58,72 +53,36 @@ public final class AcceptedTypeDecoder extends AbstractDescribedListTypeDecoder<
     }
 
     @Override
-    public Accepted readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final byte encodingCode;
+    protected int getMinListElements() {
+        return 0;
+    }
 
-        try {
-            encodingCode = buffer.readByte();
-        } catch (IndexOutOfBoundsException e) {
-            throw new DecodeEOFException(e);
-        }
+    @Override
+    protected int getMaxListElements() {
+        return 0;
+    }
 
-        switch (encodingCode) {
-            case EncodingCodes.LIST0:
-                break;
-            case EncodingCodes.LIST8:
-                SMALL_LIST_TYPE_DECODER.skipValue(buffer, state);
-                break;
-            case EncodingCodes.LIST32:
-                LARGE_LIST_TYPE_DECODER.skipValue(buffer, state);
-                break;
-            default:
-                throw new DecodeException(
-                    "Expected list encoding but got decoder for type code: " + encodingCode);
-        }
+    @Override
+    protected Accepted readSingle(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(buffer, state);
 
         return Accepted.getInstance();
     }
 
     @Override
-    public Accepted[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final Accepted[] result = new Accepted[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(buffer, state);
-            result[i] = Accepted.getInstance();
-        }
-
-        return result;
-    }
-
-    @Override
-    public Accepted readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        decoder.skipValue(stream, state);
+    protected Accepted readSingle(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(stream, state);
 
         return Accepted.getInstance();
     }
 
     @Override
-    public Accepted[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
+    protected Accepted readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
+    }
 
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final Accepted[] result = new Accepted[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(stream, state);
-            result[i] = Accepted.getInstance();
-        }
-
-        return result;
+    @Override
+    protected Accepted readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
     }
 }

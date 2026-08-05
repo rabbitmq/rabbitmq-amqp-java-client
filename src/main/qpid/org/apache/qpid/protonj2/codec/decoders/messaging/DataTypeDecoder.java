@@ -39,6 +39,8 @@ import org.apache.qpid.protonj2.types.messaging.Data;
  */
 public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
 
+    public static final DataTypeDecoder INSTANCE = new DataTypeDecoder();
+
     private static final Data EMPTY_DATA = new Data((ProtonBuffer) null);
 
     @Override
@@ -74,9 +76,9 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
                 throw new DecodeException("Expected Binary type but found encoding: " + encodingCode);
         }
 
-        if (size > buffer.getReadableBytes()) {
-            throw new DecodeException("Binary data size " + size + " is specified to be greater than the " +
-                                      "amount of data available ("+ buffer.getReadableBytes()+")");
+        if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException("Binary data size " + Integer.toUnsignedLong(size) + " is specified to be greater than the " +
+                                      "amount of data available (" + buffer.getReadableBytes() + ")");
         }
 
         // Use a heap buffer to avoid retaining any pooled buffers for prolonged periods of time.
@@ -94,8 +96,8 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
         final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
         final BinaryTypeDecoder valueDecoder = checkIsExpectedTypeAndCast(BinaryTypeDecoder.class, decoder);
         final Binary[] binaryArray = valueDecoder.readArrayElements(buffer, state, count);
-
         final Data[] dataArray = new Data[count];
+
         for (int i = 0; i < count; ++i) {
             dataArray[i] = new Data(binaryArray[i]);
         }
@@ -105,24 +107,20 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        checkIsExpectedType(BinaryTypeDecoder.class, decoder);
-
-        decoder.skipValue(buffer, state);
+        checkIsExpectedType(BinaryTypeDecoder.class, state.getDecoder().readNextTypeDecoder(buffer, state)).skipValue(buffer, state);
     }
 
     @Override
     public Data readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
         final byte encodingCode = ProtonStreamUtils.readByte(stream);
-        final int size;
+        final int length;
 
         switch (encodingCode) {
             case EncodingCodes.VBIN8:
-                size = ProtonStreamUtils.readByte(stream) & 0xFF;
+                length = ProtonStreamUtils.readByte(stream) & 0xFF;
                 break;
             case EncodingCodes.VBIN32:
-                size = ProtonStreamUtils.readInt(stream);
+                length = ProtonStreamUtils.readInt(stream);
                 break;
             case EncodingCodes.NULL:
                 return EMPTY_DATA;
@@ -130,7 +128,13 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
                 throw new DecodeException("Expected Binary type but found encoding: " + encodingCode);
         }
 
-        return new Data(ProtonStreamUtils.readBytes(stream, size));
+        if (Integer.compareUnsigned(length, state.getMaxBinarySize()) > 0) {
+            throw new DecodeException(String.format(
+                "Binary encoded length is specified to be greater than maximum allowed " +
+                "l:(%d) m:(%d)", Integer.toUnsignedLong(length), state.getMaxBinarySize()));
+        }
+
+        return new Data(ProtonStreamUtils.readBytes(stream, length));
     }
 
     @Override
@@ -138,8 +142,8 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
         final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
         final BinaryTypeDecoder valueDecoder = checkIsExpectedTypeAndCast(BinaryTypeDecoder.class, decoder);
         final Binary[] binaryArray = valueDecoder.readArrayElements(stream, state, count);
-
         final Data[] dataArray = new Data[count];
+
         for (int i = 0; i < count; ++i) {
             dataArray[i] = new Data(binaryArray[i]);
         }
@@ -149,10 +153,6 @@ public final class DataTypeDecoder extends AbstractDescribedTypeDecoder<Data> {
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        checkIsExpectedType(BinaryTypeDecoder.class, decoder);
-
-        decoder.skipValue(stream, state);
+        checkIsExpectedType(BinaryTypeDecoder.class, state.getDecoder().readNextTypeDecoder(stream, state)).skipValue(stream, state);
     }
 }

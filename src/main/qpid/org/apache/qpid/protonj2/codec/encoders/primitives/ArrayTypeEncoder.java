@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.codec.encoders.PrimitiveTypeEncoder;
  */
 public final class ArrayTypeEncoder implements PrimitiveTypeEncoder<Object> {
 
+    public static final ArrayTypeEncoder INSTANCE = new ArrayTypeEncoder();
+
     @Override
     public boolean isArrayType() {
         return true;
@@ -84,8 +86,7 @@ public final class ArrayTypeEncoder implements PrimitiveTypeEncoder<Object> {
             final int startIndex = buffer.getWriteOffset();
 
             // Reserve space for the size and write the count of list elements.
-            buffer.writeInt(0);
-            buffer.writeInt(values.length);
+            buffer.writeLong(values.length);
 
             // Write the arrays as a raw series of arrays accounting for nested arrays
             writeRawArray(buffer, state, values);

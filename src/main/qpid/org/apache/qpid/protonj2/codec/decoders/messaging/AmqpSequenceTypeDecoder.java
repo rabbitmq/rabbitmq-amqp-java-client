@@ -37,6 +37,8 @@ import org.apache.qpid.protonj2.types.messaging.AmqpSequence;
 @SuppressWarnings("rawtypes")
 public final class AmqpSequenceTypeDecoder extends AbstractDescribedTypeDecoder<AmqpSequence> {
 
+    public static final AmqpSequenceTypeDecoder INSTANCE = new AmqpSequenceTypeDecoder();
+
     @Override
     public Class<AmqpSequence> getTypeClass() {
         return AmqpSequence.class;
@@ -68,8 +70,8 @@ public final class AmqpSequenceTypeDecoder extends AbstractDescribedTypeDecoder<
         final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
         final ListTypeDecoder valueDecoder = checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder);
         final List<Object>[] elements = valueDecoder.readArrayElements(buffer, state, count);
+        final AmqpSequence[] array = new AmqpSequence[count];
 
-        AmqpSequence[] array = new AmqpSequence[count];
         for (int i = 0; i < count; ++i) {
             array[i] = new AmqpSequence(elements[i]);
         }
@@ -79,11 +81,7 @@ public final class AmqpSequenceTypeDecoder extends AbstractDescribedTypeDecoder<
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        decoder.skipValue(buffer, state);
+        checkIsExpectedType(ListTypeDecoder.class, state.getDecoder().readNextTypeDecoder(buffer, state)).skipValue(buffer, state);
     }
 
     @SuppressWarnings("unchecked")
@@ -102,8 +100,8 @@ public final class AmqpSequenceTypeDecoder extends AbstractDescribedTypeDecoder<
         final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
         final ListTypeDecoder valueDecoder = checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder);
         final List<Object>[] elements = valueDecoder.readArrayElements(stream, state, count);
+        final AmqpSequence[] array = new AmqpSequence[count];
 
-        AmqpSequence[] array = new AmqpSequence[count];
         for (int i = 0; i < count; ++i) {
             array[i] = new AmqpSequence(elements[i]);
         }
@@ -113,10 +111,6 @@ public final class AmqpSequenceTypeDecoder extends AbstractDescribedTypeDecoder<
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        decoder.skipValue(stream, state);
+        checkIsExpectedType(ListTypeDecoder.class, state.getDecoder().readNextTypeDecoder(stream, state)).skipValue(stream, state);
     }
 }

@@ -20,11 +20,14 @@ import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 
 /**
  * Encoder of AMQP String type values to a byte stream.
  */
 public final class StringTypeEncoder extends AbstractPrimitiveTypeEncoder<String> {
+
+    public static final StringTypeEncoder INSTANCE = new StringTypeEncoder();
 
     @Override
     public Class<String> getTypeClass() {
@@ -33,55 +36,23 @@ public final class StringTypeEncoder extends AbstractPrimitiveTypeEncoder<String
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, String value) {
-        // We are pessimistic and assume larger strings will encode
-        // at the max 4 bytes per character instead of calculating
-        if (value.length() > 64) {
-            writeString(buffer, state, value);
-        } else {
-            writeSmallString(buffer, state, value);
-        }
-    }
-
-    private static void writeSmallString(ProtonBuffer buffer, EncoderState state, String value) {
-        buffer.writeByte(EncodingCodes.STR8);
-        buffer.writeByte((byte) 0);
-
-        int startIndex = buffer.getWriteOffset();
-
-        // Write the full string value
-        state.encodeUTF8(buffer, value);
-
-        // Move back and write the size into the size slot
-        buffer.setByte(startIndex - Byte.BYTES, (byte) (buffer.getWriteOffset() - startIndex));
-    }
-
-    private static void writeString(ProtonBuffer buffer, EncoderState state, String value) {
-        buffer.writeByte(EncodingCodes.STR32);
-        buffer.writeInt(0);
-
-        int startIndex = buffer.getWriteOffset();
-
-        // Write the full string value
-        state.encodeUTF8(buffer, value);
-
-        // Move back and write the size into the size slot
-        buffer.setInt(startIndex - Integer.BYTES, buffer.getWriteOffset() - startIndex);
+        ProtonEncodings.writeString(buffer, state, value);
     }
 
     @Override
     public void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         buffer.writeByte(EncodingCodes.STR32);
+
         for (Object value : values) {
-            // Reserve space for the size
             buffer.writeInt(0);
 
-            int stringStart = buffer.getWriteOffset();
+            final int startIndex = buffer.getWriteOffset();
 
             // Write the full string value
             state.encodeUTF8(buffer, (CharSequence) value);
 
-            // Move back and write the string size
-            buffer.setInt(stringStart - Integer.BYTES, buffer.getWriteOffset() - stringStart);
+            // Move back and write the size into the size slot
+            buffer.setInt(startIndex - Integer.BYTES, buffer.getWriteOffset() - startIndex);
         }
     }
 }

@@ -20,12 +20,11 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslMechanisms;
@@ -34,6 +33,8 @@ import org.apache.qpid.protonj2.types.security.SaslMechanisms;
  * Decoder of AMQP SaslChallenge type values from a byte stream.
  */
 public final class SaslMechanismsTypeDecoder extends AbstractDescribedListTypeDecoder<SaslMechanisms> {
+
+    public static final SaslMechanismsTypeDecoder INSTANCE = new SaslMechanismsTypeDecoder();
 
     private static final int REQUIRED_SASL_MECHANISMS_LIST_ENTRIES = 1;
 
@@ -53,72 +54,36 @@ public final class SaslMechanismsTypeDecoder extends AbstractDescribedListTypeDe
     }
 
     @Override
-    public SaslMechanisms readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected final int getMinListElements() {
+        return REQUIRED_SASL_MECHANISMS_LIST_ENTRIES;
     }
 
     @Override
-    public SaslMechanisms[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final SaslMechanisms[] result = new SaslMechanisms[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected final int getMaxListElements() {
+        return REQUIRED_SASL_MECHANISMS_LIST_ENTRIES;
     }
 
-    private SaslMechanisms readProperties(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected SaslMechanisms readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final SaslMechanisms mechanisms = new SaslMechanisms();
+        final Symbol[] values = state.getDecoder().readMultiple(buffer, state, Symbol.class);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count != REQUIRED_SASL_MECHANISMS_LIST_ENTRIES) {
-            throw new DecodeException("SASL Mechanisms must contain at least one mechanisms entry: " + count);
-        } else {
-            mechanisms.setSaslServerMechanisms(state.getDecoder().readMultiple(buffer, state, Symbol.class));
+        if (values == null) {
+            throw new DecodeException("The mechanisms field cannot be omitted from the SaslMechanisms");
         }
 
-        return mechanisms;
+        return mechanisms.setSaslServerMechanisms(values);
     }
 
     @Override
-    public SaslMechanisms readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public SaslMechanisms[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final SaslMechanisms[] result = new SaslMechanisms[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private SaslMechanisms readProperties(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected SaslMechanisms readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final SaslMechanisms mechanisms = new SaslMechanisms();
+        final Symbol[] values = state.getDecoder().readMultiple(stream, state, Symbol.class);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count != REQUIRED_SASL_MECHANISMS_LIST_ENTRIES) {
-            throw new DecodeException("SASL Mechanisms must contain at least one mechanisms entry: " + count);
-        } else {
-            mechanisms.setSaslServerMechanisms(state.getDecoder().readMultiple(stream, state, Symbol.class));
+        if (values == null) {
+            throw new DecodeException("The mechanisms field cannot be omitted from the SaslMechanisms");
         }
 
-        return mechanisms;
+        return mechanisms.setSaslServerMechanisms(values);
     }
 }

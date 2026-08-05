@@ -320,7 +320,7 @@ final class ProtonSaslClientContext extends ProtonSaslContext implements SaslCli
     private static class ProtonDefaultSaslClientListener implements SaslClientListener {
 
         private static final ProtonBuffer EMPTY_BUFFER = ProtonBufferAllocator.defaultAllocator().allocate(0).convertToReadOnly();
-        private static final Symbol ANONYMOUS = Symbol.valueOf("ANONYMOUS");
+        private static final Symbol ANONYMOUS = Symbol.getSASLSymbol("ANONYMOUS");
 
         @Override
         public void handleSaslMechanisms(SaslClientContext context, Symbol[] mechanisms) {

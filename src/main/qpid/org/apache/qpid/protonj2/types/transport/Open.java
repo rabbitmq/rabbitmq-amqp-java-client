@@ -98,7 +98,7 @@ public final class Open implements Performative {
         return copy;
     }
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Open object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;

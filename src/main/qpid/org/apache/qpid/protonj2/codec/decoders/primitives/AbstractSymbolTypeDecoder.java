@@ -20,11 +20,12 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
-import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
+import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBufferAllocator;
 import org.apache.qpid.protonj2.codec.DecodeException;
 import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
 import org.apache.qpid.protonj2.types.Symbol;
 
 /**
@@ -37,18 +38,18 @@ public abstract class AbstractSymbolTypeDecoder extends AbstractPrimitiveTypeDec
         final int length = readSize(buffer, state);
 
         if (length == 0) {
-            return Symbol.valueOf("");
+            return Symbol.getSymbol("");
         }
 
-        if (length > buffer.getReadableBytes()) {
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
             throw new DecodeException(String.format(
                     "Symbol encoded size %d is specified to be greater than the amount " +
-                    "of data available (%d)", length, buffer.getReadableBytes()));
+                    "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
         }
 
         try (ProtonBuffer symbolBuffer = buffer.copy(buffer.getReadOffset(), length, true)) {
             buffer.advanceReadOffset(length);
-            return Symbol.getSymbol(symbolBuffer, true);
+            return getSymbol(symbolBuffer, true);
         }
     }
 
@@ -77,7 +78,13 @@ public abstract class AbstractSymbolTypeDecoder extends AbstractPrimitiveTypeDec
         final int length = readSize(stream, state);
 
         if (length == 0) {
-            return Symbol.valueOf("");
+            return Symbol.getSymbol("");
+        }
+
+        if (Integer.compareUnsigned(length, state.getMaxSymbolSize()) > 0) {
+            throw new DecodeException(String.format(
+                "Binary encoded length is specified to be greater than maximum allowed " +
+                "l:(%d) m:(%d)", Integer.toUnsignedLong(length), state.getMaxSymbolSize()));
         }
 
         final byte[] symbolBytes = new byte[length];
@@ -88,7 +95,7 @@ public abstract class AbstractSymbolTypeDecoder extends AbstractPrimitiveTypeDec
             throw new DecodeException("Error while reading Symbol payload bytes", ex);
         }
 
-        return Symbol.getSymbol(ProtonBufferAllocator.defaultAllocator().copy(symbolBytes).convertToReadOnly());
+        return getSymbol(ProtonByteArrayBufferAllocator.wrapped(symbolBytes).convertToReadOnly(), false);
     }
 
     /**
@@ -113,15 +120,43 @@ public abstract class AbstractSymbolTypeDecoder extends AbstractPrimitiveTypeDec
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        buffer.advanceReadOffset(readSize(buffer, state));
+        final int length = readSize(buffer, state);
+
+        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException(String.format(
+                "Symbol encoded size %d is specified to be greater than the amount " +
+                "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
+        }
+
+        buffer.advanceReadOffset(length);
     }
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        try {
-            stream.skip(readSize(stream, state));
-        } catch (IOException ex) {
-            throw new DecodeException("Error while reading Symbol payload bytes", ex);
+        final int length = readSize(stream, state);
+
+        if (Integer.compareUnsigned(length, state.getMaxSymbolSize()) > 0) {
+            throw new DecodeException(String.format(
+                "Binary encoded length is specified to be greater than maximum allowed " +
+                "l:(%d) m:(%d)", Integer.toUnsignedLong(length), state.getMaxSymbolSize()));
         }
+
+        ProtonStreamUtils.skipBytes(stream, length);
+    }
+
+    /**
+     * Gets a singleton {@link Symbol} instance that matches the given {@link ProtonBuffer}
+     * byte view of the {@link Symbol}. A subclass can override this to produce the Symbol
+     * singleton from a source other than the default which is the general symbol cache.
+     *
+     * @param buffer
+     * 		The {@link ProtonBuffer} version of the {@link Symbol} value.
+     * @param copyOnCreate
+     * 		Should the provided buffer be copied during creation of a new {@link Symbol}.
+     *
+     * @return a {@link Symbol} that matches the given {@link String}.
+     */
+    protected Symbol getSymbol(ProtonBuffer buffer, boolean copyOnCreate) {
+        return Symbol.getSymbol(buffer, copyOnCreate);
     }
 }

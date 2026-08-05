@@ -17,7 +17,6 @@
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.List;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -30,8 +29,10 @@ import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
 /**
  * Decoder of Zero sized AMQP List values from a byte stream.
  */
-@SuppressWarnings( { "unchecked", "rawtypes" } )
+@SuppressWarnings( { "rawtypes" } )
 public final class List0TypeDecoder extends AbstractPrimitiveTypeDecoder<List> implements ListTypeDecoder {
+
+    public static final List0TypeDecoder INSTANCE = new List0TypeDecoder();
 
     @Override
     public int getTypeCode() {
@@ -39,21 +40,46 @@ public final class List0TypeDecoder extends AbstractPrimitiveTypeDecoder<List> i
     }
 
     @Override
+    public boolean isZeroWidth() {
+        return true;
+    }
+
+    @Override
     public List<Object> readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        return Collections.EMPTY_LIST;
+        state.increaseDepth();
+        try {
+            return List.of();
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public List<Object> readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return Collections.EMPTY_LIST;
+        state.increaseDepth();
+        try {
+            return List.of();
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
+        try {
+            state.increaseDepth();
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
+        try {
+            state.increaseDepth();
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override

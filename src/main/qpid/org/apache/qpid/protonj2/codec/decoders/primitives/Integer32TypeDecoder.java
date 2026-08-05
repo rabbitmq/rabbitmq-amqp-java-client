@@ -16,6 +16,8 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
+import static org.apache.qpid.protonj2.codec.decoders.PrimitiveArrayTypeDecoder.validateArrayConstraints;
+
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -30,6 +32,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  * Decode AMQP Integer values from a byte stream
  */
 public final class Integer32TypeDecoder extends AbstractPrimitiveTypeDecoder<Integer> {
+
+    public static final Integer32TypeDecoder INSTANCE = new Integer32TypeDecoder();
 
     @Override
     public boolean isJavaPrimitive() {
@@ -108,4 +112,29 @@ public final class Integer32TypeDecoder extends AbstractPrimitiveTypeDecoder<Int
         return Integer.BYTES;
     }
 
+    @Override
+    public int[] readPrimitiveArray(ProtonBuffer buffer, DecoderState state, int count) {
+        validateArrayConstraints(count, buffer, state, this);
+
+        final int[] array = new int[count];
+
+        for (int i = 0; i < count; i++) {
+            array[i] = readPrimitiveValue(buffer, state);
+        }
+
+        return array;
+    }
+
+    @Override
+    public int[] readPrimitiveArray(InputStream stream, StreamDecoderState state, int count) {
+        validateArrayConstraints(count, stream, state, this);
+
+        final int[] array = new int[count];
+
+        for (int i = 0; i < count; i++) {
+            array[i] = readPrimitiveValue(stream, state);
+        }
+
+        return array;
+    }
 }

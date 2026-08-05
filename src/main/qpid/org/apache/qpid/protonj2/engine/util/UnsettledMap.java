@@ -36,6 +36,13 @@ import org.apache.qpid.protonj2.types.UnsignedInteger;
  * A specialized collection like entity that is used to keep track of unsettled
  * incoming and outgoing deliveries for AMQP links and the sessions that manage
  * those links.
+ * <p>
+ * While this class implements the {@link Map} interface it does not fully behave
+ * as a standard map as it solves the issue of tracking delivery IDs which always
+ * increase until such time as the unsigned integer value used to represents them
+ * overflows. It is possible (although unlikely) for the same ID to exist for multiple
+ * deliveries if an older delivery exists in the Map and the delivery IDs overflow and
+ * the same value is produced once again.
  *
  * @param <Delivery> The delivery type being tracker (incoming or outgoing)
  */
@@ -45,10 +52,15 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
         int getDeliveryId(Delivery delivery);
     }
 
-    private final double BUCKET_LOAD_FACTOR_MULTIPLIER = 0.30;
+    private static final double BUCKET_LOAD_FACTOR_MULTIPLIER = 0.25;
 
     private static final int UNSETTLED_INITIAL_BUCKETS = 2;
     private static final int UNSETTLED_BUCKET_SIZE = 256;
+
+    // Allow the free list to grow as needed but establish a maximum size before
+    // recycled buckets are allowed to be garbage collected once no longer used.
+    private static final int FREE_LIST_GROWTH_AMOUNT = 2;
+    private static final int FREE_LIST_SIZE_LIMIT = 8;
 
     // Always full buckets used in operations that needs unwritable bounds
     private final UnsettledBucket<Delivery> ALWAYS_FULL_BUCKET = new UnsettledBucket<>();
@@ -57,11 +69,14 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
     private final int bucketCapacity;
     private final int bucketLowWaterMark;
 
-    private int totalEntries;
+    private int size;
     private int modCount;
+    private int generations;
+    private int freeListSize;
 
-    private int current;
-    private UnsettledBucket<Delivery>[] buckets;
+    private UnsettledBucket<Delivery> head; // Where new puts begin from
+    private UnsettledBucket<Delivery> tail; // Where all gets start searching from
+    private UnsettledBucket<Delivery> free; // Stack of free buckets
 
     public UnsettledMap(UnsettledGetDeliveryId<Delivery> idSupplier) {
         this(idSupplier, UNSETTLED_INITIAL_BUCKETS, UNSETTLED_BUCKET_SIZE);
@@ -71,11 +86,11 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
         this(idSupplier, initialBuckets, UNSETTLED_BUCKET_SIZE);
     }
 
-    @SuppressWarnings("unchecked")
     public UnsettledMap(UnsettledGetDeliveryId<Delivery> idSupplier, int initialBuckets, int bucketSize) {
         this.deliveryIdSupplier = idSupplier;
         this.bucketCapacity = bucketSize;
         this.bucketLowWaterMark = (int) (bucketSize * BUCKET_LOAD_FACTOR_MULTIPLIER);
+        this.freeListSize = initialBuckets;
 
         if (bucketSize < 1) {
             throw new IllegalArgumentException("The bucket size must be greater than zero");
@@ -85,9 +100,12 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
             throw new IllegalArgumentException("The initial number of buckets must be at least 1");
         }
 
-        buckets = new UnsettledBucket[initialBuckets];
-        for (int i = 0; i < buckets.length; ++i) {
-            buckets[i] = new UnsettledBucket<>(bucketSize, deliveryIdSupplier);
+        // All initial buckets go onto the free list
+        free = new UnsettledBucket<Delivery>(bucketCapacity);
+        for (int i = 1; i < initialBuckets; ++i) {
+            UnsettledBucket<Delivery> newFree = new UnsettledBucket<>(bucketCapacity);
+            newFree.prev = free;
+            free = newFree;
         }
     }
 
@@ -98,11 +116,18 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
     @Override
     public void clear() {
-        for (int i = 0; i < buckets.length && buckets[i].isReadable(); ++i) {
-            buckets[i].clear(); // Ensure any referenced deliveries are cleared
+        for (UnsettledBucket<Delivery> bucket = tail; bucket != null; bucket = bucket.next) {
+            bucket.clear();
+            if (freeListSize < FREE_LIST_SIZE_LIMIT) {
+                bucket.prev = free;
+                free = bucket;
+                freeListSize++;
+            }
         }
 
-        current = totalEntries = 0;
+        head = tail = null;
+        size = 0;
+        modCount++;
     }
 
     @Override
@@ -123,26 +148,25 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
      * @param delivery
      * 		The delivery that is being added to the tracker
      *
-     * @return null in all cases as this tracker does not check for duplicates.
+     * @return <code>null</code> in all cases as this Map type does not check for duplicates.
      */
     public Delivery put(int deliveryId, Delivery delivery) {
-        if (!buckets[current].put(deliveryId, delivery)) {
-            // Always move to next bucket or create one so that current is always
-            // position on a writable bucket.
-            if (++current == buckets.length) {
-                // Create a new bucket of entries since we don't have any more space free yet
-                // and update the chain with the newly create bucket. We disregard the max segments
-                // here since we always need the extra space regardless of how many pending unsettled
-                // deliveries there are.
-                buckets = Arrays.copyOf(buckets, current + 1);
-                buckets[current] = new UnsettledBucket<>(bucketCapacity, deliveryIdSupplier);
-            }
+        UnsettledBucket<Delivery> bucket = this.head;
 
-            // Moved on after overflow so we know this one will work.
-            buckets[current].put(deliveryId, delivery);
+        if (bucket != null) {
+            if (Integer.compareUnsigned(deliveryId, bucket.highestDeliveryId) <= 0) {
+                generations = Math.max(0, generations + 1);
+                bucket = advanceHead();
+            } else if (bucket.getFreeSpace() == 0) {
+                bucket = advanceHead();
+            }
+        } else {
+            bucket = advanceHead();
         }
 
-        totalEntries++;
+        bucket.generation = generations;
+        bucket.put(deliveryId, delivery);
+        size++;
         modCount++;
 
         return null;
@@ -150,71 +174,74 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
     @Override
     public int size() {
-        return totalEntries;
+        return size;
     }
 
     @Override
     public boolean isEmpty() {
-        return totalEntries == 0;
+        return size == 0;
     }
 
     @Override
     public Delivery get(Object key) {
-        return get(Number.class.cast(key).intValue());
+        if (key instanceof Number) {
+            return get(((Number) key).intValue());
+        } else {
+            return null;
+        }
+    }
+
+    public Delivery get(UnsignedInteger key) {
+        return get(key.intValue());
     }
 
     public Delivery get(int deliveryId) {
-        if (totalEntries > 0) {
-            // Search every bucket because delivery IDs can wrap around, but we can
-            // stop at the first empty bucket as all buckets following it must also
-            // be empty buckets.
-            for (int i = 0; i <= current; ++i) {
-                if (buckets[i].isInRange(deliveryId)) {
-                    final Delivery result = buckets[i].get(deliveryId);
-                    if (result != null) {
-                        return result;
-                    }
-                }
-            }
-        }
-
-        return null;
+        return findDelivery(deliveryId, false);
     }
 
     @Override
     public Delivery remove(Object key) {
-        return removeValue(Number.class.cast(key).intValue());
+        if (key instanceof Number) {
+            return remove(((Number) key).intValue());
+        } else {
+            return null;
+        }
+    }
+
+    public Delivery remove(UnsignedInteger key) {
+        return remove(key.intValue());
     }
 
     public Delivery remove(int deliveryId) {
-        return removeValue(deliveryId);
+        return findDelivery(deliveryId, true);
     }
 
     @Override
     public boolean containsKey(Object key) {
-        return containsKey(Number.class.cast(key).intValue());
+        if (key instanceof Number) {
+            return containsKey(((Number) key).intValue());
+        } else {
+            return false;
+        }
     }
 
-    public boolean containsKey(int key) {
-        if (totalEntries > 0) {
-            for (int i = 0; i <= current; ++i) {
-                if (buckets[i].isInRange(key)) {
-                    if (buckets[i].get(key) != null) {
-                        return true;
-                    }
-                }
-            }
-        }
+    public boolean containsKey(UnsignedInteger key) {
+        return containsKey(key.intValue());
+    }
 
-        return false;
+    public boolean containsKey(int deliveryId) {
+        return findDelivery(deliveryId, false) != null;
     }
 
     @Override
     public boolean containsValue(Object value) {
-        if (totalEntries > 0 && value != null) {
-            for (int i = 0; i <= current; ++i) {
-                for (int j = buckets[i].readOffset; j < buckets[i].writeOffset; ++j) {
-                    if (value.equals(buckets[i].entryAt(j))) {
+        if (value != null && size > 0) {
+            for (UnsettledBucket<Delivery> bucket = tail; bucket != null; bucket = bucket.next) {
+                final int writeOffset = bucket.writeOffset;
+                final Delivery[] deliveries = bucket.deliveries;
+
+                for (int j = bucket.readOffset; j < writeOffset; ++j) {
+                    if (value.equals(deliveries[j])) {
                         return true;
                     }
                 }
@@ -234,50 +261,72 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
     public void forEach(Consumer<Delivery> action) {
         Objects.requireNonNull(action);
 
-        if (totalEntries > 0) {
-            for (int i = 0; i <= current; ++i) {
-                for (int j = buckets[i].readOffset; j < buckets[i].writeOffset; ++j) {
-                    action.accept(buckets[i].entryAt(j));
-                }
+        if (size == 0) {
+            return;
+        }
+
+        for (UnsettledBucket<Delivery> bucket = tail; bucket != null; bucket = bucket.next) {
+            final int writeOffset = bucket.writeOffset;
+            final Delivery[] deliveries = bucket.deliveries;
+
+            for (int j = bucket.readOffset; j < writeOffset; ++j) {
+                action.accept(deliveries[j]);
             }
         }
     }
 
     /**
-     * Visits each entry within the given range and invokes the provided action
-     * on each delivery in the tracker.
+     * Visits each entry within the given range and invokes the provided action on
+     * each delivery in the tracker. The lower and upper bounds are limits which are
+     * not exclusive meaning entries within this range are visited regards of there
+     * being an exact match on the lower and upper boundaries.
      *
      * @param first
-     * 		The first entry to visit.
+     * 		The lower bound of the first entry to visit.
      * @param last
-     * 		The last entry to visit.
+     * 		The upper bound of the last entry to visit.
      * @param action
      * 		The action to invoke on each visited entry.
      */
     public void forEach(int first, int last, Consumer<Delivery> action) {
         Objects.requireNonNull(action);
 
-        if (totalEntries == 0) {
+        if (size == 0) {
             return;
         }
 
+        int readStart = -1;
         boolean foundFirst = false;
         boolean foundLast = false;
 
-        for (int i = 0; i <= current && !foundLast; ++i) {
-            if (!foundFirst && !buckets[i].isInRange(first)) {
-                continue;
+        for (UnsettledBucket<Delivery> bucket = tail; bucket != null && !foundLast; bucket = bucket.next) {
+            final int writeOffset = bucket.writeOffset;
+
+            readStart = bucket.readOffset;
+
+            if (!foundFirst && bucket.isCapturedByRange(first, last))  {
+                final int result = bucket.search(first);
+                final int ceiling = result >= 0 ? result : ~result;
+
+                if (ceiling < writeOffset) {
+                    foundFirst = true;
+                    readStart = ceiling;
+                }
             }
 
-            for (int j = buckets[i].readOffset; j < buckets[i].writeOffset && !foundLast; ++j) {
-                final Delivery delivery = buckets[i].entryAt(j);
-                final int deliveryId = deliveryIdSupplier.getDeliveryId(delivery);
+            if (foundFirst) {
+                final Delivery[] deliveries = bucket.deliveries;
+                final int[] deliveryIds = bucket.deliveryIds;
 
-                foundFirst = foundFirst || deliveryId == first;
-                foundLast = deliveryId == last;
+                for (int j = readStart; j < writeOffset && !foundLast;) {
+                    final int candidate = deliveryIds[j];
+                    final int comparison = Integer.compareUnsigned(candidate, last);
 
-                if (foundFirst) {
-                    action.accept(delivery);
+                    if (comparison <= 0) {
+                        action.accept(deliveries[j++]);
+                    }
+
+                    foundLast = comparison >= 0;
                 }
             }
         }
@@ -298,7 +347,7 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
     public void removeEach(int first, int last, Consumer<Delivery> action) {
         Objects.requireNonNull(action);
 
-        if (totalEntries == 0) {
+        if (size == 0) {
             return;
         }
 
@@ -307,74 +356,58 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
         int removeStart = 0;
         int removeEnd = 0;
 
-        for (int i = 0; i <= current && !foundLast; ++i) {
-            if (!foundFirst && !buckets[i].isInRange(first)) {
-                continue;
-            }
+        for (UnsettledBucket<Delivery> bucket = tail; bucket != null && !foundLast; ) {
+            final int writeOffset = bucket.writeOffset;
 
-            final UnsettledBucket<Delivery> bucket = buckets[i];
+            removeStart = bucket.readOffset;
 
-            for (int j = removeStart = removeEnd = bucket.readOffset; j < bucket.writeOffset && !foundLast; ) {
-                final Delivery delivery = bucket.entryAt(j);
-                final int deliveryId = deliveryIdSupplier.getDeliveryId(delivery);
+            if (!foundFirst && bucket.isCapturedByRange(first, last))  {
+                final int result = bucket.search(first);
+                final int ceiling = result >= 0 ? result : ~result;
 
-                foundFirst = foundFirst || deliveryId == first;
-                foundLast = deliveryId == last;
-
-                if (foundFirst) {
-                    action.accept(delivery);
-                    removeEnd = ++j;
-                } else {
-                    removeStart = removeEnd = ++j;
+                if (ceiling < writeOffset) {
+                    foundFirst = true;
+                    removeStart = ceiling;
                 }
             }
 
-            // We found first so this iteration did clear some elements from the current bucket
-            // and we need to check that this removal cleared a full bucket which means the index
-            // needs to shift back one since we will have recycled the empty bucket. When the last
-            // index is found we should also attempt to compact the bucket with the previous one
-            // to reduce fragmentation.
             if (foundFirst) {
-                i = removeRange(i, removeStart, removeEnd, foundLast) ? --i : i;
+                final Delivery[] deliveries = bucket.deliveries;
+                final int[] deliveryIds = bucket.deliveryIds;
+
+                for (removeEnd = removeStart; removeEnd < writeOffset && !foundLast;) {
+                    final int candidate = deliveryIds[removeEnd];
+                    final int comparison = Integer.compareUnsigned(candidate, last);
+
+                    if (comparison <= 0) {
+                        action.accept(deliveries[removeEnd++]);
+                    }
+
+                    foundLast = comparison >= 0;
+                }
+
+                bucket = removeRange(bucket, removeStart, removeEnd, foundLast);
+            } else {
+                bucket = bucket.next;
             }
         }
-    }
-
-    private boolean removeRange(int bucketIndex, int start, int end, boolean compact) {
-        final UnsettledBucket<Delivery> bucket = buckets[bucketIndex];
-        final int removals = end - start;
-
-        this.totalEntries -= removals;
-        this.modCount++;
-
-        if (removals == bucket.entries) {
-            return recycleBucket(bucketIndex);
-        } else {
-            System.arraycopy(bucket.deliveries, end, bucket.deliveries, start, bucket.writeOffset - end);
-            Arrays.fill(bucket.deliveries, bucket.writeOffset - removals, bucket.writeOffset, null);
-
-            bucket.writeOffset = bucket.writeOffset - removals;
-            bucket.entries -= removals;
-            bucket.highestDeliveryId = bucket.entryIdAt(bucket.writeOffset - 1);
-
-            if (compact) {
-                return tryCompact(bucketIndex);
-            }
-        }
-
-        return false;
     }
 
     @Override
     public void forEach(BiConsumer<? super UnsignedInteger, ? super Delivery> action) {
         Objects.requireNonNull(action);
 
-        if (totalEntries > 0) {
-            for (int i = 0; i <= current; ++i) {
-                for (int j = buckets[i].readOffset; j < buckets[i].writeOffset; ++j) {
-                    final Delivery delivery = buckets[i].entryAt(j);
-                    action.accept(UnsignedInteger.valueOf(deliveryIdSupplier.getDeliveryId(delivery)), delivery);
-                }
+        if (size == 0) {
+            return;
+        }
+
+        for (UnsettledBucket<Delivery> bucket = tail; bucket != null; bucket = bucket.next) {
+            final int writeOffset = bucket.writeOffset;
+            final Delivery[] deliveries = bucket.deliveries;
+            final int[] deliveryIds = bucket.deliveryIds;
+
+            for (int j = bucket.readOffset; j < writeOffset; ++j) {
+                action.accept(UnsignedInteger.valueOf(deliveryIds[j]), deliveries[j]);
             }
         }
     }
@@ -421,10 +454,10 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
         }
 
         try {
-            for (int i = 0; i <= current; ++i) {
-                for (int j = buckets[i].readOffset; j < buckets[i].writeOffset; ++j) {
-                    final Delivery delivery = buckets[i].entryAt(j);
-                    if (!delivery.equals(m.get(deliveryIdSupplier.getDeliveryId(delivery)))) {
+            for (UnsettledBucket<Delivery> bucket = tail; bucket != null; bucket = bucket.next) {
+                for (int j = bucket.readOffset; j < bucket.writeOffset; ++j) {
+                    final Delivery delivery = bucket.deliveries[j];
+                    if (!delivery.equals(m.get(bucket.deliveryIds[j]))) {
                         return false;
                     }
                 }
@@ -438,225 +471,401 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
     @Override
     public String toString() {
-        return "UnsettledMap: { size=" + totalEntries +
-                              " buckets=" + buckets.length +
+        return "UnsettledMap: { size=" + size +
                               " bucket-capacity=" + bucketCapacity + " }";
     }
 
     //----- Internal UnsettledMap API
 
-    private boolean recycleBucket(int index) {
-        buckets[index].clear();  // Drop all content and reset as empty bucket
-
-        // If the current bucket is cleared then we can just start writing in it again
-        if (index < current) {
-            current--;
-            final int next = index + 1;
-            UnsettledBucket<Delivery> recycled = buckets[index];
-            System.arraycopy(buckets, next, buckets, index, buckets.length - next);
-            buckets[buckets.length - 1] = recycled;
-            return true;
+    private Delivery findDelivery(int deliveryId, boolean remove) {
+        if (size == 0) {
+            return null;
         }
 
-        return false;
+        final boolean hasNotOverflowed = generations == 0;
+        final int globalLow = tail.lowestDeliveryId;
+        final int globalHigh = head.highestDeliveryId;
+
+        if (hasNotOverflowed) {
+            // When there is no overflow in the map we can fast path check for the delivery
+            // being outside the global range and exit early. All other cases of overflow
+            // requires some caution and we search all the buckets for a match.
+            if (Integer.compareUnsigned(deliveryId, globalLow) < 0 ||
+                Integer.compareUnsigned(deliveryId, globalHigh) > 0) {
+                return null;
+            }
+        }
+
+        final UnsettledBucket<Delivery> tail = this.tail;
+
+        if (tail.isInRange(deliveryId)) {
+            final int deliveryIndex = tail.search(deliveryId);
+            if (deliveryIndex >= 0) {
+                return remove ? getAndRemove(tail, deliveryIndex) : tail.deliveries[deliveryIndex];
+            }
+        }
+
+        if (head == tail) {
+            return null;
+        }
+
+        if (hasNotOverflowed) {
+            final int distFromTail = deliveryId - globalLow;
+            final int distToHead = globalHigh - deliveryId;
+
+            // We can only search from head if there are no active overflows, which is indicated
+            // by generations being greater than zero.
+            if (Integer.compareUnsigned(distFromTail, distToHead) > 0) {
+                return searchBackwards(deliveryId, head, remove);
+            }
+        }
+
+        return searchForwards(deliveryId, tail.next, remove, hasNotOverflowed);
     }
 
-    private Delivery removeValue(int deliveryId) {
-        if (totalEntries > 0) {
-            Delivery result = null;
+    private Delivery searchForwards(int deliveryId, UnsettledBucket<Delivery> target, boolean remove, boolean canStopEarly) {
+        for (; target != null; target = target.next) {
+            if (canStopEarly && Integer.compareUnsigned(target.lowestDeliveryId, deliveryId) > 0) {
+                break;
+            }
 
-            for (int i = 0; i <= current; ++i) {
-                if (buckets[i].isInRange(deliveryId) && (result = buckets[i].remove(deliveryId)) != null) {
-                    totalEntries--;
-                    modCount++;
+            if (Integer.compareUnsigned(deliveryId, target.lowestDeliveryId) < 0) {
+                continue;
+            }
 
-                    if (buckets[i].entries <= bucketLowWaterMark) {
-                        tryCompact(i);
-                    }
+            if (Integer.compareUnsigned(deliveryId, target.highestDeliveryId) > 0) {
+                continue;
+            }
 
-                    return result;
-                }
+            final int index = target.search(deliveryId);
+
+            if (index >= 0) {
+                return remove ? getAndRemove(target, index) : target.deliveries[index];
             }
         }
 
         return null;
     }
 
-    // Called from iteration APIs which requires the method to return the location of the next
-    // entry once removal and possible bucket compaction is completed.
-    private long removeAt(int bucketIndex, int bucketEntry) {
-        if (bucketIndex >= buckets.length || bucketEntry >= UNSETTLED_BUCKET_SIZE) {
-            throw new IndexOutOfBoundsException(String.format(
-                "Cannot remove an entry from segment %d at index %d which is outside the tracked bounds", bucketIndex, bucketEntry));
+    private Delivery searchBackwards(int deliveryId, UnsettledBucket<Delivery> target, boolean remove) {
+        for (; target != null; target = target.prev) {
+            if (Integer.compareUnsigned(target.highestDeliveryId, deliveryId) < 0) {
+                break;
+            }
+
+            if (Integer.compareUnsigned(deliveryId, target.lowestDeliveryId) < 0) {
+                continue;
+            }
+
+            if (Integer.compareUnsigned(deliveryId, target.highestDeliveryId) > 0) {
+                continue;
+            }
+
+            final int index = target.search(deliveryId);
+
+            if (index >= 0) {
+                return remove ? getAndRemove(target, index) : target.deliveries[index];
+            }
         }
 
-        final UnsettledBucket<Delivery> bucket = buckets[bucketIndex];
+        return null;
+    }
 
-        bucket.removeAt(bucketEntry);
-        totalEntries--;
+    private Delivery getAndRemove(UnsettledBucket<Delivery> bucket, int index) {
+        final Delivery delivery = bucket.deliveries[index];
+
+        bucket.removeIndex(index);
+
+        size--;
         modCount++;
 
-        long result = -1;
+        if (bucket.entries <= bucketLowWaterMark) {
+            tryCompact(bucket);
+        }
+
+        return delivery;
+    }
+
+    private UnsettledBucket<Delivery> advanceHead() {
+        if (free == null) {
+            for (int i = 0; i < FREE_LIST_GROWTH_AMOUNT; i++) {
+                UnsettledBucket<Delivery> bucket = new UnsettledBucket<Delivery>(bucketCapacity);
+
+                bucket.prev = free;
+                free = bucket;
+            }
+
+            freeListSize = FREE_LIST_GROWTH_AMOUNT;
+        }
+
+        // Pop a bucket off the free list
+        UnsettledBucket<Delivery> popped = free;
+        free = popped.prev;
+        freeListSize--;
+
+        if (head == null) {
+            popped.prev = null;
+            head = popped;
+            tail = popped;
+        } else if (head == tail) {
+            head = popped;
+            head.prev = tail;
+            tail.next = head;
+        } else {
+            head.next = popped;
+            popped.prev = head;
+            head = popped;
+        }
+
+        return head;
+    }
+
+    private UnsettledBucket<Delivery> removeRange(UnsettledBucket<Delivery> bucket, int start, int end, boolean compact) {
+        final int removals = end - start;
+        final UnsettledBucket<Delivery> next = bucket.next;
+
+        this.size -= removals;
+        this.modCount++;
+
+        if (removals == bucket.entries) {
+            recycleBucket(bucket);
+        } else {
+            System.arraycopy(bucket.deliveries, end, bucket.deliveries, start, bucket.writeOffset - end);
+            System.arraycopy(bucket.deliveryIds, end, bucket.deliveryIds, start, bucket.writeOffset - end);
+            Arrays.fill(bucket.deliveries, bucket.writeOffset - removals, bucket.writeOffset, null);
+
+            bucket.writeOffset = bucket.writeOffset - removals;
+            bucket.entries -= removals;
+            bucket.highestDeliveryId = bucket.deliveryIds[bucket.writeOffset - 1];
+            bucket.lowestDeliveryId = bucket.deliveryIds[bucket.readOffset];
+
+            if (compact) {
+                tryCompact(bucket);
+            }
+        }
+
+        return next;
+    }
+
+    private void recycleBucket(UnsettledBucket<Delivery> bucket) {
+        final UnsettledBucket<Delivery> bucketNext = bucket.next;
+        final UnsettledBucket<Delivery> bucketPrev = bucket.prev;
+
+        final int nextGeneration = bucketNext == null ? -1 : bucketNext.generation;
+        final int prevGeneration = bucketPrev == null ? -1 : bucketPrev.generation;
+
+        // This is the last of its generation so we decrease the tracked generations which can
+        // allow search operations to optimize if they know there isn't any overflow in the map
+        // when they are running.
+        if (prevGeneration != bucket.generation && nextGeneration != bucket.generation) {
+            generations = Math.max(0, generations - 1);
+        }
+
+        if (bucket == head) {
+            head = bucketPrev;
+        }
+
+        if (bucket == tail) {
+            tail = bucketNext;
+        }
+
+        if (bucketNext != null) {
+            bucketNext.prev = bucketPrev;
+        }
+
+        if (bucketPrev != null) {
+            bucketPrev.next = bucketNext;
+        }
+
+        bucket.clear();  // Drop all content and reset as empty bucket
+
+        if (freeListSize < FREE_LIST_SIZE_LIMIT) {
+            bucket.prev = free;
+            free = bucket;
+            freeListSize++;
+        }
+    }
+
+    // Called from iteration APIs which requires the method to return the location of the next
+    // entry once removal and possible bucket compaction is completed.
+    private IteratorRemoveResult<Delivery> removeAt(UnsettledBucket<Delivery> bucket, int bucketEntry) {
+        final int entriesRead = bucketEntry - bucket.readOffset; // compute now before entries shift
+
+        bucketEntry = bucket.removeIndex(bucketEntry);
+        size--;
+        modCount++;
+
+        IteratorRemoveResult<Delivery> result = null;
 
         if (bucket.isReadable()) {
-            final int nextBucketIndex = bucketIndex + 1;
-            final int prevBucketIndex = bucketIndex - 1;
+            final UnsettledBucket<Delivery> next = bucket.next;
+            final UnsettledBucket<Delivery> prev = bucket.prev;
 
-            final UnsettledBucket<Delivery> nextBucket =
-                bucketIndex == current || Integer.compareUnsigned(bucket.highestDeliveryId, buckets[nextBucketIndex].lowestDeliveryId) > 0 ?
-                    ALWAYS_FULL_BUCKET : buckets[nextBucketIndex];
-            final UnsettledBucket<Delivery> prevBucket =
-                bucketIndex == 0 || Integer.compareUnsigned(bucket.lowestDeliveryId, buckets[prevBucketIndex].highestDeliveryId) < 0 ?
-                    ALWAYS_FULL_BUCKET : buckets[prevBucketIndex];
+            final UnsettledBucket<Delivery> nextBucket = (bucket == head || next == null) ||
+                Integer.compareUnsigned(bucket.highestDeliveryId, next.lowestDeliveryId) >= 0 ? ALWAYS_FULL_BUCKET : next;
+            final UnsettledBucket<Delivery> prevBucket = (bucket == tail || prev == null) ||
+                Integer.compareUnsigned(bucket.lowestDeliveryId, prev.highestDeliveryId) <= 0 ? ALWAYS_FULL_BUCKET : prev;
 
             // As soon as compaction is possible move elements from this bucket into previous and next
             // which reduces search times as there are fewer buckets to traverse/
             if (nextBucket.getFreeSpace() + prevBucket.getFreeSpace() >= bucket.entries) {
                 final int toCopyBackward = Math.min(prevBucket.getFreeSpace(), bucket.entries);
-                final int nextEntryOffset = ++bucketEntry - (bucket.readOffset + toCopyBackward);
-
-                if (nextEntryOffset < 0) {
-                    // Moved into the previous bucket so the index being negative
-                    // give us the located when added to the previous write offset
-                    result = (long) (prevBucketIndex) << 32;
-                    result |= prevBucket.writeOffset + nextEntryOffset;
-                } else if (nextBucket.entries + (bucket.entries - toCopyBackward) > 0) {
-                    // Moved into the next bucket gives of the raw index so long
-                    // as we compact entries to zero (otherwise it is the read offset
-                    result = (long) bucketIndex << 32;
-                    result |= nextEntryOffset;
-                }
+                final int readOffset = toCopyBackward - entriesRead;
 
                 doCompaction(bucket, prevBucket, nextBucket);
-                recycleBucket(bucketIndex);
+
+                recycleBucket(bucket);
+
+                if (readOffset > 0) {
+                    result = new IteratorRemoveResult<Delivery>(prevBucket, prevBucket.writeOffset - readOffset);
+                } else {
+                    result = new IteratorRemoveResult<Delivery>(nextBucket, nextBucket.readOffset - readOffset);
+                }
             } else {
-                // If the element removed is not the last in this bucket then the next is just
-                // the next element otherwise it is the first element of the next bucket if it
-                // non-empty otherwise we reached the end of the elements.
-                if (++bucketEntry < bucket.writeOffset) {
-                    result = (long) bucketIndex << 32;
-                    result |= bucketEntry;
-                } else if (nextBucketIndex <= current && buckets[nextBucketIndex].entries > 0) {
-                    result = (long) nextBucketIndex << 32;
-                    result |= buckets[nextBucketIndex].readOffset;
+                // If there is more to read in the current bucket we can just choose the
+                // next element to read, otherwise we must move into the next bucket assuming
+                // we aren't at the end of the head bucket since the next bucket could be the
+                // tail bucket. We need to check though that the next bucket is readable as it
+                // could be the head bucket but there could be nothing in there.
+                if (bucketEntry < bucket.writeOffset) {
+                    result = new IteratorRemoveResult<Delivery>(bucket, bucketEntry);
+                } else if (bucket != head) {
+                    result = new IteratorRemoveResult<Delivery>(nextBucket, nextBucket.readOffset);
                 }
             }
         } else {
-            recycleBucket(bucketIndex);
+            final UnsettledBucket<Delivery> next = bucket.next;
 
-            // The bucket was empty and will be recycled shifting down all buckets following it and if
-            // there is a next non-empty bucket then the next entry is the first entry in that bucket.
-            if (bucketIndex <= current && buckets[bucketIndex].entries > 0) {
-                result = (long) bucketIndex << 32;
-                result |= buckets[bucketIndex].readOffset;
+            // The bucket wasn't head so we either need to move ahead one slot or
+            // stay where we are depending on the outcome of recycle. The only case
+            // where we stay on the current index is if head retracts as the next
+            // bucket is now in the slot slot we just recycle.
+            recycleBucket(bucket);
+
+            if (next != null) {
+                result = new IteratorRemoveResult<Delivery>(next, next.readOffset);
             }
         }
 
         return result;
     }
 
+    // This method is called knowing that there is enough space either in front of, or behind the target
+    // bucket to accommodate all its entries so there are no checks here to validate that assumption.
+    // We do not clear or update the actual bucket state here but instead allow the natural cleanup
+    // of the recycle method handle that for us.
     private final void doCompaction(UnsettledBucket<Delivery> bucket, UnsettledBucket<Delivery> prev, UnsettledBucket<Delivery> next) {
-        if (prev.getFreeSpace() > 0) {
-            final int toCopy = Math.min(bucket.entries, prev.getFreeSpace());
+        final Object[] srcDeliveries = bucket.deliveries;
+        final int[] srcDeliveryIds = bucket.deliveryIds;
 
-            // We always compact to zero which makes some of the other updates simpler and
-            // can allow for easier compaction in the future.
-            if (prev.readOffset != 0) {
+        int srcEntries = bucket.entries;
+        int srcReadOffset = bucket.readOffset;
+
+        if (prev.getFreeSpace() > 0) {
+            final int toCopy = Math.min(srcEntries, prev.getFreeSpace());
+            final int prevTailSpace = prev.deliveries.length - prev.writeOffset;
+
+            if (prevTailSpace < toCopy && prev.readOffset != 0) {
+                // Not enough space at the end of the previous bucket arrays so we will compact to
+                // zero if not already there and then copy what we can into that bucket.
                 System.arraycopy(prev.deliveries, prev.readOffset, prev.deliveries, 0, prev.entries);
+                System.arraycopy(prev.deliveryIds, prev.readOffset, prev.deliveryIds, 0, prev.entries);
                 if (prev.writeOffset > prev.entries + toCopy) {
                     // Ensure no dangling entries after compaction
-                    Arrays.fill(prev.deliveries, prev.entries, prev.writeOffset, null);
+                    Arrays.fill(prev.deliveries, prev.entries + toCopy, prev.writeOffset, null);
                 }
 
                 prev.writeOffset -= prev.readOffset;
                 prev.readOffset = 0;
             }
 
-            System.arraycopy(bucket.deliveries, bucket.readOffset, prev.deliveries, prev.writeOffset, toCopy);
+            System.arraycopy(srcDeliveries, srcReadOffset, prev.deliveries, prev.writeOffset, toCopy);
+            System.arraycopy(srcDeliveryIds, srcReadOffset, prev.deliveryIds, prev.writeOffset, toCopy);
 
             prev.entries += toCopy;
-            prev.writeOffset = prev.entries;
-            prev.highestDeliveryId = prev.entryIdAt(prev.writeOffset - 1);
+            prev.writeOffset += toCopy;
+            prev.highestDeliveryId = prev.deliveryIds[prev.writeOffset - 1];
 
-            bucket.entries -= toCopy;
-            bucket.writeOffset -= toCopy;
-            bucket.readOffset += toCopy;
+            srcEntries -= toCopy;
+            srcReadOffset += toCopy;
         }
 
         // We didn't get them all into the previous bucket but we know that if we are
         // here then there must be space ahead to accept the rest as we already checked.
-        if (bucket.entries > 0) {
-            if (next.readOffset != bucket.entries) {
-                System.arraycopy(next.deliveries, next.readOffset, next.deliveries, bucket.entries, next.entries);
-                if (next.readOffset < bucket.entries) {
-                    // Ensure no dangling entries after compaction
-                    Arrays.fill(next.deliveries, bucket.entries + next.entries, next.deliveries.length, null);
+        if (srcEntries > 0) {
+            if (next.entries != 0) {
+                if (next.readOffset < srcEntries) {
+                    System.arraycopy(next.deliveries, next.readOffset, next.deliveries, srcEntries, next.entries);
+                    System.arraycopy(next.deliveryIds, next.readOffset, next.deliveryIds, srcEntries, next.entries);
+
+                    next.readOffset = 0;
+                    next.writeOffset = srcEntries + next.entries;
+                } else {
+                    next.readOffset -= srcEntries;
                 }
+            } else {
+                next.writeOffset = srcEntries;
             }
 
-            System.arraycopy(bucket.deliveries, bucket.readOffset, next.deliveries, 0, bucket.entries);
+            System.arraycopy(srcDeliveries, srcReadOffset, next.deliveries, next.readOffset, srcEntries);
+            System.arraycopy(srcDeliveryIds, srcReadOffset, next.deliveryIds, next.readOffset, srcEntries);
 
-            next.readOffset = 0;
-            next.entries += bucket.entries;
-            next.writeOffset = next.entries;
-            next.lowestDeliveryId = next.entryIdAt(0);
-            // We set this since the next bucket could be empty in some cases so it would
-            // need to be initialized.
-            next.highestDeliveryId = next.entryIdAt(next.writeOffset - 1);
+            next.entries += srcEntries;
+            next.lowestDeliveryId = next.deliveryIds[next.readOffset];
+            next.highestDeliveryId = next.deliveryIds[next.writeOffset - 1];
         }
     }
 
-    // This variant is called from the Map API remove methods and doesn't need to track bucket
-    // compaction results or next element locations which increases performance in this case.
-    private boolean tryCompact(int bucketIndex) {
-        final UnsettledBucket<Delivery> bucket = buckets[bucketIndex];
-
-        final int nextBucketIndex = bucketIndex + 1;
-        final int prevBucketIndex = bucketIndex - 1;
+    private void tryCompact(UnsettledBucket<Delivery> bucket) {
+        final UnsettledBucket<Delivery> next = bucket.next;
+        final UnsettledBucket<Delivery> prev = bucket.prev;
 
         if (bucket.isReadable()) {
             final UnsettledBucket<Delivery> nextBucket =
-                bucketIndex == current || Integer.compareUnsigned(bucket.highestDeliveryId, buckets[nextBucketIndex].lowestDeliveryId) > 0 ?
-                    ALWAYS_FULL_BUCKET : buckets[nextBucketIndex];
+                (next == null || bucket == head) ||
+                Integer.compareUnsigned(bucket.highestDeliveryId, next.lowestDeliveryId) >= 0 ? ALWAYS_FULL_BUCKET : next;
             final UnsettledBucket<Delivery> prevBucket =
-                bucketIndex == 0 || Integer.compareUnsigned(bucket.lowestDeliveryId, buckets[prevBucketIndex].highestDeliveryId) < 0 ?
-                    ALWAYS_FULL_BUCKET : buckets[prevBucketIndex];
+                (prev == null || bucket == tail) ||
+                Integer.compareUnsigned(bucket.lowestDeliveryId, prev.highestDeliveryId) <= 0 ? ALWAYS_FULL_BUCKET : prev;
 
             // As soon as compaction is possible move elements from this bucket into previous and next
             // which reduces search times as there are fewer buckets to traverse/
             if (nextBucket.getFreeSpace() + prevBucket.getFreeSpace() >= bucket.entries) {
                 doCompaction(bucket, prevBucket, nextBucket);
-                return recycleBucket(bucketIndex);
+                recycleBucket(bucket);
             }
         } else {
-            return recycleBucket(bucketIndex);
+            recycleBucket(bucket);
         }
-
-        return false;
     }
 
     //----- Internal bucket of delivery sequence
 
-    private static class UnsettledBucket<Delivery> {
+    @SuppressWarnings("unchecked")
+    private static final class UnsettledBucket<Delivery> {
+
+        private UnsettledBucket<Delivery> next;
+        private UnsettledBucket<Delivery> prev;
 
         private int readOffset;
         private int writeOffset;
         private int entries;
-        private int lowestDeliveryId = 0;
-        private int highestDeliveryId = 0;
+        private int lowestDeliveryId = UnsignedInteger.MAX_VALUE.intValue();
+        private int highestDeliveryId;
+        private int generation = 0; // Tracks which ID overflow this belongs to
 
-        private final Object[] deliveries;
-        private final UnsettledGetDeliveryId<Delivery> deliveryIdSupplier;
+        private final Delivery[] deliveries;
+        private final int[] deliveryIds;
 
         private UnsettledBucket() {
-            this.deliveryIdSupplier = null;
-            this.deliveries = new Object[0];
+            this.deliveries = (Delivery[]) new Object[0];
+            this.deliveryIds = new int[0];
             this.highestDeliveryId = UnsignedInteger.MAX_VALUE.intValue();
         }
 
-        public UnsettledBucket(int bucketCapacity, UnsettledGetDeliveryId<Delivery> idSupplier) {
-            this.deliveryIdSupplier = idSupplier;
-            this.deliveries = new Object[bucketCapacity];
+        public UnsettledBucket(int bucketCapacity) {
+            this.deliveries = (Delivery[]) new Object[bucketCapacity];
+            this.deliveryIds = new int[bucketCapacity];
         }
 
         public boolean isReadable() {
@@ -667,21 +876,42 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
             return deliveries.length - entries;
         }
 
-        public boolean isFull() {
-            return writeOffset == deliveries.length;
-        }
-
+        /**
+         * Checks if the delivery ID is likely in this bucket by comparing the lowest and
+         * highest delivery IDs in this bucket to the given delivery ID value, if the ID is
+         * between the highest and lowest value known to be in this bucket it is assumed that
+         * it is likely in this bucket.
+         *
+         * @param deliveryId
+         * 	The delivery ID to check for possible existence in this bucket.
+         *
+         * @return <code>true</code> if the delivery ID might be in this bucket.
+         */
         public boolean isInRange(int deliveryId) {
-            return Integer.compareUnsigned(deliveryId, lowestDeliveryId) >= 0 &&
-                   Integer.compareUnsigned(deliveryId, highestDeliveryId) <= 0;
+            return Integer.compareUnsigned(deliveryId, highestDeliveryId) <= 0 &&
+                   Integer.compareUnsigned(deliveryId, lowestDeliveryId) >= 0;
         }
 
-        public boolean put(int deliveryId, Delivery delivery) {
-            // Reject an addition if full or if the delivery ID to be added is less that
-            // the highest id we have tracked as that likely indicates a roll-over of the
-            // IDs and must go into the next bucket so that this bucket is kept in order.
-            if (isFull() || (Integer.compareUnsigned(deliveryId, highestDeliveryId) <= 0 && entries > 0)) {
-                return false;
+        /**
+         * Checks if the given range of delivery IDs potentially captures any entries in
+         * this bucket by checking if the lowest delivery ID in this bucket is between the
+         * given low and high values.
+         *
+         * @param lowest
+         * 		The lowest value that is being searched for.
+         * @param highest
+         * 		The highest value that is being searched for.
+         *
+         * @return <code>true</code> if the bucket contains some entries in the given range.
+         */
+        public boolean isCapturedByRange(int lowest, int highest) {
+            return Integer.compareUnsigned(lowestDeliveryId, highest) <= 0 &&
+                   Integer.compareUnsigned(highestDeliveryId, lowest) >= 0;
+        }
+
+        public void put(int deliveryId, Delivery delivery) {
+            if (writeOffset == deliveryIds.length) {
+                compact();
             }
 
             if (entries == 0) {
@@ -689,97 +919,78 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
             }
 
             highestDeliveryId = deliveryId;
+            deliveryIds[writeOffset] = deliveryId;
             deliveries[writeOffset++] = delivery;
             entries++;
-
-            return true;
         }
 
-        @SuppressWarnings("unchecked")
-        public Delivery get(int deliveryId) {
-            Delivery delivery;
-
-            // Be optimistic and assume the result is in the first entry and then if not search
-            // beyond that entry for the result.
-            if (deliveryIdSupplier.getDeliveryId(delivery = (Delivery) deliveries[readOffset]) == deliveryId) {
-                return delivery;
-            } else {
-                final int location = search(deliveryId, readOffset + 1, writeOffset);
-                if (location >= 0) {
-                    return (Delivery) deliveries[location];
-                }
-            }
-
-            return null;
-        }
-
-        @SuppressWarnings("unchecked")
-        public Delivery entryAt(int index) {
-            return (Delivery) deliveries[index];
-        }
-
-        @SuppressWarnings("unchecked")
-        public int entryIdAt(int index) {
-            return deliveryIdSupplier.getDeliveryId((Delivery) deliveries[index]);
-        }
-
-        @SuppressWarnings("unchecked")
-        public Delivery remove(int deliveryId) {
-            // Be optimistic and assume the result is in the first entry and then if not search
-            // beyond that entry for the result.
-            if (deliveryIdSupplier.getDeliveryId((Delivery) deliveries[readOffset]) == deliveryId) {
-                return removeAt(readOffset);
-            } else {
-                final int location = search(deliveryId, readOffset + 1, writeOffset);
-                if (location >= 0) {
-                    return removeAt(location);
-                }
-            }
-
-            return null;
-        }
-
-        @SuppressWarnings("unchecked")
-        public Delivery removeAt(int bucketEntry) {
-            final Delivery delivery = (Delivery) deliveries[bucketEntry];
-
+        /**
+         * Remove the entry at the given bucket entry and return the index of the logical
+         * next element in the bucket that takes its place. Depending on the direction the
+         * bucket elements are shifted this could be the same value or it might be a value
+         * one larger which can become the write offset in either case so the caller should
+         * check that the value is less than write offset before using it.
+         *
+         * @param deliveryIndex
+         * 		The index in the bucket that is being removed.
+         *
+         * @return the next value following the bucket index which could be the write offset
+         */
+        public int removeIndex(int deliveryIndex) {
             entries--;
 
             // If not the readOffset we compact the entries to avoid null gaps in the entries
-            // which complicates searches and makes bulk assignments or copies impossible.
-            if (bucketEntry != readOffset) {
-                System.arraycopy(deliveries, readOffset, deliveries, readOffset + 1, bucketEntry - readOffset);
+            // which complicates searches and makes bulk assignments or copies impossible. If
+            // at the read offset then we either advance the lowest Id seen or we've consumed
+            // all the entries and we reset the value to ensure range checks fail
+            if (deliveryIndex == readOffset) {
                 deliveries[readOffset++] = null;
+                deliveryIndex++;
+                // We removed the first element meaning we now must increase the lowest entry to
+                // avoid false positives when accessing randomly unless unordered since there
+                // could be duplicates
+                if (entries > 0) {
+                    lowestDeliveryId = deliveryIds[readOffset];
+                } else {
+                    lowestDeliveryId = UnsignedInteger.MAX_VALUE.intValue();
+                    highestDeliveryId = 0;
+                    readOffset = 0;
+                    writeOffset = 0;
+                }
+            } else if (deliveryIndex == writeOffset - 1) {
+                deliveries[--writeOffset] = null;
                 // If we remove the last entry then we can reduce the highest delivery ID in this
                 // bucket to avoid false positive matches when randomly accessing elements unless
                 // unordered in which case there could be duplicate entries
-                if (bucketEntry == writeOffset) {
-                    highestDeliveryId = deliveryIdSupplier.getDeliveryId((Delivery) deliveries[writeOffset - 1]);
-                }
+                highestDeliveryId = deliveryIds[writeOffset - 1];
             } else {
-                deliveries[readOffset++] = null;
-                // We removed the first element meaning we now must increase the lowest entry to
-                // avoid false positives when accessing randomly unless unordered since there could
-                // be duplicates
-                if (entries > 0) {
-                    lowestDeliveryId = deliveryIdSupplier.getDeliveryId((Delivery) deliveries[readOffset]);
+                final int prefixSize = deliveryIndex - readOffset;
+                final int suffixSize = (writeOffset - 1) - deliveryIndex;
+
+                if (prefixSize <= suffixSize) {
+                    System.arraycopy(deliveries, readOffset, deliveries, readOffset + 1, prefixSize);
+                    System.arraycopy(deliveryIds, readOffset, deliveryIds, readOffset + 1, prefixSize);
+                    deliveries[readOffset++] = null;
+                    deliveryIndex++;
+                } else {
+                    System.arraycopy(deliveries, deliveryIndex + 1, deliveries, deliveryIndex, suffixSize);
+                    System.arraycopy(deliveryIds, deliveryIndex + 1, deliveryIds, deliveryIndex, suffixSize);
+                    deliveries[--writeOffset] = null;
                 }
             }
 
-            return delivery;
+            return deliveryIndex;
         }
 
         public void clear() {
             if (entries != 0) {
                 Arrays.fill(deliveries, null);
-                entries = 0;
             }
 
             // Ensures the first put always assigns this
             lowestDeliveryId = UnsignedInteger.MAX_VALUE.intValue();
-            highestDeliveryId = 0;
-            writeOffset = 0;
-            readOffset = 0;
+            highestDeliveryId = writeOffset = readOffset = entries = 0;
+            next = prev = null;
         }
 
         @Override
@@ -791,69 +1002,93 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
                                     " highID=" + highestDeliveryId + " }";
         }
 
-        private static int BINARY_SEARCH_THRESHOLD = 64;
+        private static final int BINARY_SEARCH_THRESHOLD = 16;
 
-        // Given the behavior of binary search it doesn't make sense to employ
-        // it on spans under a certain number if elements
-        private int search(int deliveryId, int fromIndex, int toIndex) {
-            if ((toIndex - fromIndex) < BINARY_SEARCH_THRESHOLD) {
-                return linearSearch(deliveryId, fromIndex, toIndex);
+        /**
+         * Search the bucket to find a delivery with the matching delivery ID and
+         * return this index in the deliveries array where that delivery is located.
+         *
+         * @param deliveryId
+         * 		The target delivery ID to find in the set of tracked deliveries.
+         *
+         * @return the index in the deliveries array where the found delivery lives, or the insertion point as
+         *         a negative value (e.g. -(index - 1).
+         */
+        public int search(int deliveryId) {
+            if (deliveryIds[readOffset] == deliveryId) {
+                return readOffset;
+            } else if (entries < BINARY_SEARCH_THRESHOLD) {
+                return linearSearch(deliveryId, readOffset, writeOffset);
             } else {
-                return binarySearch(deliveryId, fromIndex, toIndex);
+                return binarySearch(deliveryId, readOffset, writeOffset);
             }
          }
 
-        // Must use our own to avoid boxing for unsigned integer comparison.
-        // fromIndex is inclusive since we search from readOffset normally
-        // toIndex is exclusive since we search to writeOffset normally.
-        @SuppressWarnings("unchecked")
+        // Must use our own until moving onto a JDK that adds the unsigned binary
+        // search API since delivery IDs are unsigned integers
         private int binarySearch(int deliveryId, int fromIndex, int toIndex) {
+            final int[] ids = deliveryIds;
+
             int low = fromIndex;
             int high = toIndex - 1;
 
             while (low <= high) {
                 final int mid = (low + high) >>> 1;
-                final int midDeliveryId = deliveryIdSupplier.getDeliveryId((Delivery) deliveries[mid]);
-                final int cmp = UnsignedInteger.compare(midDeliveryId, deliveryId);
+                final int midDeliveryId = ids[mid];
+                final int cmp = Integer.compareUnsigned(midDeliveryId, deliveryId);
 
                 if (cmp < 0) {
                     low = mid + 1;
                 } else if (cmp > 0) {
                     high = mid - 1;
                 } else {
-                    return mid;  // first matching delivery
+                    return mid;
                 }
             }
 
-            return -1; // signal that delivery ID is not in this bucket
+            return ~low; // signal that delivery ID is not in this bucket also gives insertion point
         }
 
-        // Must use our own to avoid boxing for unsigned integer comparison.
-        // fromIndex is inclusive since we search from readOffset normally
-        // toIndex is exclusive since we search to writeOffset normally.
-        @SuppressWarnings("unchecked")
+        // Must use our own until moving onto a JDK that adds the unsigned binary
+        // search API since delivery IDs are unsigned integers
         private int linearSearch(int deliveryId, int fromIndex, int toIndex) {
+            final int[] ids = deliveryIds;
+
             for (int i = fromIndex; i < toIndex; ++i) {
-                final int idAtIndex = deliveryIdSupplier.getDeliveryId((Delivery) deliveries[i]);
-                final int comp = UnsignedInteger.compare(idAtIndex, deliveryId);
+                final int idAtIndex = ids[i];
+                final int comp = Integer.compareUnsigned(idAtIndex, deliveryId);
 
                 if (comp == 0) {
                     return i;
                 } else if (comp > 0) {
                     // Can't be in this bucket because we already found a larger value
-                    break;
+                    // so return the insertion point where it would go
+                    return ~i;
                 }
             }
 
-            return -1;
+            return ~toIndex;
+        }
+
+        private void compact() {
+            if (readOffset != 0) {
+                System.arraycopy(deliveries, readOffset, deliveries, 0, entries);
+                System.arraycopy(deliveryIds, readOffset, deliveryIds, 0, entries);
+                Arrays.fill(deliveries, entries, writeOffset, null);
+
+                writeOffset = entries;
+                readOffset = 0;
+            } else {
+                throw new IllegalStateException("Put called when no space in the bucket for new entries");
+            }
         }
     }
 
     //----- Internal cached values for the various collection type access objects
 
-    // Once requested we will create an store a single instance to a collection
-    // with no state for each of the key, values ,entries types. Since the types do
-    // not have state the trivial race on create is not important to the eventual
+    // Once requested we will create and store a single instance to a collection
+    // with no state for each of the key, values and entries types. Since the types
+    // do not have state the trivial race on create is not important to the eventual
     // outcome of having a cached instance.
 
     protected Set<UnsignedInteger> keySet;
@@ -866,12 +1101,12 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
         @Override
         public Iterator<Delivery> iterator() {
-            return new UnsettledTrackingMapValuesIterator(0);
+            return new UnsettledTrackingMapValuesIterator(tail);
         }
 
         @Override
         public int size() {
-            return UnsettledMap.this.totalEntries;
+            return UnsettledMap.this.size;
         }
 
         @Override
@@ -897,12 +1132,12 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
         @Override
         public Iterator<UnsignedInteger> iterator() {
-            return new UnsettledTrackingMapKeysIterator(0);
+            return new UnsettledTrackingMapKeysIterator(tail);
         }
 
         @Override
         public int size() {
-            return UnsettledMap.this.totalEntries;
+            return UnsettledMap.this.size;
         }
 
         @Override
@@ -912,7 +1147,10 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
         @Override
         public boolean remove(Object target) {
-            return UnsettledMap.this.remove(Number.class.cast(target).intValue()) != null;
+            if (target instanceof Number) {
+                return UnsettledMap.this.remove(((Number) target).intValue()) != null;
+            }
+            return false;
         }
 
         @Override
@@ -925,12 +1163,12 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
         @Override
         public Iterator<Map.Entry<UnsignedInteger, Delivery>> iterator() {
-            return new UnsettledTrackingMapEntryIterator(0);
+            return new UnsettledTrackingMapEntryIterator(tail);
         }
 
         @Override
         public int size() {
-            return UnsettledMap.this.totalEntries;
+            return UnsettledMap.this.size;
         }
 
         @Override
@@ -965,21 +1203,32 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
     //----- Map Iterator implementation for EntrySet, KeySet and Values collections
 
+    private static final class IteratorRemoveResult<Delivery> {
+
+        public final UnsettledBucket<Delivery> bucket;
+        public final int readOffset;
+
+        public IteratorRemoveResult(UnsettledBucket<Delivery> bucket, int readOffset) {
+            this.bucket = bucket;
+            this.readOffset = readOffset;
+        }
+    }
+
     // Base class iterator that can be used for the collections returned from the Map
     private abstract class UnsettledTrackingMapIterator<T> implements Iterator<T> {
 
-        protected int currentBucket;
+        protected UnsettledBucket<Delivery> currentBucket;
         protected int readOffset;
 
         protected T lastReturned;
-        protected int lastReturnedbucket;
-        protected int lastReturnedbucketIndex;
+        protected int lastReturnedBucketIndex;
+        protected UnsettledBucket<Delivery> lastReturnedBucket;
 
         protected int expectedModCount;
 
-        public UnsettledTrackingMapIterator(int startAt) {
-            this.currentBucket = buckets[startAt].isReadable() ? startAt : -1;
-            this.readOffset = buckets[startAt].isReadable() ? buckets[startAt].readOffset : -1;
+        public UnsettledTrackingMapIterator(UnsettledBucket<Delivery> bucket) {
+            this.currentBucket = bucket;
+            this.readOffset = currentBucket == null ? -1 : currentBucket.readOffset;
             this.expectedModCount = UnsettledMap.this.modCount;
         }
 
@@ -997,15 +1246,15 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
                 throw new ConcurrentModificationException();
             }
 
-            lastReturnedbucket = currentBucket;
-            lastReturnedbucketIndex = readOffset;
+            lastReturnedBucket = currentBucket;
+            lastReturnedBucketIndex = readOffset;
             lastReturned = entryAt(currentBucket, readOffset);
             successor();
 
             return lastReturned;
         }
 
-        protected abstract T entryAt(int bucketIndex, int bucketEntry);
+        protected abstract T entryAt(UnsettledBucket<Delivery> bucket, int bucketEntry);
 
         @Override
         public void remove() {
@@ -1016,11 +1265,13 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
                 throw new ConcurrentModificationException();
             }
 
-            long next = UnsettledMap.this.removeAt(lastReturnedbucket, lastReturnedbucketIndex);
-            if (next >= 0) {
-                currentBucket = (int) (next >> 32);
-                readOffset = (int) (next & 0xFFFFFFFF);
+            final IteratorRemoveResult<Delivery> result = UnsettledMap.this.removeAt(lastReturnedBucket, lastReturnedBucketIndex);
+
+            if (result != null) {
+                currentBucket = result.bucket;
+                readOffset = result.readOffset;
             } else {
+                currentBucket = null;
                 readOffset = -1;
             }
 
@@ -1029,10 +1280,10 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
         }
 
         private void successor() {
-            if (++readOffset == buckets[currentBucket].writeOffset) {
-                currentBucket++;
-                if (currentBucket < buckets.length && buckets[currentBucket].isReadable()) {
-                    readOffset = buckets[currentBucket].readOffset;
+            if (++readOffset == currentBucket.writeOffset) {
+                currentBucket = currentBucket.next;
+                if (currentBucket != null && currentBucket.isReadable()) {
+                    readOffset = currentBucket.readOffset;
                 } else {
                     readOffset = -1;
                 }
@@ -1042,39 +1293,38 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
     private final class UnsettledTrackingMapValuesIterator extends UnsettledTrackingMapIterator<Delivery> {
 
-        public UnsettledTrackingMapValuesIterator(int startAt) {
-            super(startAt);
+        public UnsettledTrackingMapValuesIterator(UnsettledBucket<Delivery> bucket) {
+            super(bucket);
         }
 
         @Override
-        protected Delivery entryAt(int bucketIndex, int bucketEntry) {
-            return buckets[currentBucket].entryAt(bucketEntry);
+        protected Delivery entryAt(UnsettledBucket<Delivery> bucket, int bucketEntry) {
+            return bucket.deliveries[bucketEntry];
         }
     }
 
     private final class UnsettledTrackingMapKeysIterator extends UnsettledTrackingMapIterator<UnsignedInteger> {
 
-        public UnsettledTrackingMapKeysIterator(int startAt) {
-            super(startAt);
+        public UnsettledTrackingMapKeysIterator(UnsettledBucket<Delivery> bucket) {
+            super(bucket);
         }
 
         @Override
-        protected UnsignedInteger entryAt(int bucketIndex, int bucketEntry) {
-            return UnsignedInteger.valueOf(deliveryIdSupplier.getDeliveryId(buckets[currentBucket].entryAt(bucketEntry)));
+        protected UnsignedInteger entryAt(UnsettledBucket<Delivery> bucket, int bucketEntry) {
+            return UnsignedInteger.valueOf(bucket.deliveryIds[bucketEntry]);
         }
     }
 
     private final class UnsettledTrackingMapEntryIterator extends UnsettledTrackingMapIterator<Entry<UnsignedInteger, Delivery>> {
 
-        public UnsettledTrackingMapEntryIterator(int startAt) {
-            super(startAt);
+        public UnsettledTrackingMapEntryIterator(UnsettledBucket<Delivery> bucket) {
+            super(bucket);
         }
 
         @Override
-        protected Entry<UnsignedInteger, Delivery> entryAt(int bucketIndex, int bucketEntry) {
-            final Delivery delivery = buckets[currentBucket].entryAt(bucketEntry);
-
-            return new ImmutableUnsettledTrackingkMapEntry<Delivery>(deliveryIdSupplier.getDeliveryId(delivery), delivery);
+        protected Entry<UnsignedInteger, Delivery> entryAt(UnsettledBucket<Delivery> bucket, int bucketEntry) {
+            return new ImmutableUnsettledTrackingkMapEntry<Delivery>(
+                    bucket.deliveryIds[bucketEntry], bucket.deliveries[bucketEntry]);
         }
     }
 

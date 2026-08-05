@@ -20,12 +20,15 @@ import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 
 /**
  * Encoder of AMQP Symbol type values to a byte stream.
  */
 public final class SymbolTypeEncoder extends AbstractPrimitiveTypeEncoder<Symbol> {
+
+    public static final SymbolTypeEncoder INSTANCE = new SymbolTypeEncoder();
 
     @Override
     public Class<Symbol> getTypeClass() {
@@ -34,17 +37,7 @@ public final class SymbolTypeEncoder extends AbstractPrimitiveTypeEncoder<Symbol
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, Symbol value) {
-        int symbolBytes = value.getLength();
-
-        if (symbolBytes <= 255) {
-            buffer.writeByte(EncodingCodes.SYM8);
-            buffer.writeByte((byte) symbolBytes);
-        } else {
-            buffer.writeByte(EncodingCodes.SYM32);
-            buffer.writeInt(symbolBytes);
-        }
-
-        value.writeTo(buffer);
+        ProtonEncodings.writeSymbol(buffer, value);
     }
 
     @Override

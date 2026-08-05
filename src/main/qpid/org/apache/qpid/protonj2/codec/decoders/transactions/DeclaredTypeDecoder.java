@@ -20,12 +20,15 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
 import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.primitives.BinaryTypeDecoder;
+import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transactions.Declared;
@@ -35,8 +38,9 @@ import org.apache.qpid.protonj2.types.transactions.Declared;
  */
 public final class DeclaredTypeDecoder extends AbstractDescribedListTypeDecoder<Declared> {
 
-    private static final int MIN_DECLARED_LIST_ENTRIES = 1;
-    private static final int MAX_DECLARED_LIST_ENTRIES = 1;
+    public static final DeclaredTypeDecoder INSTANCE = new DeclaredTypeDecoder();
+
+    private static final int REQUIRED_DECLARED_LIST_ENTRIES = 1;
 
     @Override
     public Class<Declared> getTypeClass() {
@@ -54,78 +58,42 @@ public final class DeclaredTypeDecoder extends AbstractDescribedListTypeDecoder<
     }
 
     @Override
-    public Declared readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readDeclared(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return REQUIRED_DECLARED_LIST_ENTRIES;
     }
 
     @Override
-    public Declared[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Declared[] result = new Declared[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDeclared(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return REQUIRED_DECLARED_LIST_ENTRIES;
     }
 
-    private Declared readDeclared(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Declared readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Declared declared = new Declared();
+        final TypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_DECLARED_LIST_ENTRIES) {
-            throw new DecodeException("The txn-id field cannot be omitted");
-        } else if (count > MAX_DECLARED_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Declared list encoding: " + count);
-        } else if (count == 1) {
-            declared.setTxnId(state.getDecoder().readBinary(buffer, state));
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            return declared.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(buffer, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the Declared");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
-
-        return declared;
     }
 
     @Override
-    public Declared readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readDeclared(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Declared[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Declared[] result = new Declared[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readDeclared(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Declared readDeclared(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Declared readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Declared declared = new Declared();
+        final StreamTypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_DECLARED_LIST_ENTRIES) {
-            throw new DecodeException("The txn-id field cannot be omitted");
-        } else if (count > MAX_DECLARED_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Declared list encoding: " + count);
-        } else if (count == 1) {
-            declared.setTxnId(state.getDecoder().readBinary(stream, state));
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            return declared.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(stream, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the Declared");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
-
-        return declared;
     }
 }

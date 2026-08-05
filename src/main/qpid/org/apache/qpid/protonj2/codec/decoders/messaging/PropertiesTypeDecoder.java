@@ -20,14 +20,13 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Properties;
@@ -37,8 +36,15 @@ import org.apache.qpid.protonj2.types.messaging.Properties;
  */
 public final class PropertiesTypeDecoder extends AbstractDescribedListTypeDecoder<Properties> {
 
+    public static final PropertiesTypeDecoder INSTANCE = new PropertiesTypeDecoder();
+
     private static final int MIN_PROPERTIES_LIST_ENTRIES = 0;
     private static final int MAX_PROPERTIES_LIST_ENTRIES = 13;
+
+    @Override
+    public Class<Properties> getTypeClass() {
+        return Properties.class;
+    }
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -51,45 +57,18 @@ public final class PropertiesTypeDecoder extends AbstractDescribedListTypeDecode
     }
 
     @Override
-    public Class<Properties> getTypeClass() {
-        return Properties.class;
+    protected int getMinListElements() {
+        return MIN_PROPERTIES_LIST_ENTRIES;
     }
 
     @Override
-    public Properties readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMaxListElements() {
+        return MAX_PROPERTIES_LIST_ENTRIES;
     }
 
     @Override
-    public Properties[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-        final ListTypeDecoder listDecoder = checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder);
-
-        final Properties[] result = new Properties[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(buffer, state, listDecoder);
-        }
-
-        return result;
-    }
-
-    private Properties readProperties(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Properties readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Properties properties = new Properties();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_PROPERTIES_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Properties list encoding: " + count);
-        }
-
-        if (count > MAX_PROPERTIES_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Properties list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // Peek ahead and see if there is a null in the next slot, if so we don't call
@@ -102,43 +81,43 @@ public final class PropertiesTypeDecoder extends AbstractDescribedListTypeDecode
 
             switch (index) {
                 case 0:
-                    properties.setMessageId(state.getDecoder().readObject(buffer, state));
+                    properties.setMessageId(decoder.readObject(buffer, state));
                     break;
                 case 1:
-                    properties.setUserId(state.getDecoder().readBinary(buffer, state));
+                    properties.setUserId(decoder.readBinary(buffer, state));
                     break;
                 case 2:
-                    properties.setTo(state.getDecoder().readString(buffer, state));
+                    properties.setTo(decoder.readString(buffer, state));
                     break;
                 case 3:
-                    properties.setSubject(state.getDecoder().readString(buffer, state));
+                    properties.setSubject(decoder.readString(buffer, state));
                     break;
                 case 4:
-                    properties.setReplyTo(state.getDecoder().readString(buffer, state));
+                    properties.setReplyTo(decoder.readString(buffer, state));
                     break;
                 case 5:
-                    properties.setCorrelationId(state.getDecoder().readObject(buffer, state));
+                    properties.setCorrelationId(decoder.readObject(buffer, state));
                     break;
                 case 6:
-                    properties.setContentType(state.getDecoder().readSymbol(buffer, state, null));
+                    properties.setContentType(decoder.readSymbol(buffer, state, null));
                     break;
                 case 7:
-                    properties.setContentEncoding(state.getDecoder().readSymbol(buffer, state, null));
+                    properties.setContentEncoding(decoder.readSymbol(buffer, state, null));
                     break;
                 case 8:
-                    properties.setAbsoluteExpiryTime(state.getDecoder().readTimestamp(buffer, state, 0l));
+                    properties.setAbsoluteExpiryTime(decoder.readTimestamp(buffer, state, 0l));
                     break;
                 case 9:
-                    properties.setCreationTime(state.getDecoder().readTimestamp(buffer, state, 0l));
+                    properties.setCreationTime(decoder.readTimestamp(buffer, state, 0l));
                     break;
                 case 10:
-                    properties.setGroupId(state.getDecoder().readString(buffer, state));
+                    properties.setGroupId(decoder.readString(buffer, state));
                     break;
                 case 11:
-                    properties.setGroupSequence(state.getDecoder().readUnsignedInteger(buffer, state, 0l));
+                    properties.setGroupSequence(decoder.readUnsignedInteger(buffer, state, 0l));
                     break;
                 case 12:
-                    properties.setReplyToGroupId(state.getDecoder().readString(buffer, state));
+                    properties.setReplyToGroupId(decoder.readString(buffer, state));
                     break;
             }
         }
@@ -147,40 +126,8 @@ public final class PropertiesTypeDecoder extends AbstractDescribedListTypeDecode
     }
 
     @Override
-    public Properties readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Properties[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-        final ListTypeDecoder listDecoder = checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder);
-
-        final Properties[] result = new Properties[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(stream, state, listDecoder);
-        }
-
-        return result;
-    }
-
-    private Properties readProperties(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Properties readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Properties properties = new Properties();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_PROPERTIES_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in Properties list encoding: " + count);
-        }
-
-        if (count > MAX_PROPERTIES_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Properties list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // If the stream allows we peek ahead and see if there is a null in the next slot,
@@ -197,43 +144,43 @@ public final class PropertiesTypeDecoder extends AbstractDescribedListTypeDecode
 
             switch (index) {
                 case 0:
-                    properties.setMessageId(state.getDecoder().readObject(stream, state));
+                    properties.setMessageId(decoder.readObject(stream, state));
                     break;
                 case 1:
-                    properties.setUserId(state.getDecoder().readBinary(stream, state));
+                    properties.setUserId(decoder.readBinary(stream, state));
                     break;
                 case 2:
-                    properties.setTo(state.getDecoder().readString(stream, state));
+                    properties.setTo(decoder.readString(stream, state));
                     break;
                 case 3:
-                    properties.setSubject(state.getDecoder().readString(stream, state));
+                    properties.setSubject(decoder.readString(stream, state));
                     break;
                 case 4:
-                    properties.setReplyTo(state.getDecoder().readString(stream, state));
+                    properties.setReplyTo(decoder.readString(stream, state));
                     break;
                 case 5:
-                    properties.setCorrelationId(state.getDecoder().readObject(stream, state));
+                    properties.setCorrelationId(decoder.readObject(stream, state));
                     break;
                 case 6:
-                    properties.setContentType(state.getDecoder().readSymbol(stream, state, null));
+                    properties.setContentType(decoder.readSymbol(stream, state, null));
                     break;
                 case 7:
-                    properties.setContentEncoding(state.getDecoder().readSymbol(stream, state, null));
+                    properties.setContentEncoding(decoder.readSymbol(stream, state, null));
                     break;
                 case 8:
-                    properties.setAbsoluteExpiryTime(state.getDecoder().readTimestamp(stream, state, 0l));
+                    properties.setAbsoluteExpiryTime(decoder.readTimestamp(stream, state, 0l));
                     break;
                 case 9:
-                    properties.setCreationTime(state.getDecoder().readTimestamp(stream, state, 0l));
+                    properties.setCreationTime(decoder.readTimestamp(stream, state, 0l));
                     break;
                 case 10:
-                    properties.setGroupId(state.getDecoder().readString(stream, state));
+                    properties.setGroupId(decoder.readString(stream, state));
                     break;
                 case 11:
-                    properties.setGroupSequence(state.getDecoder().readUnsignedInteger(stream, state, 0l));
+                    properties.setGroupSequence(decoder.readUnsignedInteger(stream, state, 0l));
                     break;
                 case 12:
-                    properties.setReplyToGroupId(state.getDecoder().readString(stream, state));
+                    properties.setReplyToGroupId(decoder.readString(stream, state));
                     break;
             }
         }

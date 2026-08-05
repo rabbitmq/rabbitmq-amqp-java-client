@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.security;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslResponse;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.security.SaslResponse;
  * Encoder of AMQP SaslResponse type values to a byte stream
  */
 public final class SaslResponseTypeEncoder extends AbstractDescribedListTypeEncoder<SaslResponse> {
+
+    public static final SaslResponseTypeEncoder INSTANCE = new SaslResponseTypeEncoder();
 
     @Override
     public Class<SaslResponse> getTypeClass() {
@@ -46,6 +50,21 @@ public final class SaslResponseTypeEncoder extends AbstractDescribedListTypeEnco
     }
 
     @Override
+    public int getElementCount(SaslResponse challenge) {
+        return 1;
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 1;
+    }
+
+    @Override
     public byte getListEncoding(SaslResponse value) {
         if (value.getResponse().getReadableBytes() < 255) {
             return EncodingCodes.LIST8;
@@ -55,23 +74,13 @@ public final class SaslResponseTypeEncoder extends AbstractDescribedListTypeEnco
     }
 
     @Override
-    public void writeElement(SaslResponse response, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeBinary(buffer, state, response.getResponse());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown SaslResponse value index: " + index);
+    public void writeElements(SaslResponse response, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        final ProtonBuffer data = response.getResponse();
+
+        if (data != null) {
+            ProtonEncodings.writeBinary(buffer, data);
+        } else {
+            throw new EncodeException("Cannot write a SaslResponse instance without an response assigned");
         }
-    }
-
-    @Override
-    public int getElementCount(SaslResponse challenge) {
-        return 1;
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 1;
     }
 }

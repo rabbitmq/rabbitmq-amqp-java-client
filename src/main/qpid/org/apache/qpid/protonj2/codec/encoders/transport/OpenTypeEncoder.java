@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Open;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transport.Open;
  * Encoder of AMQP Open type values to a byte stream.
  */
 public final class OpenTypeEncoder extends AbstractDescribedListTypeEncoder<Open> {
+
+    public static final OpenTypeEncoder INSTANCE = new OpenTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,23 +50,52 @@ public final class OpenTypeEncoder extends AbstractDescribedListTypeEncoder<Open
     }
 
     @Override
-    public void writeElement(Open open, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (open.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    encoder.writeString(buffer, state, open.getContainerId());
-                    break;
+    public byte getListEncoding(Open value) {
+        return EncodingCodes.LIST32;
+    }
+
+    @Override
+    public int getElementCount(Open open) {
+        return open.getElementCount();
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 10;
+    }
+
+    @Override
+    public void writeElements(Open open, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (open.hasContainerId()) {
+            ProtonEncodings.writeString(buffer, state, open.getContainerId());
+        } else {
+            throw new EncodeException("Cannot encode an Open that does not have an assigned container-id");
+        }
+
+        for (int i = 1; i < count; ++i) {
+            if (!open.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
                 case 1:
-                    encoder.writeString(buffer, state, open.getHostname());
+                    ProtonEncodings.writeString(buffer, state, open.getHostname());
                     break;
                 case 2:
-                    encoder.writeUnsignedInteger(buffer, state, open.getMaxFrameSize());
+                    ProtonEncodings.writeUnsignedInteger(buffer, open.getMaxFrameSize());
                     break;
                 case 3:
-                    encoder.writeUnsignedShort(buffer, state, open.getChannelMax());
+                    buffer.writeByte(EncodingCodes.USHORT);
+                    buffer.writeShort((short) open.getChannelMax());
                     break;
                 case 4:
-                    encoder.writeUnsignedInteger(buffer, state, open.getIdleTimeout());
+                    ProtonEncodings.writeUnsignedInteger(buffer, open.getIdleTimeout());
                     break;
                 case 5:
                     encoder.writeArray(buffer, state, open.getOutgoingLocales());
@@ -79,26 +112,7 @@ public final class OpenTypeEncoder extends AbstractDescribedListTypeEncoder<Open
                 case 9:
                     encoder.writeMap(buffer, state, open.getProperties());
                     break;
-                default:
-                    throw new IllegalArgumentException("Unknown Open value index: " + index);
             }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
         }
-    }
-
-    @Override
-    public byte getListEncoding(Open value) {
-        return EncodingCodes.LIST32;
-    }
-
-    @Override
-    public int getElementCount(Open open) {
-        return open.getElementCount();
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 1;
     }
 }

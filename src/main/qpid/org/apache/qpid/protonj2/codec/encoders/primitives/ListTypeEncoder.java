@@ -31,6 +31,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public final class ListTypeEncoder extends AbstractPrimitiveTypeEncoder<List> {
 
+    public static final ListTypeEncoder INSTANCE = new ListTypeEncoder();
+
     @Override
     public Class<List> getTypeClass() {
         return List.class;
@@ -56,29 +58,27 @@ public final class ListTypeEncoder extends AbstractPrimitiveTypeEncoder<List> {
 
     private void writeValue(ProtonBuffer buffer, EncoderState state, List value) {
         final int startIndex = buffer.getWriteOffset();
-
-        // Reserve space for the size
-        buffer.writeInt(0);
+        final int size = value.size();
 
         // Write the count of list elements.
-        buffer.writeInt(value.size());
+        buffer.writeLong(size);
 
-        TypeEncoder encoder = null;
+        TypeEncoder typeEncoder = this;
 
         // Write the list elements and then compute total size written, try not to lookup
         // encoders when the types in the list all match.
-        for (int i = 0; i < value.size(); ++i) {
-            Object entry = value.get(i);
+        for (int i = 0; i < size; ++i) {
+            final Object entry = value.get(i);
 
-            if (encoder == null || !encoder.getTypeClass().equals(entry.getClass())) {
-                encoder = state.getEncoder().getTypeEncoder(entry);
+            if (!typeEncoder.getTypeClass().equals(entry.getClass())) {
+                typeEncoder = state.getEncoder().getTypeEncoder(entry);
+
+                if (typeEncoder == null) {
+                    throw new EncodeException("Cannot find encoder for type " + entry);
+                }
             }
 
-            if (encoder == null) {
-                throw new EncodeException("Cannot find encoder for type " + entry);
-            }
-
-            encoder.writeType(buffer, state, entry);
+            typeEncoder.writeType(buffer, state, entry);
         }
 
         // Move back and write the size

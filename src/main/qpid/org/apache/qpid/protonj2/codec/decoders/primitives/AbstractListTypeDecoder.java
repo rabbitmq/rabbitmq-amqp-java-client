@@ -16,7 +16,6 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +27,7 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
 
 /**
  * Base for the various List type decoders needed to read AMQP List values.
@@ -35,59 +35,115 @@ import org.apache.qpid.protonj2.codec.decoders.AbstractPrimitiveTypeDecoder;
 @SuppressWarnings("rawtypes")
 public abstract class AbstractListTypeDecoder extends AbstractPrimitiveTypeDecoder<List> implements ListTypeDecoder {
 
+    private static final int MAX_LIST_PREALLOCATION = 256;
+
     @Override
     public List<Object> readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final int size = readSize(buffer, state);
+        state.increaseDepth();
 
-        // Ensure we do not allocate an array of size greater then the available data, otherwise there is a risk for an OOM error
-        if (size > buffer.getReadableBytes()) {
-            throw new DecodeException(String.format(
-                    "List encoded size %d is specified to be greater than the amount " +
-                    "of data available (%d)", size, buffer.getReadableBytes()));
+        try {
+            final int size = readSize(buffer, state);
+            final int expectedEndPos = buffer.getReadOffset() + size;
+
+            // Ensure we do not allocate an array of size greater then the available data, otherwise there is a risk for an OOM error
+            if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
+                throw new DecodeException(String.format(
+                        "List encoded size %d is specified to be greater than the amount " +
+                        "of data available (%d)", Integer.toUnsignedLong(size), buffer.getReadableBytes()));
+            }
+
+            final int count = readCount(buffer, state);
+
+            if (Integer.compareUnsigned(count, size) > 0) {
+                throw new DecodeException(String.format(
+                        "List encoded element count is specified to be greater than the encoded size " +
+                        "s:(%d) c:(%d)", Integer.toUnsignedLong(size), Integer.toUnsignedLong(count)));
+            }
+
+            final List<Object> list = new ArrayList<>(Math.min(MAX_LIST_PREALLOCATION, count));
+            final Decoder decoder = state.getDecoder();
+            for (int i = 0; i < count; i++) {
+                list.add(decoder.readObject(buffer, state));
+            }
+
+            if (buffer.getReadOffset() != expectedEndPos) {
+                throw new DecodeException("List decoding did not read the expected amount of bytes: " + size);
+            }
+
+            return list;
+        } finally {
+            state.decreaseDepth();
         }
-
-        final int count = readCount(buffer, state);
-
-        if (count > buffer.getReadableBytes()) {
-            throw new DecodeException(String.format(
-                    "List encoded element count %d is specified to be greater than the amount " +
-                    "of data available (%d)", count, buffer.getReadableBytes()));
-        }
-
-        final List<Object> list = new ArrayList<>(count);
-        final Decoder decoder = state.getDecoder();
-        for (int i = 0; i < count; i++) {
-            list.add(decoder.readObject(buffer, state));
-        }
-
-        return list;
     }
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        buffer.advanceReadOffset(readSize(buffer, state));
+        final int size = readSize(buffer, state);
+
+        if (Integer.compareUnsigned(size, buffer.getReadableBytes()) > 0) {
+            throw new DecodeException(String.format(
+                "List encoded size %d is specified to be greater than the amount " +
+                "of data available (%d)", Integer.toUnsignedLong(size), buffer.getReadableBytes()));
+        }
+
+        state.increaseDepth();
+
+        try {
+            buffer.advanceReadOffset(size);
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public List<Object> readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        readSize(stream, state);
-        final int count = readCount(stream, state);
+        state.increaseDepth();
 
-        final List<Object> list = new ArrayList<>(count);
-        final StreamDecoder decoder = state.getDecoder();
-        for (int i = 0; i < count; i++) {
-            list.add(decoder.readObject(stream, state));
+        try {
+            final int size = readSize(stream, state);
+
+            if (Integer.compareUnsigned(size, state.getMaxListSize()) > 0) {
+                throw new DecodeException(String.format(
+                        "List encoded suze is specified to be greater than maximum allowed " +
+                        "s:(%d) m:(%d)", Integer.toUnsignedLong(size), state.getMaxListSize()));
+            }
+
+            final int count = readCount(stream, state);
+
+            if (Integer.compareUnsigned(count, size) > 0) {
+                throw new DecodeException(String.format(
+                        "List encoded element count is specified to be greater than the encoded size " +
+                        "s:(%d) c:(%d)", Integer.toUnsignedLong(size), Integer.toUnsignedLong(count)));
+            }
+
+            final List<Object> list = new ArrayList<>(Math.min(MAX_LIST_PREALLOCATION, count));
+            final StreamDecoder decoder = state.getDecoder();
+            for (int i = 0; i < count; i++) {
+                list.add(decoder.readObject(stream, state));
+            }
+
+            return list;
+        } finally {
+            state.decreaseDepth();
         }
-
-        return list;
     }
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
+        final int size = readSize(stream, state);
+
+        if (Integer.compareUnsigned(size, state.getMaxListSize()) > 0) {
+            throw new DecodeException(String.format(
+                    "List encoded suze is specified to be greater than maximum allowed " +
+                    "s:(%d) m:(%d)", Integer.toUnsignedLong(size), state.getMaxListSize()));
+        }
+
+        state.increaseDepth();
+
         try {
-            stream.skip(readSize(stream, state));
-        } catch (IOException ex) {
-            throw new DecodeException("Error while reading List payload bytes", ex);
+            ProtonStreamUtils.skipBytes(stream, size);
+        } finally {
+            state.decreaseDepth();
         }
     }
 }

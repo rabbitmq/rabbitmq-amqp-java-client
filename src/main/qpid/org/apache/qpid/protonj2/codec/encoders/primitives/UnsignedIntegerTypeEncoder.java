@@ -20,12 +20,15 @@ import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
 
 /**
  * Encoder of AMQP UnsignedShort type values to a byte stream.
  */
 public final class UnsignedIntegerTypeEncoder extends AbstractPrimitiveTypeEncoder<UnsignedInteger> {
+
+    public static final UnsignedIntegerTypeEncoder INSTANCE = new UnsignedIntegerTypeEncoder();
 
     @Override
     public Class<UnsignedInteger> getTypeClass() {
@@ -34,17 +37,7 @@ public final class UnsignedIntegerTypeEncoder extends AbstractPrimitiveTypeEncod
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, UnsignedInteger value) {
-        int intValue = value.intValue();
-
-        if (intValue == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (intValue > 0 && intValue <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) intValue);
-        } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt(intValue);
-        }
+        ProtonEncodings.writeUnsignedInteger(buffer, value.intValue());
     }
 
     /**
@@ -61,12 +54,7 @@ public final class UnsignedIntegerTypeEncoder extends AbstractPrimitiveTypeEncod
      * 		The unsigned integer single byte value to encode.
      */
     public void writeType(ProtonBuffer buffer, EncoderState state, byte value) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte(value);
-        }
+        ProtonEncodings.writeUnsignedInteger(buffer, value);
     }
 
     /**
@@ -83,15 +71,7 @@ public final class UnsignedIntegerTypeEncoder extends AbstractPrimitiveTypeEncod
      * 		The unsigned int value to encode.
      */
     public void writeType(ProtonBuffer buffer, EncoderState state, int value) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (value > 0 && value <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) value);
-        } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt(value);
-        }
+        ProtonEncodings.writeUnsignedInteger(buffer, value);
     }
 
     /**
@@ -112,17 +92,7 @@ public final class UnsignedIntegerTypeEncoder extends AbstractPrimitiveTypeEncod
             throw new IllegalArgumentException("Value \"" + value + "\" lies outside the range [" + 0L + "-" + (1L << 32) + ").");
         }
 
-        int intValue = (int) value;
-
-        if (intValue == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (intValue > 0 && intValue <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) intValue);
-        } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt(intValue);
-        }
+        ProtonEncodings.writeUnsignedInteger(buffer, value);
     }
 
     @Override

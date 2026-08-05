@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.security;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslChallenge;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.security.SaslChallenge;
  * Encoder of AMQP SaslChallenge type values to a byte stream
  */
 public final class SaslChallengeTypeEncoder extends AbstractDescribedListTypeEncoder<SaslChallenge> {
+
+    public static final SaslChallengeTypeEncoder INSTANCE = new SaslChallengeTypeEncoder();
 
     @Override
     public Class<SaslChallenge> getTypeClass() {
@@ -46,14 +50,18 @@ public final class SaslChallengeTypeEncoder extends AbstractDescribedListTypeEnc
     }
 
     @Override
-    public void writeElement(SaslChallenge challenge, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeBinary(buffer, state, challenge.getChallenge());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown SaslChallenge value index: " + index);
-        }
+    public int getElementCount(SaslChallenge challenge) {
+        return 1;
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 1;
     }
 
     @Override
@@ -66,12 +74,13 @@ public final class SaslChallengeTypeEncoder extends AbstractDescribedListTypeEnc
     }
 
     @Override
-    public int getElementCount(SaslChallenge challenge) {
-        return 1;
-    }
+    public void writeElements(SaslChallenge challenge, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        final ProtonBuffer data = challenge.getChallenge();
 
-    @Override
-    public int getMinElementCount() {
-        return 1;
+        if (data != null) {
+            ProtonEncodings.writeBinary(buffer, data);
+        } else {
+            throw new EncodeException("Cannot write a SaslChallenge instance without an challenge payload assigned");
+        }
     }
 }

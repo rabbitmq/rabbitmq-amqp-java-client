@@ -25,7 +25,7 @@ import org.apache.qpid.protonj2.types.UnsignedLong;
 public final class SaslOutcome implements SaslPerformative {
 
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x0000000000000044L);
-    public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:sasl-outcome:list");
+    public static final Symbol DESCRIPTOR_SYMBOL = Symbol.getSASLSymbol("amqp:sasl-outcome:list");
 
     private SaslCode code;
     private ProtonBuffer additionalData;

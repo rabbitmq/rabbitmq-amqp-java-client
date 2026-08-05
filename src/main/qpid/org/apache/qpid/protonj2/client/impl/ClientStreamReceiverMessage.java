@@ -28,6 +28,7 @@ import java.util.function.Consumer;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
 import org.apache.qpid.protonj2.client.Message;
+import org.apache.qpid.protonj2.client.StreamDecodeOptions;
 import org.apache.qpid.protonj2.client.StreamReceiverMessage;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
@@ -95,11 +96,21 @@ public final class ClientStreamReceiverMessage implements StreamReceiverMessage 
     private StreamState currentState = StreamState.IDLE;
     private MessageBodyInputStream bodyStream;
 
-    ClientStreamReceiverMessage(ClientStreamReceiver receiver, ClientStreamDelivery delivery, InputStream deliveryStream) {
+    ClientStreamReceiverMessage(ClientStreamReceiver receiver, ClientStreamDelivery delivery, StreamDecodeOptions decodeOptions, InputStream deliveryStream) {
         this.receiver = receiver;
         this.delivery = delivery;
         this.deliveryStream = deliveryStream;
         this.protonDelivery = delivery.protonDelivery();
+
+        // Configure the decoder state here which will then apply to all decode operations
+        decoderState.setDepthLimit(decodeOptions.depthLimit());
+        decoderState.setMaxZeroWidthArrayElements(decodeOptions.maxZeroWidthArrayElements());
+        decoderState.setMaxStringSize(decodeOptions.maxStringSize());
+        decoderState.setMaxArraySize(decodeOptions.maxArraySize());
+        decoderState.setMaxListSize(decodeOptions.maxListSize());
+        decoderState.setMaxMapSize(decodeOptions.maxMapSize());
+        decoderState.setMaxBinarySize(decodeOptions.maxBinarySize());
+        decoderState.setMaxSymbolSize(decodeOptions.maxSymbolSize());
     }
 
     @Override

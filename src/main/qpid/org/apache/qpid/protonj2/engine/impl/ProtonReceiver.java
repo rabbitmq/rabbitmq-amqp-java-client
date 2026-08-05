@@ -39,6 +39,7 @@ import org.apache.qpid.protonj2.types.transport.DeliveryState;
 import org.apache.qpid.protonj2.types.transport.Detach;
 import org.apache.qpid.protonj2.types.transport.Disposition;
 import org.apache.qpid.protonj2.types.transport.Flow;
+import org.apache.qpid.protonj2.types.transport.LinkError;
 import org.apache.qpid.protonj2.types.transport.Role;
 import org.apache.qpid.protonj2.types.transport.Transfer;
 
@@ -422,11 +423,10 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
             delivery.remotelySettled();
         }
 
-        if (payload != null) {
-            delivery.appendTransferPayload(payload);
-        }
+        delivery.appendTransferPayload(payload);
 
         final boolean done = transfer.getAborted() || !transfer.getMore();
+
         if (done) {
             getCreditState().decrementCredit();
             getCreditState().incrementDeliveryCount();
@@ -437,6 +437,12 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
             } else {
                 delivery.completed();
             }
+        } else if (delivery.getTransferCount() >= engine.configuration().getMaxTransfersPerDelivery()) {
+            engine.engineFailed(new ProtocolViolationException(LinkError.TRANSFER_LIMIT_EXCEEDED,
+                "Delivery not completed within configured max Transfers per delivery value: " +
+                engine.configuration().getMaxTransfersPerDelivery()));
+
+            return delivery;
         }
 
         if (transfer.getAborted()) {

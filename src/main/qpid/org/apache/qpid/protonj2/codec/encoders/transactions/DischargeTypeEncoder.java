@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transactions;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transactions.Discharge;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transactions.Discharge;
  * Encoder of AMQP Discharge type values to a byte stream.
  */
 public final class DischargeTypeEncoder extends AbstractDescribedListTypeEncoder<Discharge> {
+
+    public static final DischargeTypeEncoder INSTANCE = new DischargeTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,17 +50,18 @@ public final class DischargeTypeEncoder extends AbstractDescribedListTypeEncoder
     }
 
     @Override
-    public void writeElement(Discharge discharge, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeBinary(buffer, state, discharge.getTxnId());
-                break;
-            case 1:
-                buffer.writeByte(discharge.getFail() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Discharge value index: " + index);
-        }
+    public int getElementCount(Discharge discharge) {
+        return 2;
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 2;
     }
 
     @Override
@@ -69,12 +74,17 @@ public final class DischargeTypeEncoder extends AbstractDescribedListTypeEncoder
     }
 
     @Override
-    public int getElementCount(Discharge discharge) {
-        return 2;
-    }
+    public void writeElements(Discharge discharge, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        final Binary txnId = discharge.getTxnId();
 
-    @Override
-    public int getMinElementCount() {
-        return 1;
+        if (txnId != null && txnId.getLength() > 0) {
+            encoder.writeBinary(buffer, state, txnId);
+        } else {
+            throw new EncodeException("Cannot write a Discharge instance without a transaction Id assigned");
+        }
+
+        if (count == 2) {
+            buffer.writeByte(discharge.getFail() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+        }
     }
 }

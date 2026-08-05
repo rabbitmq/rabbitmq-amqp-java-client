@@ -17,9 +17,11 @@
 package org.apache.qpid.protonj2.codec.encoders.messaging;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedMapTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Footer;
@@ -28,6 +30,8 @@ import org.apache.qpid.protonj2.types.messaging.Footer;
  * Encoder of AMQP Footer type values to a byte stream
  */
 public final class FooterTypeEncoder extends AbstractDescribedMapTypeEncoder<Object, Object, Footer> {
+
+    public static final FooterTypeEncoder INSTANCE = new FooterTypeEncoder();
 
     @Override
     public Class<Footer> getTypeClass() {
@@ -45,16 +49,11 @@ public final class FooterTypeEncoder extends AbstractDescribedMapTypeEncoder<Obj
     }
 
     @Override
-    public boolean hasMap(Footer value) {
-        return value.getValue() != null;
-    }
-
-    @Override
     public int getMapSize(Footer value) {
         if (value.getValue() != null) {
             return value.getValue().size();
         } else {
-            return 0;
+            throw new EncodeException("Footer must have an assigned Map payload");
         }
     }
 
@@ -62,7 +61,7 @@ public final class FooterTypeEncoder extends AbstractDescribedMapTypeEncoder<Obj
     public void writeMapEntries(ProtonBuffer buffer, Encoder encoder, EncoderState state, Footer footers) {
         // Write the Map elements and then compute total size written.
         footers.getValue().forEach((key, value) -> {
-            encoder.writeObject(buffer, state, key);
+            ProtonEncodings.writeSymbol(buffer, key);
             encoder.writeObject(buffer, state, value);
         });
     }

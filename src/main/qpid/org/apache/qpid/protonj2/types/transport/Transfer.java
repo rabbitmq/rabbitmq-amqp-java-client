@@ -60,7 +60,7 @@ public final class Transfer implements Performative {
     private boolean aborted;
     private boolean batchable;
 
-    //----- Query the state of the Header object -----------------------------//
+    //----- Query the state of the Transfer object -----------------------------//
 
     public boolean isEmpty() {
         return modified == 0;

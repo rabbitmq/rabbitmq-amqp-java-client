@@ -20,12 +20,15 @@ import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 
 /**
  * Encoder of AMQP UnsignedShort type values to a byte stream.
  */
 public final class UnsignedLongTypeEncoder extends AbstractPrimitiveTypeEncoder<UnsignedLong> {
+
+    public static final UnsignedLongTypeEncoder INSTANCE = new UnsignedLongTypeEncoder();
 
     @Override
     public Class<UnsignedLong> getTypeClass() {
@@ -34,7 +37,7 @@ public final class UnsignedLongTypeEncoder extends AbstractPrimitiveTypeEncoder<
 
     @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, UnsignedLong value) {
-        writeType(buffer, state, value.longValue());
+        ProtonEncodings.writeUnsignedLong(buffer, value.longValue());
     }
 
     /**
@@ -51,15 +54,7 @@ public final class UnsignedLongTypeEncoder extends AbstractPrimitiveTypeEncoder<
      * 		The unsigned long primitive value to encode.
      */
     public void writeType(ProtonBuffer buffer, EncoderState state, long value) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.ULONG0);
-        } else if (value > 0 && value <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLULONG);
-            buffer.writeByte((byte) value);
-        } else {
-            buffer.writeByte(EncodingCodes.ULONG);
-            buffer.writeLong(value);
-        }
+        ProtonEncodings.writeUnsignedLong(buffer, value);
     }
 
     /**
@@ -76,12 +71,7 @@ public final class UnsignedLongTypeEncoder extends AbstractPrimitiveTypeEncoder<
      * 		The byte value to encode as an unsigned long.
      */
     public void writeType(ProtonBuffer buffer, EncoderState state, byte value) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.ULONG0);
-        } else {
-            buffer.writeByte(EncodingCodes.SMALLULONG);
-            buffer.writeByte(value);
-        }
+        ProtonEncodings.writeUnsignedLong(buffer, value);
     }
 
     @Override

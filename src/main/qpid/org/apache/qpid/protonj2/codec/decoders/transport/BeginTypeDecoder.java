@@ -25,11 +25,8 @@ import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Begin;
@@ -38,6 +35,8 @@ import org.apache.qpid.protonj2.types.transport.Begin;
  * Decoder of AMQP Begin type values from a byte stream
  */
 public final class BeginTypeDecoder extends AbstractDescribedListTypeDecoder<Begin> {
+
+    public static final BeginTypeDecoder INSTANCE = new BeginTypeDecoder();
 
     private static final int MIN_BEGIN_LIST_ENTRIES = 4;
     private static final int MAX_BEGIN_LIST_ENTRIES = 8;
@@ -58,38 +57,18 @@ public final class BeginTypeDecoder extends AbstractDescribedListTypeDecoder<Beg
     }
 
     @Override
-    public Begin readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readBegin(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_BEGIN_LIST_ENTRIES;
     }
 
     @Override
-    public Begin[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final Begin[] result = new Begin[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readBegin(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_BEGIN_LIST_ENTRIES;
     }
 
-    private Begin readBegin(ProtonBuffer buffer, Decoder decoder, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected Begin readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final Begin begin = new Begin();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count < MIN_BEGIN_LIST_ENTRIES) {
-            throw new DecodeException(errorForMissingRequiredFields(count));
-        }
-
-        if (count > MAX_BEGIN_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Begin list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // Peek ahead and see if there is a null in the next slot, if so we don't call
@@ -137,38 +116,8 @@ public final class BeginTypeDecoder extends AbstractDescribedListTypeDecoder<Beg
     }
 
     @Override
-    public Begin readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readBegin(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public Begin[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final Begin[] result = new Begin[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readBegin(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private Begin readBegin(InputStream stream, StreamDecoder decoder, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected Begin readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final Begin begin = new Begin();
-
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count < MIN_BEGIN_LIST_ENTRIES) {
-            throw new DecodeException(errorForMissingRequiredFields(count));
-        }
-
-        if (count > MAX_BEGIN_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in Begin list encoding: " + count);
-        }
 
         for (int index = 0; index < count; ++index) {
             // If the stream allows we peek ahead and see if there is a null in the next slot,

@@ -29,6 +29,16 @@ public final class Target implements Terminus {
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x0000000000000029L);
     public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:target:list");
 
+    private static final int ADDRESS = 1;
+    private static final int DURABLE = 2;
+    private static final int EXPIRY_PLICY = 4;
+    private static final int TIMEOUT = 8;
+    private static final int DYNAMIC = 16;
+    private static final int DYNAMIC_NODE_PROPERTIES = 32;
+    private static final int CAPABILITIES = 64;
+
+    private int modified = 0;
+
     private String address;
     private TerminusDurability durable = TerminusDurability.NONE;
     private TerminusExpiryPolicy expiryPolicy = TerminusExpiryPolicy.SESSION_END;
@@ -54,6 +64,51 @@ public final class Target implements Terminus {
         if (other.capabilities != null) {
             this.capabilities = other.capabilities.clone();
         }
+
+        this.modified = other.modified;
+    }
+
+    //----- Query the state of the Target object -----------------------------//
+
+    public boolean isEmpty() {
+        return modified == 0;
+    }
+
+    public boolean hasElement(int index) {
+        final int value = 1 << index;
+        return (modified & value) == value;
+    }
+
+    public int getElementCount() {
+        return 32 - Integer.numberOfLeadingZeros(modified);
+    }
+
+    public boolean hasAddress() {
+        return (modified & ADDRESS) == ADDRESS;
+    }
+
+    public boolean hasDurable() {
+        return (modified & DURABLE) == DURABLE;
+    }
+
+    public boolean hasExpiryPolicy() {
+        return (modified & EXPIRY_PLICY) == EXPIRY_PLICY;
+    }
+
+    public boolean hasTimeout() {
+        return (modified & TIMEOUT) == TIMEOUT;
+    }
+
+    public boolean hasDynamic() {
+        return (modified & DYNAMIC) == DYNAMIC;
+    }
+
+    public boolean hasDynamicNodeProperties() {
+        return (modified & DYNAMIC_NODE_PROPERTIES) == DYNAMIC_NODE_PROPERTIES;
+    }
+
+    public boolean hasCapabilities() {
+        return (modified & CAPABILITIES) == CAPABILITIES;
     }
 
     @Override
@@ -66,6 +121,12 @@ public final class Target implements Terminus {
     }
 
     public Target setAddress(String address) {
+        if (address == null) {
+            modified &= ~ADDRESS;
+        } else {
+            modified |= ADDRESS;
+        }
+
         this.address = address;
         return this;
     }
@@ -75,6 +136,12 @@ public final class Target implements Terminus {
     }
 
     public Target setDurable(TerminusDurability durable) {
+        if (durable == null) {
+            modified &= ~DURABLE;
+        } else {
+            modified |= DURABLE;
+        }
+
         this.durable = durable == null ? TerminusDurability.NONE : durable;
         return this;
     }
@@ -84,6 +151,12 @@ public final class Target implements Terminus {
     }
 
     public Target setExpiryPolicy(TerminusExpiryPolicy expiryPolicy) {
+        if (expiryPolicy == null) {
+            modified &= ~EXPIRY_PLICY;
+        } else {
+            modified |= EXPIRY_PLICY;
+        }
+
         this.expiryPolicy = expiryPolicy == null ? TerminusExpiryPolicy.SESSION_END : expiryPolicy;
         return this;
     }
@@ -93,6 +166,12 @@ public final class Target implements Terminus {
     }
 
     public Target setTimeout(UnsignedInteger timeout) {
+        if (timeout == null) {
+            modified &= ~TIMEOUT;
+        } else {
+            modified |= TIMEOUT;
+        }
+
         this.timeout = timeout;
         return this;
     }
@@ -102,6 +181,12 @@ public final class Target implements Terminus {
     }
 
     public Target setDynamic(boolean dynamic) {
+        if (dynamic == false) {
+            modified &= ~DYNAMIC;
+        } else {
+            modified |= DYNAMIC;
+        }
+
         this.dynamic = dynamic;
         return this;
     }
@@ -112,6 +197,12 @@ public final class Target implements Terminus {
 
     @SuppressWarnings("unchecked")
     public Target setDynamicNodeProperties(Map<Symbol, ?> dynamicNodeProperties) {
+        if (dynamicNodeProperties == null) {
+            modified &= ~DYNAMIC_NODE_PROPERTIES;
+        } else {
+            modified |= DYNAMIC_NODE_PROPERTIES;
+        }
+
         this.dynamicNodeProperties = (Map<Symbol, Object>) dynamicNodeProperties;
         return this;
     }
@@ -121,6 +212,12 @@ public final class Target implements Terminus {
     }
 
     public Target setCapabilities(Symbol... capabilities) {
+        if (capabilities == null) {
+            modified &= ~CAPABILITIES;
+        } else {
+            modified |= CAPABILITIES;
+        }
+
         this.capabilities = capabilities;
         return this;
     }

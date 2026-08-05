@@ -34,7 +34,7 @@ public class PlainMechanism extends AbstractMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol PLAIN = Symbol.valueOf("PLAIN");
+    public static final Symbol PLAIN = Symbol.getSASLSymbol("PLAIN");
 
     @Override
     public Symbol getName() {

@@ -16,7 +16,10 @@
  */
 package org.apache.qpid.protonj2.codec.decoders.primitives;
 
+import static org.apache.qpid.protonj2.codec.decoders.PrimitiveArrayTypeDecoder.validateArrayConstraints;
+
 import java.io.InputStream;
+import java.util.Arrays;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
@@ -28,6 +31,8 @@ import org.apache.qpid.protonj2.codec.StreamDecoderState;
  * Decoder of AMQP Boolean False values from a byte stream.
  */
 public final class BooleanFalseTypeDecoder extends BooleanTypeDecoder {
+
+    public static final BooleanFalseTypeDecoder INSTANCE = new BooleanFalseTypeDecoder();
 
     @Override
     public Boolean readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
@@ -42,6 +47,11 @@ public final class BooleanFalseTypeDecoder extends BooleanTypeDecoder {
     @Override
     public int getTypeCode() {
         return EncodingCodes.BOOLEAN_FALSE & 0xff;
+    }
+
+    @Override
+    public boolean isZeroWidth() {
+        return true;
     }
 
     @Override
@@ -72,4 +82,47 @@ public final class BooleanFalseTypeDecoder extends BooleanTypeDecoder {
         return 0;
     }
 
+    @Override
+    public Boolean[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
+        validateArrayConstraints(count, buffer, state, this);
+
+        final Boolean[] array = new Boolean[count];
+
+        Arrays.fill(array, Boolean.FALSE);
+
+        return array;
+    }
+
+    @Override
+    public Boolean[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
+        validateArrayConstraints(count, stream, state, this);
+
+        final Boolean[] array = new Boolean[count];
+
+        Arrays.fill(array, Boolean.FALSE);
+
+        return array;
+    }
+
+    @Override
+    public boolean[] readPrimitiveArray(ProtonBuffer buffer, DecoderState state, int count) {
+        validateArrayConstraints(count, buffer, state, this);
+
+        final boolean[] array = new boolean[count];
+
+        Arrays.fill(array, Boolean.FALSE.booleanValue());
+
+        return array;
+    }
+
+    @Override
+    public boolean[] readPrimitiveArray(InputStream stream, StreamDecoderState state, int count) {
+        validateArrayConstraints(count, stream, state, this);
+
+        final boolean[] array = new boolean[count];
+
+        Arrays.fill(array, Boolean.FALSE.booleanValue());
+
+        return array;
+    }
 }

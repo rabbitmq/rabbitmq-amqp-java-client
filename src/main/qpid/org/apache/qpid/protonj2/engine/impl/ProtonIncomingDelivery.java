@@ -350,12 +350,14 @@ public class ProtonIncomingDelivery implements IncomingDelivery {
     ProtonIncomingDelivery appendTransferPayload(ProtonBuffer buffer) {
         transferCount++;
 
-        if (payload == null) {
-            this.payload = buffer;
-        } else if (ProtonCompositeBuffer.isComposite(payload)) {
-            ((ProtonCompositeBuffer) payload).append(buffer);
-        } else {
-            this.payload = link.getEngine().configuration().getBufferAllocator().composite(new ProtonBuffer[] { payload, buffer });
+        if (buffer != null) {
+            if (payload == null) {
+                this.payload = buffer;
+            } else if (ProtonCompositeBuffer.isComposite(payload)) {
+                ((ProtonCompositeBuffer) payload).append(buffer);
+            } else {
+                this.payload = link.getEngine().configuration().getBufferAllocator().composite(new ProtonBuffer[] { payload, buffer });
+            }
         }
 
         return this;

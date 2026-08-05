@@ -31,26 +31,44 @@ import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
  */
 public final class Symbol implements Comparable<Symbol> {
 
-    private static final Map<ProtonBuffer, Symbol> bufferToSymbols = new ConcurrentHashMap<>(2048);
-    private static final Map<String, Symbol> stringToSymbols = new ConcurrentHashMap<>(2048);
-
     private static final Symbol EMPTY_SYMBOL = new Symbol();
 
+    private static final int SYMBOL_CACHE_INITIAL_CAPACITY = 2048;
+    private static final int MAX_CACHED_SYMBOLS = 8192;
     private static final int MAX_CACHED_SYMBOL_SIZE = 64;
+
+    private static final int SASL_SYMBOL_CACHE_INITIAL_CAPACITY = 32;
+    private static final int MAX_CACHED_SASL_SYMBOLS = 128;
+    private static final int MAX_CACHED_SASL_SYMBOL_SIZE = 32;
+
+    /**
+     * Larger cache used for normal operations after the SASL exchange has completed.
+     */
+    private static final SymbolCache SYMBOL_CACHE =
+        new SymbolCache(MAX_CACHED_SYMBOLS, MAX_CACHED_SYMBOL_SIZE, SYMBOL_CACHE_INITIAL_CAPACITY);
+
+    /**
+     * Smaller cache meant to house the small commonly used Symbols during the SASL exchange.
+     */
+    private static final SymbolCache SASL_SYMBOL_CACHE =
+        new SymbolCache(MAX_CACHED_SASL_SYMBOLS, MAX_CACHED_SASL_SYMBOL_SIZE, SASL_SYMBOL_CACHE_INITIAL_CAPACITY);
 
     private String symbolString;
     private final ProtonBuffer underlying;
     private final int hashCode;
+    private final SymbolCache symbolCache;
 
     private Symbol() {
         this.underlying = ProtonBufferAllocator.defaultAllocator().allocate(0).convertToReadOnly();
         this.hashCode = 31;
         this.symbolString = "";
+        this.symbolCache = null;
     }
 
-    private Symbol(ProtonBuffer underlying) {
+    private Symbol(ProtonBuffer underlying, SymbolCache cache) {
         this.underlying = underlying;
         this.hashCode = underlying.hashCode();
+        this.symbolCache = cache;
     }
 
     /**
@@ -75,14 +93,7 @@ public final class Symbol implements Comparable<Symbol> {
     @Override
     public String toString() {
         if (symbolString == null && underlying.getReadableBytes() > 0) {
-            symbolString = underlying.toString(US_ASCII);
-
-            if (underlying.getReadableBytes() <= MAX_CACHED_SYMBOL_SIZE) {
-                final Symbol existing;
-                if ((existing = stringToSymbols.putIfAbsent(symbolString, this)) != null) {
-                    symbolString = existing.symbolString;
-                }
-            }
+            symbolString = symbolCache.toString(this);
         }
 
         return symbolString;
@@ -161,31 +172,9 @@ public final class Symbol implements Comparable<Symbol> {
             return null;
         } else if (symbolBuffer.getReadableBytes() == 0) {
             return EMPTY_SYMBOL;
+        } else {
+            return SYMBOL_CACHE.getSymbol(symbolBuffer, copyOnCreate);
         }
-
-        Symbol symbol = bufferToSymbols.get(symbolBuffer);
-        if (symbol == null) {
-            if (copyOnCreate) {
-                // Copy to a known heap based buffer to avoid issue with life-cycle of pooled buffer types.
-                int symbolSize = symbolBuffer.getReadableBytes();
-                ProtonBuffer copy = ProtonBufferAllocator.defaultAllocator().allocate(symbolSize);
-                copy.writeBytes(symbolBuffer);
-                symbolBuffer = copy.convertToReadOnly();
-            }
-
-            symbol = new Symbol(symbolBuffer);
-
-            // Don't cache overly large symbols to prevent holding large
-            // amount of memory in the symbol cache.
-            if (symbolBuffer.getReadableBytes() <= MAX_CACHED_SYMBOL_SIZE) {
-                final Symbol existing;
-                if ((existing = bufferToSymbols.putIfAbsent(symbolBuffer, symbol)) != null) {
-                    symbol = existing;
-                }
-            }
-        }
-
-        return symbol;
     }
 
     /**
@@ -202,19 +191,178 @@ public final class Symbol implements Comparable<Symbol> {
             return null;
         } else if (stringValue.isEmpty()) {
             return EMPTY_SYMBOL;
+        } else {
+            return SYMBOL_CACHE.getSymbol(stringValue);
+        }
+    }
+
+    /**
+     * Look up a singleton {@link Symbol} instance that matches the given {@link ProtonBuffer}
+     * byte view of the {@link Symbol} from the smaller SASL Symbol cache. The symbols returned
+     * here are meant to only be those used in the SASL exchange during connection
+     * establishment..
+     *
+     * @param symbolBytes
+     * 		The {@link String} version of the {@link Symbol} value.
+     *
+     * @return a {@link Symbol} that matches the given {@link String}.
+     */
+    public static Symbol getSASLSymbol(ProtonBuffer symbolBytes) {
+        return getSASLSymbol(symbolBytes, false);
+    }
+
+    /**
+     * Look up a singleton {@link Symbol} instance that matches the given {@link ProtonBuffer}
+     * byte view of the {@link Symbol} from the smaller SASL Symbol cache. The symbols returned
+     * here are meant to only be those used in the SASL exchange during connection
+     * establishment..
+     *
+     * @param symbolBuffer
+     * 		The {@link ProtonBuffer} version of the {@link Symbol} value.
+     * @param copyOnCreate
+     * 		Should the provided buffer be copied during creation of a new {@link Symbol}.
+     *
+     * @return a {@link Symbol} that matches the given {@link String}.
+     */
+    public static Symbol getSASLSymbol(ProtonBuffer symbolBuffer, boolean copyOnCreate) {
+        if (symbolBuffer == null) {
+            return null;
+        } else if (symbolBuffer.getReadableBytes() == 0) {
+            return EMPTY_SYMBOL;
+        } else {
+            return SASL_SYMBOL_CACHE.getSymbol(symbolBuffer, copyOnCreate);
+        }
+    }
+
+    /**
+     * Look up a singleton {@link Symbol} instance that matches the given {@link String}
+     * name of the {@link Symbol} from the smaller SASL Symbol cache. The symbols returned
+     * here are meant to only be those used in the SASL exchange during connection
+     * establishment..
+     *
+     * @param stringValue
+     * 		The {@link String} version of the {@link Symbol} value.
+     *
+     * @return a {@link Symbol} that matches the given {@link String}.
+     */
+    public static Symbol getSASLSymbol(String stringValue) {
+        if (stringValue == null) {
+            return null;
+        } else if (stringValue.isEmpty()) {
+            return EMPTY_SYMBOL;
+        } else {
+            return SASL_SYMBOL_CACHE.getSymbol(stringValue);
+        }
+    }
+
+    private static class SymbolCache {
+
+        private final Map<ProtonBuffer, Symbol> bufferToSymbols;
+        private final Map<String, Symbol> stringToSymbols;
+
+        private final int maxCachedSymbols;
+        private final int maxCachedSymbolSize;
+
+        public SymbolCache(int maxCachedSymbols, int maxCachedSymbolSize, int initialCapacity) {
+            this.maxCachedSymbols = maxCachedSymbols;
+            this.maxCachedSymbolSize = maxCachedSymbolSize;
+
+            this.bufferToSymbols = new ConcurrentHashMap<>(initialCapacity);
+            this.stringToSymbols = new ConcurrentHashMap<>(initialCapacity);
         }
 
-        Symbol symbol = stringToSymbols.get(stringValue);
-        if (symbol == null) {
-            symbol = getSymbol(ProtonBufferAllocator.defaultAllocator().copy(stringValue.getBytes(US_ASCII)));
+        public String toString(Symbol symbol) {
+            if (symbol.symbolString == null && symbol.getLength() > 0) {
+                symbol.symbolString = symbol.underlying.toString(US_ASCII);
 
-            // Don't cache overly large symbols to prevent holding large
-            // amount of memory in the symbol cache.
-            if (symbol.underlying.getReadableBytes() <= MAX_CACHED_SYMBOL_SIZE) {
-                stringToSymbols.put(stringValue, symbol);
+                if (symbol.getLength() <= maxCachedSymbolSize && stringToSymbols.size() < maxCachedSymbols) {
+                    Symbol existing = null;
+
+                    synchronized (this) {
+                        if (stringToSymbols.size() < maxCachedSymbols) {
+                            existing = stringToSymbols.putIfAbsent(symbol.symbolString, symbol);
+                        }
+                    }
+
+                    if (existing != null) {
+                        symbol.symbolString = existing.symbolString;
+                    }
+                }
+            }
+
+            return symbol.symbolString;
+        }
+
+        public Symbol getSymbol(String stringValue) {
+            final boolean canCache = stringValue.length() <= maxCachedSymbolSize;
+
+            Symbol symbol = null;
+
+            if (canCache) {
+                symbol = stringToSymbols.get(stringValue);
+            }
+
+            if (symbol == null) {
+                symbol = getSymbol(ProtonBufferAllocator.defaultAllocator().copy(stringValue.getBytes(US_ASCII)), false);
+
+                // For a new symbol instance we can give it a string value now and avoid any future need
+                // to look in the cache for the mappings which saves some work later for Symbol::toString.
+                if (symbol.symbolString == null) {
+                    symbol.symbolString = stringValue;
+                }
+
+                // Don't cache overly large symbols to prevent holding large amount of memory in
+                // the symbol cache and limit the cache to a cap to prevent over-large cache growth.
+                if (canCache && stringToSymbols.size() < maxCachedSymbols) {
+                    synchronized (this) {
+                        if (stringToSymbols.size() < maxCachedSymbols) {
+                            stringToSymbols.putIfAbsent(stringValue, symbol);
+                        }
+                    }
+                }
+            }
+
+            return symbol;
+        }
+
+        public Symbol getSymbol(ProtonBuffer symbolBuffer, boolean copyOnCreate) {
+            final boolean canCache = symbolBuffer.getReadableBytes() <= maxCachedSymbolSize;
+
+            if (canCache) {
+                Symbol symbol = bufferToSymbols.get(symbolBuffer);
+
+                if (symbol == null) {
+                    synchronized (this) {
+                        symbol = bufferToSymbols.get(symbolBuffer);
+
+                        if (symbol != null) {
+                            return symbol;
+                        }
+
+                        symbol = createSymbol(this, symbolBuffer, copyOnCreate);
+
+                        if (bufferToSymbols.size() < maxCachedSymbols) {
+                            bufferToSymbols.put(symbol.underlying, symbol);
+                        }
+                    }
+                }
+
+                return symbol;
+            } else {
+                return createSymbol(this, symbolBuffer, copyOnCreate);
             }
         }
+    }
 
-        return symbol;
+    private static Symbol createSymbol(SymbolCache cache, ProtonBuffer symbolBuffer, boolean copyOnCreate) {
+        if (copyOnCreate) {
+            // Copy to a known heap based buffer to avoid issue with life-cycle of pooled buffer types.
+            int symbolSize = symbolBuffer.getReadableBytes();
+            ProtonBuffer copy = ProtonBufferAllocator.defaultAllocator().allocate(symbolSize);
+            copy.writeBytes(symbolBuffer);
+            symbolBuffer = copy.convertToReadOnly();
+        }
+
+        return new Symbol(symbolBuffer, cache);
     }
 }

@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
 import org.apache.qpid.protonj2.client.AdvancedMessage;
+import org.apache.qpid.protonj2.client.DecodeOptions;
 import org.apache.qpid.protonj2.client.Message;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.codec.CodecFactory;
@@ -61,7 +62,7 @@ public abstract class ClientMessageSupport {
     private static final ThreadLocal<EncoderState> THREAD_LOCAL_ENCODER_STATE =
         ThreadLocal.withInitial(() -> DEFAULT_ENCODER.newEncoderState());
     private static final ThreadLocal<DecoderState> THREAD_LOCAL_DECODER_STATE =
-            ThreadLocal.withInitial(() -> DEFAULT_DECODER.newDecoderState());
+        ThreadLocal.withInitial(() -> DEFAULT_DECODER.newDecoderState());
 
     //----- Message Conversion
 
@@ -152,8 +153,34 @@ public abstract class ClientMessageSupport {
         return decodeMessage(DEFAULT_DECODER, THREAD_LOCAL_DECODER_STATE.get(), buffer, daConsumer);
     }
 
+    public static Message<?> decodeMessage(ProtonBuffer buffer, Consumer<DeliveryAnnotations> daConsumer, DecodeOptions options) throws ClientException {
+        final DecoderState tlsState = THREAD_LOCAL_DECODER_STATE.get();
+
+        final int oldDepthLimit = tlsState.getDepthLimit();
+        final int oldMaxZeroWidthArrayElements = tlsState.getMaxZeroWidthArrayElements();
+
+        try {
+            tlsState.setDepthLimit(options.depthLimit());
+            tlsState.setMaxZeroWidthArrayElements(options.maxZeroWidthArrayElements());
+
+            return decodeMessage(DEFAULT_DECODER, tlsState, buffer, daConsumer);
+        } finally {
+            tlsState.setDepthLimit(oldDepthLimit);
+            tlsState.setMaxZeroWidthArrayElements(oldMaxZeroWidthArrayElements);
+        }
+    }
+
     public static Message<?> decodeMessage(Decoder decoder, ProtonBuffer buffer, Consumer<DeliveryAnnotations> daConsumer) throws ClientException {
         return decodeMessage(decoder, decoder.newDecoderState(), buffer, daConsumer);
+    }
+
+    public static Message<?> decodeMessage(Decoder decoder, ProtonBuffer buffer, Consumer<DeliveryAnnotations> daConsumer, DecodeOptions options) throws ClientException {
+        final DecoderState decoderState = decoder.newDecoderState();
+
+        decoderState.setDepthLimit(options.depthLimit());
+        decoderState.setMaxZeroWidthArrayElements(options.maxZeroWidthArrayElements());
+
+        return decodeMessage(decoder, decoderState, buffer, daConsumer);
     }
 
     public static Message<?> decodeMessage(Decoder decoder, DecoderState decoderState,
@@ -168,6 +195,8 @@ public abstract class ClientMessageSupport {
                 section = (Section<?>) decoder.readObject(buffer, decoderState);
             } catch (Exception e) {
                 throw ClientExceptionSupport.createNonFatalOrPassthrough(e);
+            } finally {
+                decoderState.reset();
             }
 
             switch (section.getType()) {

@@ -33,6 +33,8 @@ import org.apache.qpid.protonj2.types.messaging.AmqpSequence;
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public final class AmqpSequenceTypeEncoder extends AbstractDescribedTypeEncoder<AmqpSequence> {
 
+    public static final AmqpSequenceTypeEncoder INSTANCE = new AmqpSequenceTypeEncoder();
+
     private static final byte[] SEQUENCE_PREAMBLE = new byte[] {
             EncodingCodes.DESCRIBED_TYPE_INDICATOR, EncodingCodes.SMALLULONG, AmqpSequence.DESCRIPTOR_CODE.byteValue()
         };
@@ -67,8 +69,7 @@ public final class AmqpSequenceTypeEncoder extends AbstractDescribedTypeEncoder<
         int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         writeRawArray(buffer, state, values);
 
@@ -86,7 +87,8 @@ public final class AmqpSequenceTypeEncoder extends AbstractDescribedTypeEncoder<
     @Override
     public void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        state.getEncoder().writeUnsignedLong(buffer, state, getDescriptorCode());
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(AmqpSequence.DESCRIPTOR_CODE.byteValue());
 
         final List[] elements = new List[values.length];
 

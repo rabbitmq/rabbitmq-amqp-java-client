@@ -25,10 +25,7 @@ import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.ErrorCondition;
@@ -37,6 +34,8 @@ import org.apache.qpid.protonj2.types.transport.ErrorCondition;
  * Decoder of AMQP ErrorCondition type values from a byte stream.
  */
 public final class ErrorConditionTypeDecoder extends AbstractDescribedListTypeDecoder<ErrorCondition> {
+
+    public static final ErrorConditionTypeDecoder INSTANCE = new ErrorConditionTypeDecoder();
 
     private static final int MIN_ERROR_CONDITION_LIST_ENTRIES = 1;
     private static final int MAX_ERROR_CONDITION_LIST_ENTRIES = 3;
@@ -57,106 +56,56 @@ public final class ErrorConditionTypeDecoder extends AbstractDescribedListTypeDe
     }
 
     @Override
-    public ErrorCondition readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readErrorCondition(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_ERROR_CONDITION_LIST_ENTRIES;
     }
 
     @Override
-    public ErrorCondition[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final ErrorCondition[] result = new ErrorCondition[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readErrorCondition(buffer, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_ERROR_CONDITION_LIST_ENTRIES;
     }
 
-    private ErrorCondition readErrorCondition(ProtonBuffer buffer, Decoder decoder, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
+    @Override
+    protected ErrorCondition readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
+        final Symbol condition = decoder.readSymbol(buffer, state);
 
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_ERROR_CONDITION_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in ErrorCondition list encoding: " + count);
-        }
-        if (count > MAX_ERROR_CONDITION_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in ErrorCondition list encoding: " + count);
+        if (condition == null) {
+            throw new DecodeException("ErrorCondition requries an assigned condition value be sent but was null");
         }
 
-        Symbol condition = null;
         String description = null;
+
+        if (count >= 2) {
+            description = decoder.readString(buffer, state);
+        }
+
         Map<Symbol, Object> info = null;
 
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    condition = decoder.readSymbol(buffer, state);
-                    break;
-                case 1:
-                    description = decoder.readString(buffer, state);
-                    break;
-                case 2:
-                    info = decoder.readMap(buffer, state);
-                    break;
-            }
+        if (count == 3) {
+            info = decoder.readMap(buffer, state);
         }
 
         return new ErrorCondition(condition, description, info);
     }
 
     @Override
-    public ErrorCondition readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
+    protected ErrorCondition readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
+        final Symbol condition = decoder.readSymbol(stream, state);
 
-        return readErrorCondition(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public ErrorCondition[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final ErrorCondition[] result = new ErrorCondition[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readErrorCondition(stream, state.getDecoder(), state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+        if (condition == null) {
+            throw new DecodeException("ErrorCondition requries an assigned condition value be sent but was null");
         }
 
-        return result;
-    }
-
-    private ErrorCondition readErrorCondition(InputStream stream, StreamDecoder decoder, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_ERROR_CONDITION_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in ErrorCondition list encoding: " + count);
-        }
-        if (count > MAX_ERROR_CONDITION_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in ErrorCondition list encoding: " + count);
-        }
-
-        Symbol condition = null;
         String description = null;
+
+        if (count >= 2) {
+            description = decoder.readString(stream, state);
+        }
+
         Map<Symbol, Object> info = null;
 
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    condition = decoder.readSymbol(stream, state);
-                    break;
-                case 1:
-                    description = decoder.readString(stream, state);
-                    break;
-                case 2:
-                    info = decoder.readMap(stream, state);
-                    break;
-            }
+        if (count == 3) {
+            info = decoder.readMap(stream, state);
         }
 
         return new ErrorCondition(condition, description, info);

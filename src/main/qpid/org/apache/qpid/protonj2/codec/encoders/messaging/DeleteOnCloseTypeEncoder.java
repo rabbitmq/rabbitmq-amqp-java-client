@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.messaging.DeleteOnClose;
  */
 public final class DeleteOnCloseTypeEncoder extends AbstractDescribedListTypeEncoder<DeleteOnClose> {
 
+    public static final DeleteOnCloseTypeEncoder INSTANCE = new DeleteOnCloseTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return DeleteOnClose.DESCRIPTOR_CODE;
@@ -47,15 +49,21 @@ public final class DeleteOnCloseTypeEncoder extends AbstractDescribedListTypeEnc
 
     @Override
     public byte getListEncoding(DeleteOnClose value) {
-        return EncodingCodes.LIST0 & 0xff;
-    }
-
-    @Override
-    public void writeElement(DeleteOnClose source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        return EncodingCodes.LIST0;
     }
 
     @Override
     public int getElementCount(DeleteOnClose value) {
         return 0;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 0;
+    }
+
+    @Override
+    public void writeElements(DeleteOnClose source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        throw new UnsupportedOperationException("This type should never have to write list elements");
     }
 }

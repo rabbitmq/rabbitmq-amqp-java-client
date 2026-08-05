@@ -17,6 +17,7 @@
 package org.apache.qpid.protonj2.engine.exceptions;
 
 import org.apache.qpid.protonj2.types.Symbol;
+import org.apache.qpid.protonj2.types.transport.AmqpError;
 
 /**
  * Error thrown when there has been a violation of the AMQP specification
@@ -25,7 +26,7 @@ public class ProtocolViolationException extends ProtonException {
 
     private static final long serialVersionUID = 1L;
 
-    private Symbol condition;
+    private Symbol condition = AmqpError.INTERNAL_ERROR;
 
     public ProtocolViolationException() {
         super();

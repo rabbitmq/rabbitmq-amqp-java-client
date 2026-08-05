@@ -16,7 +16,6 @@
  */
 package org.apache.qpid.protonj2.types.messaging;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.qpid.protonj2.types.Symbol;
@@ -27,6 +26,12 @@ public final class Modified implements DeliveryState, Outcome {
 
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x0000000000000027L);
     public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:modified:list");
+
+    private static final int DELIVERY_FAILED = 1;
+    private static final int UNDELIVERABLE_HERE = 2;
+    private static final int ANNOTATIONS = 4;
+
+    private int modified = 0;
 
     private boolean deliveryFailed;
     private boolean undeliverableHere;
@@ -39,9 +44,34 @@ public final class Modified implements DeliveryState, Outcome {
     }
 
     public Modified(boolean deliveryFailed, boolean undeliverableHere, Map<Symbol, Object> annotations) {
-        this.deliveryFailed = deliveryFailed;
-        this.undeliverableHere = undeliverableHere;
-        this.messageAnnotations = annotations != null ? new HashMap<>(annotations) : null;
+        setDeliveryFailed(deliveryFailed);
+        setUndeliverableHere(undeliverableHere);
+        setMessageAnnotations(annotations);
+    }
+
+    public boolean isEmpty() {
+        return modified == 0;
+    }
+
+    public int getElementCount() {
+        return 32 - Integer.numberOfLeadingZeros(modified);
+    }
+
+    public boolean hasElement(int index) {
+        final int value = 1 << index;
+        return (modified & value) == value;
+    }
+
+    public boolean hasDeliveryFailed() {
+        return (modified & DELIVERY_FAILED) == DELIVERY_FAILED;
+    }
+
+    public boolean hasUndeliverableHere() {
+        return (modified & UNDELIVERABLE_HERE) == UNDELIVERABLE_HERE;
+    }
+
+    public boolean hasAnnotations() {
+        return (modified & ANNOTATIONS) == ANNOTATIONS;
     }
 
     public boolean isDeliveryFailed() {
@@ -49,6 +79,12 @@ public final class Modified implements DeliveryState, Outcome {
     }
 
     public Modified setDeliveryFailed(boolean deliveryFailed) {
+        if (deliveryFailed) {
+            modified |= DELIVERY_FAILED;
+        } else {
+            modified &= ~DELIVERY_FAILED;
+        }
+
         this.deliveryFailed = deliveryFailed;
         return this;
     }
@@ -58,6 +94,12 @@ public final class Modified implements DeliveryState, Outcome {
     }
 
     public Modified setUndeliverableHere(boolean undeliverableHere) {
+        if (undeliverableHere) {
+            modified |= UNDELIVERABLE_HERE;
+        } else {
+            modified &= ~UNDELIVERABLE_HERE;
+        }
+
         this.undeliverableHere = undeliverableHere;
         return this;
     }
@@ -68,6 +110,12 @@ public final class Modified implements DeliveryState, Outcome {
 
     @SuppressWarnings("unchecked")
     public Modified setMessageAnnotations(Map<Symbol, ?> messageAnnotations) {
+        if (messageAnnotations != null) {
+            modified |= ANNOTATIONS;
+        } else {
+            modified &= ~ANNOTATIONS;
+        }
+
         this.messageAnnotations = (Map<Symbol, Object>) messageAnnotations;
         return this;
     }

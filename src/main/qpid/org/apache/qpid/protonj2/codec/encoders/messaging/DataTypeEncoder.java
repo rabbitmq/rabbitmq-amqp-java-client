@@ -29,6 +29,8 @@ import org.apache.qpid.protonj2.types.messaging.Data;
  */
 public final class DataTypeEncoder extends AbstractDescribedTypeEncoder<Data> {
 
+    public static final DataTypeEncoder INSTANCE = new DataTypeEncoder();
+
     private static final byte[] DATA_PREAMBLE = new byte[] {
         EncodingCodes.DESCRIBED_TYPE_INDICATOR, EncodingCodes.SMALLULONG, Data.DESCRIPTOR_CODE.byteValue()
     };
@@ -80,8 +82,7 @@ public final class DataTypeEncoder extends AbstractDescribedTypeEncoder<Data> {
         final int startIndex = buffer.getWriteOffset();
 
         // Reserve space for the size and write the count of list elements.
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         writeRawArray(buffer, state, values);
 
@@ -99,9 +100,10 @@ public final class DataTypeEncoder extends AbstractDescribedTypeEncoder<Data> {
     @Override
     public void writeRawArray(ProtonBuffer buffer, EncoderState state, Object[] values) {
         buffer.writeByte(EncodingCodes.DESCRIBED_TYPE_INDICATOR);
-        state.getEncoder().writeUnsignedLong(buffer, state, getDescriptorCode());
-
+        buffer.writeByte(EncodingCodes.SMALLULONG);
+        buffer.writeByte(Data.DESCRIPTOR_CODE.byteValue());
         buffer.writeByte(EncodingCodes.VBIN32);
+
         for (Object value : values) {
             final ProtonBuffer binary = ((Data) value).getBuffer();
             buffer.writeInt(binary.getReadableBytes());

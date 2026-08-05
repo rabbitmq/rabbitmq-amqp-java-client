@@ -26,22 +26,22 @@ import java.io.InputStream;
 public interface StreamTypeDecoder<V> {
 
     /**
-     * @return the Class that this decoder handles.
+     * {@return the Class that this decoder handles}
      */
     Class<V> getTypeClass();
 
     /**
-     * @return true if the underlying type that is going to be decoded is an primitive type
+     * {@return true if the underlying type that is going to be decoded is an primitive type}
      */
     boolean isPrimitive();
 
     /**
-     * @return true if the underlying type that is going to be decoded is an array type
+     * {@return true if the underlying type that is going to be decoded is an array type}
      */
     boolean isArrayType();
 
     /**
-     * @return true if the underlying type is the null type meaning there are no bytes to decode.
+     * {@return true if the underlying type is the null type meaning there are no bytes to decode}
      */
     boolean isNull();
 

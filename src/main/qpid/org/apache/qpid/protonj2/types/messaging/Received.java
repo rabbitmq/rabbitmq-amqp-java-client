@@ -26,14 +26,46 @@ public final class Received implements DeliveryState {
     public static final UnsignedLong DESCRIPTOR_CODE = UnsignedLong.valueOf(0x0000000000000023L);
     public static final Symbol DESCRIPTOR_SYMBOL = Symbol.valueOf("amqp:received:list");
 
+    private static final int SECTION_NUMBER = 1;
+    private static final int SECTION_OFFSET = 2;
+
+    private int modified = 0;
+
     private UnsignedInteger sectionNumber;
     private UnsignedLong sectionOffset;
+
+    public boolean isEmpty() {
+        return modified == 0;
+    }
+
+    public int getElementCount() {
+        return 32 - Integer.numberOfLeadingZeros(modified);
+    }
+
+    public boolean hasElement(int index) {
+        final int value = 1 << index;
+        return (modified & value) == value;
+    }
+
+    public boolean hasSectionNumber() {
+        return (modified & SECTION_NUMBER) == SECTION_NUMBER;
+    }
+
+    public boolean hasSectionOffset() {
+        return (modified & SECTION_OFFSET) == SECTION_OFFSET;
+    }
 
     public UnsignedInteger getSectionNumber() {
         return sectionNumber;
     }
 
     public Received setSectionNumber(UnsignedInteger sectionNumber) {
+        if (sectionNumber != null) {
+            modified |= SECTION_NUMBER;
+        } else {
+            modified &= ~SECTION_NUMBER;
+        }
+
         this.sectionNumber = sectionNumber;
         return this;
     }
@@ -43,6 +75,12 @@ public final class Received implements DeliveryState {
     }
 
     public Received setSectionOffset(UnsignedLong sectionOffset) {
+        if (sectionOffset != null) {
+            modified |= SECTION_OFFSET;
+        } else {
+            modified &= ~SECTION_OFFSET;
+        }
+
         this.sectionOffset = sectionOffset;
         return this;
     }

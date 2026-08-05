@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.messaging.Released;
  */
 public final class ReleasedTypeEncoder extends AbstractDescribedListTypeEncoder<Released> {
 
+    public static final ReleasedTypeEncoder INSTANCE = new ReleasedTypeEncoder();
+
     private static final byte[] RELEASED_ENCODING = new byte[] {
         EncodingCodes.DESCRIBED_TYPE_INDICATOR,
         EncodingCodes.SMALLULONG,
@@ -58,16 +60,22 @@ public final class ReleasedTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
+    public int getElementCount(Released value) {
+        return 0;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 0;
+    }
+
+    @Override
     public void writeType(ProtonBuffer buffer, EncoderState state, Released value) {
         buffer.writeBytes(RELEASED_ENCODING);
     }
 
     @Override
-    public void writeElement(Released source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-    }
-
-    @Override
-    public int getElementCount(Released value) {
-        return 0;
+    public void writeElements(Released source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        throw new UnsupportedOperationException("This type should never have to write list elements");
     }
 }

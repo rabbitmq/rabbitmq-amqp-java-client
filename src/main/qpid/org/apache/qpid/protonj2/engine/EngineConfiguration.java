@@ -38,7 +38,7 @@ public interface EngineConfiguration {
     EngineConfiguration setBufferAllocator(ProtonBufferAllocator allocator);
 
     /**
-     * @return the currently assigned {@link ProtonBufferAllocator}.
+     * {@return the currently assigned {@link ProtonBufferAllocator}}
      */
     ProtonBufferAllocator getBufferAllocator();
 
@@ -56,8 +56,31 @@ public interface EngineConfiguration {
     EngineConfiguration setTraceFrames(boolean traceFrames);
 
     /**
-     * @return true if the engine will emit frames to system output.
+     * {@return true if the engine will emit frames to system output}
      */
     boolean isTraceFrames();
 
+    /**
+     * Sets the configured maximum number of Transfer frames that can make up a single completed
+     * delivery. If the delivery is not completed within this number of transfer frames the engine
+     * may either close the associated link or the connection in its entirety. An engine implementation
+     * may opt not to implement this feature in which case the value should be fixed at zero and any
+     * assignment should be ignored. If the value is configured as zero then the behavior should be
+     * to treat that as no limit was assigned.
+     *
+     * @param maxTransfers
+     * 		The maximum number of Transfers allowed for a single inbound delivery.
+     *
+     * @return this {@link EngineConfiguration} for chaining.
+     */
+    default EngineConfiguration setMaxTransfersPerDelivery(int maxTransfers) {
+        throw new UnsupportedOperationException("Default configuration does not support assigning a default max transfers value");
+    }
+
+    /**
+     * {@return the maximum number of Transfer frames allowed for a single Delivery}
+     */
+    default int getMaxTransfersPerDelivery() {
+        return 0;
+    }
 }

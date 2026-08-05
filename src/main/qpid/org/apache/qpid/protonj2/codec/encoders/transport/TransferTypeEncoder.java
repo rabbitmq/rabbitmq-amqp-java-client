@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Transfer;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transport.Transfer;
  * Encoder of AMQP Transfer type values to a byte stream.
  */
 public final class TransferTypeEncoder extends AbstractDescribedListTypeEncoder<Transfer> {
+
+    public static final TransferTypeEncoder INSTANCE = new TransferTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -45,37 +49,77 @@ public final class TransferTypeEncoder extends AbstractDescribedListTypeEncoder<
         return Transfer.class;
     }
 
-    /*
-     * This assumes that the value was already check be the setter in Transfer
-     */
-    private static void writeCheckedUnsignedInteger(final long value, final ProtonBuffer buffer) {
-        if (value == 0) {
-            buffer.writeByte(EncodingCodes.UINT0);
-        } else if (value <= 255) {
-            buffer.writeByte(EncodingCodes.SMALLUINT);
-            buffer.writeByte((byte) value);
+    @Override
+    public int getElementCount(Transfer transfer) {
+        return transfer.getElementCount();
+    }
+
+    @Override
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 11;
+    }
+
+    @Override
+    public byte getListEncoding(Transfer value) {
+        if (value.getState() != null) {
+            return EncodingCodes.LIST32;
+        } else if (value.getDeliveryTag() != null && value.getDeliveryTag().tagLength() > 200) {
+            return EncodingCodes.LIST32;
         } else {
-            buffer.writeByte(EncodingCodes.UINT);
-            buffer.writeInt((int) value);
+            return EncodingCodes.LIST8;
         }
     }
 
     @Override
-    public void writeElement(Transfer transfer, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (transfer.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    writeCheckedUnsignedInteger(transfer.getHandle(), buffer);
-                    break;
-                case 1:
-                    writeCheckedUnsignedInteger(transfer.getDeliveryId(), buffer);
-                    break;
-                case 2:
-                    encoder.writeDeliveryTag(buffer, state, transfer.getDeliveryTag());
-                    break;
-                case 3:
-                    writeCheckedUnsignedInteger(transfer.getMessageFormat(), buffer);
-                    break;
+    public void writeElements(Transfer transfer, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (transfer.hasHandle()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, transfer.getHandle());
+        } else {
+            throw new EncodeException("Cannot write an Transfer that does not have a handle assigned.");
+        }
+
+        if (count >= 2) {
+            if (transfer.hasDeliveryId()) {
+                ProtonEncodings.writeUnsignedInteger(buffer, transfer.getDeliveryId());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        if (count >= 3) {
+            if (transfer.hasDeliveryTag()) {
+                ProtonEncodings.writeDeliveryTag(buffer, transfer.getDeliveryTag());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        if (count >= 4) {
+            if (transfer.hasMessageFormat()) {
+                ProtonEncodings.writeUnsignedInteger(buffer, transfer.getMessageFormat());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        } else {
+            return;
+        }
+
+        for (int i = 4; i < count; ++i) {
+            if (!transfer.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
                 case 4:
                     buffer.writeByte(transfer.getSettled() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
                     break;
@@ -98,32 +142,7 @@ public final class TransferTypeEncoder extends AbstractDescribedListTypeEncoder<
                 case 10:
                     buffer.writeByte(transfer.getBatchable() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
                     break;
-                default:
-                    throw new IllegalArgumentException("Unknown Transfer value index: " + index);
             }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
         }
-    }
-
-    @Override
-    public byte getListEncoding(Transfer value) {
-        if (value.getState() != null) {
-            return EncodingCodes.LIST32;
-        } else if (value.getDeliveryTag() != null && value.getDeliveryTag().tagLength() > 200) {
-            return EncodingCodes.LIST32;
-        } else {
-            return EncodingCodes.LIST8;
-        }
-    }
-
-    @Override
-    public int getElementCount(Transfer transfer) {
-        return transfer.getElementCount();
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 1;
     }
 }

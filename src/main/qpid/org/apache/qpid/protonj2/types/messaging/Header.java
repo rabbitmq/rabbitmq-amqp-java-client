@@ -78,6 +78,11 @@ public final class Header implements Section<Header> {
         return 32 - Integer.numberOfLeadingZeros(modified);
     }
 
+    public boolean hasElement(int index) {
+        final int value = 1 << index;
+        return (modified & value) == value;
+    }
+
     public boolean hasDurable() {
         return (modified & DURABLE) == DURABLE;
     }

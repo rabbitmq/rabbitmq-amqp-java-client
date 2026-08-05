@@ -822,7 +822,7 @@ public final class Netty4ToProtonBufferAdapter extends SharedResource<ProtonBuff
 
     @Override
     public int getReadableArrayLength() {
-        return resource.capacity();
+        return getReadableBytes();
     }
 
     @Override

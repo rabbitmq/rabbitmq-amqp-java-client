@@ -20,12 +20,11 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslChallenge;
@@ -34,6 +33,8 @@ import org.apache.qpid.protonj2.types.security.SaslChallenge;
  * Decoder of AMQP SaslChallenge type values from a byte stream.
  */
 public final class SaslChallengeTypeDecoder extends AbstractDescribedListTypeDecoder<SaslChallenge> {
+
+    public static final SaslChallengeTypeDecoder INSTANCE = new SaslChallengeTypeDecoder();
 
     private static final int REQUIRED_LIST_ENTRIES = 1;
 
@@ -53,72 +54,36 @@ public final class SaslChallengeTypeDecoder extends AbstractDescribedListTypeDec
     }
 
     @Override
-    public SaslChallenge readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected final int getMinListElements() {
+        return REQUIRED_LIST_ENTRIES;
     }
 
     @Override
-    public SaslChallenge[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final SaslChallenge[] result = new SaslChallenge[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected final int getMaxListElements() {
+        return REQUIRED_LIST_ENTRIES;
     }
 
-    private SaslChallenge readProperties(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected SaslChallenge readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final SaslChallenge challenge = new SaslChallenge();
+        final ProtonBuffer challenegeBuffer = state.getDecoder().readBinaryAsBuffer(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        if (count != REQUIRED_LIST_ENTRIES) {
-            throw new DecodeException("SASL Challenge must contain a single challenge binary: " + count);
-        } else {
-            challenge.setChallenge(state.getDecoder().readBinaryAsBuffer(buffer, state));
+        if (challenegeBuffer == null) {
+            throw new DecodeException("The challenge field cannot be omitted from the SaslChallenge");
         }
 
-        return challenge;
+        return challenge.setChallenge(challenegeBuffer);
     }
 
     @Override
-    public SaslChallenge readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public SaslChallenge[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final SaslChallenge[] result = new SaslChallenge[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readProperties(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private SaslChallenge readProperties(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected SaslChallenge readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final SaslChallenge challenge = new SaslChallenge();
+        final ProtonBuffer challenegeBuffer = state.getDecoder().readBinaryAsBuffer(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        if (count != REQUIRED_LIST_ENTRIES) {
-            throw new DecodeException("SASL Challenge must contain a single challenge binary: " + count);
-        } else {
-            challenge.setChallenge(state.getDecoder().readBinaryAsBuffer(stream, state));
+        if (challenegeBuffer == null) {
+            throw new DecodeException("The challenge field cannot be omitted from the SaslChallenge");
         }
 
-        return challenge;
+        return challenge.setChallenge(challenegeBuffer);
     }
 }

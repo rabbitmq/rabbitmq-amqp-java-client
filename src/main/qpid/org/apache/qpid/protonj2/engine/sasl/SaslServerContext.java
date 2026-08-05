@@ -78,7 +78,7 @@ public interface SaslServerContext extends SaslContext {
      * @throws EngineStateException if the engine has already shutdown or failed while processing the mechanisms.
      */
     default SaslServerContext sendMechanisms(String[] mechanisms) throws EngineStateException {
-        return sendMechanisms(Symbols.getSymbols(mechanisms));
+        return sendMechanisms(Symbols.getSASLSymbols(mechanisms));
     }
 
     /**

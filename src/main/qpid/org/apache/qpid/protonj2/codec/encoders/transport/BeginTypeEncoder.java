@@ -17,10 +17,12 @@
 package org.apache.qpid.protonj2.codec.encoders.transport;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Begin;
@@ -29,6 +31,8 @@ import org.apache.qpid.protonj2.types.transport.Begin;
  * Encoder of AMQP Begin type values to a byte stream.
  */
 public final class BeginTypeEncoder extends AbstractDescribedListTypeEncoder<Begin> {
+
+    public static final BeginTypeEncoder INSTANCE = new BeginTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,42 +50,6 @@ public final class BeginTypeEncoder extends AbstractDescribedListTypeEncoder<Beg
     }
 
     @Override
-    public void writeElement(Begin begin, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (begin.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    encoder.writeUnsignedShort(buffer, state, begin.getRemoteChannel());
-                    break;
-                case 1:
-                    encoder.writeUnsignedInteger(buffer, state, begin.getNextOutgoingId());
-                    break;
-                case 2:
-                    encoder.writeUnsignedInteger(buffer, state, begin.getIncomingWindow());
-                    break;
-                case 3:
-                    encoder.writeUnsignedInteger(buffer, state, begin.getOutgoingWindow());
-                    break;
-                case 4:
-                    encoder.writeUnsignedInteger(buffer, state, begin.getHandleMax());
-                    break;
-                case 5:
-                    encoder.writeArray(buffer, state, begin.getOfferedCapabilities());
-                    break;
-                case 6:
-                    encoder.writeArray(buffer, state, begin.getDesiredCapabilities());
-                    break;
-                case 7:
-                    encoder.writeMap(buffer, state, begin.getProperties());
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown Begin value index: " + index);
-            }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
-        }
-    }
-
-    @Override
     public byte getListEncoding(Begin value) {
         return EncodingCodes.LIST32;
     }
@@ -94,5 +62,60 @@ public final class BeginTypeEncoder extends AbstractDescribedListTypeEncoder<Beg
     @Override
     public int getMinElementCount() {
         return 4;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 8;
+    }
+
+    @Override
+    public void writeElements(Begin begin, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (begin.hasRemoteChannel()) {
+            buffer.writeByte(EncodingCodes.USHORT);
+            buffer.writeShort((short) begin.getRemoteChannel());
+        } else {
+            buffer.writeByte(EncodingCodes.NULL);
+        }
+
+        if (begin.hasNextOutgoingId()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, begin.getNextOutgoingId());
+        } else {
+            throw new EncodeException("Cannot write an Begin that does not have a next outgoing id assigned.");
+        }
+
+        if (begin.hasIncomingWindow()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, begin.getIncomingWindow());
+        } else {
+            throw new EncodeException("Cannot write an Begin that does not have a incoming window assigned.");
+        }
+
+        if (begin.hasOutgoingWindow()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, begin.getOutgoingWindow());
+        } else {
+            throw new EncodeException("Cannot write an Begin that does not have a outgoing window assigned.");
+        }
+
+        for (int i = 4; i < count; ++i) {
+            if (!begin.hasElement(i)) {
+                buffer.writeByte(EncodingCodes.NULL);
+                continue;
+            }
+
+            switch (i) {
+                case 4:
+                    ProtonEncodings.writeUnsignedInteger(buffer, begin.getHandleMax());
+                    break;
+                case 5:
+                    encoder.writeArray(buffer, state, begin.getOfferedCapabilities());
+                    break;
+                case 6:
+                    encoder.writeArray(buffer, state, begin.getDesiredCapabilities());
+                    break;
+                case 7:
+                    encoder.writeMap(buffer, state, begin.getProperties());
+                    break;
+            }
+        }
     }
 }

@@ -26,6 +26,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class DoubleTypeEncoder extends AbstractPrimitiveTypeEncoder<Double> {
 
+    public static final DoubleTypeEncoder INSTANCE = new DoubleTypeEncoder();
+
     @Override
     public Class<Double> getTypeClass() {
         return Double.class;
@@ -83,8 +85,7 @@ public final class DoubleTypeEncoder extends AbstractPrimitiveTypeEncoder<Double
 
         int startIndex = buffer.getWriteOffset();
 
-        buffer.writeByte((byte) 0);
-        buffer.writeByte((byte) values.length);
+        buffer.writeShort((short) values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);
@@ -101,8 +102,7 @@ public final class DoubleTypeEncoder extends AbstractPrimitiveTypeEncoder<Double
 
         int startIndex = buffer.getWriteOffset();
 
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);

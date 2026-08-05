@@ -44,7 +44,7 @@ public class OauthBearerMechanism extends AbstractMechanism {
     /**
      * A singleton instance of the symbolic mechanism name.
      */
-    public static final Symbol OAUTHBEARER = Symbol.valueOf("OAUTHBEARER");
+    public static final Symbol OAUTHBEARER = Symbol.getSASLSymbol("OAUTHBEARER");
 
     private String additionalFailureInformation;
 

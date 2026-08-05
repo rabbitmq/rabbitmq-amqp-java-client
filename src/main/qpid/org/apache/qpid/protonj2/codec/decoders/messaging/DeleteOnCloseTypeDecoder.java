@@ -20,10 +20,10 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
-import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
-import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
 import org.apache.qpid.protonj2.types.Symbol;
@@ -34,6 +34,8 @@ import org.apache.qpid.protonj2.types.messaging.DeleteOnClose;
  * Decoder of AMQP DeleteOnClose type values from a byte stream
  */
 public final class DeleteOnCloseTypeDecoder extends AbstractDescribedListTypeDecoder<DeleteOnClose> {
+
+    public static final DeleteOnCloseTypeDecoder INSTANCE = new DeleteOnCloseTypeDecoder();
 
     @Override
     public Class<DeleteOnClose> getTypeClass() {
@@ -51,56 +53,36 @@ public final class DeleteOnCloseTypeDecoder extends AbstractDescribedListTypeDec
     }
 
     @Override
-    public DeleteOnClose readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
+    protected int getMinListElements() {
+        return 0;
+    }
 
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
+    @Override
+    protected int getMaxListElements() {
+        return 0;
+    }
 
-        decoder.skipValue(buffer, state);
+    @Override
+    protected DeleteOnClose readSingle(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(buffer, state);
 
         return DeleteOnClose.getInstance();
     }
 
     @Override
-    public DeleteOnClose[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final DeleteOnClose[] result = new DeleteOnClose[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(buffer, state);
-            result[i] = DeleteOnClose.getInstance();
-        }
-
-        return result;
-    }
-
-    @Override
-    public DeleteOnClose readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        decoder.skipValue(stream, state);
+    protected DeleteOnClose readSingle(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+        listDecoder.skipValue(stream, state);
 
         return DeleteOnClose.getInstance();
     }
 
     @Override
-    public DeleteOnClose[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
+    protected DeleteOnClose readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
+    }
 
-        checkIsExpectedType(ListTypeDecoder.class, decoder);
-
-        final DeleteOnClose[] result = new DeleteOnClose[count];
-
-        for (int i = 0; i < count; ++i) {
-            decoder.skipValue(stream, state);
-            result[i] = DeleteOnClose.getInstance();
-        }
-
-        return result;
+    @Override
+    protected DeleteOnClose readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
+        throw new DecodeException("Invalid API called for empty list type: " + getClass().getName());
     }
 }

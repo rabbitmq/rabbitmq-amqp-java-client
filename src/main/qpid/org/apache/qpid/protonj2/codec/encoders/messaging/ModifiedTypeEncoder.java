@@ -30,6 +30,10 @@ import org.apache.qpid.protonj2.types.messaging.Modified;
  */
 public final class ModifiedTypeEncoder extends AbstractDescribedListTypeEncoder<Modified> {
 
+    public static final ModifiedTypeEncoder INSTANCE = new ModifiedTypeEncoder();
+
+    private static final int MAX_LIST_ELEMENTS = 3;
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return Modified.DESCRIPTOR_CODE;
@@ -46,20 +50,8 @@ public final class ModifiedTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(Modified source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                buffer.writeByte(source.isDeliveryFailed() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                break;
-            case 1:
-                buffer.writeByte(source.isUndeliverableHere() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                break;
-            case 2:
-                encoder.writeMap(buffer, state, source.getMessageAnnotations());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Modified value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return MAX_LIST_ELEMENTS;
     }
 
     @Override
@@ -73,14 +65,19 @@ public final class ModifiedTypeEncoder extends AbstractDescribedListTypeEncoder<
 
     @Override
     public int getElementCount(Modified value) {
-        if (value.getMessageAnnotations() != null) {
-            return 3;
-        } else if (value.isUndeliverableHere()) {
-            return 2;
-        } else if (value.isDeliveryFailed()) {
-            return 1;
-        } else {
-            return 0;
+        return value.getElementCount();
+    }
+
+    @Override
+    public void writeElements(Modified source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        buffer.writeByte(source.isDeliveryFailed() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+
+        if (count > 1) {
+            buffer.writeByte(source.isUndeliverableHere() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+        }
+
+        if (count == 3) {
+            encoder.writeMap(buffer, state, source.getMessageAnnotations());
         }
     }
 }

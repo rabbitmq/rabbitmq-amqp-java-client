@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.Decimal64;
  */
 public final class Decimal64TypeDecoder extends AbstractPrimitiveTypeDecoder<Decimal64> {
 
+    public static final Decimal64TypeDecoder INSTANCE = new Decimal64TypeDecoder();
+
     @Override
     public Class<Decimal64> getTypeClass() {
         return Decimal64.class;

@@ -21,6 +21,8 @@ public final class UnsignedByte extends Number implements Comparable<UnsignedByt
     private static final long serialVersionUID = 6271683731751283403L;
     private static final UnsignedByte[] cachedValues = new UnsignedByte[256];
 
+    public static final UnsignedByte MAX_VALUE = new UnsignedByte((byte) -1);
+
     static {
         for (int i = 0; i < 256; i++) {
             cachedValues[i] = new UnsignedByte((byte) i);

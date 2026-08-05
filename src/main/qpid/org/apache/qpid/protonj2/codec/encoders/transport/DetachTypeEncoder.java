@@ -21,6 +21,7 @@ import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.EncodingCodes;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.transport.Detach;
@@ -29,6 +30,8 @@ import org.apache.qpid.protonj2.types.transport.Detach;
  * Encoder of AMQP Detach type values to a byte stream.
  */
 public final class DetachTypeEncoder extends AbstractDescribedListTypeEncoder<Detach> {
+
+    public static final DetachTypeEncoder INSTANCE = new DetachTypeEncoder();
 
     @Override
     public UnsignedLong getDescriptorCode() {
@@ -46,27 +49,6 @@ public final class DetachTypeEncoder extends AbstractDescribedListTypeEncoder<De
     }
 
     @Override
-    public void writeElement(Detach detach, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        if (detach.hasElement(index)) {
-            switch (index) {
-                case 0:
-                    encoder.writeUnsignedInteger(buffer, state, detach.getHandle());
-                    break;
-                case 1:
-                    buffer.writeByte(detach.getClosed() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
-                    break;
-                case 2:
-                    encoder.writeObject(buffer, state, detach.getError());
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown Detach value index: " + index);
-            }
-        } else {
-            buffer.writeByte(EncodingCodes.NULL);
-        }
-    }
-
-    @Override
     public byte getListEncoding(Detach value) {
         return value.getError() == null ? EncodingCodes.LIST8 : EncodingCodes.LIST32;
     }
@@ -79,5 +61,35 @@ public final class DetachTypeEncoder extends AbstractDescribedListTypeEncoder<De
     @Override
     public int getMinElementCount() {
         return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 3;
+    }
+
+    @Override
+    public void writeElements(Detach detach, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (detach.hasHandle()) {
+            ProtonEncodings.writeUnsignedInteger(buffer, detach.getHandle());
+        } else {
+            buffer.writeByte(EncodingCodes.NULL);
+        }
+
+        if (count >= 2) {
+            if (detach.hasClosed()) {
+                buffer.writeByte(detach.getClosed() ? EncodingCodes.BOOLEAN_TRUE : EncodingCodes.BOOLEAN_FALSE);
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        }
+
+        if (count == 3) {
+            if (detach.hasError()) {
+                encoder.writeObject(buffer, state, detach.getError());
+            } else {
+                buffer.writeByte(EncodingCodes.NULL);
+            }
+        }
     }
 }

@@ -26,6 +26,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class LongTypeEncoder extends AbstractPrimitiveTypeEncoder<Long> {
 
+    public static final LongTypeEncoder INSTANCE = new LongTypeEncoder();
+
     @Override
     public Class<Long> getTypeClass() {
         return Long.class;
@@ -87,8 +89,7 @@ public final class LongTypeEncoder extends AbstractPrimitiveTypeEncoder<Long> {
 
         int startIndex = buffer.getWriteOffset();
 
-        buffer.writeByte((byte) 0);
-        buffer.writeByte((byte) values.length);
+        buffer.writeShort((short) values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);
@@ -105,8 +106,7 @@ public final class LongTypeEncoder extends AbstractPrimitiveTypeEncoder<Long> {
 
         int startIndex = buffer.getWriteOffset();
 
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);

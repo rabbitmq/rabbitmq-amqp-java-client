@@ -27,6 +27,8 @@ import org.apache.qpid.protonj2.types.Decimal64;
  */
 public final class Decimal64TypeEncoder extends AbstractPrimitiveTypeEncoder<Decimal64> {
 
+    public static final Decimal64TypeEncoder INSTANCE = new Decimal64TypeEncoder();
+
     @Override
     public Class<Decimal64> getTypeClass() {
         return Decimal64.class;

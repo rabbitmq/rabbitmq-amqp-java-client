@@ -26,6 +26,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class BooleanTypeEncoder extends AbstractPrimitiveTypeEncoder<Boolean> {
 
+    public static final BooleanTypeEncoder INSTANCE = new BooleanTypeEncoder();
+
     @Override
     public Class<Boolean> getTypeClass() {
         return Boolean.class;
@@ -106,8 +108,7 @@ public final class BooleanTypeEncoder extends AbstractPrimitiveTypeEncoder<Boole
 
         final int startIndex = buffer.getWriteOffset();
 
-        buffer.writeByte((byte) 0);
-        buffer.writeByte((byte) values.length);
+        buffer.writeShort((short) values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);
@@ -124,8 +125,7 @@ public final class BooleanTypeEncoder extends AbstractPrimitiveTypeEncoder<Boole
 
         final int startIndex = buffer.getWriteOffset();
 
-        buffer.writeInt(0);
-        buffer.writeInt(values.length);
+        buffer.writeLong(values.length);
 
         // Write the array elements after writing the array length
         writeRawArray(buffer, state, values);

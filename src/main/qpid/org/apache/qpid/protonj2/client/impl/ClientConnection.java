@@ -847,7 +847,7 @@ public final class ClientConnection implements Connection {
     private Engine configureEngineSaslSupport() {
         if (options.saslOptions().saslEnabled()) {
             SaslMechanismSelector mechSelector =
-                new SaslMechanismSelector(ClientConversionSupport.toSymbolSet(options.saslOptions().allowedMechanisms()));
+                new SaslMechanismSelector(ClientConversionSupport.toSASLSymbolSet(options.saslOptions().allowedMechanisms()));
 
             engine.saslDriver().client().setListener(new SaslAuthenticator(mechSelector, new SaslCredentialsProvider() {
 

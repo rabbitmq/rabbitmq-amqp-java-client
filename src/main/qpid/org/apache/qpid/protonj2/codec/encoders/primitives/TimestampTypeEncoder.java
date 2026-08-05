@@ -28,6 +28,8 @@ import org.apache.qpid.protonj2.codec.encoders.AbstractPrimitiveTypeEncoder;
  */
 public final class TimestampTypeEncoder extends AbstractPrimitiveTypeEncoder<Date> {
 
+    public static final TimestampTypeEncoder INSTANCE = new TimestampTypeEncoder();
+
     @Override
     public Class<Date> getTypeClass() {
         return Date.class;

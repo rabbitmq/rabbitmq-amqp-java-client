@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.transport.Close;
  */
 public final class CloseTypeEncoder extends AbstractDescribedListTypeEncoder<Close> {
 
+    public static final CloseTypeEncoder INSTANCE = new CloseTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return Close.DESCRIPTOR_CODE;
@@ -46,14 +48,13 @@ public final class CloseTypeEncoder extends AbstractDescribedListTypeEncoder<Clo
     }
 
     @Override
-    public void writeElement(Close close, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeObject(buffer, state, close.getError());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Close value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return 1;
+    }
+
+    @Override
+    public void writeElements(Close close, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        encoder.writeObject(buffer, state, close.getError());
     }
 
     @Override

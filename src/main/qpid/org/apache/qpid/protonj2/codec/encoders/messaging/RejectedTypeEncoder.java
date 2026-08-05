@@ -30,6 +30,10 @@ import org.apache.qpid.protonj2.types.messaging.Rejected;
  */
 public final class RejectedTypeEncoder extends AbstractDescribedListTypeEncoder<Rejected> {
 
+    public static final RejectedTypeEncoder INSTANCE = new RejectedTypeEncoder();
+
+    private static final int MAX_LIST_ELEMENTS = 1;
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return Rejected.DESCRIPTOR_CODE;
@@ -46,14 +50,8 @@ public final class RejectedTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(Rejected source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeObject(buffer, state, source.getError());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown Rejected value index: " + index);
-        }
+    public int getMaxElementCount() {
+        return MAX_LIST_ELEMENTS;
     }
 
     @Override
@@ -67,10 +65,11 @@ public final class RejectedTypeEncoder extends AbstractDescribedListTypeEncoder<
 
     @Override
     public int getElementCount(Rejected value) {
-        if (value.getError() != null) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return value.getError() == null ? 0 : 1;
+    }
+
+    @Override
+    public void writeElements(Rejected source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        encoder.writeObject(buffer, state, source.getError());
     }
 }

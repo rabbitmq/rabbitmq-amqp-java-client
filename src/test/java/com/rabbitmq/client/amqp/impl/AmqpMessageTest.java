@@ -27,6 +27,7 @@ import com.rabbitmq.client.amqp.impl.Tuples.Triple;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -115,7 +116,10 @@ public class AmqpMessageTest {
 
             // AmqpValue with various AMQP 1.0 types that should fail with default converter
             triple(new AmqpValue<>(42), (Integer i) -> i.toString(), "42"),
-            triple(new AmqpValue<>(3.14159), (Double d) -> String.format("%.5f", d), "3.14159"),
+            triple(
+                new AmqpValue<>(3.14159),
+                (Double d) -> String.format(Locale.ROOT, "%.5f", d),
+                "3.14159"),
             triple(new AmqpValue<>(true), (Boolean b) -> b ? "TRUE" : "FALSE", "TRUE"),
             triple(new AmqpValue<>(true), (Boolean b) -> b, Boolean.TRUE),
             triple(
@@ -377,8 +381,9 @@ public class AmqpMessageTest {
     nativeMessage.toAdvancedMessage().clearBodySections();
 
     AmqpMessage message = new AmqpMessage(nativeMessage);
-
-    assertThat(message.body((List<Object> sections) -> sections)).isEmpty();
+    Message.SectionsConverter<Object, List<Object>> sectionsConverter = sections -> sections;
+    List<Object> bodySections = message.body(sectionsConverter);
+    assertThat(bodySections).isEmpty();
   }
 
   @Test

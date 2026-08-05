@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.Decimal32;
  */
 public final class Decimal32TypeDecoder extends AbstractPrimitiveTypeDecoder<Decimal32> {
 
+    public static final Decimal32TypeDecoder INSTANCE = new Decimal32TypeDecoder();
+
     @Override
     public Class<Decimal32> getTypeClass() {
         return Decimal32.class;

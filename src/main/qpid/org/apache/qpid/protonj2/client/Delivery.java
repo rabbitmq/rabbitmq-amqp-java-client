@@ -58,6 +58,37 @@ public interface Delivery {
     <E> Message<E> message() throws ClientException;
 
     /**
+     * Decode the {@link Delivery} payload and return an {@link Message} object.
+     * <p>
+     * If the incoming message carried any delivery annotations they can be accessed via the
+     * {@link #annotations()} method.  Re-sending the returned message will not also
+     * send the incoming delivery annotations, the sender must include them in the
+     * {@link Sender#send(Message, Map)} call if they are to be forwarded onto the next recipient.
+     * <p>
+     * Calling this message claims the payload of the delivery for the returned {@link Message} and
+     * excludes use of the {@link #rawInputStream()} method of the {@link Delivery} object.  Calling
+     * the {@link #rawInputStream()} method after calling this method throws {@link ClientIllegalStateException}.
+     * <p>
+     * Care should be taken if attempting to specify anything other than the wild card type for the body
+     * of the returned message as the wrong type specification can lead to an exception.
+     * <p>
+     * The default implementation calls to the {@link #message()} method without any options to
+     * preserve backwards compatibility.
+     *
+     * @param <E> The type of message body that should be contained in the returned {@link Message}.
+     *
+     * @param options
+     * 		The {@link DecodeOptions} to use when decoding the delivery bytes.
+     *
+     * @return a {@link Message} instance that wraps the decoded payload.
+     *
+     * @throws ClientException if an error occurs while decoding the payload.
+     */
+    default <E> Message<E> message(DecodeOptions options) throws ClientException {
+        return message();
+    }
+
+    /**
      * Create and return an {@link InputStream} that reads the raw payload bytes of the given {@link Delivery}.
      * <p>
      * Calling this method claims the payload of the delivery for the returned {@link InputStream} and excludes
@@ -86,6 +117,30 @@ public interface Delivery {
      * @throws ClientException if an error occurs while decoding the payload.
      */
     Map<String, Object> annotations() throws ClientException;
+
+    /**
+     * Decodes the {@link Delivery} payload and returns a {@link Map} containing a copy
+     * of any associated {@link DeliveryAnnotations} that were transmitted with the {@link Message}
+     * payload of this {@link Delivery}.
+     * <p>
+     * Calling this message claims the payload of the delivery for the returned {@link Map} and the decoded
+     * {@link Message} that can be accessed via the {@link #message()} method and  excludes use of the
+     * {@link #rawInputStream()} method of the {@link Delivery} object.  Calling the {@link #rawInputStream()}
+     * method after calling this method throws {@link ClientIllegalStateException}.
+     * <p>
+     * The default implementation calls to the {@link #annotations()} method without any options to
+     * preserve backwards compatibility.
+     *
+     * @param options
+     * 		The {@link DecodeOptions} to use when decoding the delivery bytes.
+     *
+     * @return copy of the delivery annotations that were transmitted with the {@link Message} payload.
+     *
+     * @throws ClientException if an error occurs while decoding the payload.
+     */
+    default Map<String, Object> annotations(DecodeOptions options) throws ClientException {
+        return annotations();
+    }
 
     /**
      * Accepts and settles the delivery.

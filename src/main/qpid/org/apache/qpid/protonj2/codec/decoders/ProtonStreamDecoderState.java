@@ -16,7 +16,6 @@
  */
 package org.apache.qpid.protonj2.codec.decoders;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -38,11 +37,35 @@ public final class ProtonStreamDecoderState implements StreamDecoderState {
 
     private static final int MAX_CHAR_BUFFER_CACHE_SIZE = 100;
 
+    /**
+     * The default maximum depth the decoder will allow before triggering an {@link DecodeException}
+     * when the state depth value is increased during a decode process of complex types that can next
+     * objects.
+     */
+    public static final int DEFAULT_MAX_DECODE_DEPTH = 32;
+
+    /**
+     * The default maximum number of zero width array elements that controls the size of an zero width
+     * array type that can be decoded without throwing an DecodeException.
+     */
+    public static final int DEFAULT_MAX_ZERO_WIDTH_ARRAY_ELEMENTS = 0;
+
     private final CharsetDecoder STRING_DECODER = StandardCharsets.UTF_8.newDecoder();
     private final ProtonStreamDecoder decoder;
-    private final char[] decodeCache = new char[MAX_CHAR_BUFFER_CACHE_SIZE];
+    private final byte[] decodeCache = new byte[MAX_CHAR_BUFFER_CACHE_SIZE];
+    private final CharBuffer charDecodeChache = CharBuffer.allocate(MAX_CHAR_BUFFER_CACHE_SIZE);
 
+    private int maxDecodeDepth = DEFAULT_MAX_DECODE_DEPTH;
     private UTF8StreamDecoder stringDecoder;
+    private int maxZeroWidthArrayElemets = DEFAULT_MAX_ZERO_WIDTH_ARRAY_ELEMENTS;
+    private int maxStringLength = DEFAULT_MAX_ALLOCATION_LIMIT;
+    private int maxArrayLength = DEFAULT_MAX_ALLOCATION_LIMIT;
+    private int maxBinaryLength = DEFAULT_MAX_ALLOCATION_LIMIT;
+    private int maxSymbolLength = DEFAULT_MAX_ALLOCATION_LIMIT;
+    private int maxListSize = DEFAULT_MAX_ALLOCATION_LIMIT;
+    private int maxMapSize = DEFAULT_MAX_ALLOCATION_LIMIT;
+
+    private int decodeDepth;
 
     /**
      * Create a new {@link StreamDecoderState} instance that is joined forever to the given {@link Decoder}.
@@ -61,7 +84,7 @@ public final class ProtonStreamDecoderState implements StreamDecoderState {
 
     @Override
     public ProtonStreamDecoderState reset() {
-        // No intermediate state to reset
+        decodeDepth = 0;
         return this;
     }
 
@@ -85,10 +108,125 @@ public final class ProtonStreamDecoderState implements StreamDecoderState {
     }
 
     @Override
+    public int getMaxZeroWidthArrayElements() {
+        return maxZeroWidthArrayElemets;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxZeroWidthArrayElements(int maxElements) {
+        this.maxZeroWidthArrayElemets = maxElements;
+        return this;
+    }
+
+    @Override
+    public int getMaxStringSize() {
+        return maxStringLength;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxStringSize(int maxStringLength) {
+        this.maxStringLength = maxStringLength;
+        return this;
+    }
+
+    @Override
+    public int getMaxArraySize() {
+        return maxArrayLength;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxArraySize(int maxArrayLength) {
+        this.maxArrayLength = maxArrayLength;
+        return this;
+    }
+
+    @Override
+    public int getMaxListSize() {
+        return maxListSize;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxListSize(int maxListSize) {
+        this.maxListSize = maxListSize;
+        return this;
+    }
+
+    @Override
+    public int getMaxMapSize() {
+        return maxMapSize;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxMapSize(int maxMapSize) {
+        this.maxMapSize = maxMapSize;
+        return this;
+    }
+
+    @Override
+    public int getMaxBinarySize() {
+        return maxBinaryLength;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxBinarySize(int maxBinaryLength) {
+        this.maxBinaryLength = maxBinaryLength;
+        return this;
+    }
+
+    @Override
+    public int getMaxSymbolSize() {
+        return maxSymbolLength;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setMaxSymbolSize(int maxSymbolLength) {
+        this.maxSymbolLength = maxSymbolLength;
+        return this;
+    }
+
+    @Override
+    public ProtonStreamDecoderState setDepthLimit(int limit) {
+        this.maxDecodeDepth = Math.max(0, limit);
+        return this;
+    }
+
+    @Override
+    public int getDepthLimit() {
+        return maxDecodeDepth;
+    }
+
+    @Override
+    public ProtonStreamDecoderState increaseDepth() throws DecodeException {
+        if (++decodeDepth > maxDecodeDepth) {
+            --decodeDepth; // Unwind decrement to ensure the depth returns to zero.
+            throw new DecodeException(
+                "The nesting of types in the object being decoded exceeded the configured limit: " + maxDecodeDepth);
+        }
+
+        return this;
+    }
+
+    @Override
+    public ProtonStreamDecoderState decreaseDepth() {
+        decodeDepth = Math.max(0, decodeDepth - 1);
+        return this;
+    }
+
+    @Override
     public String decodeUTF8(InputStream stream, int length) throws DecodeException {
+        if (length < 0) {
+            throw new DecodeException("Specified UTF length:" + length + " cannot be negative.");
+        }
+
+        if (length > getMaxStringSize()) {
+            throw new DecodeException(String.format(
+                    "String encoded size %d is specified to be greater than the configured " +
+                    "max string size (%d)", length, getMaxStringSize()));
+        }
+
         try {
             if (stringDecoder == null) {
-                return internalDecode(stream, length, STRING_DECODER, length > MAX_CHAR_BUFFER_CACHE_SIZE ? new char[length] : decodeCache);
+                return internalDecode(stream, length, STRING_DECODER, length > MAX_CHAR_BUFFER_CACHE_SIZE ? new byte[length] : decodeCache);
             } else {
                 return stringDecoder.decodeUTF8(stream);
             }
@@ -97,41 +235,52 @@ public final class ProtonStreamDecoderState implements StreamDecoderState {
         }
     }
 
-    private static String internalDecode(InputStream stream, final int length, CharsetDecoder decoder, char[] scratch) throws IOException {
-        int offset;
-        int lastRead = 0;
+    private String internalDecode(InputStream stream, final int length, CharsetDecoder decoder, byte[] scratch) throws IOException {
+        int offset = 0;
 
-        for (offset = 0; offset < length; offset++) {
-            lastRead = stream.read();
-            if (lastRead < 0) {
-                throw new EOFException("Reached end of stream before decoding the full String content");
-            } else if (lastRead > 127) {
+        if (stream.read(scratch, 0, length) != length) {
+            throw new DecodeException("Failed to read all string bytes from provided stream");
+        }
+
+        for (; offset < length; offset++) {
+            // Check for non-ASCII chars and break if any which will trigger fallback decode
+            if (scratch[offset] < 0) {
                 break;
             }
-            scratch[offset] = (char) lastRead;
         }
 
         if (offset == length) {
-            return new String(scratch, 0, length);
+            return new String(scratch, 0, length, StandardCharsets.US_ASCII);
         } else {
-            return internalDecodeUTF8(stream, length, scratch, (byte) lastRead, offset, decoder);
+            return internalDecodeUTF8(decoder, scratch, length, offset);
         }
     }
 
-    private static String internalDecodeUTF8(final InputStream stream, final int length, final char[] chars, final byte stoppageByte, final int offset, final CharsetDecoder decoder) throws IOException {
-        final CharBuffer out = CharBuffer.wrap(chars);
-        out.position(offset);
+    private String internalDecodeUTF8(CharsetDecoder decoder, final byte[] contents, final int length, final int offset) throws IOException {
+        final int remaining = length - offset; // Largest possible outcome if all remaining are single byte values
 
-        // Create a buffer from the remaining portion of the buffer and then use the decoder to complete the work
-        // remember to move the main buffer position to consume the data processed.
-        final byte[] trailingBytes = new byte[length - offset];
-        trailingBytes[0] = stoppageByte;
-        stream.read(trailingBytes, 1, trailingBytes.length - 1);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(trailingBytes);
+        if (offset < 0) {
+            throw new IllegalArgumentException("Specified offset:" + offset + " cannot be negative.");
+        }
+
+        if (remaining < 0) {
+            throw new IllegalArgumentException("Remaining UTF8 Bytes size cannot be negative, was " + remaining);
+        }
+
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(contents, offset, remaining);
+        final CharBuffer out = length > MAX_CHAR_BUFFER_CACHE_SIZE ? CharBuffer.allocate(length) : charDecodeChache.clear();
+
+        // Pre-populate the ASCII portion we already scanned into the output character buffer
+        for (int i = 0; i < offset; i++) {
+            out.put((char) contents[i]);
+        }
 
         try {
+            CoderResult cr = null;
+
             for (;;) {
-                CoderResult cr = byteBuffer.hasRemaining() ? decoder.decode(byteBuffer, out, true) : CoderResult.UNDERFLOW;
+                cr = byteBuffer.hasRemaining() ? decoder.decode(byteBuffer, out, true) : CoderResult.UNDERFLOW;
+
                 if (cr.isUnderflow()) {
                     cr = decoder.flush(out);
                 }

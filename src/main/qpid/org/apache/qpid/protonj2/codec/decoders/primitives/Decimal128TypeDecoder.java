@@ -32,6 +32,8 @@ import org.apache.qpid.protonj2.types.Decimal128;
  */
 public final class Decimal128TypeDecoder extends AbstractPrimitiveTypeDecoder<Decimal128> {
 
+    public static final Decimal128TypeDecoder INSTANCE = new Decimal128TypeDecoder();
+
     @Override
     public Class<Decimal128> getTypeClass() {
         return Decimal128.class;

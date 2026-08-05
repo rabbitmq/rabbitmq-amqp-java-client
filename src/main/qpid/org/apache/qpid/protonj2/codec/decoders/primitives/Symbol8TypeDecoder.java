@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.codec.decoders.ProtonStreamUtils;
  */
 public final class Symbol8TypeDecoder extends AbstractSymbolTypeDecoder {
 
+    public static final Symbol8TypeDecoder INSTANCE = new Symbol8TypeDecoder();
+
     @Override
     public int getTypeCode() {
         return EncodingCodes.SYM8 & 0xff;

@@ -174,6 +174,13 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
 
             @Override
             public boolean hasNext() {
+                if (!initialized) {
+                    next = ProtonBufferComponentAccessor.this.first();
+                    initialized = true;
+                } else if (next == null) {
+                    next = ProtonBufferComponentAccessor.this.next();
+                }
+
                 return next != null;
             }
 
@@ -183,18 +190,27 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
                     throw new NoSuchElementException();
                 }
 
-                if (!initialized) {
-                    next = ProtonBufferComponentAccessor.this.first();
-                    initialized = true;
-                } else {
-                    next = ProtonBufferComponentAccessor.this.next();
+                // has next was not called so we need to prime the state value
+                // here and see if there is a next, then throw if not to honor
+                // the contract of iterator.
+                if (next == null) {
+                    if (!initialized) {
+                        next = ProtonBufferComponentAccessor.this.first();
+                        initialized = true;
+                    } else {
+                        next = ProtonBufferComponentAccessor.this.next();
+                    }
                 }
 
                 if (next == null) {
                     throw new NoSuchElementException();
                 }
 
-                return next;
+                ProtonBufferComponent toReturn = next;
+
+                next = null; // we consumed it so clear to prepare for next round.
+
+                return toReturn;
             }
         };
     }
@@ -210,6 +226,13 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
 
             @Override
             public boolean hasNext() {
+                if (!initialized) {
+                    next = ProtonBufferComponentAccessor.this.firstReadable();
+                    initialized = true;
+                } else if (next == null) {
+                    next = ProtonBufferComponentAccessor.this.nextReadable();
+                }
+
                 return next != null;
             }
 
@@ -219,18 +242,27 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
                     throw new NoSuchElementException();
                 }
 
-                if (!initialized) {
-                    next = ProtonBufferComponentAccessor.this.firstReadable();
-                    initialized = true;
-                } else {
-                    next = ProtonBufferComponentAccessor.this.nextReadable();
+                // has next was not called so we need to prime the state value
+                // here and see if there is a next, then throw if not to honor
+                // the contract of iterator.
+                if (next == null) {
+                    if (!initialized) {
+                        next = ProtonBufferComponentAccessor.this.firstReadable();
+                        initialized = true;
+                    } else {
+                        next = ProtonBufferComponentAccessor.this.nextReadable();
+                    }
                 }
 
                 if (next == null) {
                     throw new NoSuchElementException();
                 }
 
-                return next;
+                ProtonBufferComponent toReturn = next;
+
+                next = null; // we consumed it so clear to prepare for next round.
+
+                return toReturn;
             }
         };
     }
@@ -246,6 +278,13 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
 
             @Override
             public boolean hasNext() {
+                if (!initialized) {
+                    next = ProtonBufferComponentAccessor.this.firstWritable();
+                    initialized = true;
+                } else if (next == null) {
+                    next = ProtonBufferComponentAccessor.this.nextWritable();
+                }
+
                 return next != null;
             }
 
@@ -255,18 +294,27 @@ public interface ProtonBufferComponentAccessor extends AutoCloseable {
                     throw new NoSuchElementException();
                 }
 
-                if (!initialized) {
-                    next = ProtonBufferComponentAccessor.this.firstWritable();
-                    initialized = true;
-                } else {
-                    next = ProtonBufferComponentAccessor.this.nextWritable();
+                // has next was not called so we need to prime the state value
+                // here and see if there is a next, then throw if not to honor
+                // the contract of iterator.
+                if (next == null) {
+                    if (!initialized) {
+                        next = ProtonBufferComponentAccessor.this.firstWritable();
+                        initialized = true;
+                    } else {
+                        next = ProtonBufferComponentAccessor.this.nextWritable();
+                    }
                 }
 
                 if (next == null) {
                     throw new NoSuchElementException();
                 }
 
-                return next;
+                ProtonBufferComponent toReturn = next;
+
+                next = null; // we consumed it so clear to prepare for next round.
+
+                return toReturn;
             }
         };
     }

@@ -274,7 +274,7 @@ final class ProtonSaslServerContext extends ProtonSaslContext implements SaslSer
 
     public static class ProtonDefaultSaslServerListener implements SaslServerListener {
 
-        private static final Symbol[] PLAIN = { Symbol.valueOf("PLAIN") };
+        private static final Symbol[] PLAIN = { Symbol.getSASLSymbol("PLAIN") };
 
         @Override
         public void handleSaslHeader(SaslServerContext context, AMQPHeader header) {

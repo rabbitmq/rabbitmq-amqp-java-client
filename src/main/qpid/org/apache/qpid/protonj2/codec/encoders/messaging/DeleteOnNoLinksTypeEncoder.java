@@ -30,6 +30,8 @@ import org.apache.qpid.protonj2.types.messaging.DeleteOnNoLinks;
  */
 public final class DeleteOnNoLinksTypeEncoder extends AbstractDescribedListTypeEncoder<DeleteOnNoLinks> {
 
+    public static final DeleteOnNoLinksTypeEncoder INSTANCE = new DeleteOnNoLinksTypeEncoder();
+
     @Override
     public UnsignedLong getDescriptorCode() {
         return DeleteOnNoLinks.DESCRIPTOR_CODE;
@@ -47,15 +49,21 @@ public final class DeleteOnNoLinksTypeEncoder extends AbstractDescribedListTypeE
 
     @Override
     public byte getListEncoding(DeleteOnNoLinks value) {
-        return EncodingCodes.LIST0 & 0xff;
-    }
-
-    @Override
-    public void writeElement(DeleteOnNoLinks source, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        return EncodingCodes.LIST0;
     }
 
     @Override
     public int getElementCount(DeleteOnNoLinks value) {
         return 0;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 0;
+    }
+
+    @Override
+    public void writeElements(DeleteOnNoLinks source, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        throw new UnsupportedOperationException("This type should never have to write list elements");
     }
 }

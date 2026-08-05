@@ -20,12 +20,15 @@ import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
+import org.apache.qpid.protonj2.codec.Decoder;
 import org.apache.qpid.protonj2.codec.DecoderState;
+import org.apache.qpid.protonj2.codec.StreamDecoder;
 import org.apache.qpid.protonj2.codec.StreamDecoderState;
 import org.apache.qpid.protonj2.codec.StreamTypeDecoder;
 import org.apache.qpid.protonj2.codec.TypeDecoder;
 import org.apache.qpid.protonj2.codec.decoders.AbstractDescribedListTypeDecoder;
-import org.apache.qpid.protonj2.codec.decoders.primitives.ListTypeDecoder;
+import org.apache.qpid.protonj2.codec.decoders.primitives.BinaryTypeDecoder;
+import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.messaging.Outcome;
@@ -35,6 +38,8 @@ import org.apache.qpid.protonj2.types.transactions.TransactionalState;
  * Decoder of AMQP TransactionState types from a byte stream.
  */
 public final class TransactionStateTypeDecoder extends AbstractDescribedListTypeDecoder<TransactionalState> {
+
+    public static final TransactionStateTypeDecoder INSTANCE = new TransactionStateTypeDecoder();
 
     private static final int MIN_TRANSACTION_STATE_LIST_ENTRIES = 1;
     private static final int MAX_TRANSACTION_STATE_LIST_ENTRIES = 2;
@@ -55,98 +60,52 @@ public final class TransactionStateTypeDecoder extends AbstractDescribedListType
     }
 
     @Override
-    public TransactionalState readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        return readTransactionalState(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
+    protected int getMinListElements() {
+        return MIN_TRANSACTION_STATE_LIST_ENTRIES;
     }
 
     @Override
-    public TransactionalState[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
-        final TransactionalState[] result = new TransactionalState[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readTransactionalState(buffer, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
+    protected int getMaxListElements() {
+        return MAX_TRANSACTION_STATE_LIST_ENTRIES;
     }
 
-    private TransactionalState readTransactionalState(ProtonBuffer buffer, DecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    @Override
+    protected TransactionalState readType(int count, ProtonBuffer buffer, Decoder decoder, DecoderState state) throws DecodeException {
         final TransactionalState transactionalState = new TransactionalState();
+        final TypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(buffer, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(buffer, state);
-        final int count = listDecoder.readCount(buffer, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_TRANSACTION_STATE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in TransactionalState list encoding: " + count);
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            transactionalState.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(buffer, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the TransactionalState");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
 
-        if (count > MAX_TRANSACTION_STATE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in TransactionalState list encoding: " + count);
-        }
-
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    transactionalState.setTxnId(state.getDecoder().readBinary(buffer, state));
-                    break;
-                case 1:
-                    transactionalState.setOutcome((Outcome) state.getDecoder().readObject(buffer, state));
-                    break;
-            }
+        if (count == 2) {
+            transactionalState.setOutcome(state.getDecoder().readObject(buffer, state, Outcome.class));
         }
 
         return transactionalState;
     }
 
     @Override
-    public TransactionalState readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        return readTransactionalState(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-    }
-
-    @Override
-    public TransactionalState[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
-        final TransactionalState[] result = new TransactionalState[count];
-        for (int i = 0; i < count; ++i) {
-            result[i] = readTransactionalState(stream, state, checkIsExpectedTypeAndCast(ListTypeDecoder.class, decoder));
-        }
-
-        return result;
-    }
-
-    private TransactionalState readTransactionalState(InputStream stream, StreamDecoderState state, ListTypeDecoder listDecoder) throws DecodeException {
+    protected TransactionalState readType(int count, InputStream stream, StreamDecoder decoder, StreamDecoderState state) throws DecodeException {
         final TransactionalState transactionalState = new TransactionalState();
+        final StreamTypeDecoder<?> typeDecoder = state.getDecoder().readNextTypeDecoder(stream, state);
 
-        @SuppressWarnings("unused")
-        final int size = listDecoder.readSize(stream, state);
-        final int count = listDecoder.readCount(stream, state);
-
-        // Don't decode anything if things already look wrong.
-        if (count < MIN_TRANSACTION_STATE_LIST_ENTRIES) {
-            throw new DecodeException("Not enough entries in TransactionalState list encoding: " + count);
+        if (typeDecoder instanceof BinaryTypeDecoder) {
+            transactionalState.setTxnId(new Binary(((BinaryTypeDecoder) typeDecoder).readValueAsArray(stream, state)));
+        } else if (typeDecoder.isNull()) {
+            throw new DecodeException("The txn-id field cannot be omitted from the TransactionalState");
+        } else {
+            throw new DecodeException(
+                "Expected a Binary encoding but got decoder for type: " + typeDecoder.getTypeClass().getName());
         }
 
-        if (count > MAX_TRANSACTION_STATE_LIST_ENTRIES) {
-            throw new DecodeException("To many entries in TransactionalState list encoding: " + count);
-        }
-
-        for (int index = 0; index < count; ++index) {
-            switch (index) {
-                case 0:
-                    transactionalState.setTxnId(state.getDecoder().readBinary(stream, state));
-                    break;
-                case 1:
-                    transactionalState.setOutcome((Outcome) state.getDecoder().readObject(stream, state));
-                    break;
-            }
+        if (count == 2) {
+            transactionalState.setOutcome(state.getDecoder().readObject(stream, state, Outcome.class));
         }
 
         return transactionalState;

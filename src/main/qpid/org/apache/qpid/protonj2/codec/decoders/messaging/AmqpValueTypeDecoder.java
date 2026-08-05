@@ -35,6 +35,8 @@ import org.apache.qpid.protonj2.types.messaging.AmqpValue;
 @SuppressWarnings("rawtypes")
 public final class AmqpValueTypeDecoder extends AbstractDescribedTypeDecoder<AmqpValue> {
 
+    public static final AmqpValueTypeDecoder INSTANCE = new AmqpValueTypeDecoder();
+
     @Override
     public Class<AmqpValue> getTypeClass() {
         return AmqpValue.class;
@@ -52,17 +54,21 @@ public final class AmqpValueTypeDecoder extends AbstractDescribedTypeDecoder<Amq
 
     @Override
     public AmqpValue<?> readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-        return new AmqpValue<>(decoder.readValue(buffer, state));
+        state.increaseDepth();
+
+        try {
+            return new AmqpValue<>(state.getDecoder().readNextTypeDecoder(buffer, state).readValue(buffer, state));
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public AmqpValue[] readArrayElements(ProtonBuffer buffer, DecoderState state, int count) throws DecodeException {
         final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-
         final Object[] elements = decoder.readArrayElements(buffer, state, count);
-
         final AmqpValue[] array = new AmqpValue[count];
+
         for (int i = 0; i < count; ++i) {
             array[i] = new AmqpValue<>(elements[i]);
         }
@@ -72,23 +78,32 @@ public final class AmqpValueTypeDecoder extends AbstractDescribedTypeDecoder<Amq
 
     @Override
     public void skipValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final TypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(buffer, state);
-        decoder.skipValue(buffer, state);
+        state.increaseDepth();
+
+        try {
+            state.getDecoder().readNextTypeDecoder(buffer, state).skipValue(buffer, state);;
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public AmqpValue readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-        return new AmqpValue<>(decoder.readValue(stream, state));
+        state.increaseDepth();
+
+        try {
+            return new AmqpValue<>(state.getDecoder().readNextTypeDecoder(stream, state).readValue(stream, state));
+        } finally {
+            state.decreaseDepth();
+        }
     }
 
     @Override
     public AmqpValue[] readArrayElements(InputStream stream, StreamDecoderState state, int count) throws DecodeException {
         final StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-
         final Object[] elements = decoder.readArrayElements(stream, state, count);
-
         final AmqpValue[] array = new AmqpValue[count];
+
         for (int i = 0; i < count; ++i) {
             array[i] = new AmqpValue<>(elements[i]);
         }
@@ -98,7 +113,12 @@ public final class AmqpValueTypeDecoder extends AbstractDescribedTypeDecoder<Amq
 
     @Override
     public void skipValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        StreamTypeDecoder<?> decoder = state.getDecoder().readNextTypeDecoder(stream, state);
-        decoder.skipValue(stream, state);
+        state.increaseDepth();
+
+        try {
+            state.getDecoder().readNextTypeDecoder(stream, state).skipValue(stream, state);;
+        } finally {
+            state.decreaseDepth();
+        }
     }
 }

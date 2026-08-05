@@ -17,9 +17,11 @@
 package org.apache.qpid.protonj2.codec.encoders.security;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
+import org.apache.qpid.protonj2.codec.EncodeException;
 import org.apache.qpid.protonj2.codec.Encoder;
 import org.apache.qpid.protonj2.codec.EncoderState;
 import org.apache.qpid.protonj2.codec.encoders.AbstractDescribedListTypeEncoder;
+import org.apache.qpid.protonj2.codec.encoders.ProtonEncodings;
 import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedLong;
 import org.apache.qpid.protonj2.types.security.SaslInit;
@@ -28,6 +30,8 @@ import org.apache.qpid.protonj2.types.security.SaslInit;
  * Encoder of AMQP SaslInit type values to a byte stream
  */
 public final class SaslInitTypeEncoder extends AbstractDescribedListTypeEncoder<SaslInit> {
+
+    public static final SaslInitTypeEncoder INSTANCE = new SaslInitTypeEncoder();
 
     @Override
     public Class<SaslInit> getTypeClass() {
@@ -45,19 +49,29 @@ public final class SaslInitTypeEncoder extends AbstractDescribedListTypeEncoder<
     }
 
     @Override
-    public void writeElement(SaslInit init, int index, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
-        switch (index) {
-            case 0:
-                encoder.writeSymbol(buffer, state, init.getMechanism());
-                break;
-            case 1:
-                encoder.writeBinary(buffer, state, init.getInitialResponse());
-                break;
-            case 2:
-                encoder.writeString(buffer, state, init.getHostname());
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown SaslInit value index: " + index);
+    public int getMinElementCount() {
+        return 1;
+    }
+
+    @Override
+    public int getMaxElementCount() {
+        return 3;
+    }
+
+    @Override
+    public void writeElements(SaslInit init, int count, ProtonBuffer buffer, Encoder encoder, EncoderState state) {
+        if (init.getMechanism() != null) {
+            ProtonEncodings.writeSymbol(buffer, init.getMechanism());
+        } else {
+            throw new EncodeException("Cannot write a SaslInit instance without a mechanism assigned");
+        }
+
+        if (count >= 2) {
+            encoder.writeBinary(buffer, state, init.getInitialResponse());
+        }
+
+        if (count == 3) {
+            ProtonEncodings.writeString(buffer, state, init.getHostname());
         }
     }
 
@@ -70,10 +84,5 @@ public final class SaslInitTypeEncoder extends AbstractDescribedListTypeEncoder<
         } else {
             return 1;
         }
-    }
-
-    @Override
-    public int getMinElementCount() {
-        return 1;
     }
 }
