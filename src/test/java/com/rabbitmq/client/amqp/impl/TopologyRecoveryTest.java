@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.DIRECT;
 import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
+import static com.rabbitmq.client.amqp.impl.TestUtils.safeManagementOperation;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.lang.String.format;
 import static java.time.Duration.ofMillis;
@@ -216,19 +217,20 @@ public class TopologyRecoveryTest {
     List<String> connEvents = new CopyOnWriteArrayList<>();
     List<String> pubEvents = new CopyOnWriteArrayList<>();
     List<String> consEvents = new CopyOnWriteArrayList<>();
-    try (Connection connection =
+    String e = exchange();
+    String q = queue();
+    Connection connection =
         connection(
             this.connectionName,
             isolateResources,
             this.recoveredSync,
             b ->
                 b.listeners(
-                    context -> connEvents.add("connection " + context.currentState().name())))) {
+                    context -> connEvents.add("connection " + context.currentState().name())));
+    try {
       assertThat(connectionAttemptCount).hasValue(1);
-      String e = exchange();
-      String q = queue();
-      connection.management().exchange(e).type(FANOUT).autoDelete(true).declare();
-      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
+      connection.management().exchange(e).type(FANOUT).declare();
+      connection.management().queue(q).declare();
       // to delete the exchange automatically
       connection.management().binding().sourceExchange(e).destinationQueue(q).bind();
 
@@ -276,6 +278,10 @@ public class TopologyRecoveryTest {
           () -> consEvents.size() == expectedConsStates.length,
           () -> format(messageFormat, expectedConsStates.length, consEvents.size(), consEvents));
       assertThat(consEvents).containsExactly(expectedConsStates);
+    } finally {
+      safeManagementOperation(connection, m -> m.queueDelete(q));
+      safeManagementOperation(connection, m -> m.exchangeDelete(e));
+      connection.close();
     }
   }
 
