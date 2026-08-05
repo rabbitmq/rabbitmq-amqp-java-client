@@ -434,6 +434,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
         throw new AmqpException(e);
       }
       this.sslContext = context;
+      this.hostnameVerification(false);
       return this;
     }
 
