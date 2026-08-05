@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.Management.ExchangeType.FANOUT;
 import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
+import static java.lang.String.format;
 import static java.time.Duration.ofMillis;
 import static java.util.stream.IntStream.range;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -261,11 +262,19 @@ public class TopologyRecoveryTest {
           new String[] {
             "consumer OPENING", "consumer OPEN", "consumer RECOVERING", "consumer OPEN",
           };
-      waitAtMost(() -> connEvents.size() == expectedConnStates.length);
+
+      String messageFormat = "Expected %d event(s), got %d (%s)";
+      waitAtMost(
+          () -> connEvents.size() == expectedConnStates.length,
+          () -> format(messageFormat, expectedConnStates.length, connEvents.size(), connEvents));
       assertThat(connEvents).containsExactly(expectedConnStates);
-      waitAtMost(() -> pubEvents.size() == expectedPubStates.length);
+      waitAtMost(
+          () -> pubEvents.size() == expectedPubStates.length,
+          () -> format(messageFormat, expectedPubStates.length, pubEvents.size(), pubEvents));
       assertThat(pubEvents).containsExactly(expectedPubStates);
-      waitAtMost(() -> consEvents.size() == expectedConsStates.length);
+      waitAtMost(
+          () -> consEvents.size() == expectedConsStates.length,
+          () -> format(messageFormat, expectedConsStates.length, consEvents.size(), consEvents));
       assertThat(consEvents).containsExactly(expectedConsStates);
     }
   }
