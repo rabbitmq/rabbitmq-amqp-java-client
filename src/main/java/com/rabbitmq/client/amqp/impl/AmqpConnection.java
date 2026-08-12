@@ -485,7 +485,6 @@ final class AmqpConnection extends ResourceBase
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
           consumer.recoverAfterConnectionFailure();
-          consumer.state(OPEN);
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
         } catch (AmqpException.AmqpConnectionException ex) {
           LOGGER.warn(

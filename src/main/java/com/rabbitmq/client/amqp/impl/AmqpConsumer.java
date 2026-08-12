@@ -124,6 +124,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final ConsumerWorkService consumerWorkService;
   // package-private for testing
   Duration pauseHandshakeTimeout = Duration.ofSeconds(10);
+  // package-private for testing: runs after the native receiver has been reopened during
+  // recovery, immediately before the new generation is activated
+  volatile Runnable beforeActivateHook = () -> {};
+
+  // Arbitrates the two writers of the consumer lifecycle: close() and the tail of
+  // recoverAfterConnectionFailure. Held only across field writes, never across I/O.
+  private final Object lifecycleLock = new Object();
 
   // One instance per receiver generation. Everything the credit path touches lives here, so a
   // generation's state cannot outlive the executor that owns it.
@@ -172,8 +179,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     try {
       Link openedLink = this.openLink(this.sessionHandler.session());
       this.directReplyToAddress = openedLink.receiver.address();
-      this.state(OPEN);
-      openedLink.receiver.addCredit(this.initialCredits);
+      if (this.activate(openedLink)) {
+        openedLink.receiver.addCredit(this.initialCredits);
+      }
     } catch (ClientException e) {
       AmqpException ex = ExceptionUtils.convert(e);
       this.close(ex);
@@ -184,26 +192,30 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   @Override
   public void pause() {
+    checkOpen();
     if (this.pauseStatus.compareAndSet(PauseStatus.UNPAUSED, PauseStatus.PAUSING)) {
       try {
         CountDownLatch latch = new CountDownLatch(1);
         this.echoedFlowAfterPauseLatch.set(latch);
-        this.link.executor.execute(this::doPause);
+        Link linkAtPause = this.link;
+        onExecutor(linkAtPause, () -> doPause(linkAtPause));
         try {
           boolean echoed =
               latch.await(this.pauseHandshakeTimeout.toMillis(), TimeUnit.MILLISECONDS);
           if (!echoed) {
-            // doPause may already have zeroed the link credit, so resetting to UNPAUSED here
+            // doPause may already have zeroed the link credit, so falling back to UNPAUSED here
             // would leave the consumer stalled with no way to re-credit the link
             LOGGER.warn("Did not receive echoed flow to pause receiver");
           }
-          this.pauseStatus.set(PauseStatus.PAUSED);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
       } catch (Exception e) {
         LOGGER.warn("Exception while pausing consumer: {}", e.getMessage(), e);
-        this.pauseStatus.set(PauseStatus.PAUSED);
+      } finally {
+        // CAS, not set: a concurrent recovery may legitimately have moved the status, and its
+        // write must win. The finally guarantees the status never stays at PAUSING (L3)
+        this.pauseStatus.compareAndSet(PauseStatus.PAUSING, PauseStatus.PAUSED);
       }
     }
   }
@@ -428,15 +440,15 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             this.subscriptionListener,
             createNativeHandler(this.messageHandler, holder),
             this.nativeCloseHandler);
-    return installLink(receiver, holder);
+    return buildLink(receiver, holder);
   }
 
-  // Builds the Link for an already-open native receiver and publishes it to both the
-  // generation-local holder (read by the native handler) and this.link (read by everything
-  // else), on the proton executor, before returning. Credit must not be granted until this
-  // returns : a freshly opened receiver has zero credit (creditWindow(0)), so no delivery
-  // can arrive before its generation's Link exists.
-  private Link installLink(ClientReceiver receiver, AtomicReference<Link> holder) {
+  // Builds the Link for an already-open native receiver and publishes it to the
+  // generation-local holder (read by the native handler), on the proton executor, before
+  // returning. this.link is published separately, by activate(), which arbitrates the
+  // publication against close(). The holder is still populated before any credit is granted,
+  // which is all invariant I1 needs.
+  private Link buildLink(ClientReceiver receiver, AtomicReference<Link> holder) {
     try {
       Scheduler executor = receiver.executor();
       CountDownLatch publishedLatch = new CountDownLatch(1);
@@ -464,7 +476,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             protonReceiver.creditStateUpdateHandler(decorator);
 
             holder.set(newLink);
-            this.link = newLink;
             publishedLatch.countDown();
           });
       if (!publishedLatch.await(10, TimeUnit.SECONDS)) {
@@ -476,7 +487,27 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
+  // Publishes the new generation and moves the consumer to OPEN, atomically with respect to
+  // close(). Returns false if the consumer was closed concurrently: the caller then still owns
+  // the receiver it opened and must close it.
+  private boolean activate(Link newLink) {
+    synchronized (this.lifecycleLock) {
+      if (this.closed.get()) {
+        return false;
+      }
+      Link previous = this.link;
+      if (previous != null && previous != newLink) {
+        previous.current = false;
+      }
+      this.link = newLink;
+      this.state(OPEN);
+      return true;
+    }
+  }
+
   void recoverAfterConnectionFailure() {
+    // optimization that avoids a pointless retry loop for a consumer already closed;
+    // activate() is the actual guarantee
     if (this.closed.get()) {
       LOGGER.debug("Consumer {} is closed, skipping recovery", this.id);
       return;
@@ -503,56 +534,69 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             "Create AMQP receiver to address '%s'",
             this.address);
 
-    // Check again after potentially long retry operation
+    // optimization that avoids a pointless buildLink for a consumer already closed after a
+    // potentially long retry operation; activate() is the actual guarantee
     if (this.closed.get()) {
       LOGGER.debug("Consumer {} was closed during recovery, cleaning up new receiver", this.id);
-      try {
-        newReceiver.close();
-      } catch (Exception e) {
-        LOGGER.debug("Error while closing receiver during cleanup: {}", e.getMessage());
-      }
+      closeQuietly(newReceiver);
       return;
     }
 
-    Link previousLink = this.link;
     try {
-      Link newLink = this.installLink(newReceiver, holder);
+      Link newLink = this.buildLink(newReceiver, holder);
       this.directReplyToAddress = newReceiver.address();
+      this.beforeActivateHook.run();
+      if (!this.activate(newLink)) {
+        LOGGER.debug("Consumer {} was closed during recovery, closing new receiver", this.id);
+        closeQuietly(newReceiver);
+        return;
+      }
       // the previous generation is gone; its counters are irrelevant from here on, so there is
       // no hand-reset of unsettledMessageCount: unsettledMessageCount() already reads the new
       // Link's counter, which starts at zero
-      if (previousLink != null) {
-        previousLink.current = false;
+      if (this.pausedOrPausing()) {
+        LOGGER.debug("Consumer {} is paused, not granting credit after recovery", this.id);
+      } else {
+        newLink.receiver.addCredit(this.initialCredits);
       }
-      this.pauseStatus.set(PauseStatus.UNPAUSED);
-      this.state(OPEN);
-      newLink.receiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     }
   }
 
   void close(Throwable cause) {
-    if (this.closed.compareAndSet(false, true)) {
+    Link linkToClose;
+    synchronized (this.lifecycleLock) {
+      if (!this.closed.compareAndSet(false, true)) {
+        return;
+      }
+      linkToClose = this.link;
       this.state(CLOSING, cause);
-      if (this.consumerWorkService != null) {
-        this.consumerWorkService.unregister(this);
+    }
+    if (this.consumerWorkService != null) {
+      this.consumerWorkService.unregister(this);
+    }
+    this.connection.removeConsumer(this);
+    try {
+      if (linkToClose != null) {
+        linkToClose.receiver.close();
       }
-      this.connection.removeConsumer(this);
-      try {
-        Link currentLink = this.link;
-        if (currentLink != null) {
-          currentLink.receiver.close();
-        }
-        this.sessionHandler.close();
-      } catch (Exception e) {
-        LOGGER.warn("Error while closing receiver", e);
-      }
-      this.state(CLOSED, cause);
-      MetricsCollector mc = this.metricsCollector;
-      if (mc != null) {
-        mc.closeConsumer();
-      }
+      this.sessionHandler.close();
+    } catch (Exception e) {
+      LOGGER.warn("Error while closing receiver", e);
+    }
+    this.state(CLOSED, cause);
+    MetricsCollector mc = this.metricsCollector;
+    if (mc != null) {
+      mc.closeConsumer();
+    }
+  }
+
+  private static void closeQuietly(ClientReceiver receiver) {
+    try {
+      receiver.close();
+    } catch (Exception e) {
+      LOGGER.debug("Error while closing receiver during cleanup: {}", e.getMessage());
     }
   }
 
@@ -616,8 +660,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void doPause() {
-    Link link = this.link;
+  private void doPause(Link link) {
     link.creditState.updateCredit(0);
     link.creditState.updateEcho(true);
     link.sessionWindow.writeFlow(link.protonReceiver);
@@ -625,6 +668,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   boolean pausedOrPausing() {
     return this.pauseStatus.get() != PauseStatus.UNPAUSED;
+  }
+
+  PauseStatus pauseStatus() {
+    return this.pauseStatus.get();
   }
 
   enum PauseStatus {

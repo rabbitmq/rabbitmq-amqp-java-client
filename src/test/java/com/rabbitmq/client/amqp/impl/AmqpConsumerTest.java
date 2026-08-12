@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
@@ -31,6 +32,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
@@ -42,8 +44,12 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -394,6 +400,212 @@ public class AmqpConsumerTest {
     assertThat(publishSync).completes();
 
     assertThat(consumeSync).completes();
+  }
+
+  @Test
+  void pauseInterruptedDoesNotLeaveConsumerPausing() throws InterruptedException {
+    connection.management().queue(this.q).declare();
+    Publisher publisher = connection.publisherBuilder().queue(this.q).build();
+
+    int initialCredits = 5;
+    Sync consumeSync = sync(initialCredits);
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            connection
+                .consumerBuilder()
+                .queue(this.q)
+                .initialCredits(initialCredits)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+
+    Thread pausingThread = new Thread(consumer::pause);
+    pausingThread.start();
+    waitAtMost(consumer::pausedOrPausing);
+    pausingThread.interrupt();
+    pausingThread.join(TimeUnit.SECONDS.toMillis(10));
+
+    // the finally in pause() must settle the status even though the wait was interrupted,
+    // never leaving it at the unrecoverable PAUSING (unpause() cannot CAS out of it)
+    assertThat(consumer.pausedOrPausing()).isTrue();
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    consumer.unpause();
+
+    IntStream.range(0, initialCredits)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+    assertThat(consumeSync).completes();
+  }
+
+  @Test
+  void pauseThrowsOnClosedConsumer() {
+    connection.management().queue(this.q).declare();
+    Consumer consumer =
+        connection.consumerBuilder().queue(this.q).messageHandler((ctx, msg) -> {}).build();
+    consumer.close();
+
+    assertThatThrownBy(consumer::pause)
+        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+  }
+
+  @Test
+  void pausedConsumerStaysPausedAfterRecovery(TestInfo info) throws InterruptedException {
+    String cName = name(info);
+    connection.management().queue(this.q).declare();
+    Connection c =
+        ((AmqpConnectionBuilder) environment.connectionBuilder())
+            .name(cName)
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+    Publisher publisher = c.publisherBuilder().queue(this.q).build();
+
+    int initialCredits = 5;
+    int messageCount = initialCredits;
+    Sync consumeSync = sync(messageCount);
+    Sync recoveredSync = sync();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            c.consumerBuilder()
+                .queue(this.q)
+                .initialCredits(initialCredits)
+                .listeners(recoveredListener(recoveredSync))
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+
+    consumer.pause();
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    closeConnection(cName);
+    assertThat(recoveredSync).completes();
+    waitAtMost(() -> ((ResourceBase) c).state() == OPEN);
+    // the pause intent must survive recovery: no credit granted on the new generation
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    Sync publishSync = sync(messageCount);
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    // settle: a paused consumer must not consume anything after recovery
+    TestUtils.simulateActivity(Duration.ofSeconds(1));
+    assertThat(connection.management().queueInfo(this.q).messageCount()).isEqualTo(messageCount);
+
+    consumer.unpause();
+    assertThat(consumeSync).completes();
+
+    assertCreditInvariants(consumer, initialCredits);
+
+    c.close();
+  }
+
+  @Test
+  void consumerClosedDuringRecoveryStaysClosed(TestInfo info) throws InterruptedException {
+    String cName = name(info);
+    connection.management().queue(this.q).declare();
+    Connection c =
+        ((AmqpConnectionBuilder) environment.connectionBuilder())
+            .name(cName)
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+
+    List<Resource.State[]> transitions = new CopyOnWriteArrayList<>();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            c.consumerBuilder()
+                .queue(this.q)
+                .listeners(
+                    ctx ->
+                        transitions.add(
+                            new Resource.State[] {ctx.previousState(), ctx.currentState()}))
+                .messageHandler((ctx, msg) -> {})
+                .build();
+
+    CountDownLatch hookEntered = new CountDownLatch(1);
+    CountDownLatch releaseHook = new CountDownLatch(1);
+    consumer.beforeActivateHook =
+        () -> {
+          hookEntered.countDown();
+          try {
+            releaseHook.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        };
+
+    closeConnection(cName);
+    assertThat(hookEntered.await(10, TimeUnit.SECONDS)).isTrue();
+    consumer.close();
+    releaseHook.countDown();
+
+    waitAtMost(() -> ((ResourceBase) consumer).state() == CLOSED);
+    // settle: nothing must move the state away from CLOSED afterwards
+    TestUtils.simulateActivity(Duration.ofMillis(500));
+    assertThat(((ResourceBase) consumer).state()).isEqualTo(CLOSED);
+    assertThat(transitions).noneMatch(t -> (t[0] == CLOSED || t[0] == CLOSING) && t[1] == OPEN);
+
+    waitAtMost(() -> ((ResourceBase) c).state() == OPEN);
+    c.close();
+  }
+
+  @Test
+  void consumerClosedDuringRecoveryDoesNotLeakNewReceiver(TestInfo info)
+      throws InterruptedException {
+    String cName = name(info);
+    connection.management().queue(this.q).declare();
+    Connection c =
+        ((AmqpConnectionBuilder) environment.connectionBuilder())
+            .name(cName)
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+
+    AmqpConsumer consumer =
+        (AmqpConsumer) c.consumerBuilder().queue(this.q).messageHandler((ctx, msg) -> {}).build();
+
+    CountDownLatch hookEntered = new CountDownLatch(1);
+    CountDownLatch releaseHook = new CountDownLatch(1);
+    consumer.beforeActivateHook =
+        () -> {
+          hookEntered.countDown();
+          try {
+            releaseHook.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        };
+
+    closeConnection(cName);
+    assertThat(hookEntered.await(10, TimeUnit.SECONDS)).isTrue();
+    consumer.close();
+    releaseHook.countDown();
+
+    waitAtMost(() -> consumer.state() == CLOSED);
+
+    Publisher publisher = connection.publisherBuilder().queue(this.q).build();
+    int messageCount = 10;
+    Sync publishSync = sync(messageCount);
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    // settle: a leaked, credited receiver would consume these
+    TestUtils.simulateActivity(Duration.ofSeconds(1));
+    assertThat(connection.management().queueInfo(this.q).messageCount()).isEqualTo(messageCount);
+
+    waitAtMost(() -> ((ResourceBase) c).state() == OPEN);
+    c.close();
   }
 
   @ParameterizedTest
