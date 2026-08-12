@@ -44,11 +44,11 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
@@ -77,6 +77,25 @@ import org.apache.qpid.protonj2.types.messaging.Released;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The credit accounting and disposition path relies on five invariants:
+ *
+ * <ul>
+ *   <li><b>I1</b> — credit is granted only after the {@link Link} is installed. Enforced by {@code
+ *       creditWindow(0)}: a freshly opened receiver has zero credit until we grant it, so no
+ *       delivery can arrive before its generation exists.
+ *   <li><b>I2</b> — {@code Link.pendingWorkItems} is read and written only on that {@link Link}'s
+ *       proton executor: a plain {@code int}, no atomics.
+ *   <li><b>I3</b> — {@code pendingWorkItems} is incremented exactly once per delivery (at dispatch,
+ *       already on the proton thread) and decremented exactly once (at work-item completion). One
+ *       event each.
+ *   <li><b>I4</b> — replenish is triggered from work-item completion and from every settle. It is
+ *       conservative and idempotent (only ever tops up to the window), so an extra trigger is
+ *       harmless and only a violation of I3 can stall the consumer.
+ *   <li><b>I5</b> — a disposition is queued on the proton executor before the replenish that
+ *       follows it.
+ * </ul>
+ */
 final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
@@ -84,7 +103,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
-  private volatile ClientReceiver nativeReceiver;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final int initialCredits;
   private final boolean preSettled;
@@ -101,25 +119,22 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private final AtomicReference<CountDownLatch> echoedFlowAfterPauseLatch = new AtomicReference<>();
   private final MetricsCollector metricsCollector;
   private final SessionHandler sessionHandler;
-  private final AtomicLong unsettledMessageCount = new AtomicLong(0);
-  private final Runnable replenishCreditOperation = this::replenishCreditIfNeeded;
-  private final java.util.function.Consumer<Delivery> nativeHandler;
+  private final MessageHandler messageHandler;
   private final java.util.function.Consumer<ClientException> nativeCloseHandler;
   private final ConsumerWorkService consumerWorkService;
-  private final AtomicInteger pendingWorkItems = new AtomicInteger(0);
+  // package-private for testing
+  Duration pauseHandshakeTimeout = Duration.ofSeconds(10);
 
-  // native receiver internal state, accessed only in the native executor/scheduler
-  private ProtonReceiver protonReceiver;
-  private volatile Scheduler protonExecutor;
-  private ProtonSessionIncomingWindow sessionWindow;
-  private ProtonLinkCreditState creditState;
+  // One instance per receiver generation. Everything the credit path touches lives here, so a
+  // generation's state cannot outlive the executor that owns it.
+  private volatile Link link;
 
   AmqpConsumer(AmqpConsumerBuilder builder) {
     super(builder.listeners(), builder.connection().environment().executorService());
     this.id = ID_SEQUENCE.getAndIncrement();
     this.initialCredits = builder.initialCredits();
     this.preSettled = builder.isPreSettled() || builder.directReplyTo();
-    MessageHandler messageHandler =
+    this.messageHandler =
         builder
             .connection()
             .observationCollector()
@@ -139,7 +154,6 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         ofNullable(builder.subscriptionListener()).orElse(NO_OP_SUBSCRIPTION_LISTENER);
     this.connection = builder.connection();
     this.sessionHandler = this.connection.createSessionHandler();
-    this.nativeHandler = createNativeHandler(messageHandler);
     this.nativeCloseHandler =
         e -> {
           this.connection
@@ -152,22 +166,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         };
     this.consumerWorkService = connection.consumerWorkService();
     this.consumerWorkService.register(this, this.initialCredits);
-    this.nativeReceiver =
-        createNativeReceiver(
-            this.sessionHandler.session(),
-            this.address,
-            this.preSettled,
-            this.linkProperties,
-            this.filters,
-            this.subscriptionListener,
-            this.nativeHandler,
-            this.nativeCloseHandler);
+    // set before opening the link
+    // (assigning it up front removes the need to reason about it)
+    this.metricsCollector = this.connection.metricsCollector();
     try {
-      this.directReplyToAddress = nativeReceiver.address();
-      this.initStateFromNativeReceiver(this.nativeReceiver);
-      this.metricsCollector = this.connection.metricsCollector();
+      Link openedLink = this.openLink(this.sessionHandler.session());
+      this.directReplyToAddress = openedLink.receiver.address();
       this.state(OPEN);
-      this.nativeReceiver.addCredit(this.initialCredits);
+      openedLink.receiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
       AmqpException ex = ExceptionUtils.convert(e);
       this.close(ex);
@@ -182,21 +188,22 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       try {
         CountDownLatch latch = new CountDownLatch(1);
         this.echoedFlowAfterPauseLatch.set(latch);
-        this.protonExecutor.execute(this::doPause);
+        this.link.executor.execute(this::doPause);
         try {
-          boolean echoed = latch.await(10, TimeUnit.SECONDS);
-          if (echoed) {
-            this.pauseStatus.set(PauseStatus.PAUSED);
-          } else {
+          boolean echoed =
+              latch.await(this.pauseHandshakeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+          if (!echoed) {
+            // doPause may already have zeroed the link credit, so resetting to UNPAUSED here
+            // would leave the consumer stalled with no way to re-credit the link
             LOGGER.warn("Did not receive echoed flow to pause receiver");
-            this.pauseStatus.set(PauseStatus.UNPAUSED);
           }
+          this.pauseStatus.set(PauseStatus.PAUSED);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
       } catch (Exception e) {
         LOGGER.warn("Exception while pausing consumer: {}", e.getMessage(), e);
-        this.pauseStatus.set(PauseStatus.UNPAUSED);
+        this.pauseStatus.set(PauseStatus.PAUSED);
       }
     }
   }
@@ -205,17 +212,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   public void unpause() {
     checkOpen();
     if (this.pauseStatus.compareAndSet(PauseStatus.PAUSED, PauseStatus.UNPAUSED)) {
-      try {
-        this.nativeReceiver.addCredit(this.initialCredits);
-      } catch (ClientException e) {
-        throw ExceptionUtils.convert(e);
-      }
+      // top up through the same formula as any other replenish, accounting for
+      // pendingWorkItems, instead of blindly granting a full window of credit
+      Link currentLink = this.link;
+      onExecutor(currentLink, () -> replenish(currentLink));
     }
   }
 
   @Override
   public long unsettledMessageCount() {
-    return unsettledMessageCount.get();
+    return this.link.unsettled.get();
   }
 
   @Override
@@ -307,11 +313,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private java.util.function.Consumer<Delivery> createNativeHandler(MessageHandler handler) {
-    Runnable maybeIncrementUnsettledRunnable;
+  // Builds the native delivery handler for one receiver generation. The handler reads the
+  // generation's Link through linkHolder rather than through a field, so it can only ever see
+  // the Link that belongs to its own receiver: the holder is populated before any credit
+  // is granted, and a stale generation's receiver never delivers again once superseded.
+  private java.util.function.Consumer<Delivery> createNativeHandler(
+      MessageHandler handler, AtomicReference<Link> linkHolder) {
+    java.util.function.Consumer<Link> maybeIncrementUnsettled;
     java.util.function.Consumer<Delivery> dispatchedRunnable;
     if (this.preSettled) {
-      maybeIncrementUnsettledRunnable = Utils.NO_OP_RUNNABLE;
+      maybeIncrementUnsettled = link -> {};
       dispatchedRunnable =
           delivery -> {
             try {
@@ -319,18 +330,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             } catch (ClientException e) {
               LOGGER.warn("Error while settling message: {}", e.getMessage());
             }
+            Link link = linkHolder.get();
             AmqpMessage message;
             try {
               message = new AmqpMessage(delivery.message());
             } catch (ClientException e) {
               LOGGER.warn("Error while decoding message: {}", e.getMessage());
-              // Decrement and replenish on proton executor to keep pendingWorkItems
-              // consistent with credit state and avoid over-crediting
-              protonExecutor.execute(
-                  () -> {
-                    pendingWorkItems.decrementAndGet();
-                    replenishCreditIfNeeded();
-                  });
+              onExecutor(link, () -> completeWorkItem(link));
               return;
             }
             metricsCollector.consumeDisposition(ACCEPTED);
@@ -339,18 +345,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
             } catch (Exception ex) {
               LOGGER.warn("Error in message handler", ex);
             }
-            // Decrement and replenish on proton executor to keep pendingWorkItems
-            // consistent with credit state and avoid over-crediting
-            protonExecutor.execute(
-                () -> {
-                  pendingWorkItems.decrementAndGet();
-                  replenishCreditIfNeeded();
-                });
+            onExecutor(link, () -> completeWorkItem(link));
           };
     } else {
-      maybeIncrementUnsettledRunnable = this.unsettledMessageCount::incrementAndGet;
+      maybeIncrementUnsettled = link -> link.unsettled.incrementAndGet();
       dispatchedRunnable =
           delivery -> {
+            Link link = linkHolder.get();
             AmqpMessage message;
             try {
               message = new AmqpMessage(delivery.message());
@@ -361,32 +362,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               } catch (ClientException ex) {
                 LOGGER.warn("Error while rejecting non-decoded message: {}", ex.getMessage());
               }
-              unsettledMessageCount.decrementAndGet();
-              // Decrement and replenish on proton executor to keep pendingWorkItems
-              // consistent with credit state and avoid over-crediting
-              protonExecutor.execute(
-                  () -> {
-                    pendingWorkItems.decrementAndGet();
-                    replenishCreditIfNeeded();
-                  });
+              link.unsettled.decrementAndGet();
+              onExecutor(link, () -> completeWorkItem(link));
               return;
             }
-            // Tracks whether pendingWorkItems has already been decremented for this
-            // delivery, so it happens exactly once whichever comes first: the handler
-            // returning (below) or the application settling the message (see settle()).
-            // Guessing which one comes first is not reliable: it depends on whether the
-            // application settles synchronously from the handler or defers it elsewhere.
-            AtomicBoolean pendingWorkItemDecremented = new AtomicBoolean(false);
-            Consumer.Context context =
-                new DeliveryContext(
-                    delivery,
-                    this.protonExecutor,
-                    this.protonReceiver,
-                    this.metricsCollector,
-                    this.unsettledMessageCount,
-                    this.replenishCreditOperation,
-                    pendingWorkItemDecremented,
-                    this);
+            Consumer.Context context = new DeliveryContext(delivery, link, this);
             try {
               handler.handle(context, message);
             } catch (Exception ex) {
@@ -397,27 +377,18 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                 LOGGER.warn("Error while discarding message", iex);
               }
             } finally {
-              // Decrement on proton executor so replenishCreditIfNeeded sees
-              // a consistent pendingWorkItems value when it runs. Credit is only
-              // replenished when the application settles the message (see settle()
-              // below), not merely because the handler returned.
-              try {
-                protonExecutor.execute(
-                    () -> decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented));
-              } catch (RejectedExecutionException ex) {
-                // The executor is dead, meaning the connection dropped.
-                // The race condition with replenishCreditIfNeeded is irrelevant now.
-                // Safely decrement the atomic counter directly so we don't leak work items.
-                decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented);
-              }
+              // pendingWorkItems is decremented exactly once, at work-item completion,
+              // regardless of whether or when the application settles the message.
+              onExecutor(link, () -> completeWorkItem(link));
             }
           };
     }
     return delivery -> {
       if (this.state() == OPEN) {
-        maybeIncrementUnsettledRunnable.run();
+        Link link = linkHolder.get();
+        maybeIncrementUnsettled.accept(link);
         this.metricsCollector.consume();
-        pendingWorkItems.incrementAndGet();
+        link.pendingWorkItems++;
         this.consumerWorkService.dispatch(this, () -> dispatchedRunnable.accept(delivery));
       } else {
         // Consumer is not open (RECOVERING, CLOSING, CLOSED), release delivery back to broker
@@ -444,11 +415,73 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     };
   }
 
+  // Opens the first generation of the native receiver for this consumer.
+  private Link openLink(Session nativeSession) {
+    AtomicReference<Link> holder = new AtomicReference<>();
+    ClientReceiver receiver =
+        createNativeReceiver(
+            nativeSession,
+            this.address,
+            this.preSettled,
+            this.linkProperties,
+            this.filters,
+            this.subscriptionListener,
+            createNativeHandler(this.messageHandler, holder),
+            this.nativeCloseHandler);
+    return installLink(receiver, holder);
+  }
+
+  // Builds the Link for an already-open native receiver and publishes it to both the
+  // generation-local holder (read by the native handler) and this.link (read by everything
+  // else), on the proton executor, before returning. Credit must not be granted until this
+  // returns : a freshly opened receiver has zero credit (creditWindow(0)), so no delivery
+  // can arrive before its generation's Link exists.
+  private Link installLink(ClientReceiver receiver, AtomicReference<Link> holder) {
+    try {
+      Scheduler executor = receiver.executor();
+      CountDownLatch publishedLatch = new CountDownLatch(1);
+      executor.execute(
+          () -> {
+            ProtonReceiver protonReceiver = (ProtonReceiver) receiver.protonReceiver();
+            Link newLink =
+                new Link(
+                    receiver,
+                    executor,
+                    protonReceiver,
+                    protonReceiver.getCreditState(),
+                    protonReceiver.sessionWindow());
+
+            EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
+                protonReceiver.linkCreditUpdatedHandler();
+            EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
+                target -> {
+                  eventHandler.handle(target);
+                  CountDownLatch latch = this.echoedFlowAfterPauseLatch.getAndSet(null);
+                  if (latch != null) {
+                    latch.countDown();
+                  }
+                };
+            protonReceiver.creditStateUpdateHandler(decorator);
+
+            holder.set(newLink);
+            this.link = newLink;
+            publishedLatch.countDown();
+          });
+      if (!publishedLatch.await(10, TimeUnit.SECONDS)) {
+        throw new AmqpException("Could not initialize consumer internal state");
+      }
+      return holder.get();
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   void recoverAfterConnectionFailure() {
     if (this.closed.get()) {
       LOGGER.debug("Consumer {} is closed, skipping recovery", this.id);
       return;
     }
+    AtomicReference<Link> holder = new AtomicReference<>();
     ClientReceiver newReceiver =
         RetryUtils.callAndMaybeRetry(
             () ->
@@ -459,7 +492,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     this.linkProperties,
                     this.filters,
                     this.subscriptionListener,
-                    this.nativeHandler,
+                    createNativeHandler(this.messageHandler, holder),
                     this.nativeCloseHandler),
             e -> {
               boolean shouldRetry = ExceptionUtils.noRunningStreamMemberOnNode(e);
@@ -481,13 +514,19 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       return;
     }
 
-    this.nativeReceiver = newReceiver;
+    Link previousLink = this.link;
     try {
-      this.directReplyToAddress = this.nativeReceiver.address();
-      this.initStateFromNativeReceiver(this.nativeReceiver);
+      Link newLink = this.installLink(newReceiver, holder);
+      this.directReplyToAddress = newReceiver.address();
+      // the previous generation is gone; its counters are irrelevant from here on, so there is
+      // no hand-reset of unsettledMessageCount: unsettledMessageCount() already reads the new
+      // Link's counter, which starts at zero
+      if (previousLink != null) {
+        previousLink.current = false;
+      }
       this.pauseStatus.set(PauseStatus.UNPAUSED);
-      this.unsettledMessageCount.set(0);
-      this.nativeReceiver.addCredit(this.initialCredits);
+      this.state(OPEN);
+      newLink.receiver.addCredit(this.initialCredits);
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     }
@@ -501,8 +540,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       }
       this.connection.removeConsumer(this);
       try {
-        if (this.nativeReceiver != null) {
-          this.nativeReceiver.close();
+        Link currentLink = this.link;
+        if (currentLink != null) {
+          currentLink.receiver.close();
         }
         this.sessionHandler.close();
       } catch (Exception e) {
@@ -524,75 +564,63 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     return this.queue;
   }
 
-  private void initStateFromNativeReceiver(ClientReceiver receiver) {
+  // proton executor only
+  private void completeWorkItem(Link link) {
+    link.pendingWorkItems--;
+    replenish(link);
+  }
+
+  // proton executor only
+  private void replenish(Link link) {
+    if (!link.current || !active()) {
+      return;
+    }
+    int window = this.initialCredits;
+    // how many messages the broker is allowed to send
+    int credit = link.protonReceiver.getCredit();
+    if (credit > window * 0.5) {
+      // we should still receive enough messages,
+      // no need to top up with a small value, this prevents unnecessary traffic
+      return;
+    }
+    // Pre-settled messages have no settlement event to gate on, so pendingWorkItems (handler
+    // concurrency) is the only available signal. Non-presettled messages are gated on
+    // unsettled instead: it is decremented synchronously in DeliveryContext.settle, so a
+    // replenish racing a settle on the proton executor never reads a stale, pre-decrement
+    // value the way pendingWorkItems (decremented via a separately queued task) could.
+    int outstanding = this.preSettled ? link.pendingWorkItems : (int) link.unsettled.get();
+    // in-flight = credit (potential incoming messages) + outstanding
+    int inFlight = credit + outstanding;
+    if (inFlight > window * 0.7) {
+      // still have plenty of work, no need to top up
+      return;
+    }
     try {
-      Scheduler protonExecutor = receiver.executor();
-      CountDownLatch fieldsSetLatch = new CountDownLatch(1);
-      protonExecutor.execute(
-          () -> {
-            this.protonReceiver = (ProtonReceiver) receiver.protonReceiver();
-            this.creditState = this.protonReceiver.getCreditState();
-            this.sessionWindow = this.protonReceiver.sessionWindow();
-
-            EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
-                this.protonReceiver.linkCreditUpdatedHandler();
-            EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
-                target -> {
-                  eventHandler.handle(target);
-                  CountDownLatch latch = this.echoedFlowAfterPauseLatch.getAndSet(null);
-                  if (latch != null) {
-                    latch.countDown();
-                  }
-                };
-            this.protonReceiver.creditStateUpdateHandler(decorator);
-
-            this.protonExecutor = protonExecutor;
-            fieldsSetLatch.countDown();
-          });
-      if (!fieldsSetLatch.await(10, TimeUnit.SECONDS)) {
-        throw new AmqpException("Could not initialize consumer internal state");
-      }
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
+      link.protonReceiver.addCredit(window - inFlight);
+    } catch (Exception e) {
+      LOGGER.debug("Error caught during credit top-up", e);
     }
   }
 
-  // Must run on the proton executor, like replenishCreditIfNeeded, so the two never
-  // interleave with each other for the same delivery.
-  private void decrementPendingWorkItemIfNeeded(AtomicBoolean pendingWorkItemDecremented) {
-    if (pendingWorkItemDecremented.compareAndSet(false, true)) {
-      pendingWorkItems.decrementAndGet();
-    }
+  // the only thing the credit path asks about lifecycle; reimplemented in Track B
+  private boolean active() {
+    return !pausedOrPausing() && state() == OPEN;
   }
 
-  private void replenishCreditIfNeeded() {
-    if (!this.pausedOrPausing() && this.state() == OPEN) {
-      int creditWindow = this.initialCredits;
-      // number of available credits for the link
-      // this is the number of messages that may be on their way from the broker to the consumer
-      int currentCredit = protonReceiver.getCredit();
-      if (currentCredit <= creditWindow * 0.5) {
-        int totalInFlight = currentCredit + this.pendingWorkItems.get();
-        if (totalInFlight <= creditWindow * 0.7) {
-          // totalInFlight getting low, we'll provide some credits
-          // trying to top up back to the initial credits
-          int additionalCredit = creditWindow - totalInFlight;
-          if (additionalCredit > 0) {
-            try {
-              protonReceiver.addCredit(additionalCredit);
-            } catch (Exception ex) {
-              LOGGER.debug("Error caught during credit top-up", ex);
-            }
-          }
-        }
-      }
+  // A dead executor means the generation is gone and its counters are irrelevant.
+  private static void onExecutor(Link link, Runnable task) {
+    try {
+      link.executor.execute(task);
+    } catch (RejectedExecutionException e) {
+      LOGGER.debug("Proton executor gone, skipping task for stale link");
     }
   }
 
   private void doPause() {
-    this.creditState.updateCredit(0);
-    this.creditState.updateEcho(true);
-    this.sessionWindow.writeFlow(this.protonReceiver);
+    Link link = this.link;
+    link.creditState.updateCredit(0);
+    link.creditState.updateEcho(true);
+    link.sessionWindow.writeFlow(link.protonReceiver);
   }
 
   boolean pausedOrPausing() {
@@ -605,35 +633,43 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     PAUSED
   }
 
+  // One instance per receiver generation. Everything the credit path touches lives here, so a
+  // generation's state cannot outlive the executor that owns it.
+  private static final class Link {
+    private final ClientReceiver receiver;
+    private final Scheduler executor;
+    private final ProtonReceiver protonReceiver;
+    private final ProtonLinkCreditState creditState;
+    private final ProtonSessionIncomingWindow sessionWindow;
+    private final AtomicLong unsettled = new AtomicLong(0);
+    private int pendingWorkItems; // I2: proton-executor-confined, plain int
+    private volatile boolean current = true; // false once superseded
+
+    private Link(
+        ClientReceiver receiver,
+        Scheduler executor,
+        ProtonReceiver protonReceiver,
+        ProtonLinkCreditState creditState,
+        ProtonSessionIncomingWindow sessionWindow) {
+      this.receiver = receiver;
+      this.executor = executor;
+      this.protonReceiver = protonReceiver;
+      this.creditState = creditState;
+      this.sessionWindow = sessionWindow;
+    }
+  }
+
   private static class DeliveryContext implements Consumer.Context {
 
     private static final DeliveryState REJECTED = DeliveryState.rejected(null, null);
     private final AtomicBoolean settled = new AtomicBoolean(false);
     private final Delivery delivery;
-    private final Scheduler protonExecutor;
-    private final ProtonReceiver protonReceiver;
-    private final MetricsCollector metricsCollector;
-    private final AtomicLong unsettledMessageCount;
-    private final Runnable replenishCreditOperation;
-    private final AtomicBoolean pendingWorkItemDecremented;
+    private final Link link;
     private final AmqpConsumer consumer;
 
-    private DeliveryContext(
-        Delivery delivery,
-        Scheduler protonExecutor,
-        ProtonReceiver protonReceiver,
-        MetricsCollector metricsCollector,
-        AtomicLong unsettledMessageCount,
-        Runnable replenishCreditOperation,
-        AtomicBoolean pendingWorkItemDecremented,
-        AmqpConsumer consumer) {
+    private DeliveryContext(Delivery delivery, Link link, AmqpConsumer consumer) {
       this.delivery = delivery;
-      this.protonExecutor = protonExecutor;
-      this.protonReceiver = protonReceiver;
-      this.metricsCollector = metricsCollector;
-      this.unsettledMessageCount = unsettledMessageCount;
-      this.replenishCreditOperation = replenishCreditOperation;
-      this.pendingWorkItemDecremented = pendingWorkItemDecremented;
+      this.link = link;
       this.consumer = consumer;
     }
 
@@ -700,30 +736,20 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public BatchContext batch(int batchSizeHint) {
-      return new BatchDeliveryContext(
-          batchSizeHint,
-          protonExecutor,
-          protonReceiver,
-          metricsCollector,
-          unsettledMessageCount,
-          replenishCreditOperation,
-          consumer);
+      return new BatchDeliveryContext(batchSizeHint, link, consumer);
     }
 
     private void settle(
         DeliveryState state, MetricsCollector.ConsumeDisposition disposition, String label) {
       if (settled.compareAndSet(false, true)) {
         try {
-          protonExecutor.execute(
-              () -> {
-                consumer.decrementPendingWorkItemIfNeeded(pendingWorkItemDecremented);
-                replenishCreditOperation.run();
-              });
-          delivery.disposition(state, true);
-          unsettledMessageCount.decrementAndGet();
-          metricsCollector.consumeDisposition(disposition);
+          delivery.disposition(state, true); // queues the disposition frame
         } catch (Exception e) {
-          handleContextException(this.consumer, e, label);
+          handleContextException(this.consumer, e, label); // may rethrow, as today
+        } finally {
+          link.unsettled.decrementAndGet(); // no drift if the write above failed
+          consumer.metricsCollector.consumeDisposition(disposition);
+          onExecutor(link, () -> consumer.replenish(link)); // I5: queued after the disposition
         }
       }
     }
@@ -744,27 +770,12 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         new Rejected();
     private final List<DeliveryContext> contexts;
     private final AtomicBoolean settled = new AtomicBoolean(false);
-    private final Scheduler protonExecutor;
-    private final ProtonReceiver protonReceiver;
-    private final MetricsCollector metricsCollector;
-    private final AtomicLong unsettledMessageCount;
-    private final Runnable replenishCreditOperation;
+    private final Link link;
     private final AmqpConsumer consumer;
 
-    private BatchDeliveryContext(
-        int batchSizeHint,
-        Scheduler protonExecutor,
-        ProtonReceiver protonReceiver,
-        MetricsCollector metricsCollector,
-        AtomicLong unsettledMessageCount,
-        Runnable replenishCreditOperation,
-        AmqpConsumer consumer) {
+    private BatchDeliveryContext(int batchSizeHint, Link link, AmqpConsumer consumer) {
       this.contexts = new ArrayList<>(batchSizeHint);
-      this.protonExecutor = protonExecutor;
-      this.protonReceiver = protonReceiver;
-      this.metricsCollector = metricsCollector;
-      this.unsettledMessageCount = unsettledMessageCount;
-      this.replenishCreditOperation = replenishCreditOperation;
+      this.link = link;
       this.consumer = consumer;
     }
 
@@ -772,18 +783,26 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     public void add(Consumer.Context context) {
       if (this.settled.get()) {
         throw new IllegalStateException("Batch is closed");
+      }
+      if (!(context instanceof DeliveryContext)) {
+        throw new IllegalArgumentException("Context type not supported: " + context);
+      }
+      DeliveryContext dctx = (DeliveryContext) context;
+      if (dctx.consumer != this.consumer) {
+        // a foreign context would silently apply this batch's delivery IDs to its own link
+        throw new IllegalArgumentException("Context does not belong to this batch's consumer");
+      }
+      if (dctx.link != this.link) {
+        // a different generation than this batch's: it cannot be settled on this link, and the
+        // broker will redeliver it, so this is a normal post-recovery condition, not an error
+        LOGGER.debug("Skipping context from a stale link generation");
+        return;
+      }
+      // marking the context as settled avoids operation on it and deduplicates as well
+      if (dctx.settled.compareAndSet(false, true)) {
+        this.contexts.add(dctx);
       } else {
-        if (context instanceof DeliveryContext) {
-          DeliveryContext dctx = (DeliveryContext) context;
-          // marking the context as settled avoids operation on it and deduplicates as well
-          if (dctx.settled.compareAndSet(false, true)) {
-            this.contexts.add(dctx);
-          } else {
-            throw new IllegalStateException("Message already settled");
-          }
-        } else {
-          throw new IllegalArgumentException("Context type not supported: " + context);
-        }
+        throw new IllegalStateException("Message already settled");
       }
     }
 
@@ -870,26 +889,26 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (settled.compareAndSet(false, true)) {
         int batchSize = this.contexts.size();
         try {
-          protonExecutor.execute(
-              () -> {
-                this.contexts.forEach(
-                    dctx ->
-                        consumer.decrementPendingWorkItemIfNeeded(dctx.pendingWorkItemDecremented));
-                replenishCreditOperation.run();
-              });
           long[][] ranges =
               SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
-          this.protonExecutor.execute(
+          // Decrement unsettled synchronously, before replenish is even scheduled, so it can
+          // never read a stale value (same reasoning as the single-delivery settle path).
+          // I3: pendingWorkItems is not touched here, those decrements already happened when
+          // each handler returned. Dispositions are queued before the replenish that follows.
+          // add() guarantees every context in the batch shares this.link.
+          link.unsettled.addAndGet(-batchSize);
+          onExecutor(
+              link,
               () -> {
                 for (long[] range : ranges) {
-                  this.protonReceiver.disposition(state, range);
+                  link.protonReceiver.disposition(state, range);
                 }
+                consumer.replenish(link);
               });
-          unsettledMessageCount.addAndGet(-batchSize);
           IntStream.range(0, batchSize)
               .forEach(
                   ignored -> {
-                    metricsCollector.consumeDisposition(disposition);
+                    consumer.metricsCollector.consumeDisposition(disposition);
                   });
         } catch (Exception e) {
           handleContextException(this.consumer, e, label);
@@ -900,7 +919,29 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // for testing
   boolean protonHasUnsettled() {
-    return this.protonReceiver.hasUnsettled();
+    return this.link.protonReceiver.hasUnsettled();
+  }
+
+  // for testing
+  int pendingWorkItems() {
+    return readFromExecutor(link -> link.pendingWorkItems);
+  }
+
+  // for testing
+  int credits() {
+    return readFromExecutor(link -> link.protonReceiver.getCredit());
+  }
+
+  // pendingWorkItems is a plain int (I2), so it can only be read safely on the link's executor
+  private int readFromExecutor(java.util.function.ToIntFunction<Link> read) {
+    Link link = this.link;
+    CompletableFuture<Integer> future = new CompletableFuture<>();
+    link.executor.execute(() -> future.complete(read.applyAsInt(link)));
+    try {
+      return future.get(2, TimeUnit.SECONDS);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static class PreSettledContext implements Consumer.Context {
@@ -983,18 +1024,20 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   @SuppressFBWarnings("REC_CATCH_EXCEPTION")
   String diagnosticState() {
     int nativeCredits = -1;
-    Scheduler exec = this.protonExecutor;
-    ProtonReceiver receiver = this.protonReceiver;
+    int pendingWorkItems = -1;
+    Link link = this.link;
+    Scheduler exec = link == null ? null : link.executor;
+    ProtonReceiver receiver = link == null ? null : link.protonReceiver;
 
     if (exec != null && !exec.isShutdown() && receiver != null) {
       try {
-        java.util.concurrent.CompletableFuture<Integer> creditFuture =
-            new java.util.concurrent.CompletableFuture<>();
-
-        exec.execute(() -> creditFuture.complete(receiver.getCredit()));
-
-        // Block briefly to retrieve the value from the proton thread
-        nativeCredits = creditFuture.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        CompletableFuture<int[]> stateFuture = new CompletableFuture<>();
+        exec.execute(
+            () -> stateFuture.complete(new int[] {receiver.getCredit(), link.pendingWorkItems}));
+        // Block briefly to retrieve the values from the proton thread
+        int[] state = stateFuture.get(2, TimeUnit.SECONDS);
+        nativeCredits = state[0];
+        pendingWorkItems = state[1];
       } catch (Exception e) {
         nativeCredits = -2; // -2 indicates we failed to read the credits safely
       }
@@ -1006,8 +1049,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         this.queue == null ? "<direct-reply-to>" : this.queue,
         this.state(),
         this.pauseStatus.get(),
-        this.unsettledMessageCount.get(),
-        this.pendingWorkItems.get(),
+        this.unsettledMessageCount(),
+        pendingWorkItems,
         nativeCredits);
   }
 }
