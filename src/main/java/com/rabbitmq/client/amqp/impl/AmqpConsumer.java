@@ -192,6 +192,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   @Override
   public void pause() {
+    checkOpen();
     if (this.pauseStatus.compareAndSet(PauseStatus.UNPAUSED, PauseStatus.PAUSING)) {
       try {
         CountDownLatch latch = new CountDownLatch(1);

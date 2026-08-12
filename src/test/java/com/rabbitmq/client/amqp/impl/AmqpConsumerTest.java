@@ -32,6 +32,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
@@ -437,6 +438,17 @@ public class AmqpConsumerTest {
     IntStream.range(0, initialCredits)
         .forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
     assertThat(consumeSync).completes();
+  }
+
+  @Test
+  void pauseThrowsOnClosedConsumer() {
+    connection.management().queue(this.q).declare();
+    Consumer consumer =
+        connection.consumerBuilder().queue(this.q).messageHandler((ctx, msg) -> {}).build();
+    consumer.close();
+
+    assertThatThrownBy(consumer::pause)
+        .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
   }
 
   @Test

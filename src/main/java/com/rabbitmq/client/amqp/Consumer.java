@@ -31,7 +31,14 @@ import java.util.Map;
  */
 public interface Consumer extends AutoCloseable, Resource {
 
-  /** Pause the consumer to stop receiving messages. */
+  /**
+   * Pause the consumer to stop receiving messages.
+   *
+   * <p>Messages already in flight when this method is called may still be delivered after it
+   * returns.
+   *
+   * @throws AmqpException if the consumer is not open
+   */
   void pause();
 
   /**
@@ -41,7 +48,11 @@ public interface Consumer extends AutoCloseable, Resource {
    */
   long unsettledMessageCount();
 
-  /** Request to receive messages again. */
+  /**
+   * Request to receive messages again.
+   *
+   * @throws AmqpException if the consumer is not open
+   */
   void unpause();
 
   /** Close the consumer with its resources. */
