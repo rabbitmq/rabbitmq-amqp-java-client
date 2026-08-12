@@ -440,6 +440,62 @@ public class AmqpConsumerTest {
   }
 
   @Test
+  void pausedConsumerStaysPausedAfterRecovery(TestInfo info) throws InterruptedException {
+    String cName = name(info);
+    connection.management().queue(this.q).declare();
+    Connection c =
+        ((AmqpConnectionBuilder) environment.connectionBuilder())
+            .name(cName)
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+    Publisher publisher = c.publisherBuilder().queue(this.q).build();
+
+    int initialCredits = 5;
+    int messageCount = initialCredits;
+    Sync consumeSync = sync(messageCount);
+    Sync recoveredSync = sync();
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            c.consumerBuilder()
+                .queue(this.q)
+                .initialCredits(initialCredits)
+                .listeners(recoveredListener(recoveredSync))
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+
+    consumer.pause();
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    closeConnection(cName);
+    assertThat(recoveredSync).completes();
+    waitAtMost(() -> ((ResourceBase) c).state() == OPEN);
+    // the pause intent must survive recovery: no credit granted on the new generation
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    Sync publishSync = sync(messageCount);
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> publishSync.down()));
+    assertThat(publishSync).completes();
+
+    // settle: a paused consumer must not consume anything after recovery
+    TestUtils.simulateActivity(Duration.ofSeconds(1));
+    assertThat(connection.management().queueInfo(this.q).messageCount()).isEqualTo(messageCount);
+
+    consumer.unpause();
+    assertThat(consumeSync).completes();
+
+    assertCreditInvariants(consumer, initialCredits);
+
+    c.close();
+  }
+
+  @Test
   void consumerClosedDuringRecoveryStaysClosed(TestInfo info) throws InterruptedException {
     String cName = name(info);
     connection.management().queue(this.q).declare();

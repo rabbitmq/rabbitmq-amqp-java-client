@@ -553,8 +553,11 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       // the previous generation is gone; its counters are irrelevant from here on, so there is
       // no hand-reset of unsettledMessageCount: unsettledMessageCount() already reads the new
       // Link's counter, which starts at zero
-      this.pauseStatus.set(PauseStatus.UNPAUSED);
-      newLink.receiver.addCredit(this.initialCredits);
+      if (this.pausedOrPausing()) {
+        LOGGER.debug("Consumer {} is paused, not granting credit after recovery", this.id);
+      } else {
+        newLink.receiver.addCredit(this.initialCredits);
+      }
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     }
