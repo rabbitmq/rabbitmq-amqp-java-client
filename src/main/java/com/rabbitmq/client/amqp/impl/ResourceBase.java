@@ -60,13 +60,23 @@ abstract class ResourceBase implements Resource {
   }
 
   protected void state(Resource.State state, Throwable failureCause) {
-    Resource.State previousState = this.state.getAndSet(state);
+    // once closing has started, only CLOSED may follow: a late OPEN from a concurrent recovery
+    // must not resurrect a closed resource
+    Resource.State previousState =
+        this.state.getAndUpdate(current -> rejected(current, state) ? current : state);
+    if (rejected(previousState, state)) {
+      return;
+    }
     if (state != previousState) {
       if ((state == CLOSING || state == CLOSED) && this.closeReason == null) {
         this.closeReason = failureCause;
       }
       this.dispatch(previousState, state, failureCause);
     }
+  }
+
+  private static boolean rejected(Resource.State current, Resource.State next) {
+    return (current == CLOSING || current == CLOSED) && next != CLOSED;
   }
 
   private void dispatch(State previous, State current, Throwable failureCause) {
