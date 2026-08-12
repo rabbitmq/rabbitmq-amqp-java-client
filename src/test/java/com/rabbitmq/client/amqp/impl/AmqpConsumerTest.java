@@ -402,6 +402,44 @@ public class AmqpConsumerTest {
   }
 
   @Test
+  void pauseInterruptedDoesNotLeaveConsumerPausing() throws InterruptedException {
+    connection.management().queue(this.q).declare();
+    Publisher publisher = connection.publisherBuilder().queue(this.q).build();
+
+    int initialCredits = 5;
+    Sync consumeSync = sync(initialCredits);
+    AmqpConsumer consumer =
+        (AmqpConsumer)
+            connection
+                .consumerBuilder()
+                .queue(this.q)
+                .initialCredits(initialCredits)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+
+    Thread pausingThread = new Thread(consumer::pause);
+    pausingThread.start();
+    waitAtMost(consumer::pausedOrPausing);
+    pausingThread.interrupt();
+    pausingThread.join(TimeUnit.SECONDS.toMillis(10));
+
+    // the finally in pause() must settle the status even though the wait was interrupted,
+    // never leaving it at the unrecoverable PAUSING (unpause() cannot CAS out of it)
+    assertThat(consumer.pausedOrPausing()).isTrue();
+    assertThat(consumer.pauseStatus()).isEqualTo(AmqpConsumer.PauseStatus.PAUSED);
+
+    consumer.unpause();
+
+    IntStream.range(0, initialCredits)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+    assertThat(consumeSync).completes();
+  }
+
+  @Test
   void consumerClosedDuringRecoveryStaysClosed(TestInfo info) throws InterruptedException {
     String cName = name(info);
     connection.management().queue(this.q).declare();

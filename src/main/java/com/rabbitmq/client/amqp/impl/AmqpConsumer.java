@@ -196,22 +196,25 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       try {
         CountDownLatch latch = new CountDownLatch(1);
         this.echoedFlowAfterPauseLatch.set(latch);
-        this.link.executor.execute(this::doPause);
+        Link linkAtPause = this.link;
+        onExecutor(linkAtPause, () -> doPause(linkAtPause));
         try {
           boolean echoed =
               latch.await(this.pauseHandshakeTimeout.toMillis(), TimeUnit.MILLISECONDS);
           if (!echoed) {
-            // doPause may already have zeroed the link credit, so resetting to UNPAUSED here
+            // doPause may already have zeroed the link credit, so falling back to UNPAUSED here
             // would leave the consumer stalled with no way to re-credit the link
             LOGGER.warn("Did not receive echoed flow to pause receiver");
           }
-          this.pauseStatus.set(PauseStatus.PAUSED);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
       } catch (Exception e) {
         LOGGER.warn("Exception while pausing consumer: {}", e.getMessage(), e);
-        this.pauseStatus.set(PauseStatus.PAUSED);
+      } finally {
+        // CAS, not set: a concurrent recovery may legitimately have moved the status, and its
+        // write must win. The finally guarantees the status never stays at PAUSING (L3)
+        this.pauseStatus.compareAndSet(PauseStatus.PAUSING, PauseStatus.PAUSED);
       }
     }
   }
@@ -653,8 +656,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  private void doPause() {
-    Link link = this.link;
+  private void doPause(Link link) {
     link.creditState.updateCredit(0);
     link.creditState.updateEcho(true);
     link.sessionWindow.writeFlow(link.protonReceiver);
@@ -662,6 +664,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   boolean pausedOrPausing() {
     return this.pauseStatus.get() != PauseStatus.UNPAUSED;
+  }
+
+  PauseStatus pauseStatus() {
+    return this.pauseStatus.get();
   }
 
   enum PauseStatus {
