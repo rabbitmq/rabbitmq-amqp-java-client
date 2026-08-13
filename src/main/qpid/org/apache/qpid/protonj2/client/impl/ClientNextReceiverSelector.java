@@ -146,9 +146,10 @@ final class ClientNextReceiverSelector {
             for (org.apache.qpid.protonj2.engine.Receiver protonReceover : session.getProtonSession().receivers()) {
                 if (protonReceover.getLinkedResource() instanceof ClientReceiver) {
                     if (foundLast) {
-                        ClientReceiver candidate = protonReceover.getLinkedResource();
+                        final ClientReceiver candidate = protonReceover.getLinkedResource();
+
                         if (candidate.queuedDeliveries() > 0) {
-                            result = candidate;
+                            return candidate;
                         }
                     } else {
                         foundLast = protonReceover.getLinkedResource() == lastReceiver;
