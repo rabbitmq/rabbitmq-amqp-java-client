@@ -497,7 +497,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       }
       Link previous = this.link;
       if (previous != null && previous != newLink) {
-        previous.current = false;
+        previous.invalidate();
       }
       this.link = newLink;
       this.state(OPEN);
@@ -616,7 +616,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // proton executor only
   private void replenish(Link link) {
-    if (!link.current || !active()) {
+    if (!link.isValid() || !active()) {
       return;
     }
     int window = this.initialCredits;
@@ -703,6 +703,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       this.protonReceiver = protonReceiver;
       this.creditState = creditState;
       this.sessionWindow = sessionWindow;
+    }
+
+    boolean isValid() {
+      return this.current;
+    }
+
+    void invalidate() {
+      this.current = false;
     }
   }
 
