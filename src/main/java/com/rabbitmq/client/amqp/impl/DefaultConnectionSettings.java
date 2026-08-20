@@ -364,7 +364,9 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       }
       return uri;
     } catch (URISyntaxException e) {
-      throw new IllegalArgumentException("Invalid URI: " + uriString, e);
+      throw new IllegalArgumentException(
+          "Invalid URI syntax (" + e.getReason() + " at index " + e.getIndex() + ")"
+      );
     }
   }
 
