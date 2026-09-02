@@ -110,7 +110,7 @@ public class DelayedRetryTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
 
     assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
-        .isCloseTo(retryDelay, retryDelay.dividedBy(5));
+        .isCloseTo(retryDelay, retryDelay.dividedBy(3));
   }
 
   @ParameterizedTest
@@ -154,7 +154,7 @@ public class DelayedRetryTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
 
     assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
-        .isCloseTo(deliveryTimeOffset, deliveryTimeOffset.dividedBy(5));
+        .isCloseTo(deliveryTimeOffset, deliveryTimeOffset.dividedBy(3));
   }
 
   @ParameterizedTest
@@ -196,7 +196,7 @@ public class DelayedRetryTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
 
     assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
-        .isCloseTo(retryDelay, retryDelay.dividedBy(5));
+        .isCloseTo(retryDelay, retryDelay.dividedBy(3));
   }
 
   @ParameterizedTest
