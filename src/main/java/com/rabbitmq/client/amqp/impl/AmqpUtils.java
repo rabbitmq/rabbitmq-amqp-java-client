@@ -43,6 +43,18 @@ final class AmqpUtils {
                   .contains(
                       "the exclusive property value does not match that of the original declaration");
 
+  static final Predicate<Exception> ENTITY_NOT_FOUND_EXCEPTION_PREDICATE =
+      e -> {
+        if (!(e instanceof AmqpException) || e.getMessage() == null) {
+          return false;
+        }
+        String message = e.getMessage();
+        return (message.contains("exchange") || message.contains("queue"))
+            && (message.contains("amqp:not-found")
+                || message.contains("no exchange")
+                || message.contains("no queue"));
+      };
+
   static Publisher.Status mapDeliveryState(DeliveryState in) {
     if (in.isAccepted()) {
       return Publisher.Status.ACCEPTED;
