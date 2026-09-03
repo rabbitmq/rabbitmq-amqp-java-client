@@ -71,14 +71,7 @@ final class ConnectionStateClient implements AutoCloseable {
   }
 
   boolean registerPublisher(AmqpPublisher publisher) {
-    return this.client.query(
-        state -> {
-          if (state.connection.state() != OPEN) {
-            return false;
-          }
-          state.publishers.add(publisher);
-          return true;
-        });
+    return this.registerEntity(s -> s.publishers.add(publisher));
   }
 
   void removePublisher(AmqpPublisher publisher) {
@@ -86,14 +79,7 @@ final class ConnectionStateClient implements AutoCloseable {
   }
 
   boolean registerConsumer(AmqpConsumer consumer) {
-    return this.client.query(
-        state -> {
-          if (state.connection.state() != OPEN) {
-            return false;
-          }
-          state.consumers.add(consumer);
-          return true;
-        });
+    return this.registerEntity(s -> s.consumers.add(consumer));
   }
 
   void removeConsumer(AmqpConsumer consumer) {
@@ -101,14 +87,7 @@ final class ConnectionStateClient implements AutoCloseable {
   }
 
   boolean registerRequester(Requester requester) {
-    return this.client.query(
-        state -> {
-          if (state.connection.state() != OPEN) {
-            return false;
-          }
-          state.requesters.add(requester);
-          return true;
-        });
+    return this.registerEntity(s -> s.requesters.add(requester));
   }
 
   void removeRequester(Requester requester) {
@@ -116,18 +95,22 @@ final class ConnectionStateClient implements AutoCloseable {
   }
 
   boolean registerResponder(Responder responder) {
+    return this.registerEntity(s -> s.responders.add(responder));
+  }
+
+  void removeResponder(Responder responder) {
+    this.client.submit(state -> state.responders.remove(responder));
+  }
+
+  private boolean registerEntity(Consumer<ConnectionState> registration) {
     return this.client.query(
         state -> {
           if (state.connection.state() != OPEN) {
             return false;
           }
-          state.responders.add(responder);
+          registration.accept(state);
           return true;
         });
-  }
-
-  void removeResponder(Responder responder) {
-    this.client.submit(state -> state.responders.remove(responder));
   }
 
   // --------------------------------------------------------------
