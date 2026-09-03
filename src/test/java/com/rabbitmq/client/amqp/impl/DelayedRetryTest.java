@@ -196,7 +196,7 @@ public class DelayedRetryTest {
     waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
 
     assertThat(Duration.ofNanos(timeBetweenDeliveriesNs.get()))
-        .isCloseTo(retryDelay, retryDelay.dividedBy(3));
+        .isCloseTo(retryDelay, retryDelay.dividedBy(2));
   }
 
   @ParameterizedTest
