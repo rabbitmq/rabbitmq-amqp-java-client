@@ -20,6 +20,7 @@ package com.rabbitmq.client.amqp.impl;
 import com.rabbitmq.client.amqp.Management;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,13 +65,16 @@ final class EntityRecovery {
           }
 
           @Override
-          public void visitBindings(Collection<RecordingTopologyListener.BindingSpec> bindings) {
+          public void visitBindings(
+              Collection<RecordingTopologyListener.BindingSpec> bindings,
+              List<RecordingTopologyListener.ExchangeSpec> exchanges,
+              List<RecordingTopologyListener.QueueSpec> queues) {
             if (bindings.isEmpty()) {
               LOGGER.debug("No bindings to recover");
             } else {
               LOGGER.debug("Recovering {} binding(s)...", bindings.size());
               for (RecordingTopologyListener.BindingSpec binding : bindings) {
-                recoverBinding(binding);
+                recoverBinding(binding, exchanges, queues);
               }
               LOGGER.debug("Bindings recovered");
             }
@@ -137,21 +141,12 @@ final class EntityRecovery {
     }
   }
 
-  private void recoverBinding(RecordingTopologyListener.BindingSpec binding) {
+  void recoverBinding(
+      RecordingTopologyListener.BindingSpec binding,
+      List<RecordingTopologyListener.ExchangeSpec> exchanges,
+      List<RecordingTopologyListener.QueueSpec> queues) {
     try {
-      Management.BindingSpecification spec =
-          this.connection
-              .managementNoCheck()
-              .binding()
-              .sourceExchange(binding.source())
-              .key(binding.key());
-      if (binding.toQueue()) {
-        spec.destinationQueue(binding.destination());
-      } else {
-        spec.destinationExchange(binding.destination());
-      }
-      binding.arguments().forEach(spec::argument);
-      spec.bind();
+      bind(binding);
     } catch (Exception e) {
       LOGGER.warn(
           "Error while recovering binding from {} to {} {} with binding key {}",
@@ -160,6 +155,54 @@ final class EntityRecovery {
           binding.destination(),
           binding.key(),
           e);
+      if (AmqpUtils.ENTITY_NOT_FOUND_EXCEPTION_PREDICATE.test(e)) {
+        // the exchange and/or queue involved in the binding may have been deleted
+        // (e.g. auto-delete exchange removed by the broker), try to recreate them
+        // and retry the binding once
+        try {
+          findExchange(exchanges, binding.source()).ifPresent(this::recoverExchange);
+          if (binding.toQueue()) {
+            findQueue(queues, binding.destination()).ifPresent(this::recoverQueue);
+          } else {
+            findExchange(exchanges, binding.destination()).ifPresent(this::recoverExchange);
+          }
+          bind(binding);
+        } catch (Exception retryException) {
+          LOGGER.warn(
+              "Error while retrying to recover binding from {} to {} {} with binding key {}",
+              binding.source(),
+              binding.toQueue() ? "queue" : "exchange",
+              binding.destination(),
+              binding.key(),
+              retryException);
+        }
+      }
     }
+  }
+
+  private void bind(RecordingTopologyListener.BindingSpec binding) {
+    Management.BindingSpecification spec =
+        this.connection
+            .managementNoCheck()
+            .binding()
+            .sourceExchange(binding.source())
+            .key(binding.key());
+    if (binding.toQueue()) {
+      spec.destinationQueue(binding.destination());
+    } else {
+      spec.destinationExchange(binding.destination());
+    }
+    binding.arguments().forEach(spec::argument);
+    spec.bind();
+  }
+
+  private static Optional<RecordingTopologyListener.ExchangeSpec> findExchange(
+      List<RecordingTopologyListener.ExchangeSpec> exchanges, String name) {
+    return exchanges.stream().filter(e -> e.name().equals(name)).findAny();
+  }
+
+  private static Optional<RecordingTopologyListener.QueueSpec> findQueue(
+      List<RecordingTopologyListener.QueueSpec> queues, String name) {
+    return queues.stream().filter(q -> q.name().equals(name)).findAny();
   }
 }

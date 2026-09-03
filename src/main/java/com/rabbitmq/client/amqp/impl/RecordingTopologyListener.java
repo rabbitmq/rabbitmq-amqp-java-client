@@ -183,7 +183,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     LOGGER.debug("Topology listener '{}' visitor, exchanges visited...", this.label);
     visitor.visitQueues(queueCopy.get());
     LOGGER.debug("Topology listener '{}' visitor, queues visited...", this.label);
-    visitor.visitBindings(bindingCopy.get());
+    visitor.visitBindings(bindingCopy.get(), exchangeCopy.get(), queueCopy.get());
     LOGGER.debug("Topology listener '{}' visitor, topology visited...", this.label);
   }
 
@@ -345,7 +345,8 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
     void visitQueues(List<QueueSpec> queues);
 
-    void visitBindings(Collection<BindingSpec> bindings);
+    void visitBindings(
+        Collection<BindingSpec> bindings, List<ExchangeSpec> exchanges, List<QueueSpec> queues);
   }
 
   // for test assertions
