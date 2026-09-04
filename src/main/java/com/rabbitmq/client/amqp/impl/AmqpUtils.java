@@ -33,6 +33,7 @@ final class AmqpUtils {
   private AmqpUtils() {}
 
   static final String ANN_DELIVERY_TIME = "x-opt-delivery-time";
+  static final String ANN_DEFERRAL_TOKEN = "x-opt-deferral-token";
 
   static final Predicate<Exception> EXCLUSIVE_ACCESS_EXCEPTION_PREDICATE =
       e ->
