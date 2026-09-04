@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
@@ -146,6 +147,30 @@ final class Utils {
   static void validateMessageAnnotationKey(String key) {
     if (!key.startsWith("x-")) {
       throw new IllegalArgumentException("Message annotation keys must start with 'x-': " + key);
+    }
+  }
+
+  // ?MAX_DEFERRAL_TOKEN_SIZE on the broker side, expressed in UTF-8 bytes, not characters
+  private static final int MAX_DEFERRAL_TOKEN_SIZE = 256;
+
+  static void checkDeferralToken(String token) {
+    if (token == null || token.isEmpty()) {
+      throw new IllegalArgumentException("Deferral token must not be null or empty");
+    }
+    int size = token.getBytes(StandardCharsets.UTF_8).length;
+    if (size > MAX_DEFERRAL_TOKEN_SIZE) {
+      throw new IllegalArgumentException(
+          "Deferral token must be at most "
+              + MAX_DEFERRAL_TOKEN_SIZE
+              + " bytes (UTF-8), got "
+              + size);
+    }
+  }
+
+  static void checkDeferralDeliveryTime(Instant deliveryTime) {
+    if (!deliveryTime.isAfter(Instant.now())) {
+      throw new IllegalArgumentException(
+          "Delivery time must be in the future when a deferral token is set: " + deliveryTime);
     }
   }
 

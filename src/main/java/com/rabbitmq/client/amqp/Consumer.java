@@ -59,6 +59,32 @@ public interface Consumer extends AutoCloseable, Resource {
   @Override
   void close();
 
+  /**
+   * Claim messages previously deferred with a {@link Context#delayedRetry(Duration, boolean,
+   * String)} token, so they are redelivered ahead of their scheduled delivery time.
+   *
+   * <p>A token may have been used for more than one message, in which case claiming it can deliver
+   * more than one message, oldest first. Claiming an unknown token has no effect: it is silently
+   * ignored by the broker. A claim does not grant extra credit: claimed messages are delivered as
+   * the consumer's existing credit allows.
+   *
+   * <p>Claims do not survive connection recovery: the application must claim tokens again after the
+   * consumer recovers.
+   *
+   * <p><b>Only quorum queues support deferral tokens.</b>
+   *
+   * <p><b>Requires RabbitMQ 4.4 or more.</b>
+   *
+   * @param tokens the tokens to claim
+   * @throws AmqpException if the consumer is not open
+   * @throws AmqpException if the queue this consumer is attached to does not support deferral
+   *     tokens
+   * @see Context#delayedRetry(Duration, boolean, String)
+   * @see Context#delayedRetry(Instant, boolean, String)
+   * @since 1.6.0
+   */
+  void claimDeferred(String... tokens);
+
   /** Contract to process a message. */
   @FunctionalInterface
   interface MessageHandler {
@@ -262,6 +288,72 @@ public interface Consumer extends AutoCloseable, Resource {
      *     RabbitMQ</a>
      */
     void delayedRetry(Instant deliveryTime, boolean deliveryFailed);
+
+    /**
+     * Requeue the message for redelivery after the specified delay, and park it under a deferral
+     * token so it can also be retrieved early with {@link Consumer#claimDeferred(String...)}.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome with
+     * the <code>x-opt-delivery-time</code> annotation set to <code>now + delay</code> and the
+     * <code>x-opt-deferral-token</code> annotation set to <code>deferralToken</code>.
+     *
+     * <p>The token is honoured only because a delivery time is also set: a deferral token cannot be
+     * supplied without one, since the broker would otherwise silently ignore it. The message still
+     * becomes available at its delivery time even if the token is never claimed. If the token has
+     * already been used for another message, claiming it delivers both, oldest first. The token is
+     * readable on the redelivered message through its <code>x-opt-deferral-token
+     * </code> annotation.
+     *
+     * <p><b>Only quorum queues support deferral tokens.</b>
+     *
+     * <p><b>Requires RabbitMQ 4.4 or more.</b>
+     *
+     * @param delay delivery delay from now
+     * @param deliveryFailed if true, the delivery count of the message is incremented
+     * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see Consumer#claimDeferred(String...)
+     * @since 1.6.0
+     */
+    void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken);
+
+    /**
+     * Requeue the message for redelivery at the specified time, and park it under a deferral token
+     * so it can also be retrieved early with {@link Consumer#claimDeferred(String...)}.
+     *
+     * <p>This maps to the AMQP 1.0 <code>
+     * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome with
+     * the <code>x-opt-delivery-time</code> annotation set to the specified time and the <code>
+     * x-opt-deferral-token</code> annotation set to <code>deferralToken</code>.
+     *
+     * <p>The token is honoured only if <code>deliveryTime</code> is in the future: a deferral token
+     * cannot be supplied without one, since the broker would otherwise silently ignore it. The
+     * message still becomes available at its delivery time even if the token is never claimed. If
+     * the token has already been used for another message, claiming it delivers both, oldest first.
+     * The token is readable on the redelivered message through its <code>
+     * x-opt-deferral-token</code> annotation.
+     *
+     * <p><b>Only quorum queues support deferral tokens.</b>
+     *
+     * <p><b>Requires RabbitMQ 4.4 or more.</b>
+     *
+     * @param deliveryTime absolute delivery time, must be in the future
+     * @param deliveryFailed if true, the delivery count of the message is incremented
+     * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
+     * @see <a
+     *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
+     *     1.0 <code>modified</code> outcome</a>
+     * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
+     *     in RabbitMQ</a>
+     * @see Consumer#claimDeferred(String...)
+     * @since 1.6.0
+     */
+    void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken);
 
     /**
      * Create a batch context to accumulate message contexts and settle them at once.
