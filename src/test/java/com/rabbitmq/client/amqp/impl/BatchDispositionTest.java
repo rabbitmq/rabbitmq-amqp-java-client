@@ -177,6 +177,16 @@ public class BatchDispositionTest {
       dispose();
     }
 
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+      dispose();
+    }
+
     private void dispose() {
       dispositionFrameCount.inc();
       dispositionRangeSize.update(1);
@@ -255,6 +265,16 @@ public class BatchDispositionTest {
 
     @Override
     public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+      dispose();
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
       dispose();
     }
 

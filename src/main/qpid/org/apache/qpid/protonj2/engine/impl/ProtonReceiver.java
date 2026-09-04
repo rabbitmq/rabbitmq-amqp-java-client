@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -33,6 +34,7 @@ import org.apache.qpid.protonj2.engine.Session;
 import org.apache.qpid.protonj2.engine.exceptions.ProtocolViolationException;
 import org.apache.qpid.protonj2.engine.util.DeliveryIdTracker;
 import org.apache.qpid.protonj2.engine.util.UnsettledMap;
+import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.UnsignedInteger;
 import org.apache.qpid.protonj2.types.transport.Attach;
 import org.apache.qpid.protonj2.types.transport.DeliveryState;
@@ -66,6 +68,10 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
 
     private DeliveryState defaultDeliveryState;
     private LinkCreditState drainStateSnapshot;
+
+    // One-shot properties for the next outgoing flow only, e.g. RabbitMQ deferral-token claims.
+    // Never leaks to a later, unrelated flow.
+    private Map<Symbol, Object> nextFlowProperties;
 
     /**
      * Create a new {@link Receiver} instance with the given {@link Session} parent.
@@ -119,6 +125,21 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
             getCreditState().incrementCredit(credit);
             if (isLocallyOpen() && wasLocalAttachSent()) {
                 sessionWindow.writeFlow(this);
+            }
+        }
+
+        return this;
+    }
+
+    public ProtonReceiver writeFlowWithProperties(Map<Symbol, Object> properties) {
+        checkLinkOperable("Cannot write flow");
+
+        if (isLocallyOpen() && wasLocalAttachSent()) {
+            this.nextFlowProperties = properties;
+            try {
+                sessionWindow.writeFlow(this);
+            } finally {
+                this.nextFlowProperties = null;
             }
         }
 
@@ -469,6 +490,9 @@ public class ProtonReceiver extends ProtonLink<Receiver> implements Receiver {
         flow.setDrain(isDraining());
         if (getCreditState().isEcho()) {
             flow.setEcho(true);
+        }
+        if (nextFlowProperties != null) {
+            flow.setProperties(nextFlowProperties);
         }
 
         return this;
