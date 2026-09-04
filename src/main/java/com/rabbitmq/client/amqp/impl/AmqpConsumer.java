@@ -39,6 +39,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -70,6 +71,7 @@ import org.apache.qpid.protonj2.engine.impl.ProtonLinkCreditState;
 import org.apache.qpid.protonj2.engine.impl.ProtonReceiver;
 import org.apache.qpid.protonj2.engine.impl.ProtonSessionIncomingWindow;
 import org.apache.qpid.protonj2.types.DescribedType;
+import org.apache.qpid.protonj2.types.Symbol;
 import org.apache.qpid.protonj2.types.messaging.Accepted;
 import org.apache.qpid.protonj2.types.messaging.Modified;
 import org.apache.qpid.protonj2.types.messaging.Rejected;
@@ -100,6 +102,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
   private static final Consumer.Context PRE_SETTLED_CONTEXT = new PreSettledContext();
+  private static final String DEFERRAL_TOKENS_CAPABILITY = "rabbitmq:deferral-tokens";
+  private static final Symbol DEFERRAL_TOKENS = Symbol.valueOf(DEFERRAL_TOKENS_CAPABILITY);
+  private static final int MAX_TOKENS_PER_FLOW = 256; // ?MAX_DEFERRAL_TOKENS on the broker side
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpConsumer.class);
 
@@ -234,6 +239,39 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   @Override
   public long unsettledMessageCount() {
     return this.link.unsettled.get();
+  }
+
+  @Override
+  public void claimDeferred(String... tokens) {
+    checkOpen();
+    notNull(tokens, "Tokens");
+    Link claimLink = this.link;
+    if (!claimLink.deferralSupported()) {
+      throw new AmqpException(
+          "The queue this consumer is attached to does not support deferral tokens "
+              + "(only quorum queues do)");
+    }
+    for (String token : tokens) {
+      Utils.checkDeferralToken(token);
+    }
+    for (int offset = 0; offset < tokens.length; offset += MAX_TOKENS_PER_FLOW) {
+      String[] batch =
+          Arrays.copyOfRange(tokens, offset, Math.min(offset + MAX_TOKENS_PER_FLOW, tokens.length));
+      onExecutor(
+          claimLink,
+          () -> {
+            if (!claimLink.isValid()) {
+              // generation superseded by recovery; claims do not survive it anyway
+              return;
+            }
+            try {
+              claimLink.protonReceiver.writeFlowWithProperties(
+                  Collections.singletonMap(DEFERRAL_TOKENS, batch));
+            } catch (Exception e) {
+              LOGGER.debug("Error while claiming deferred messages", e);
+            }
+          });
+    }
   }
 
   @Override
@@ -451,6 +489,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   private Link buildLink(ClientReceiver receiver, AtomicReference<Link> holder) {
     try {
       Scheduler executor = receiver.executor();
+      boolean deferralSupported = deferralSupported(receiver);
       CountDownLatch publishedLatch = new CountDownLatch(1);
       executor.execute(
           () -> {
@@ -461,7 +500,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                     executor,
                     protonReceiver,
                     protonReceiver.getCreditState(),
-                    protonReceiver.sessionWindow());
+                    protonReceiver.sessionWindow(),
+                    deferralSupported);
 
             EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
                 protonReceiver.linkCreditUpdatedHandler();
@@ -484,6 +524,18 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       return holder.get();
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  // the receiver capability is advertised on the attach response, so it is available as soon as
+  // the native receiver has opened, before buildLink hops onto the proton executor
+  private static boolean deferralSupported(ClientReceiver receiver) {
+    try {
+      String[] capabilities = receiver.offeredCapabilities();
+      return capabilities != null
+          && Arrays.asList(capabilities).contains(DEFERRAL_TOKENS_CAPABILITY);
+    } catch (ClientException e) {
+      return false;
     }
   }
 
@@ -691,18 +743,26 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     private final AtomicLong unsettled = new AtomicLong(0);
     private int pendingWorkItems; // I2: proton-executor-confined, plain int
     private volatile boolean current = true; // false once superseded
+    // set once, from the attach response, before this Link is published
+    private final boolean deferralSupported;
 
     private Link(
         ClientReceiver receiver,
         Scheduler executor,
         ProtonReceiver protonReceiver,
         ProtonLinkCreditState creditState,
-        ProtonSessionIncomingWindow sessionWindow) {
+        ProtonSessionIncomingWindow sessionWindow,
+        boolean deferralSupported) {
       this.receiver = receiver;
       this.executor = executor;
       this.protonReceiver = protonReceiver;
       this.creditState = creditState;
       this.sessionWindow = sessionWindow;
+      this.deferralSupported = deferralSupported;
+    }
+
+    private boolean deferralSupported() {
+      return this.deferralSupported;
     }
 
     boolean isValid() {
@@ -786,6 +846,26 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       notNull(deliveryTime, "Delivery time");
       Map<String, Object> annotations =
           Collections.singletonMap(AmqpUtils.ANN_DELIVERY_TIME, Date.from(deliveryTime));
+      this.requeue(annotations, deliveryFailed);
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+      notNull(delay, "Delay");
+      this.delayedRetry(Instant.now().plus(delay), deliveryFailed, deferralToken);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+      notNull(deliveryTime, "Delivery time");
+      Utils.checkDeferralToken(deferralToken);
+      Utils.checkDeferralDeliveryTime(deliveryTime);
+      Map<String, Object> annotations =
+          Map.of(
+              AmqpUtils.ANN_DELIVERY_TIME,
+              Date.from(deliveryTime),
+              AmqpUtils.ANN_DEFERRAL_TOKEN,
+              deferralToken);
       this.requeue(annotations, deliveryFailed);
     }
 
@@ -933,6 +1013,25 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+      this.delayedRetry(Instant.now().plus(delay), deliveryFailed, deferralToken);
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+      notNull(deliveryTime, "Delivery time");
+      Utils.checkDeferralToken(deferralToken);
+      Utils.checkDeferralDeliveryTime(deliveryTime);
+      Map<String, Object> annotations =
+          Map.of(
+              AmqpUtils.ANN_DELIVERY_TIME,
+              Date.from(deliveryTime),
+              AmqpUtils.ANN_DEFERRAL_TOKEN,
+              deferralToken);
+      this.requeue(annotations, deliveryFailed);
+    }
+
+    @Override
     public BatchContext batch(int batchSizeHint) {
       return this;
     }
@@ -1048,6 +1147,16 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public void delayedRetry(Instant deliveryTime) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+      throw new UnsupportedOperationException("auto-settle on, message is already disposed");
+    }
+
+    @Override
+    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
       throw new UnsupportedOperationException("auto-settle on, message is already disposed");
     }
 
