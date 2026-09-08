@@ -60,8 +60,8 @@ public interface Consumer extends AutoCloseable, Resource {
   void close();
 
   /**
-   * Claim messages previously deferred with a {@link Context#delayedRetry(Duration, boolean,
-   * String)} token, so they are redelivered ahead of their scheduled delivery time.
+   * Claim messages previously deferred with a {@link Context#defer(String, java.time.Duration)}
+   * token, so they are redelivered ahead of their scheduled delivery time.
    *
    * <p>A token may have been used for more than one message, in which case claiming it can deliver
    * more than one message, oldest first. Claiming an unknown token has no effect: it is silently
@@ -75,12 +75,14 @@ public interface Consumer extends AutoCloseable, Resource {
    *
    * <p><b>Requires RabbitMQ 4.4 or more.</b>
    *
+   * <p>This is an experimental API, subject to change.
+   *
    * @param tokens the tokens to claim
    * @throws AmqpException if the consumer is not open
    * @throws AmqpException if the queue this consumer is attached to does not support deferral
    *     tokens
-   * @see Context#delayedRetry(Duration, boolean, String)
-   * @see Context#delayedRetry(Instant, boolean, String)
+   * @see Context#defer(String, java.time.Duration)
+   * @see Context#defer(String, java.time.Instant)
    * @since 1.6.0
    */
   void claimDeferred(String... tokens);
@@ -309,6 +311,8 @@ public interface Consumer extends AutoCloseable, Resource {
      *
      * <p><b>Requires RabbitMQ 4.4 or more.</b>
      *
+     * <p>This is an experimental API, subject to change.
+     *
      * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
      * @param delay delivery delay from now
      * @see <a
@@ -340,6 +344,8 @@ public interface Consumer extends AutoCloseable, Resource {
      * <p><b>Only quorum queues support deferral tokens.</b>
      *
      * <p><b>Requires RabbitMQ 4.4 or more.</b>
+     *
+     * <p>This is an experimental API, subject to change.
      *
      * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
      * @param deliveryTime absolute delivery time, must be in the future
