@@ -155,9 +155,9 @@ final class AmqpEnvironment implements Environment {
       this.connectionManager.close();
       this.client.close();
       this.connectionStateEventLoop.close();
-      this.recoveryEventExecutorGroup.shutdownGracefully();
-      this.recoveryEventLoop.close();
       this.connectionStateEventExecutorGroup.shutdownGracefully();
+      this.recoveryEventLoop.close();
+      this.recoveryEventExecutorGroup.shutdownGracefully();
       if (this.clockRefreshFuture != null) {
         this.clockRefreshFuture.cancel(false);
       }
