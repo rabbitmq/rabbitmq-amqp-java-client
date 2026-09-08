@@ -850,13 +850,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
-    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Duration delay) {
       notNull(delay, "Delay");
-      this.delayedRetry(Instant.now().plus(delay), deliveryFailed, deferralToken);
+      this.defer(deferralToken, Instant.now().plus(delay));
     }
 
     @Override
-    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Instant deliveryTime) {
       notNull(deliveryTime, "Delivery time");
       Utils.checkDeferralToken(deferralToken);
       Utils.checkDeferralDeliveryTime(deliveryTime);
@@ -866,7 +866,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               Date.from(deliveryTime),
               AmqpUtils.ANN_DEFERRAL_TOKEN,
               deferralToken);
-      this.requeue(annotations, deliveryFailed);
+      this.requeue(annotations, false);
     }
 
     @Override
@@ -1013,12 +1013,13 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
-    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
-      this.delayedRetry(Instant.now().plus(delay), deliveryFailed, deferralToken);
+    public void defer(String deferralToken, Duration delay) {
+      notNull(delay, "Delay");
+      this.defer(deferralToken, Instant.now().plus(delay));
     }
 
     @Override
-    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Instant deliveryTime) {
       notNull(deliveryTime, "Delivery time");
       Utils.checkDeferralToken(deferralToken);
       Utils.checkDeferralDeliveryTime(deliveryTime);
@@ -1028,7 +1029,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
               Date.from(deliveryTime),
               AmqpUtils.ANN_DEFERRAL_TOKEN,
               deferralToken);
-      this.requeue(annotations, deliveryFailed);
+      this.requeue(annotations, false);
     }
 
     @Override
@@ -1151,12 +1152,12 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
 
     @Override
-    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Duration delay) {
       throw new UnsupportedOperationException("auto-settle on, message is already disposed");
     }
 
     @Override
-    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Instant deliveryTime) {
       throw new UnsupportedOperationException("auto-settle on, message is already disposed");
     }
 
