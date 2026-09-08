@@ -178,12 +178,12 @@ public class BatchDispositionTest {
     }
 
     @Override
-    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Duration delay) {
       dispose();
     }
 
     @Override
-    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Instant deliveryTime) {
       dispose();
     }
 
@@ -269,12 +269,12 @@ public class BatchDispositionTest {
     }
 
     @Override
-    public void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Duration delay) {
       dispose();
     }
 
     @Override
-    public void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken) {
+    public void defer(String deferralToken, Instant deliveryTime) {
       dispose();
     }
 
