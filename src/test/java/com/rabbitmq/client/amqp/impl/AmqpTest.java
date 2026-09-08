@@ -27,6 +27,7 @@ import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_0_3;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_2_0;
 import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_3_0;
+import static com.rabbitmq.client.amqp.impl.TestConditions.BrokerVersion.RABBITMQ_4_4_0;
 import static com.rabbitmq.client.amqp.impl.TestUtils.simulateActivity;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
@@ -70,6 +71,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -1716,5 +1718,57 @@ public class AmqpTest {
       }
       connection.management().queueDelete(name);
     }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_4_0)
+  void streamShouldStartAtInitialOffsetIfParameterSet() {
+    try {
+      // Clears the upper two bits via bitwise AND
+      // to force the value into the safe 62-bit range [0, MAX_STREAM_INITIAL_OFFSET].
+      long initialOffset =
+          new Random().nextLong() & AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET;
+      connection.management().queue(this.name).stream()
+          .initialOffset(initialOffset)
+          .queue()
+          .declare();
+      Publisher p = connection.publisherBuilder().queue(this.name).build();
+      Sync publishSync = sync();
+      p.publish(p.message(), ctx -> publishSync.down());
+      assertThat(publishSync).completes();
+      p.close();
+
+      Sync consumeSync = sync();
+      AtomicLong firstOffset = new AtomicLong();
+      ConsumerBuilder builder =
+          connection.consumerBuilder().queue(this.name).stream()
+              .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
+              .builder()
+              .messageHandler(
+                  (context, message) -> {
+                    firstOffset.set(((Number) message.annotation("x-stream-offset")).longValue());
+                    context.accept();
+                    consumeSync.down();
+                  });
+      Consumer consumer = builder.build();
+      assertThat(consumeSync).completes();
+      assertThat(firstOffset).hasValue(initialOffset);
+      consumer.close();
+    } finally {
+      connection.management().queueDelete(this.name);
+    }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_4_0)
+  void streamCreatorShouldThrowForIncorrectInitialOffset() {
+    long initialOffset = AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET + 1;
+    assertThatThrownBy(
+            () ->
+                connection.management().queue(this.name).stream()
+                    .initialOffset(initialOffset)
+                    .queue()
+                    .declare())
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

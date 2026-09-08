@@ -530,6 +530,16 @@ public interface Management extends AutoCloseable {
     StreamSpecification initialMemberCount(int initialMemberCount);
 
     /**
+     * Set the stream initial offset.
+     *
+     * <p>Requires RabbitMQ 4.4.0 or more.
+     *
+     * @param initialOffset stream initial offset
+     * @return this stream specification
+     */
+    StreamSpecification initialOffset(long initialOffset);
+
+    /**
      * Go back to the queue specification.
      *
      * @return queue specification

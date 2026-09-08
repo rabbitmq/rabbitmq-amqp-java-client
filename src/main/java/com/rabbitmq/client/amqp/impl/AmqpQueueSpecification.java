@@ -36,6 +36,8 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpQueueSpecification.class);
   private static final Duration TEN_YEARS = Duration.ofDays(365 * 10);
   private static final boolean DURABLE = true;
+  // same as broker
+  static final long MAX_STREAM_INITIAL_OFFSET = (1L << 62) - 1;
 
   private final AmqpManagement management;
 
@@ -389,6 +391,19 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
     public Management.StreamSpecification initialMemberCount(int initialMemberCount) {
       validatePositive("x-initial-cluster-size", initialMemberCount);
       this.parent.arg("x-initial-cluster-size", initialMemberCount);
+      return this;
+    }
+
+    @Override
+    public Management.StreamSpecification initialOffset(long initialOffset) {
+      if (initialOffset < 0 || initialOffset > MAX_STREAM_INITIAL_OFFSET) {
+        throw new IllegalArgumentException(
+            "Initial offset must be between 0 and "
+                + MAX_STREAM_INITIAL_OFFSET
+                + ", given: "
+                + Long.toUnsignedString(initialOffset));
+      }
+      this.parent.arg("x-stream-initial-offset", initialOffset);
       return this;
     }
 
