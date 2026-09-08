@@ -84,4 +84,30 @@ public class AmqpQueueSpecificationTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("'x-delayed-retry-max' must be positive");
   }
+
+  @Test
+  void streamInitialOffset() {
+    AmqpManagement management = mock(AmqpManagement.class);
+    AmqpQueueSpecification spec = new AmqpQueueSpecification(management);
+
+    spec.stream().initialOffset(100L);
+
+    Map<String, Object> arguments = new HashMap<>();
+    spec.arguments(arguments::put);
+
+    assertThat(arguments).containsEntry("x-stream-initial-offset", 100L);
+
+    assertThatThrownBy(() -> spec.stream().initialOffset(-1L))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(
+            "Initial offset must be between 0 and "
+                + AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET);
+
+    assertThatThrownBy(
+            () -> spec.stream().initialOffset(AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET + 1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(
+            "Initial offset must be between 0 and "
+                + AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET);
+  }
 }
