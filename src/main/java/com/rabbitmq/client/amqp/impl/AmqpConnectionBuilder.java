@@ -42,6 +42,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   private Executor dispatchingExecutor;
   private String name;
   private TopologyListener topologyListener;
+
+  /**
+   * Whether to have links share the same session in a connection. The default is <code>false</code>
+   * : all links (publishers/consumers) share the same session in a connection.
+   */
   private boolean isolateResources = false;
 
   AmqpConnectionBuilder(AmqpEnvironment environment) {

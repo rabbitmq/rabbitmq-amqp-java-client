@@ -25,6 +25,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Abstraction to get an AMQP session. */
 interface SessionHandler extends AutoCloseable {
 
   Session session();
@@ -33,6 +34,11 @@ interface SessionHandler extends AutoCloseable {
 
   void close();
 
+  /**
+   * Session handler that always returns the session from its connection.
+   *
+   * <p>This is the default implementation used.
+   */
   final class ConnectionNativeSessionSessionHandler implements SessionHandler {
 
     private final AmqpConnection connection;
@@ -55,6 +61,7 @@ interface SessionHandler extends AutoCloseable {
     public void close() {}
   }
 
+  /** Session handler that opens its own session and returns it when queried. */
   final class SingleSessionSessionHandler implements SessionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SingleSessionSessionHandler.class);
