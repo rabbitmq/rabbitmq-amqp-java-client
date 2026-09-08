@@ -265,7 +265,7 @@ public class DelayedRetryTest {
             .messageHandler(
                 (context, message) -> {
                   if (deliveryCount.incrementAndGet() == 1) {
-                    context.delayedRetry(ofMillis(60_000), false, token);
+                    context.defer(token, ofMillis(60_000));
                     parkedSync.down();
                   } else {
                     messages.offer(message);
@@ -314,7 +314,7 @@ public class DelayedRetryTest {
                     batchRef.set(batch);
                     batch.add(context);
                     if (batch.size() == 2) {
-                      batch.delayedRetry(ofMillis(60_000), false, token);
+                      batch.defer(token, ofMillis(60_000));
                       parkedSync.down();
                     }
                   } else {
@@ -356,7 +356,7 @@ public class DelayedRetryTest {
             .messageHandler(
                 (context, message) -> {
                   if (deliveryCount.incrementAndGet() <= 2) {
-                    context.delayedRetry(ofMillis(60_000), false, token);
+                    context.defer(token, ofMillis(60_000));
                     parkedSync.down();
                   } else {
                     redelivered.offer(message);
@@ -441,13 +441,13 @@ public class DelayedRetryTest {
     Instant past = Instant.now().minusSeconds(60);
     String oversizedToken = "a".repeat(257);
 
-    assertThatThrownBy(() -> context.delayedRetry(future, false, null))
+    assertThatThrownBy(() -> context.defer(null, future))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> context.delayedRetry(future, false, ""))
+    assertThatThrownBy(() -> context.defer("", future))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> context.delayedRetry(future, false, oversizedToken))
+    assertThatThrownBy(() -> context.defer(oversizedToken, future))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> context.delayedRetry(past, false, "valid-token"))
+    assertThatThrownBy(() -> context.defer("valid-token", past))
         .isInstanceOf(IllegalArgumentException.class);
 
     // the connection is still usable after the rejected calls above
