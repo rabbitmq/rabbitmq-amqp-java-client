@@ -130,7 +130,11 @@ final class EventLoop implements AutoCloseable {
   @Override
   public void close() {
     if (this.closed.compareAndSet(false, true)) {
-      eventExecutor.execute(activeClients::clear);
+      try {
+        eventExecutor.execute(activeClients::clear);
+      } catch (Exception e) {
+        LOGGER.warn("Error while closing event loop: {}", e.getMessage());
+      }
     }
   }
 
