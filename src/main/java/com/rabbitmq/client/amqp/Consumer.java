@@ -294,9 +294,9 @@ public interface Consumer extends AutoCloseable, Resource {
      * token so it can also be retrieved early with {@link Consumer#claimDeferred(String...)}.
      *
      * <p>This maps to the AMQP 1.0 <code>
-     * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome with
-     * the <code>x-opt-delivery-time</code> annotation set to <code>now + delay</code> and the
-     * <code>x-opt-deferral-token</code> annotation set to <code>deferralToken</code>.
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to <code>now + delay</code> and the <code>
+     * x-opt-deferral-token</code> annotation set to <code>deferralToken</code>.
      *
      * <p>The token is honoured only because a delivery time is also set: a deferral token cannot be
      * supplied without one, since the broker would otherwise silently ignore it. The message still
@@ -309,9 +309,8 @@ public interface Consumer extends AutoCloseable, Resource {
      *
      * <p><b>Requires RabbitMQ 4.4 or more.</b>
      *
-     * @param delay delivery delay from now
-     * @param deliveryFailed if true, the delivery count of the message is incremented
      * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
+     * @param delay delivery delay from now
      * @see <a
      *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
      *     1.0 <code>modified</code> outcome</a>
@@ -320,15 +319,15 @@ public interface Consumer extends AutoCloseable, Resource {
      * @see Consumer#claimDeferred(String...)
      * @since 1.6.0
      */
-    void delayedRetry(Duration delay, boolean deliveryFailed, String deferralToken);
+    void defer(String deferralToken, Duration delay);
 
     /**
      * Requeue the message for redelivery at the specified time, and park it under a deferral token
      * so it can also be retrieved early with {@link Consumer#claimDeferred(String...)}.
      *
      * <p>This maps to the AMQP 1.0 <code>
-     * modified{delivery-failed = deliveryFailed, undeliverable-here = false}</code> outcome with
-     * the <code>x-opt-delivery-time</code> annotation set to the specified time and the <code>
+     * modified{delivery-failed = false, undeliverable-here = false}</code> outcome with the <code>
+     * x-opt-delivery-time</code> annotation set to the specified time and the <code>
      * x-opt-deferral-token</code> annotation set to <code>deferralToken</code>.
      *
      * <p>The token is honoured only if <code>deliveryTime</code> is in the future: a deferral token
@@ -342,9 +341,8 @@ public interface Consumer extends AutoCloseable, Resource {
      *
      * <p><b>Requires RabbitMQ 4.4 or more.</b>
      *
-     * @param deliveryTime absolute delivery time, must be in the future
-     * @param deliveryFailed if true, the delivery count of the message is incremented
      * @param deferralToken the token the message is parked under, at most 256 UTF-8 bytes
+     * @param deliveryTime absolute delivery time, must be in the future
      * @see <a
      *     href="https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-messaging-v1.0-os.html#type-modified">AMQP
      *     1.0 <code>modified</code> outcome</a>
@@ -353,7 +351,7 @@ public interface Consumer extends AutoCloseable, Resource {
      * @see Consumer#claimDeferred(String...)
      * @since 1.6.0
      */
-    void delayedRetry(Instant deliveryTime, boolean deliveryFailed, String deferralToken);
+    void defer(String deferralToken, Instant deliveryTime);
 
     /**
      * Create a batch context to accumulate message contexts and settle them at once.
