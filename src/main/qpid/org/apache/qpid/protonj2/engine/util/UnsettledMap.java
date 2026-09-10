@@ -295,22 +295,58 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
             return;
         }
 
-        int readStart = -1;
+        // There are two cases here, either first <= last or first > last which
+        // involves two cycles one for each range before and after the overflow.
+        if (Integer.compareUnsigned(first, last) <= 0) {
+            forEachInRange(tail, false, first, last, action);
+        } else {
+            final UnsettledBucket<Delivery> nextGeneration =
+                forEachInRange(tail, false, first, UnsignedInteger.MAX_VALUE.intValue(), action);
+
+            if (nextGeneration != null) {
+                forEachInRange(nextGeneration, true, 0, last, action);
+            }
+        }
+    }
+
+    private UnsettledBucket<Delivery> forEachInRange(UnsettledBucket<Delivery> tail, boolean continuation, int first, int last, Consumer<Delivery> action) {
         boolean foundFirst = false;
         boolean foundLast = false;
+        int inGeneration = continuation ? tail.generation : -1;
 
-        for (UnsettledBucket<Delivery> bucket = tail; bucket != null && !foundLast; bucket = bucket.next) {
+        UnsettledBucket<Delivery> bucket = tail;
+
+        for (; bucket != null && !foundLast; bucket = bucket.next) {
             final int writeOffset = bucket.writeOffset;
 
-            readStart = bucket.readOffset;
+            int readStart = bucket.readOffset;
 
-            if (!foundFirst && bucket.isCapturedByRange(first, last))  {
-                final int result = bucket.search(first);
-                final int ceiling = result >= 0 ? result : ~result;
+            // We are locked to a ranged search in a single generation so if values
+            // jump we can stop and return where the next generation starts in case
+            // the caller has a second range to check.
+            if (inGeneration >= 0 && bucket.generation != inGeneration) {
+                return bucket;
+            }
 
-                if (ceiling < writeOffset) {
-                    foundFirst = true;
-                    readStart = ceiling;
+            if (!foundFirst) {
+                if (bucket.isCapturedByRange(first, last)) {
+                    final int result = bucket.search(first);
+                    final int ceiling = result >= 0 ? result : ~result;
+
+                    // We either found the actual first or we found the location where it would
+                    // be inserted at which is the next logical value we will use as the start
+                    // and proceed with all values from that point until we find the end or an
+                    // element greater than the last value.
+
+                    if (ceiling < writeOffset) {
+                        foundFirst = true;
+                        readStart = ceiling;
+                        inGeneration = bucket.generation;
+                    }
+                } else if (continuation && bucket.lowestDeliveryId > first) {
+                    // If continued from a range that include overflow and we find values ahead of
+                    // the lowest point in this sequence we know there can be no matches so stop now.
+                    return null;
                 }
             }
 
@@ -330,6 +366,8 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
                 }
             }
         }
+
+        return bucket;
     }
 
     /**
@@ -351,23 +389,60 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
             return;
         }
 
+        // There are two cases here, either first <= last or first > last which
+        // involves two cycles one for each range before and after the overflow.
+        if (Integer.compareUnsigned(first, last) <= 0) {
+            removeEachInRange(tail, false, first, last, action);
+        } else {
+            final UnsettledBucket<Delivery> nextGeneration =
+                removeEachInRange(tail, false, first, UnsignedInteger.MAX_VALUE.intValue(), action);
+
+            if (nextGeneration != null) {
+                removeEachInRange(nextGeneration, true, 0, last, action);
+            }
+        }
+    }
+
+    private UnsettledBucket<Delivery> removeEachInRange(UnsettledBucket<Delivery> tail, boolean continuation, int first, int last, Consumer<Delivery> action) {
         boolean foundFirst = false;
         boolean foundLast = false;
         int removeStart = 0;
         int removeEnd = 0;
+        int inGeneration = continuation ? tail.generation : -1;
 
-        for (UnsettledBucket<Delivery> bucket = tail; bucket != null && !foundLast; ) {
+        UnsettledBucket<Delivery> bucket = tail;
+
+        for (; bucket != null && !foundLast; ) {
             final int writeOffset = bucket.writeOffset;
 
             removeStart = bucket.readOffset;
 
-            if (!foundFirst && bucket.isCapturedByRange(first, last))  {
-                final int result = bucket.search(first);
-                final int ceiling = result >= 0 ? result : ~result;
+            // We are locked to a ranged search in a single generation so if values
+            // jump we can stop and return where the next generation starts in case
+            // the caller has a second range to check.
+            if (inGeneration >= 0 && bucket.generation != inGeneration) {
+                return bucket;
+            }
 
-                if (ceiling < writeOffset) {
-                    foundFirst = true;
-                    removeStart = ceiling;
+            if (!foundFirst) {
+                if (bucket.isCapturedByRange(first, last)) {
+                    final int result = bucket.search(first);
+                    final int ceiling = result >= 0 ? result : ~result;
+
+                    // We either found the actual first or we found the location where it would
+                    // be inserted at which is the next logical value we will use as the start
+                    // and proceed with all values from that point until we find the end or an
+                    // element greater than the last value.
+
+                    if (ceiling < writeOffset) {
+                        foundFirst = true;
+                        removeStart = ceiling;
+                        inGeneration = bucket.generation;
+                    }
+                } else if (continuation && bucket.lowestDeliveryId > first) {
+                    // If continued from a range that include overflow and we find values ahead of
+                    // the lowest point in this sequence we know there can be no matches so stop now.
+                    return null;
                 }
             }
 
@@ -391,6 +466,8 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
                 bucket = bucket.next;
             }
         }
+
+        return bucket;
     }
 
     @Override
@@ -894,8 +971,7 @@ public class UnsettledMap<Delivery> implements Map<UnsignedInteger, Delivery> {
 
         /**
          * Checks if the given range of delivery IDs potentially captures any entries in
-         * this bucket by checking if the lowest delivery ID in this bucket is between the
-         * given low and high values.
+         * this bucket by checking if the the opposing ends of the ranges overlap.
          *
          * @param lowest
          * 		The lowest value that is being searched for.
