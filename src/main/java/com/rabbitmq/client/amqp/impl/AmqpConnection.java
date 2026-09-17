@@ -250,16 +250,20 @@ final class AmqpConnection extends ResourceBase
   }
 
   private static String brokerVersion(org.apache.qpid.protonj2.client.Connection connection) {
-    try {
-      return (String) connection.properties().get("version");
-    } catch (ClientException e) {
-      throw convert(e);
-    }
+    return connectionProperty(connection, "version");
   }
 
   private static String brokerProduct(org.apache.qpid.protonj2.client.Connection connection) {
+    return connectionProperty(connection, "product");
+  }
+
+  private static String brokerPlatform(org.apache.qpid.protonj2.client.Connection connection) {
+    return connectionProperty(connection, "platform");
+  }
+
+  private static String connectionProperty(org.apache.qpid.protonj2.client.Connection c, String k) {
     try {
-      return (String) connection.properties().get("product");
+      return (String) c.properties().get(k);
     } catch (ClientException e) {
       throw convert(e);
     }
@@ -351,6 +355,9 @@ final class AmqpConnection extends ResourceBase
       connectionOptions.sslEnabled(true);
       SslOptions sslOptions = connectionOptions.sslOptions();
       sslOptions.sslContextOverride(tlsSettings.sslContext());
+      sslOptions.enabledCipherSuites(tlsSettings.ciphers());
+      sslOptions.namedGroups(tlsSettings.namedGroups());
+      sslOptions.sslEngineCustomizer(tlsSettings.sslEngineCustomizer());
       sslOptions.verifyHost(tlsSettings.isHostnameVerification());
     }
     Address address = connectionSettings.selectAddress(addresses);
@@ -390,6 +397,10 @@ final class AmqpConnection extends ResourceBase
 
   String brokerProduct() {
     return brokerProduct(this.nativeConnection);
+  }
+
+  String brokerPlatform() {
+    return brokerPlatform(this.nativeConnection);
   }
 
   Pair<TopologyListener, EntityRecovery> createTopologyInfrastructure(

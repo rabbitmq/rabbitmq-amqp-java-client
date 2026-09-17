@@ -19,8 +19,13 @@ package org.apache.qpid.protonj2.client.transport.netty4;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.security.AccessController;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.PrivilegedAction;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,6 +40,8 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedKeyManager;
 
+import io.netty.handler.ssl.OpenSslContextOption;
+import io.netty.util.internal.PlatformDependent;
 import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.transport.X509AliasKeyManager;
 import org.slf4j.Logger;
@@ -187,7 +194,14 @@ public final class SslSupport {
         engine.setEnabledProtocols(buildEnabledProtocols(engine, options));
         engine.setEnabledCipherSuites(buildEnabledCipherSuites(engine, options));
         engine.setUseClientMode(true);
-        engine.setSSLParameters(createSSLParameters(engine, options));
+        SSLParameters sslParameters = createSSLParameters(engine, options);
+        if (options.namedGroups() != null) {
+           setNamesGroups(sslParameters, options.namedGroups());
+        }
+        engine.setSSLParameters(sslParameters);
+        if (options.sslEngineCustomizer() != null) {
+            options.sslEngineCustomizer().accept(engine);
+        }
 
         return engine;
     }
@@ -226,6 +240,10 @@ public final class SslSupport {
             }
             builder.keyManager(keyManagerFactory);
             builder.trustManager(trustManagerFactory);
+
+            if (options.namedGroups() != null) {
+                builder.option(OpenSslContextOption.GROUPS, options.namedGroups());
+            }
 
             return builder.build();
         } catch (Exception e) {
@@ -270,6 +288,9 @@ public final class SslSupport {
         engine.setEnabledCipherSuites(buildEnabledCipherSuites(engine, options));
         engine.setUseClientMode(true);
         engine.setSSLParameters(createSSLParameters(engine, options));
+        if (options.sslEngineCustomizer() != null) {
+            options.sslEngineCustomizer().accept(engine);
+        }
 
         return engine;
     }
@@ -474,5 +495,47 @@ public final class SslSupport {
         }
 
         return stream;
+    }
+
+    // from Netty's OpenSslParametersUtil
+    private static final MethodHandle SET_NAMED_GROUPS;
+
+    static {
+        MethodHandle setNamedGroups = null;
+        if (PlatformDependent.javaVersion() >= 20) {
+            final MethodHandles.Lookup lookup = MethodHandles.lookup();
+            setNamedGroups =
+                obtainHandle(lookup, "setNamedGroups", MethodType.methodType(void.class, String[].class));
+        }
+        SET_NAMED_GROUPS = setNamedGroups;
+    }
+
+    @SuppressWarnings("removal")
+    private static MethodHandle obtainHandle(
+        final MethodHandles.Lookup lookup, final String methodName, final MethodType type) {
+        return AccessController.doPrivileged(
+            (PrivilegedAction<MethodHandle>)
+                () -> {
+                    try {
+                        return lookup.findVirtual(SSLParameters.class, methodName, type);
+                    } catch (UnsupportedOperationException
+                             | SecurityException
+                             | NoSuchMethodException
+                             | IllegalAccessException e) {
+                        // Just ignore it.
+                        return null;
+                    }
+                });
+    }
+
+    static void setNamesGroups(SSLParameters parameters, String[] names) {
+        if (SET_NAMED_GROUPS == null) {
+            return;
+        }
+        try {
+            SET_NAMED_GROUPS.invoke(parameters, names);
+        } catch (Throwable ignore) {
+            // Ignore
+        }
     }
 }

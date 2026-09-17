@@ -19,8 +19,10 @@ package org.apache.qpid.protonj2.client;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 
 /**
  * Options for configuration of the client SSL layer
@@ -51,6 +53,8 @@ public class SslOptions implements Cloneable {
     private String[] enabledCipherSuites;
     private String[] disabledCipherSuites;
     private String[] enabledProtocols;
+    private String[] namedGroups;
+    private Consumer<SSLEngine> sslEngineCustomizer;
     private String[] disabledProtocols = DEFAULT_DISABLED_PROTOCOLS.toArray(new String[0]);
     private String contextProtocol = DEFAULT_CONTEXT_PROTOCOL;
 
@@ -250,6 +254,34 @@ public class SslOptions implements Cloneable {
     }
 
     /**
+     * @return the namedGroups or null if the defaults should be used
+     */
+    public String[] namedGroups() {
+        return namedGroups;
+    }
+
+    /**
+     * The named groups to use.
+     *
+     * @param namedGroups the named groups to use, or null if the defaults should be used.
+     *
+     * @return this options instance.
+     */
+    public SslOptions namedGroups(String... namedGroups) {
+        this.namedGroups = namedGroups;
+        return this;
+    }
+
+    public SslOptions sslEngineCustomizer(Consumer<SSLEngine> customizer) {
+        this.sslEngineCustomizer = customizer;
+        return this;
+    }
+
+    public Consumer<SSLEngine> sslEngineCustomizer() {
+        return sslEngineCustomizer;
+    }
+
+    /**
      * @return the enabledProtocols or null if the defaults should be used
      */
     public String[] enabledProtocols() {
@@ -435,6 +467,8 @@ public class SslOptions implements Cloneable {
         other.trustStoreType(trustStoreType());
         other.enabledCipherSuites(enabledCipherSuites());
         other.disabledCipherSuites(disabledCipherSuites());
+        other.namedGroups(namedGroups());
+        other.sslEngineCustomizer(sslEngineCustomizer());
         other.enabledProtocols(enabledProtocols());
         other.disabledProtocols(disabledProtocols());
         other.trustAll(trustAll());
@@ -447,4 +481,5 @@ public class SslOptions implements Cloneable {
 
         return other;
     }
+
 }

@@ -44,9 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 import org.slf4j.Logger;
@@ -386,6 +388,9 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     private boolean enabled = false;
     private boolean hostnameVerification = true;
     private SSLContext sslContext;
+    private String[] ciphers;
+    private String[] namedGroups;
+    private Consumer<SSLEngine> sslEngineCustomizer;
 
     private DefaultTlsSettings(DefaultConnectionSettings<T> connectionSettings) {
       this.connectionSettings = connectionSettings;
@@ -406,6 +411,24 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     @Override
     public TlsSettings<T> sslContext(SSLContext sslContext) {
       this.sslContext = sslContext;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> ciphers(String... ciphers) {
+      this.ciphers = ciphers;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> namedGroups(String... namedGroups) {
+      this.namedGroups = namedGroups;
+      return this;
+    }
+
+    @Override
+    public TlsSettings<T> sslEngineCustomizer(Consumer<SSLEngine> customizer) {
+      this.sslEngineCustomizer = customizer;
       return this;
     }
 
@@ -447,6 +470,9 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     void copyTo(DefaultTlsSettings<?> copy) {
       copy.enabled = this.enabled;
       copy.sslContext(this.sslContext);
+      copy.ciphers(this.ciphers);
+      copy.namedGroups(this.namedGroups);
+      copy.sslEngineCustomizer(this.sslEngineCustomizer);
       copy.hostnameVerification(this.hostnameVerification);
     }
 
@@ -460,6 +486,18 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     SSLContext sslContext() {
       return this.sslContext;
+    }
+
+    String[] ciphers() {
+      return ciphers;
+    }
+
+    String[] namedGroups() {
+      return namedGroups;
+    }
+
+    Consumer<SSLEngine> sslEngineCustomizer() {
+      return sslEngineCustomizer;
     }
 
     boolean isHostnameVerification() {
