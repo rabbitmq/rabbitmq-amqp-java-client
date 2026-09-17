@@ -53,7 +53,7 @@
         <micrometer-docs-generator.version>1.0.4</micrometer-docs-generator.version>
         <jose4j.version>0.9.7</jose4j.version>
         <commons-lang3.version>3.20.0</commons-lang3.version>
-        <bouncycastle.version>1.86</bouncycastle.version>
+        <bouncycastle.version>1.85</bouncycastle.version>
         <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
         <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
@@ -276,6 +276,18 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bctls-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
             <scope>test</scope>
         </dependency>

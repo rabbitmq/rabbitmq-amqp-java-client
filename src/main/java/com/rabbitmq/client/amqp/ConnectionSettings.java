@@ -19,7 +19,9 @@ package com.rabbitmq.client.amqp;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 
 /**
  * Settings for a connection.
@@ -198,6 +200,38 @@ public interface ConnectionSettings<T> {
      * @return TLS settings
      */
     TlsSettings<T> sslContext(SSLContext sslContext);
+
+    /**
+     * The cipher suites to enable, in order of preference.
+     *
+     * @param ciphers cipher suites to enable
+     * @return TLS settings
+     */
+    TlsSettings<T> ciphers(String... ciphers);
+
+    /**
+     * The named groups to enable, in order of preference.
+     *
+     * <p>This will be applied only for Java 20 and more.
+     *
+     * @param namedGroups named groups to enable
+     * @return TLS settings
+     * @see javax.net.ssl.SSLParameters#setNamedGroups(String[])
+     */
+    TlsSettings<T> namedGroups(String... namedGroups);
+
+    /**
+     * Callback to customize the {@link SSLEngine} used for the connection.
+     *
+     * <p>The callback is called after the library has applied its own initialization of the engine,
+     * so it can be used to override the settings the library sets by default.
+     *
+     * <p>This is an advanced extension point, most applications should not need it.
+     *
+     * @param customizer the customizer
+     * @return TLS settings
+     */
+    TlsSettings<T> sslEngineCustomizer(Consumer<SSLEngine> customizer);
 
     /**
      * Convenience method to set a {@link SSLContext} that trusts all servers.

@@ -22,6 +22,7 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Resource;
 import eu.rekawek.toxiproxy.Proxy;
@@ -365,6 +366,71 @@ public abstract class TestUtils {
         : DefaultConnectionSettings.DEFAULT_PORT;
   }
 
+  private static class ErlangVersionCondition
+      implements org.junit.jupiter.api.extension.ExecutionCondition {
+
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+      if (!context.getTestMethod().isPresent()) {
+        return ConditionEvaluationResult.enabled("Apply only to methods");
+      }
+      ErlangVersionAtLeast annotation =
+          context.getElement().get().getAnnotation(ErlangVersionAtLeast.class);
+      int expectedVersion = annotation == null ? 0 : annotation.value();
+      if (expectedVersion == 0) {
+        return ConditionEvaluationResult.enabled("No Erlang version requirement");
+      } else {
+        Integer erlangVersion =
+            context
+                .getRoot()
+                .getStore(ExtensionContext.Namespace.GLOBAL)
+                .getOrComputeIfAbsent(
+                    "erlangVersion",
+                    k -> {
+                      try (Environment env = TestUtils.environmentBuilder().build();
+                          com.rabbitmq.client.amqp.Connection c = env.connectionBuilder().build()) {
+                        String platform = ((AmqpConnection) c).brokerPlatform();
+                        return erlangMajorVersion(platform);
+                      }
+                    },
+                    Integer.class);
+
+        if (erlangVersion != null && erlangVersion >= expectedVersion) {
+          return ConditionEvaluationResult.enabled(
+              "Erlang version requirement met, expected "
+                  + expectedVersion
+                  + ", actual "
+                  + erlangVersion);
+        } else {
+          return ConditionEvaluationResult.disabled(
+              "Erlang version requirement not met, expected "
+                  + expectedVersion
+                  + ", actual "
+                  + erlangVersion);
+        }
+      }
+    }
+  }
+
+  static Integer erlangMajorVersion(String platform) {
+    if (platform == null) {
+      return null;
+    }
+    // platform looks like: Erlang/OTP 27.3.4.14
+    int spaceIndex = platform.lastIndexOf(' ');
+    if (spaceIndex < 0 || spaceIndex == platform.length() - 1) {
+      return null;
+    }
+    String version = platform.substring(spaceIndex + 1);
+    int dotIndex = version.indexOf('.');
+    String majorVersion = dotIndex < 0 ? version : version.substring(0, dotIndex);
+    try {
+      return Integer.valueOf(majorVersion);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   static class DisabledIfTlsNotEnabledCondition implements ExecutionCondition {
 
     @Override
@@ -608,6 +674,14 @@ public abstract class TestUtils {
   @Documented
   @ExtendWith(DisabledOnSemeruCondition.class)
   public @interface DisabledOnJavaSemeru {}
+
+  @Target({ElementType.TYPE, ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @ExtendWith(ErlangVersionCondition.class)
+  public @interface ErlangVersionAtLeast {
+    int value();
+  }
 
   static Sync sync() {
     return sync(1);
