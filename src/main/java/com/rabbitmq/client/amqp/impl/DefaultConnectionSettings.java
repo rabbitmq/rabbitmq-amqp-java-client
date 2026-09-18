@@ -711,6 +711,8 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
 
     private final OAuth2Settings<T> oAuth2Settings;
     private SSLContext sslContext;
+    private String[] namedGroups;
+    private String[] ciphers;
     private boolean enabled = false;
 
     DefaultOAuthTlsSettings(OAuth2Settings<T> oAuth2Settings) {
@@ -720,6 +722,18 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     @Override
     public OAuth2Settings.TlsSettings<T> sslContext(SSLContext sslContext) {
       this.sslContext = sslContext;
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings.TlsSettings<T> namedGroups(String... namedGroups) {
+      this.namedGroups = namedGroups == null ? null : namedGroups.clone();
+      return this;
+    }
+
+    @Override
+    public OAuth2Settings.TlsSettings<T> ciphers(String... ciphers) {
+      this.ciphers = ciphers == null ? null : ciphers.clone();
       return this;
     }
 
@@ -740,9 +754,19 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       return this.sslContext;
     }
 
+    String[] namedGroups() {
+      return this.namedGroups == null ? null : this.namedGroups.clone();
+    }
+
+    String[] ciphers() {
+      return this.ciphers == null ? null : this.ciphers.clone();
+    }
+
     void copyTo(DefaultOAuthTlsSettings<?> copy) {
       copy.enabled = this.enabled;
       copy.sslContext(this.sslContext);
+      copy.ciphers(this.ciphers());
+      copy.namedGroups(this.namedGroups());
     }
   }
 }

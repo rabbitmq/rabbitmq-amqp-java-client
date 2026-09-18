@@ -124,6 +124,32 @@ public interface OAuth2Settings<T> {
     TlsSettings<T> sslContext(SSLContext sslContext);
 
     /**
+     * TLS named groups (key exchange groups) for HTTPS requests.
+     *
+     * <p>Use this to select post-quantum or hybrid post-quantum key exchange, e.g. <code>
+     * X25519MLKEM768</code>. Requires {@link #sslContext(javax.net.ssl.SSLContext)} to be set, and
+     * Java 20 or more.
+     *
+     * @param namedGroups the named groups, in order of preference
+     * @return TLS settings
+     * @since 1.6.0
+     */
+    TlsSettings<T> namedGroups(String... namedGroups);
+
+    /**
+     * TLS cipher suites for HTTPS requests.
+     *
+     * <p>Note this does not affect the key exchange algorithm with TLS 1.3, see {@link
+     * #namedGroups(String...)} for post-quantum key exchange. Requires {@link
+     * #sslContext(javax.net.ssl.SSLContext)} to be set.
+     *
+     * @param ciphers the cipher suites, in order of preference
+     * @return TLS settings
+     * @since 1.6.0
+     */
+    TlsSettings<T> ciphers(String... ciphers);
+
+    /**
      * Go back to the general OAuth 2 settings.
      *
      * @return OAuth 2 settings

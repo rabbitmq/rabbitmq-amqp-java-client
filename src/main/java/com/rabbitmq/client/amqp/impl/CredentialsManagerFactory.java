@@ -81,8 +81,12 @@ final class CredentialsManagerFactory {
       DefaultConnectionSettings<?> connectionSettings) {
     DefaultConnectionSettings.DefaultOAuth2Settings<?> settings = connectionSettings.oauth2();
     SSLContext sslContext = null;
+    String[] ciphers = null;
+    String[] namedGroups = null;
     if (settings.tlsEnabled()) {
       sslContext = settings.tls().sslContext();
+      ciphers = settings.tls().ciphers();
+      namedGroups = settings.tls().namedGroups();
     }
     TokenRequester tokenRequester =
         HttpTokenRequester.builder()
@@ -92,8 +96,8 @@ final class CredentialsManagerFactory {
             .grantType(settings.grantType())
             .parameters(settings.parameters())
             .sslContext(sslContext)
-            //            .namedGroups(settings.namedGroups())
-            //            .ciphers(settings.ciphers())
+            .ciphers(ciphers)
+            .namedGroups(namedGroups)
             .parser(new GsonTokenParser())
             .build();
     return new TokenCredentialsManager(
