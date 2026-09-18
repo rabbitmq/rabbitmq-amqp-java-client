@@ -23,11 +23,9 @@ import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
 import com.rabbitmq.client.amqp.oauth2.GsonTokenParser;
 import com.rabbitmq.client.amqp.oauth2.HttpTokenRequester;
 import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
-import java.net.HttpURLConnection;
+import com.rabbitmq.client.amqp.oauth2.TokenRequester;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 
 final class CredentialsManagerFactory {
@@ -82,28 +80,22 @@ final class CredentialsManagerFactory {
   private CredentialsManager createOAuth2Credentials(
       DefaultConnectionSettings<?> connectionSettings) {
     DefaultConnectionSettings.DefaultOAuth2Settings<?> settings = connectionSettings.oauth2();
-    Consumer<HttpURLConnection> connectionConfigurator;
+    SSLContext sslContext = null;
     if (settings.tlsEnabled()) {
-      SSLContext sslContext = settings.tls().sslContext();
-      connectionConfigurator =
-          c -> {
-            if (c instanceof HttpsURLConnection) {
-              ((HttpsURLConnection) c).setSSLSocketFactory(sslContext.getSocketFactory());
-            }
-          };
-    } else {
-      connectionConfigurator = c -> {};
+      sslContext = settings.tls().sslContext();
     }
-    HttpTokenRequester tokenRequester =
-        new HttpTokenRequester(
-            settings.tokenEndpointUri(),
-            settings.clientId(),
-            settings.clientSecret(),
-            settings.grantType(),
-            settings.parameters(),
-            connectionConfigurator,
-            null,
-            new GsonTokenParser());
+    TokenRequester tokenRequester =
+        HttpTokenRequester.builder()
+            .tokenEndpointUri(settings.tokenEndpointUri())
+            .clientId(settings.clientId())
+            .clientSecret(settings.clientSecret())
+            .grantType(settings.grantType())
+            .parameters(settings.parameters())
+            .sslContext(sslContext)
+            //            .namedGroups(settings.namedGroups())
+            //            .ciphers(settings.ciphers())
+            .parser(new GsonTokenParser())
+            .build();
     return new TokenCredentialsManager(
         tokenRequester, environment.scheduledExecutorService(), settings.refreshDelayStrategy());
   }

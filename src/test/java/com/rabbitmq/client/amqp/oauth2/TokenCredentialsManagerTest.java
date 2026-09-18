@@ -155,6 +155,30 @@ public class TokenCredentialsManagerTest {
   }
 
   @Test
+  void refreshShouldBeRetriedAfterTransientFailure() throws InterruptedException {
+    Duration tokenExpiry = ofMillis(50);
+    AtomicInteger requestCount = new AtomicInteger(0);
+    when(this.requester.request())
+        .thenAnswer(
+            ignored -> {
+              int count = requestCount.incrementAndGet();
+              if (count == 2) {
+                throw new OAuth2Exception("simulated transient failure");
+              }
+              return token("ok", Instant.now().plus(tokenExpiry));
+            });
+    TokenCredentialsManager credentials =
+        new TokenCredentialsManager(
+            this.requester, this.scheduledExecutorService, DEFAULT_REFRESH_DELAY_STRATEGY);
+    CountDownLatch refreshLatch = new CountDownLatch(1);
+    Registration registration = credentials.register("", (u, p) -> refreshLatch.countDown());
+    registration.connect(connectionCallback(() -> {}));
+    // the first scheduled refresh fails, but the task recovers and retries
+    assertThat(refreshLatch.await(ofSeconds(10).toMillis(), MILLISECONDS)).isTrue();
+    assertThat(requestCount.get()).isGreaterThanOrEqualTo(3);
+  }
+
+  @Test
   void refreshDelayStrategy() {
     Duration diff = ofMillis(100);
     Function<Instant, Duration> strategy = TokenCredentialsManager.ratioRefreshDelayStrategy(0.8f);
