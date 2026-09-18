@@ -78,7 +78,8 @@ class AdvancedTlsTest {
     if (Security.getProvider(BouncyCastleJsseProvider.PROVIDER_NAME) == null) {
       Security.addProvider(new BouncyCastleJsseProvider());
     }
-    SSLContext sslContext = SSLContext.getInstance("TLS", BouncyCastleJsseProvider.PROVIDER_NAME);
+    SSLContext sslContext =
+        SSLContext.getInstance(protocol, BouncyCastleJsseProvider.PROVIDER_NAME);
     sslContext.init(null, trustManagerFactory(caCertificate()).getTrustManagers(), null);
     AtomicReference<SSLEngine> sslEngine = new AtomicReference<>();
     try (Connection ignored =
