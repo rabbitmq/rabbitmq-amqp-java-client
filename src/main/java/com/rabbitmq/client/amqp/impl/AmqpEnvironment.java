@@ -153,6 +153,7 @@ final class AmqpEnvironment implements Environment {
     if (this.closed.compareAndSet(false, true)) {
       LOGGER.debug("Closing environment {}", this);
       this.connectionManager.close();
+      this.credentialsManagerFactory.close();
       this.client.close();
       this.connectionStateEventLoop.close();
       this.connectionStateEventExecutorGroup.shutdownGracefully();
