@@ -28,11 +28,12 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.net.ssl.SSLContext;
 
-final class CredentialsManagerFactory {
+final class CredentialsManagerFactory implements AutoCloseable {
 
   private volatile CredentialsManager globalOAuth2CredentialsManager;
   private final Lock oauth2CredentialsLock = new ReentrantLock();
   private final AmqpEnvironment environment;
+  private boolean closed = false;
 
   CredentialsManagerFactory(AmqpEnvironment environment) {
     this.environment = environment;
@@ -68,6 +69,9 @@ final class CredentialsManagerFactory {
 
     this.oauth2CredentialsLock.lock();
     try {
+      if (this.closed) {
+        throw new IllegalStateException("Credentials manager factory is closed");
+      }
       if (this.globalOAuth2CredentialsManager == null) {
         this.globalOAuth2CredentialsManager = createOAuth2Credentials(connectionSettings);
       }
@@ -101,6 +105,22 @@ final class CredentialsManagerFactory {
             .parser(new GsonTokenParser())
             .build();
     return new TokenCredentialsManager(
-        tokenRequester, environment.scheduledExecutorService(), settings.refreshDelayStrategy());
+        tokenRequester,
+        environment.scheduledExecutorService(),
+        environment.executorService(),
+        settings.refreshDelayStrategy());
+  }
+
+  @Override
+  public void close() {
+    this.oauth2CredentialsLock.lock();
+    try {
+      this.closed = true;
+      if (this.globalOAuth2CredentialsManager != null) {
+        this.globalOAuth2CredentialsManager.close();
+      }
+    } finally {
+      this.oauth2CredentialsLock.unlock();
+    }
   }
 }

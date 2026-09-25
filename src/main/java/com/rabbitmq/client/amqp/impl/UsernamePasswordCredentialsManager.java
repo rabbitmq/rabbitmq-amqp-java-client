@@ -33,6 +33,9 @@ final class UsernamePasswordCredentialsManager implements CredentialsManager {
     return this.registration;
   }
 
+  @Override
+  public void close() {}
+
   private static final class RegistrationImpl implements Registration {
 
     private final UsernamePasswordCredentialsProvider provider;
