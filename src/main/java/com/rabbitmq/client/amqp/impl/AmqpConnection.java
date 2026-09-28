@@ -117,6 +117,8 @@ final class AmqpConnection extends ResourceBase
       sqlFilterExpressionsSupported,
       directReplyToSupported;
   private final boolean privateDispatchingExecutor;
+  private final CredentialsManager credentialsManager;
+  private final boolean ownsCredentialsManager;
   private final CredentialsManager.Registration credentialsRegistration;
   private final AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration;
   private final ConnectionStateClient connectionStateClient;
@@ -181,9 +183,11 @@ final class AmqpConnection extends ResourceBase
       this.affinityStrategy = null;
     }
     this.management = createManagement();
-    CredentialsManager credentialsManager = builder.credentialsManager();
+    this.credentialsManager = builder.credentialsManager();
+    this.ownsCredentialsManager =
+        !(this.connectionSettings.oauth2().enabled() && this.connectionSettings.oauth2().shared());
     this.credentialsRegistration =
-        credentialsManager.register(
+        this.credentialsManager.register(
             this.name(),
             (username, password) -> {
               State state = this.state();
@@ -202,30 +206,57 @@ final class AmqpConnection extends ResourceBase
                     state);
               }
             });
-    LOGGER.debug("Opening native connection for connection '{}'...", this.name());
-    NativeConnectionWrapper ncw =
-        ConnectionUtils.enforceAffinity(
-            addrs -> {
-              NativeConnectionWrapper wrapper =
-                  connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
-              this.nativeConnection = wrapper.connection();
-              return wrapper;
-            },
-            this.management,
-            this.affinity,
-            this.environment.affinityCache(),
-            this.affinityStrategy,
-            ConnectionUtils.NO_RETRY_STRATEGY,
-            this.name());
-    this.sync(ncw);
-    String brokerVersion = brokerVersion(this.nativeConnection);
-    this.filterExpressionsSupported = supportFilterExpressions(brokerVersion);
-    this.setTokenSupported = supportSetToken(brokerVersion);
-    this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
-    this.directReplyToSupported = supportDirectReplyTo(brokerVersion);
-    LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
-    this.connectionStateClient.executeInLoop(() -> this.updateState(OPEN));
-    this.environment.metricsCollector().openConnection();
+    try {
+      LOGGER.debug("Opening native connection for connection '{}'...", this.name());
+      NativeConnectionWrapper ncw =
+          ConnectionUtils.enforceAffinity(
+              addrs -> {
+                NativeConnectionWrapper wrapper =
+                    connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
+                this.nativeConnection = wrapper.connection();
+                return wrapper;
+              },
+              this.management,
+              this.affinity,
+              this.environment.affinityCache(),
+              this.affinityStrategy,
+              ConnectionUtils.NO_RETRY_STRATEGY,
+              this.name());
+      this.sync(ncw);
+      String brokerVersion = brokerVersion(this.nativeConnection);
+      this.filterExpressionsSupported = supportFilterExpressions(brokerVersion);
+      this.setTokenSupported = supportSetToken(brokerVersion);
+      this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
+      this.directReplyToSupported = supportDirectReplyTo(brokerVersion);
+      LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
+      this.connectionStateClient.executeInLoop(() -> this.updateState(OPEN));
+      this.environment.metricsCollector().openConnection();
+    } catch (RuntimeException e) {
+      try {
+        this.credentialsRegistration.close();
+      } catch (Exception closeException) {
+        LOGGER.info(
+            "Error while closing credentials registration after connection creation failure: {}",
+            closeException.getMessage());
+      }
+      if (this.ownsCredentialsManager) {
+        try {
+          this.credentialsManager.close();
+        } catch (Exception closeException) {
+          LOGGER.info(
+              "Error while closing credentials manager after connection creation failure: {}",
+              closeException.getMessage());
+        }
+      }
+      try {
+        this.management.destroy();
+      } catch (Exception destroyException) {
+        LOGGER.info(
+            "Error while destroying management after connection creation failure: {}",
+            destroyException.getMessage());
+      }
+      throw e;
+    }
   }
 
   private static void checkBroker(org.apache.qpid.protonj2.client.Connection connection)
@@ -776,6 +807,9 @@ final class AmqpConnection extends ResourceBase
         LOGGER.debug("Error in event loop: {}", e.getMessage());
       }
       this.credentialsRegistration.close();
+      if (this.ownsCredentialsManager) {
+        this.credentialsManager.close();
+      }
       this.environment.removeConnection(this);
       BiConsumer<String, RunnableWithException> safeClose =
           (label, action) -> {

@@ -342,6 +342,109 @@ public class Oauth2Test {
   }
 
   @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void sharedManagerShouldRefreshAfterAllConnectionsClosed(TestInfo info) throws Exception {
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
+    Duration tokenLifetime = ofSeconds(3);
+    AtomicInteger requestCount = new AtomicInteger();
+    HttpHandler httpHandler =
+        oAuth2TokenHttpHandler(
+            () -> currentTimeMillis() + tokenLifetime.toMillis(), requestCount::incrementAndGet);
+    this.server = startServer(port, contextPath, httpHandler);
+    String uri = "http://localhost:" + port + contextPath;
+
+    AmqpEnvironmentBuilder envBuilder = TestUtils.environmentBuilder();
+    DefaultOAuth2Settings<? extends EnvironmentConnectionSettings> oauth2 =
+        (DefaultOAuth2Settings<? extends EnvironmentConnectionSettings>)
+            envBuilder.connectionSettings().oauth2();
+    oauth2.refreshDelayStrategy(ratioRefreshDelayStrategy(0.4f));
+    oauth2.tokenEndpointUri(uri).clientId("rabbitmq").clientSecret("rabbitmq").shared(true);
+    try (Environment env = envBuilder.build()) {
+      Connection c = env.connectionBuilder().build();
+      String q = name(info);
+      c.management().queue(q).exclusive(true).declare();
+      c.close();
+
+      assertThat(requestCount.get()).isEqualTo(1);
+      Thread.sleep(tokenLifetime.toMillis());
+
+      Connection c2 = env.connectionBuilder().build();
+      String q2 = name(info);
+      c2.management().queue(q2).exclusive(true).declare();
+      Publisher publisher = c2.publisherBuilder().queue(q2).build();
+      Sync consumeSync = sync(3);
+      c2.consumerBuilder()
+          .queue(q2)
+          .messageHandler(
+              (ctx, msg) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
+          .build();
+      // the connection must survive several refresh rounds
+      for (int i = 0; i < 3; i++) {
+        publisher.publish(publisher.message(), ctx -> {});
+        Thread.sleep(tokenLifetime.toMillis());
+      }
+      assertThat(consumeSync).completes();
+    }
+  }
+
+  @Test
+  @BrokerVersionAtLeast(RABBITMQ_4_1_0)
+  void slowTokenEndpointShouldNotBlockConnectionCreationWhenTokenIsValid() throws Exception {
+    int port = randomNetworkPort();
+    String contextPath = "/uaa/oauth/token";
+    Duration tokenLifetime = ofSeconds(10);
+    AtomicInteger requestCount = new AtomicInteger();
+    HttpHandler httpHandler =
+        exchange -> {
+          int count = requestCount.incrementAndGet();
+          if (count > 1) {
+            try {
+              Thread.sleep(ofSeconds(5).toMillis());
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+          }
+          long expirationTime = currentTimeMillis() + tokenLifetime.toMillis();
+          String jwtToken = token(expirationTime);
+          Duration expiresIn = Duration.ofMillis(expirationTime - currentTimeMillis());
+          String oauthToken = sampleJsonToken(jwtToken, expiresIn);
+          byte[] data = oauthToken.getBytes(UTF_8);
+          exchange.getResponseHeaders().set("content-type", "application/json");
+          exchange.sendResponseHeaders(200, data.length);
+          OutputStream body = exchange.getResponseBody();
+          body.write(data);
+          body.close();
+        };
+    this.server = startServer(port, contextPath, httpHandler);
+    String uri = "http://localhost:" + port + contextPath;
+
+    AmqpEnvironmentBuilder envBuilder = TestUtils.environmentBuilder();
+    DefaultOAuth2Settings<? extends EnvironmentConnectionSettings> oauth2 =
+        (DefaultOAuth2Settings<? extends EnvironmentConnectionSettings>)
+            envBuilder.connectionSettings().oauth2();
+    oauth2.refreshDelayStrategy(ratioRefreshDelayStrategy(0.2f));
+    oauth2.tokenEndpointUri(uri).clientId("rabbitmq").clientSecret("rabbitmq").shared(true);
+    try (Environment env = envBuilder.build()) {
+      // keeps a connection open so the shared manager keeps refreshing in the background
+      Connection c1 = env.connectionBuilder().build();
+      try {
+        waitAtMost(() -> requestCount.get() >= 2);
+
+        long start = currentTimeMillis();
+        try (Connection ignored = env.connectionBuilder().build()) {}
+        long elapsed = currentTimeMillis() - start;
+        assertThat(elapsed).isLessThan(ofSeconds(2).toMillis());
+      } finally {
+        c1.close();
+      }
+    }
+  }
+
+  @Test
   void oauthConfigurationShouldUsePlainSaslMechanism() throws Exception {
     int port = randomNetworkPort();
     String contextPath = "/uaa/oauth/token";
