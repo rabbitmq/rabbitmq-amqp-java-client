@@ -18,7 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
-import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
+import com.rabbitmq.client.credentials.CredentialsManager;
 
 final class UsernamePasswordCredentialsManager implements CredentialsManager {
 
