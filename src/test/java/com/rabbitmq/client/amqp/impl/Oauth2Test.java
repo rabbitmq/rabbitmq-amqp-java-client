@@ -28,8 +28,7 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.name;
 import static com.rabbitmq.client.amqp.impl.TestUtils.randomNetworkPort;
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
-import static com.rabbitmq.client.amqp.oauth2.OAuth2TestUtils.sampleJsonToken;
-import static com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager.ratioRefreshDelayStrategy;
+import static com.rabbitmq.client.credentials.TokenCredentialsManager.ratioRefreshDelayStrategy;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.Duration.ofMillis;
@@ -506,5 +505,18 @@ public class Oauth2Test {
       responseBody.close();
       requestCallback.run();
     };
+  }
+
+  static String sampleJsonToken(String accessToken, Duration expiresIn) {
+    String json =
+        "{\n"
+            + "  \"access_token\" : \"{accessToken}\",\n"
+            + "  \"token_type\" : \"bearer\",\n"
+            + "  \"expires_in\" : {expiresIn},\n"
+            + "  \"scope\" : \"clients.read emails.write scim.userids password.write idps.write notifications.write oauth.login scim.write critical_notifications.write\",\n"
+            + "  \"jti\" : \"18c1b1dfdda04382a8bcc14d077b71dd\"\n"
+            + "}";
+    return json.replace("{accessToken}", accessToken)
+        .replace("{expiresIn}", expiresIn.getSeconds() + "");
   }
 }

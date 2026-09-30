@@ -19,11 +19,11 @@ package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.CredentialsProvider;
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
-import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
-import com.rabbitmq.client.amqp.oauth2.GsonTokenParser;
-import com.rabbitmq.client.amqp.oauth2.HttpTokenRequester;
-import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
-import com.rabbitmq.client.amqp.oauth2.TokenRequester;
+import com.rabbitmq.client.credentials.CredentialsManager;
+import com.rabbitmq.client.credentials.TokenCredentialsManager;
+import com.rabbitmq.client.credentials.TokenRequester;
+import com.rabbitmq.client.credentials.oauth2.GsonTokenParser;
+import com.rabbitmq.client.credentials.oauth2.HttpTokenRequester;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.net.ssl.SSLContext;

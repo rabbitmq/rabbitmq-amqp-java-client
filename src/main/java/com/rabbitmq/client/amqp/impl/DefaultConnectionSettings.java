@@ -29,7 +29,7 @@ import com.rabbitmq.client.amqp.CredentialsProvider;
 import com.rabbitmq.client.amqp.DefaultUsernamePasswordCredentialsProvider;
 import com.rabbitmq.client.amqp.OAuth2Settings;
 import com.rabbitmq.client.amqp.UsernamePasswordCredentialsProvider;
-import com.rabbitmq.client.amqp.oauth2.TokenCredentialsManager;
+import com.rabbitmq.client.credentials.TokenCredentialsManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;

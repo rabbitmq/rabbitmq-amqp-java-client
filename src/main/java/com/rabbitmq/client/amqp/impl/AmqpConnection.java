@@ -49,7 +49,7 @@ import com.rabbitmq.client.amqp.impl.Tuples.Pair;
 import com.rabbitmq.client.amqp.impl.Utils.RunnableWithException;
 import com.rabbitmq.client.amqp.impl.Utils.StopWatch;
 import com.rabbitmq.client.amqp.metrics.MetricsCollector;
-import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
+import com.rabbitmq.client.credentials.CredentialsManager;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

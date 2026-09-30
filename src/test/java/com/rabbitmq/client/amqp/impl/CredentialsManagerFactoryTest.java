@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.Environment;
-import com.rabbitmq.client.amqp.oauth2.CredentialsManager;
+import com.rabbitmq.client.credentials.CredentialsManager;
 import org.junit.jupiter.api.Test;
 
 public class CredentialsManagerFactoryTest {
