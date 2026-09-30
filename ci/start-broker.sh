@@ -4,8 +4,12 @@ RABBITMQ_IMAGE=${RABBITMQ_IMAGE:-rabbitmq:4.3}
 ERLANG_VERSION=${ERLANG_VERSION:-27}
 
 wait_for_message() {
-  while ! docker logs "$1" | grep -q "$2";
+  while ! docker logs "$1" 2>&1 | grep "$2" > /dev/null;
   do
+      if [ "$(docker inspect -f '{{.State.Running}}' "$1")" != "true" ]; then
+          docker logs "$1"
+          exit 1
+      fi
       sleep 2
       echo "Waiting 2 seconds for $1 to start..."
   done
@@ -15,6 +19,10 @@ make -C "${PWD}"/tls-gen/basic
 
 rm -rf rabbitmq-configuration
 mkdir -p rabbitmq-configuration/tls
+# for compatibility with Tanzu RabbitMQ Docker image
+mkdir -p rabbitmq-configuration/conf.d
+chmod 777 rabbitmq-configuration/conf.d
+
 cp -R "${PWD}"/tls-gen/basic/result/* rabbitmq-configuration/tls
 chmod o+r rabbitmq-configuration/tls/*
 chmod g+r rabbitmq-configuration/tls/*
@@ -114,6 +122,8 @@ docker rm -f rabbitmq 2>/dev/null || echo "rabbitmq was not running"
 docker run -d --name rabbitmq \
     -p 5671:5671 -p 5672:5672 \
     -p 15678:15678 -p 15677:15677 \
+    -e RABBITMQ_DEFAULT_USER=guest \
+    -e RABBITMQ_DEFAULT_PASS=guest \
     -v "${PWD}"/rabbitmq-configuration:/etc/rabbitmq \
     "${RABBITMQ_IMAGE}"
 
