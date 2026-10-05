@@ -791,7 +791,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
     @Override
     public BatchContext batch(int batchSizeHint) {
-      return new BatchDeliveryContext(batchSizeHint, link, consumer);
+      return new BatchDeliveryContext(batchSizeHint, consumer);
     }
 
     private void settle(
@@ -825,12 +825,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         new Rejected();
     private final List<DeliveryContext> contexts;
     private final AtomicBoolean settled = new AtomicBoolean(false);
-    private final Link link;
     private final AmqpConsumer consumer;
 
-    private BatchDeliveryContext(int batchSizeHint, Link link, AmqpConsumer consumer) {
+    private BatchDeliveryContext(int batchSizeHint, AmqpConsumer consumer) {
       this.contexts = new ArrayList<>(batchSizeHint);
-      this.link = link;
       this.consumer = consumer;
     }
 
@@ -847,9 +845,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         // a foreign context would silently apply this batch's delivery IDs to its own link
         throw new IllegalArgumentException("Context does not belong to this batch's consumer");
       }
-      if (dctx.link != this.link) {
-        // a different generation than this batch's: it cannot be settled on this link, and the
-        // broker will redeliver it, so this is a normal post-recovery condition, not an error
+      if (!dctx.link.isValid()) {
+        // superseded generation: it cannot be settled anymore, and the broker will redeliver it,
+        // so this is a normal post-recovery condition, not an error
         LOGGER.debug("Skipping context from a stale link generation");
         return;
       }
@@ -942,29 +940,43 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         MetricsCollector.ConsumeDisposition disposition,
         String label) {
       if (settled.compareAndSet(false, true)) {
-        int batchSize = this.contexts.size();
         try {
-          long[][] ranges =
-              SerialNumberUtils.ranges(this.contexts, ctx -> ctx.delivery.getDeliveryId());
-          // Decrement unsettled synchronously, before replenish is even scheduled, so it can
-          // never read a stale value (same reasoning as the single-delivery settle path).
-          // I3: pendingWorkItems is not touched here, those decrements already happened when
-          // each handler returned. Dispositions are queued before the replenish that follows.
-          // add() guarantees every context in the batch shares this.link.
-          link.unsettled.addAndGet(-batchSize);
-          onExecutor(
-              link,
-              () -> {
-                for (long[] range : ranges) {
-                  link.protonReceiver.disposition(state, range);
-                }
-                consumer.replenish(link);
-              });
-          IntStream.range(0, batchSize)
-              .forEach(
-                  ignored -> {
-                    consumer.metricsCollector.consumeDisposition(disposition);
-                  });
+          // The batch is not bound to a generation: contexts added before and after a recovery
+          // must each be settled on their own link. There is at most one valid link at a time,
+          // so a single group in practice.
+          Map<Link, List<DeliveryContext>> contextsByLink = new LinkedHashMap<>();
+          for (DeliveryContext ctx : this.contexts) {
+            contextsByLink.computeIfAbsent(ctx.link, l -> new ArrayList<>()).add(ctx);
+          }
+          for (Map.Entry<Link, List<DeliveryContext>> entry : contextsByLink.entrySet()) {
+            Link link = entry.getKey();
+            List<DeliveryContext> linkContexts = entry.getValue();
+            if (!link.isValid()) {
+              // superseded since add(), the broker redelivers these messages
+              continue;
+            }
+            int batchSize = linkContexts.size();
+            long[][] ranges =
+                SerialNumberUtils.ranges(linkContexts, ctx -> ctx.delivery.getDeliveryId());
+            // Decrement unsettled synchronously, before replenish is even scheduled, so it can
+            // never read a stale value (same reasoning as the single-delivery settle path).
+            // I3: pendingWorkItems is not touched here, those decrements already happened when
+            // each handler returned. Dispositions are queued before the replenish that follows.
+            link.unsettled.addAndGet(-batchSize);
+            onExecutor(
+                link,
+                () -> {
+                  for (long[] range : ranges) {
+                    link.protonReceiver.disposition(state, range);
+                  }
+                  consumer.replenish(link);
+                });
+            IntStream.range(0, batchSize)
+                .forEach(
+                    ignored -> {
+                      consumer.metricsCollector.consumeDisposition(disposition);
+                    });
+          }
         } catch (Exception e) {
           handleContextException(this.consumer, e, label);
         }

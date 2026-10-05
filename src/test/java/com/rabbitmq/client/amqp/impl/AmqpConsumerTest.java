@@ -43,6 +43,7 @@ import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.Sync;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -756,6 +757,75 @@ public class AmqpConsumerTest {
     batch.add(freshContext.get());
     assertThat(batch.size()).isEqualTo(1);
     batch.accept();
+
+    c.close();
+  }
+
+  @Test
+  void batchFromStaleContextSettlesLiveContextsAfterRecovery(TestInfo info) {
+    String cName = name(info);
+    connection.management().queue(this.q).type(QUORUM).declare();
+    Connection c =
+        ((AmqpConnectionBuilder) environment.connectionBuilder())
+            .name(cName)
+            .recovery()
+            .backOffDelayPolicy(backOffDelayPolicy)
+            .connectionBuilder()
+            .build();
+    Publisher publisher = c.publisherBuilder().queue(this.q).build();
+
+    int initialCredits = 10;
+    int messageCount = initialCredits * 3;
+    AtomicReference<Consumer.Context> staleContext = new AtomicReference<>();
+    Sync staleReceived = sync();
+    List<Consumer.Context> liveContexts = new CopyOnWriteArrayList<>();
+    AtomicInteger liveReceived = new AtomicInteger();
+    Sync recoveredSync = sync();
+
+    c.consumerBuilder()
+        .queue(this.q)
+        .initialCredits(initialCredits)
+        .listeners(recoveredListener(recoveredSync))
+        .messageHandler(
+            (ctx, msg) -> {
+              // only one message is published before the recovery, everything else is
+              // received on the new generation (including the redelivered first message)
+              if (staleContext.compareAndSet(null, ctx)) {
+                staleReceived.down();
+              } else {
+                liveContexts.add(ctx);
+                liveReceived.incrementAndGet();
+              }
+            })
+        .build();
+
+    publisher.publish(publisher.message(), ctx -> {});
+    assertThat(staleReceived).completes();
+
+    closeConnection(cName);
+    assertThat(recoveredSync).completes();
+    waitAtMost(() -> ((ResourceBase) c).state() == OPEN);
+
+    IntStream.range(0, messageCount)
+        .forEach(ignored -> publisher.publish(publisher.message(), ctx -> {}));
+
+    int expectedLive = messageCount + 1;
+    // the batch is always created from the stale context: live contexts must be settled on
+    // their own link, otherwise the consumer runs out of credits and stalls
+    waitAtMost(
+        () -> {
+          List<Consumer.Context> toSettle = new ArrayList<>(liveContexts);
+          if (!toSettle.isEmpty()) {
+            liveContexts.removeAll(toSettle);
+            Consumer.BatchContext batch = staleContext.get().batch(toSettle.size());
+            toSettle.forEach(batch::add);
+            assertThat(batch.size()).isEqualTo(toSettle.size());
+            batch.accept();
+          }
+          return liveReceived.get() == expectedLive && liveContexts.isEmpty();
+        });
+
+    waitAtMost(() -> connection.management().queueInfo(this.q).messageCount() == 0);
 
     c.close();
   }
