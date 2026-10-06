@@ -268,7 +268,9 @@ public abstract class ClientMessageSupport {
         properties.setAbsoluteExpiryTime(source.absoluteExpiryTime());
         properties.setCreationTime(source.creationTime());
         properties.setGroupId(source.groupId());
-        properties.setGroupSequence(source.groupSequence());
+        if (source.hasGroupSequence()) {
+            properties.setGroupSequence(source.groupSequence());
+        }
         properties.setReplyToGroupId(source.replyToGroupId());
 
         final MessageAnnotations messageAnnotations;

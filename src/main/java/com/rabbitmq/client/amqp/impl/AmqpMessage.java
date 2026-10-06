@@ -293,6 +293,11 @@ final class AmqpMessage implements Message {
   }
 
   @Override
+  public boolean hasGroupSequence() {
+    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasGroupSequence);
+  }
+
+  @Override
   public String replyToGroupId() {
     return returnFromDelegate(org.apache.qpid.protonj2.client.Message::replyToGroupId);
   }

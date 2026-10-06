@@ -387,6 +387,12 @@ public final class ClientStreamReceiverMessage implements StreamReceiverMessage 
     }
 
     @Override
+    public boolean hasGroupSequence() throws ClientException {
+        Properties properties = properties();
+        return properties != null && properties.hasGroupSequence();
+    }
+
+    @Override
     public StreamReceiverMessage groupSequence(int groupSequence) throws ClientUnsupportedOperationException {
         throw new ClientUnsupportedOperationException("Cannot write to a StreamReceiveMessage");
     }

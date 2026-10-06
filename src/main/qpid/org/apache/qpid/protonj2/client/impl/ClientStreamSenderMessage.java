@@ -696,6 +696,11 @@ final class ClientStreamSenderMessage implements StreamSenderMessage {
     }
 
     @Override
+    public boolean hasGroupSequence() {
+        return properties != null && properties.hasGroupSequence();
+    }
+
+    @Override
     public StreamSenderMessage groupSequence(int groupSequence) throws ClientIllegalStateException {
         lazyCreateProperties().setGroupSequence(groupSequence);
         return this;
