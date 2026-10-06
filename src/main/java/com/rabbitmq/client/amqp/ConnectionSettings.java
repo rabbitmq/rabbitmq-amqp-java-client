@@ -120,6 +120,21 @@ public interface ConnectionSettings<T> {
   T idleTimeout(Duration idleTimeout);
 
   /**
+   * Timeout for the establishment of the TCP connection.
+   *
+   * <p>The timeout applies to each connection attempt. It does not include the TLS handshake and
+   * the AMQP connection opening.
+   *
+   * <p>The timeout also applies to the WebSocket handshake when WebSocket is used.
+   *
+   * <p>Default is 60 seconds.
+   *
+   * @param connectionTimeout connection timeout, must be positive
+   * @return type-parameter object
+   */
+  T connectionTimeout(Duration connectionTimeout);
+
+  /**
    * The {@link AddressSelector} to use.
    *
    * @param selector address selector

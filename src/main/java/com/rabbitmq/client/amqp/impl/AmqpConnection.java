@@ -401,6 +401,7 @@ final class AmqpConnection extends ResourceBase
     }
     connectionOptions
         .transportOptions()
+        .connectTimeout((int) connectionSettings.connectionTimeout().toMillis())
         .readBytesConsumer(this.environment().readBytesConsumer())
         .writtenBytesConsumer(this.environment().writtenBytesConsumer());
     StopWatch stopWatch = new StopWatch();

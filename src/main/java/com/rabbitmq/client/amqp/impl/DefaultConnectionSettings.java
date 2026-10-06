@@ -51,6 +51,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
+import org.apache.qpid.protonj2.client.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,6 +79,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   private String virtualHost = DEFAULT_VIRTUAL_HOST;
   private List<URI> uris = Collections.emptyList();
   private Duration idleTimeout = Duration.ofMillis(ConnectionOptions.DEFAULT_IDLE_TIMEOUT);
+  private Duration connectionTimeout = Duration.ofMillis(TransportOptions.DEFAULT_CONNECT_TIMEOUT);
   private static final Random RANDOM = new Random();
   private AddressSelector addressSelector =
       addresses -> {
@@ -180,6 +182,19 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
   }
 
   @Override
+  public T connectionTimeout(Duration connectionTimeout) {
+    if (connectionTimeout == null
+        || connectionTimeout.isNegative()
+        || connectionTimeout.isZero()
+        || connectionTimeout.toMillis() > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException(
+          "Connection timeout must be between 1 ms and " + Integer.MAX_VALUE + " ms");
+    }
+    this.connectionTimeout = connectionTimeout;
+    return this.toReturn();
+  }
+
+  @Override
   public T addressSelector(AddressSelector selector) {
     this.addressSelector = selector;
     return this.toReturn();
@@ -219,6 +234,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return idleTimeout;
   }
 
+  Duration connectionTimeout() {
+    return this.connectionTimeout;
+  }
+
   Address selectAddress(List<Address> addresses) {
     if (addresses == null || addresses.isEmpty()) {
       return this.addressSelector.select(this.addresses);
@@ -252,6 +271,7 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     copy.uris(this.uris.stream().map(URI::toString).toArray(String[]::new));
     copy.addressSelector(this.addressSelector);
     copy.idleTimeout(this.idleTimeout);
+    copy.connectionTimeout(this.connectionTimeout);
 
     if (this.tlsSettings.enabled()) {
       this.tlsSettings.copyTo((DefaultTlsSettings<?>) copy.tls());
