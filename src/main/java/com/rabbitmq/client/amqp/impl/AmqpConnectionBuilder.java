@@ -100,6 +100,11 @@ class AmqpConnectionBuilder implements ConnectionBuilder {
   }
 
   @Override
+  public ConnectionBuilder connectionTimeout(Duration connectionTimeout) {
+    return this.connectionSettings.connectionTimeout(connectionTimeout);
+  }
+
+  @Override
   public ConnectionBuilder addressSelector(AddressSelector selector) {
     return this.connectionSettings.addressSelector(selector);
   }
