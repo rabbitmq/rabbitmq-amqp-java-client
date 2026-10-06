@@ -519,11 +519,21 @@ public interface Message<E> {
     Message<E> groupId(String groupId) throws ClientException;
 
     /**
-     * @return the assigned group sequence for this message.
+     * @return the assigned group sequence for this message, or zero if unset.
+     * @see #hasGroupSequence()
      *
      * @throws ClientException if an error occurs while reading the given value.
      */
     int groupSequence() throws ClientException;
+
+    /**
+     * Checks whether the group sequence is set, including an explicitly set zero.
+     *
+     * @return whether the group sequence is set.
+     *
+     * @throws ClientException if an error occurs while reading the given value.
+     */
+    boolean hasGroupSequence() throws ClientException;
 
     /**
      * Sets the group sequence value to assign to this {@link Message}.

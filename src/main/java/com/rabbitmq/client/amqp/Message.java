@@ -352,9 +352,17 @@ public interface Message {
   /**
    * Get the message position in its group.
    *
-   * @return the group sequence
+   * @return the group sequence, or zero if unset
+   * @see #hasGroupSequence()
    */
   int groupSequence();
+
+  /**
+   * Check whether the group sequence is set, including an explicitly set zero.
+   *
+   * @return whether the group sequence is set
+   */
+  boolean hasGroupSequence();
 
   /**
    * Get the reply-to group ID.

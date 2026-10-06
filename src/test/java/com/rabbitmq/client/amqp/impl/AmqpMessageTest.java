@@ -20,6 +20,10 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.Tuples.triple;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
@@ -45,11 +49,57 @@ import org.apache.qpid.protonj2.types.messaging.AmqpSequence;
 import org.apache.qpid.protonj2.types.messaging.AmqpValue;
 import org.apache.qpid.protonj2.types.messaging.Data;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class AmqpMessageTest {
 
   private static AmqpMessage msg() {
     return new AmqpMessage();
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(ints = {0, 42, -1})
+  void groupSequencePresenceShouldSurviveEncoding(Integer sequence) throws Exception {
+    AmqpMessage message = msg();
+    assertThat(message.hasGroupSequence()).isFalse();
+    assertThat(message.groupSequence()).isZero();
+    message.groupId("group").replyToGroupId("reply-group");
+    if (sequence != null) {
+      message.groupSequence(sequence);
+    }
+    boolean present = sequence != null;
+    int expected = present ? sequence : 0;
+    assertThat(message.hasGroupSequence()).isEqualTo(present);
+    assertThat(message.groupSequence()).isEqualTo(expected);
+    try (ProtonBuffer buffer =
+        ClientMessageSupport.encodeMessage(message.nativeMessage().toAdvancedMessage(), null)) {
+      Message decoded = new AmqpMessage(ClientMessageSupport.decodeMessage(buffer, null));
+      assertThat(decoded.hasGroupSequence()).isEqualTo(present);
+      assertThat(decoded.groupSequence()).isEqualTo(expected);
+    }
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(ints = {0, 42, -1})
+  void groupSequencePresenceShouldSurviveConversion(Integer sequence) throws Exception {
+    org.apache.qpid.protonj2.client.Message<?> source =
+        mock(org.apache.qpid.protonj2.client.Message.class);
+    when(source.toAdvancedMessage()).thenThrow(new UnsupportedOperationException());
+    boolean present = sequence != null;
+    when(source.hasGroupSequence()).thenReturn(present);
+    if (present) {
+      when(source.groupSequence()).thenReturn(sequence);
+    }
+    Message converted = new AmqpMessage(ClientMessageSupport.convertMessage(source));
+    assertThat(converted.hasGroupSequence()).isEqualTo(present);
+    assertThat(converted.groupSequence()).isEqualTo(present ? sequence : 0);
+    if (!present) {
+      verify(source, never()).groupSequence();
+    }
   }
 
   @Test

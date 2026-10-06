@@ -313,6 +313,11 @@ public final class ClientMessage<E> implements AdvancedMessage<E> {
     }
 
     @Override
+    public boolean hasGroupSequence() {
+        return properties != null && properties.hasGroupSequence();
+    }
+
+    @Override
     public Message<E> groupSequence(int groupSequence) {
         lazyCreateProperties().setGroupSequence(groupSequence);
         return this;
