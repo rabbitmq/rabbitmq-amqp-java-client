@@ -17,8 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
-
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -31,7 +29,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
-import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.impl.ClientMessage;
 import org.apache.qpid.protonj2.types.Binary;
 import org.apache.qpid.protonj2.types.Decimal128;
 import org.apache.qpid.protonj2.types.Decimal32;
@@ -48,265 +46,266 @@ final class AmqpMessage implements Message {
 
   private static final byte[] EMPTY_BODY = new byte[0];
 
-  private final org.apache.qpid.protonj2.client.Message<?> delegate;
+  private final ClientMessage<?> delegate;
 
   private boolean durableIsSet = false;
 
   AmqpMessage() {
-    this(org.apache.qpid.protonj2.client.Message.create(EMPTY_BODY));
+    this(EMPTY_BODY);
   }
 
   AmqpMessage(byte[] body) {
-    this(org.apache.qpid.protonj2.client.Message.create(body));
+    this(ClientMessage.create(new Data(body)));
   }
 
   AmqpMessage(org.apache.qpid.protonj2.client.Message<?> delegate) {
-    this.delegate = delegate;
+    // ClientMessage is the only implementation and its accessors do not throw ClientException
+    this.delegate = (ClientMessage<?>) delegate;
   }
 
   // properties
 
   @Override
   public Object messageId() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::messageId);
+    return this.delegate.messageId();
   }
 
   @Override
   public String messageIdAsString() {
-    return returnFromDelegate(m -> (String) m.messageId());
+    return (String) this.delegate.messageId();
   }
 
   @Override
   public long messageIdAsLong() {
-    return returnFromDelegate(m -> ((UnsignedLong) m.messageId()).longValue());
+    return ((UnsignedLong) this.delegate.messageId()).longValue();
   }
 
   @Override
   public byte[] messageIdAsBinary() {
-    return returnFromDelegate(m -> ((Binary) m.messageId()).asByteArray());
+    return ((Binary) this.delegate.messageId()).asByteArray();
   }
 
   @Override
   public UUID messageIdAsUuid() {
-    return returnFromDelegate(m -> (UUID) m.messageId());
+    return (UUID) this.delegate.messageId();
   }
 
   @Override
   public Object correlationId() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::correlationId);
+    return this.delegate.correlationId();
   }
 
   @Override
   public String correlationIdAsString() {
-    return returnFromDelegate(m -> (String) m.correlationId());
+    return (String) this.delegate.correlationId();
   }
 
   @Override
   public long correlationIdAsLong() {
-    return returnFromDelegate(m -> ((UnsignedLong) m.correlationId())).longValue();
+    return ((UnsignedLong) this.delegate.correlationId()).longValue();
   }
 
   @Override
   public byte[] correlationIdAsBinary() {
-    return returnFromDelegate(m -> ((Binary) m.correlationId()).asByteArray());
+    return ((Binary) this.delegate.correlationId()).asByteArray();
   }
 
   @Override
   public UUID correlationIdAsUuid() {
-    return returnFromDelegate(m -> (UUID) m.correlationId());
+    return (UUID) this.delegate.correlationId();
   }
 
   @Override
   public byte[] userId() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::userId);
+    return this.delegate.userId();
   }
 
   @Override
   public String to() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::to);
+    return this.delegate.to();
   }
 
   @Override
   public String subject() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::subject);
+    return this.delegate.subject();
   }
 
   @Override
   public String replyTo() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::replyTo);
+    return this.delegate.replyTo();
   }
 
   @Override
   public Message messageId(Object id) {
-    callOnDelegate(m -> m.messageId(id));
+    this.delegate.messageId(id);
     return this;
   }
 
   @Override
   public Message messageId(String id) {
-    callOnDelegate(m -> m.messageId(id));
+    this.delegate.messageId(id);
     return this;
   }
 
   @Override
   public Message messageId(long id) {
-    callOnDelegate(m -> m.messageId(new UnsignedLong(id)));
+    this.delegate.messageId(new UnsignedLong(id));
     return this;
   }
 
   @Override
   public Message messageId(byte[] id) {
-    callOnDelegate(m -> m.messageId(new Binary(id)));
+    this.delegate.messageId(new Binary(id));
     return this;
   }
 
   @Override
   public Message messageId(UUID id) {
-    callOnDelegate(m -> m.messageId(id));
+    this.delegate.messageId(id);
     return this;
   }
 
   @Override
   public Message correlationId(Object correlationId) {
-    callOnDelegate(m -> m.correlationId(correlationId));
+    this.delegate.correlationId(correlationId);
     return this;
   }
 
   @Override
   public Message correlationId(String correlationId) {
-    callOnDelegate(m -> m.correlationId(correlationId));
+    this.delegate.correlationId(correlationId);
     return this;
   }
 
   @Override
   public Message correlationId(long correlationId) {
-    callOnDelegate(m -> m.correlationId(UnsignedLong.valueOf(correlationId)));
+    this.delegate.correlationId(UnsignedLong.valueOf(correlationId));
     return this;
   }
 
   @Override
   public Message correlationId(byte[] correlationId) {
-    callOnDelegate(m -> m.correlationId(new Binary(correlationId)));
+    this.delegate.correlationId(new Binary(correlationId));
     return this;
   }
 
   @Override
   public Message correlationId(UUID correlationId) {
-    callOnDelegate(m -> m.correlationId(correlationId));
+    this.delegate.correlationId(correlationId);
     return this;
   }
 
   @Override
   public Message userId(byte[] userId) {
-    callOnDelegate(m -> m.userId(userId));
+    this.delegate.userId(userId);
     return this;
   }
 
   @Override
   public Message to(String address) {
-    callOnDelegate(m -> m.to(address));
+    this.delegate.to(address);
     return this;
   }
 
   @Override
   public Message subject(String subject) {
-    callOnDelegate(m -> m.subject(subject));
+    this.delegate.subject(subject);
     return this;
   }
 
   @Override
   public Message replyTo(String replyTo) {
-    callOnDelegate(m -> m.replyTo(replyTo));
+    this.delegate.replyTo(replyTo);
     return this;
   }
 
   @Override
   public Message contentType(String contentType) {
-    callOnDelegate(m -> m.contentType(contentType));
+    this.delegate.contentType(contentType);
     return this;
   }
 
   @Override
   public Message contentEncoding(String contentEncoding) {
-    callOnDelegate(m -> m.contentEncoding(contentEncoding));
+    this.delegate.contentEncoding(contentEncoding);
     return this;
   }
 
   @Override
   public Message absoluteExpiryTime(long absoluteExpiryTime) {
-    callOnDelegate(m -> m.absoluteExpiryTime(absoluteExpiryTime));
+    this.delegate.absoluteExpiryTime(absoluteExpiryTime);
     return this;
   }
 
   @Override
   public Message creationTime(long creationTime) {
-    callOnDelegate(m -> m.creationTime(creationTime));
+    this.delegate.creationTime(creationTime);
     return this;
   }
 
   @Override
   public Message groupId(String groupID) {
-    callOnDelegate(m -> m.groupId(groupID));
+    this.delegate.groupId(groupID);
     return this;
   }
 
   @Override
   public Message groupSequence(int groupSequence) {
-    callOnDelegate(m -> m.groupSequence(groupSequence));
+    this.delegate.groupSequence(groupSequence);
     return this;
   }
 
   @Override
   public Message replyToGroupId(String groupId) {
-    callOnDelegate(m -> m.replyToGroupId(groupId));
+    this.delegate.replyToGroupId(groupId);
     return this;
   }
 
   @Override
   public String contentType() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::contentType);
+    return this.delegate.contentType();
   }
 
   @Override
   public String contentEncoding() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::contentEncoding);
+    return this.delegate.contentEncoding();
   }
 
   @Override
   public long absoluteExpiryTime() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::absoluteExpiryTime);
+    return this.delegate.absoluteExpiryTime();
   }
 
   @Override
   public long creationTime() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::creationTime);
+    return this.delegate.creationTime();
   }
 
   @Override
   public String groupId() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::groupId);
+    return this.delegate.groupId();
   }
 
   @Override
   public int groupSequence() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::groupSequence);
+    return this.delegate.groupSequence();
   }
 
   @Override
   public boolean hasGroupSequence() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasGroupSequence);
+    return this.delegate.hasGroupSequence();
   }
 
   @Override
   public String replyToGroupId() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::replyToGroupId);
+    return this.delegate.replyToGroupId();
   }
 
   // application properties
 
   @Override
   public Object property(String key) {
-    Object value = returnFromDelegate(m -> m.property(key));
+    Object value = this.delegate.property(key);
     if (value instanceof Binary) {
       return ((Binary) value).asByteArray();
     } else {
@@ -316,142 +315,142 @@ final class AmqpMessage implements Message {
 
   @Override
   public Message property(String key, boolean value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, byte value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, short value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, int value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, long value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message propertyUnsigned(String key, byte value) {
-    callOnDelegate(m -> m.property(key, new UnsignedByte(value)));
+    this.delegate.property(key, new UnsignedByte(value));
     return this;
   }
 
   @Override
   public Message propertyUnsigned(String key, short value) {
-    callOnDelegate(m -> m.property(key, new UnsignedShort(value)));
+    this.delegate.property(key, new UnsignedShort(value));
     return this;
   }
 
   @Override
   public Message propertyUnsigned(String key, int value) {
-    callOnDelegate(m -> m.property(key, new UnsignedInteger(value)));
+    this.delegate.property(key, new UnsignedInteger(value));
     return this;
   }
 
   @Override
   public Message propertyUnsigned(String key, long value) {
-    callOnDelegate(m -> m.property(key, new UnsignedLong(value)));
+    this.delegate.property(key, new UnsignedLong(value));
     return this;
   }
 
   @Override
   public Message property(String key, float value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, double value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message propertyDecimal32(String key, BigDecimal value) {
-    callOnDelegate(m -> m.property(key, new Decimal32(value)));
+    this.delegate.property(key, new Decimal32(value));
     return this;
   }
 
   @Override
   public Message propertyDecimal64(String key, BigDecimal value) {
-    callOnDelegate(m -> m.property(key, new Decimal64(value)));
+    this.delegate.property(key, new Decimal64(value));
     return this;
   }
 
   @Override
   public Message propertyDecimal128(String key, BigDecimal value) {
-    callOnDelegate(m -> m.property(key, new Decimal128(value)));
+    this.delegate.property(key, new Decimal128(value));
     return this;
   }
 
   @Override
   public Message property(String key, char value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message propertyTimestamp(String key, long value) {
-    callOnDelegate(m -> m.property(key, new Date(value)));
+    this.delegate.property(key, new Date(value));
     return this;
   }
 
   @Override
   public Message property(String key, UUID value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message property(String key, byte[] value) {
-    callOnDelegate(m -> m.property(key, new Binary(value)));
+    this.delegate.property(key, new Binary(value));
     return this;
   }
 
   @Override
   public Message property(String key, String value) {
-    callOnDelegate(m -> m.property(key, value));
+    this.delegate.property(key, value);
     return this;
   }
 
   @Override
   public Message propertySymbol(String key, String value) {
-    callOnDelegate(m -> m.property(key, Symbol.getSymbol(value)));
+    this.delegate.property(key, Symbol.getSymbol(value));
     return this;
   }
 
   @Override
   public boolean hasProperty(String key) {
-    return returnFromDelegate(m -> m.hasProperty(key));
+    return this.delegate.hasProperty(key);
   }
 
   @Override
   public boolean hasProperties() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasProperties);
+    return this.delegate.hasProperties();
   }
 
   @Override
   public Object removeProperty(String key) {
-    return returnFromDelegate(m -> m.removeProperty(key));
+    return this.delegate.removeProperty(key);
   }
 
   @Override
   public Message forEachProperty(BiConsumer<String, Object> action) {
-    callOnDelegate(m -> m.forEachProperty(action));
+    this.delegate.forEachProperty(action);
     return this;
   }
 
@@ -459,12 +458,8 @@ final class AmqpMessage implements Message {
 
   @Override
   public Message body(byte[] body) {
-    try {
-      this.delegate.toAdvancedMessage().clearBodySections();
-      this.delegate.toAdvancedMessage().addBodySection(new Data(body));
-    } catch (ClientException e) {
-      throw convert(e);
-    }
+    this.delegate.clearBodySections();
+    this.delegate.addBodySection(new Data(body));
     return this;
   }
 
@@ -485,41 +480,28 @@ final class AmqpMessage implements Message {
 
   @Override
   public byte[] body() {
-    try {
-      Object value = this.delegate.body();
-      return DEFAULT_CONVERTER.convert(value);
-    } catch (ClientException e) {
-      throw convert(e);
-    }
+    return DEFAULT_CONVERTER.convert(this.delegate.body());
   }
 
   @Override
   public <I, O> O body(Converter<I, O> converter) {
-    try {
-      @SuppressWarnings("unchecked")
-      I value = (I) this.delegate.body();
-      return converter.convert(value);
-    } catch (ClientException e) {
-      throw convert(e);
-    }
+    @SuppressWarnings("unchecked")
+    I value = (I) this.delegate.body();
+    return converter.convert(value);
   }
 
   @Override
   public <I, O> O body(SectionsConverter<I, O> converter) {
-    try {
-      Collection<Section<?>> sections = this.delegate.toAdvancedMessage().bodySections();
-      List<I> sectionValues = new ArrayList<>(sections.size());
+    Collection<Section<?>> sections = this.delegate.bodySections();
+    List<I> sectionValues = new ArrayList<>(sections.size());
 
-      for (Section<?> section : sections) {
-        @SuppressWarnings("unchecked")
-        I value = (I) section.getValue();
-        sectionValues.add(value);
-      }
-
-      return converter.convert(sectionValues);
-    } catch (ClientException e) {
-      throw convert(e);
+    for (Section<?> section : sections) {
+      @SuppressWarnings("unchecked")
+      I value = (I) section.getValue();
+      sectionValues.add(value);
     }
+
+    return converter.convert(sectionValues);
   }
 
   // header section
@@ -527,29 +509,29 @@ final class AmqpMessage implements Message {
   @Override
   public Message durable(boolean durable) {
     this.durableIsSet = true;
-    callOnDelegate(m -> m.durable(durable));
+    this.delegate.durable(durable);
     return this;
   }
 
   @Override
   public boolean durable() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::durable);
+    return this.delegate.durable();
   }
 
   @Override
   public long deliveryCount() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::deliveryCount);
+    return this.delegate.deliveryCount();
   }
 
   @Override
   public Message priority(byte priority) {
-    callOnDelegate(m -> m.priority(priority));
+    this.delegate.priority(priority);
     return this;
   }
 
   @Override
   public byte priority() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::priority);
+    return this.delegate.priority();
   }
 
   @Override
@@ -557,52 +539,52 @@ final class AmqpMessage implements Message {
     if (ttl == null) {
       throw new IllegalArgumentException("TTL cannot be null");
     }
-    callOnDelegate(m -> m.timeToLive(ttl.toMillis()));
+    this.delegate.timeToLive(ttl.toMillis());
     return this;
   }
 
   @Override
   public Duration ttl() {
-    return returnFromDelegate(m -> Duration.ofMillis(m.timeToLive()));
+    return Duration.ofMillis(this.delegate.timeToLive());
   }
 
   @Override
   public boolean firstAcquirer() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::firstAcquirer);
+    return this.delegate.firstAcquirer();
   }
 
   // message annotations
 
   @Override
   public Object annotation(String key) {
-    return returnFromDelegate(m -> m.annotation(key));
+    return this.delegate.annotation(key);
   }
 
   @Override
   public Message annotation(String key, Object value) {
     Utils.validateMessageAnnotationKey(key);
-    callOnDelegate(m -> m.annotation(key, value));
+    this.delegate.annotation(key, value);
     return this;
   }
 
   @Override
   public boolean hasAnnotation(String key) {
-    return returnFromDelegate(m -> m.hasAnnotation(key));
+    return this.delegate.hasAnnotation(key);
   }
 
   @Override
   public boolean hasAnnotations() {
-    return returnFromDelegate(org.apache.qpid.protonj2.client.Message::hasAnnotations);
+    return this.delegate.hasAnnotations();
   }
 
   @Override
   public Object removeAnnotation(String key) {
-    return returnFromDelegate(m -> m.removeAnnotation(key));
+    return this.delegate.removeAnnotation(key);
   }
 
   @Override
   public Message forEachAnnotation(BiConsumer<String, Object> action) {
-    callOnDelegate(m -> m.forEachAnnotation(action));
+    this.delegate.forEachAnnotation(action);
     return this;
   }
 
@@ -616,7 +598,7 @@ final class AmqpMessage implements Message {
     return new DefaultMessageAddressBuilder(this, DefaultMessageAddressBuilder.REPLY_TO_CALLBACK);
   }
 
-  AmqpMessage enforceDurability() throws ClientException {
+  AmqpMessage enforceDurability() {
     if (!this.durableIsSet) {
       this.delegate.durable(true);
     }
@@ -652,33 +634,7 @@ final class AmqpMessage implements Message {
     }
   }
 
-  private void callOnDelegate(CallableConsumer call) {
-    try {
-      call.accept(this.delegate);
-    } catch (ClientException e) {
-      throw convert(e);
-    }
-  }
-
-  private <E> E returnFromDelegate(MessageFunctionCallable<E> call) {
-    try {
-      return call.call(this.delegate);
-    } catch (ClientException e) {
-      throw new AmqpException(e);
-    }
-  }
-
-  private interface CallableConsumer {
-
-    void accept(org.apache.qpid.protonj2.client.Message<?> message) throws ClientException;
-  }
-
-  private interface MessageFunctionCallable<T> {
-
-    T call(org.apache.qpid.protonj2.client.Message<?> message) throws ClientException;
-  }
-
-  org.apache.qpid.protonj2.client.Message<?> nativeMessage() {
+  ClientMessage<?> nativeMessage() {
     return this.delegate;
   }
 }
