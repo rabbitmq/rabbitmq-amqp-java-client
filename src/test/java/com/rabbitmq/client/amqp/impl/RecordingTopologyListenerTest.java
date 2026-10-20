@@ -114,6 +114,21 @@ public class RecordingTopologyListenerTest {
   }
 
   @Test
+  void autoDeleteQueueIsDeletedAfterLastConsumerIsClosedWithDirectReplyToConsumer() {
+    recovery.queueDeclared(autoDeleteQueue("ad-q"));
+
+    // direct reply-to consumers have no queue
+    recovery.consumerCreated(1, null);
+    recovery.consumerCreated(2, "ad-q");
+
+    recovery.consumerDeleted(2, "ad-q");
+    assertThat(recovery).hasNoQueues();
+
+    recovery.consumerDeleted(1, null);
+    assertThat(recovery).hasNoQueues();
+  }
+
+  @Test
   void autoDeleteExchangeIsDeletedWhenLastBindingIsDeleted() {
     recovery.exchangeDeclared(exchange("ex1"));
     recovery.exchangeDeclared(exchange("ex2"));
