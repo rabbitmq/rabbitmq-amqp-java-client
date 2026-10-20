@@ -177,6 +177,16 @@ public class BatchDispositionTest {
       dispose();
     }
 
+    @Override
+    public void defer(String deferralToken, Duration delay) {
+      dispose();
+    }
+
+    @Override
+    public void defer(String deferralToken, Instant deliveryTime) {
+      dispose();
+    }
+
     private void dispose() {
       dispositionFrameCount.inc();
       dispositionRangeSize.update(1);
@@ -255,6 +265,16 @@ public class BatchDispositionTest {
 
     @Override
     public void delayedRetry(Instant deliveryTime, boolean deliveryFailed) {
+      dispose();
+    }
+
+    @Override
+    public void defer(String deferralToken, Duration delay) {
+      dispose();
+    }
+
+    @Override
+    public void defer(String deferralToken, Instant deliveryTime) {
       dispose();
     }
 
