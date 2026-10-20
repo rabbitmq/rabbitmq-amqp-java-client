@@ -112,7 +112,7 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
           s.consumers.remove(id);
           // if there's no consumer anymore on the queue, delete it if it's auto-delete
           boolean atLeastOneConsumerOnQueue =
-              s.consumers.values().stream().anyMatch(spec -> spec.queue.equals(queue));
+              s.consumers.values().stream().anyMatch(spec -> Objects.equals(spec.queue, queue));
           if (!atLeastOneConsumerOnQueue) {
             QueueSpec queueSpec = s.queues.get(queue);
             if (queueSpec != null && queueSpec.autoDelete) {
