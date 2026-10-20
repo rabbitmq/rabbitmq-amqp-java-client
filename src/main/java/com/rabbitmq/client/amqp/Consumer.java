@@ -83,7 +83,7 @@ public interface Consumer extends AutoCloseable, Resource {
    *     tokens
    * @see Context#defer(String, java.time.Duration)
    * @see Context#defer(String, java.time.Instant)
-   * @since 1.6.0
+   * @since 1.7.0
    */
   void claimDeferred(String... tokens);
 
@@ -321,7 +321,7 @@ public interface Consumer extends AutoCloseable, Resource {
      * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
      *     in RabbitMQ</a>
      * @see Consumer#claimDeferred(String...)
-     * @since 1.6.0
+     * @since 1.7.0
      */
     void defer(String deferralToken, Duration delay);
 
@@ -355,7 +355,7 @@ public interface Consumer extends AutoCloseable, Resource {
      * @see <a href="https://www.rabbitmq.com/docs/amqp#modified-outcome">Modified Outcome Support
      *     in RabbitMQ</a>
      * @see Consumer#claimDeferred(String...)
-     * @since 1.6.0
+     * @since 1.7.0
      */
     void defer(String deferralToken, Instant deliveryTime);
 
