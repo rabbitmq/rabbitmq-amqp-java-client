@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import static com.rabbitmq.client.amqp.Publisher.Status.ACCEPTED;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
@@ -43,10 +45,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -231,6 +235,128 @@ public class AmqpConnectionRecoveryTest {
       assertThat(stateSync.get(OPEN)).completes();
       assertThat(connectionAttemptCount).hasValueGreaterThan(1);
       c.management().queue().name(q).autoDelete(true).exclusive(true).declare();
+    }
+  }
+
+  @Test
+  void connectionShouldRecoverWhenBrokerEndsSessionOnConsumerDetach(TestInfo info) {
+    String downQ = name(info) + "-down";
+    String q = name(info);
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(RECOVERING, TestUtils.sync(1));
+    stateSync.put(OPEN, TestUtils.sync(2));
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .listeners(
+                    context -> {
+                      if (stateSync.containsKey(context.currentState())) {
+                        stateSync.get(context.currentState()).down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
+    try (Connection c = new AmqpConnection(builder)) {
+      c.management().queue(downQ).quorum().queue().declare();
+      c.management().queue(q).declare();
+      try {
+        Consumer downConsumer =
+            c.consumerBuilder().queue(downQ).messageHandler((ctx, msg) -> ctx.accept()).build();
+        TestUtils.Sync consumeSync = TestUtils.sync();
+        AtomicInteger consumerOpenCount = new AtomicInteger(0);
+        c.consumerBuilder()
+            .queue(q)
+            .messageHandler(
+                (ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
+            .listeners(
+                context -> {
+                  if (context.currentState() == OPEN) {
+                    consumerOpenCount.incrementAndGet();
+                  }
+                })
+            .build();
+        AtomicInteger publisherOpenCount = new AtomicInteger(0);
+        Publisher p =
+            c.publisherBuilder()
+                .queue(q)
+                .listeners(
+                    context -> {
+                      if (context.currentState() == OPEN) {
+                        publisherOpenCount.incrementAndGet();
+                      }
+                    })
+                .build();
+
+        // the broker ends the session when it cannot remove the consumer on detach
+        Cli.stopQuorumQueueServers(downQ);
+        downConsumer.close();
+
+        assertThat(stateSync.get(RECOVERING)).completes();
+        assertThat(stateSync.get(OPEN)).completes();
+        assertThat(connectionAttemptCount).hasValue(2);
+        waitAtMost(() -> consumerOpenCount.get() == 2);
+        waitAtMost(() -> publisherOpenCount.get() == 2);
+        assertThat(((AmqpConsumer) downConsumer).state()).isEqualTo(CLOSED);
+
+        TestUtils.Sync publishSync = TestUtils.sync();
+        p.publish(
+            p.message(),
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            });
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+
+        c.consumerBuilder().queue(q).messageHandler((ctx, msg) -> ctx.accept()).build().close();
+      } finally {
+        Cli.restartQuorumQueueServers(downQ);
+        c.management().queueDelete(downQ);
+        c.management().queueDelete(q);
+      }
+    }
+  }
+
+  @Test
+  void connectionShouldBeClosedWhenBrokerEndsSessionAndRecoveryIsDisabled(TestInfo info) {
+    String q = name(info);
+    TestUtils.Sync closedSync = TestUtils.sync();
+    AtomicReference<Throwable> closeCause = new AtomicReference<>();
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .listeners(
+                    context -> {
+                      if (context.currentState() == CLOSED) {
+                        closeCause.set(context.failureCause());
+                        closedSync.down();
+                      }
+                    })
+                .recovery()
+                .activated(false)
+                .connectionBuilder();
+    try (Connection c = new AmqpConnection(builder)) {
+      c.management().queue(q).quorum().queue().declare();
+      try {
+        Consumer consumer =
+            c.consumerBuilder().queue(q).messageHandler((ctx, msg) -> ctx.accept()).build();
+        Cli.stopQuorumQueueServers(q);
+        consumer.close();
+        assertThat(closedSync).completes();
+        assertThat(closeCause.get())
+            .isInstanceOf(AmqpException.AmqpResourceClosedException.class)
+            .hasMessageContaining(q);
+      } finally {
+        Cli.restartQuorumQueueServers(q);
+        try (Connection c2 = environment.connectionBuilder().build()) {
+          c2.management().queueDelete(q);
+        }
+      }
     }
   }
 }

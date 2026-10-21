@@ -72,6 +72,7 @@ import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,6 +173,8 @@ final class AmqpConnection extends ResourceBase
             this.close(failureCause);
           };
     }
+    java.util.function.Consumer<ClientException> sessionCloseHandler =
+        createSessionCloseHandler(this.connectionStateClient.epoch());
     if (this.connectionSettings.affinity().activated()) {
       this.affinity =
           new ConnectionUtils.AffinityContext(
@@ -212,7 +215,12 @@ final class AmqpConnection extends ResourceBase
           ConnectionUtils.enforceAffinity(
               addrs -> {
                 NativeConnectionWrapper wrapper =
-                    connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
+                    connect(
+                        this.connectionSettings,
+                        this.name(),
+                        disconnectHandler,
+                        sessionCloseHandler,
+                        addrs);
                 this.nativeConnection = wrapper.connection();
                 return wrapper;
               },
@@ -364,6 +372,7 @@ final class AmqpConnection extends ResourceBase
       DefaultConnectionSettings<?> connectionSettings,
       String name,
       BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler,
+      java.util.function.Consumer<ClientException> sessionCloseHandler,
       List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
@@ -414,7 +423,8 @@ final class AmqpConnection extends ResourceBase
       LOGGER.debug("Connection attempt '{}' succeeded", this.name());
       checkBroker(connection);
       checkBrokerVersion(connection);
-      Session session = connection.openSession(Utils.sessionOptions());
+      Session session =
+          connection.openSession(Utils.sessionOptions().closeHandler(sessionCloseHandler));
       return new NativeConnectionWrapper(connection, session, extractNode(connection), address);
     } catch (ClientException e) {
       throw convert(e);
@@ -463,6 +473,22 @@ final class AmqpConnection extends ResourceBase
     };
   }
 
+  private java.util.function.Consumer<ClientException> createSessionCloseHandler(
+      long attemptEpoch) {
+    return e -> {
+      // the session of the connection is closed by the broker, but the connection is still up
+      if (e instanceof ClientSessionRemotelyClosedException) {
+        AmqpException exception = convert(e);
+        if (this.recoveryConfiguration.activated()) {
+          this.connectionStateClient.handleSessionFailure(attemptEpoch, exception);
+        } else {
+          // closing the connection blocks, it cannot run on the IO thread
+          this.environment.executorService().submit(() -> this.close(exception));
+        }
+      }
+    };
+  }
+
   private CompletableFuture<NativeConnectionWrapper> recoverNativeConnection(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
@@ -476,6 +502,7 @@ final class AmqpConnection extends ResourceBase
                               this.connectionSettings,
                               connectionName,
                               createDisconnectHandler(attemptEpoch),
+                              createSessionCloseHandler(attemptEpoch),
                               addrs);
                       // Temporarily assign the native connection so AmqpManagement can use it to
                       // open its session and query the broker for queue leader information
@@ -537,7 +564,14 @@ final class AmqpConnection extends ResourceBase
               ex);
           throw ex;
         } catch (AmqpException.AmqpResourceClosedException ex) {
-          if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
+          if (ExceptionUtils.sessionRemotelyClosed(ex)) {
+            LOGGER.warn(
+                "Session closed while trying to recover consumer {} (queue '{}'), restarting recovery",
+                consumer.id(),
+                consumer.queue(),
+                ex);
+            throw new AmqpException.AmqpConnectionException("Session closed during recovery", ex);
+          } else if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
             LOGGER.warn(
                 "Could not recover consumer {} (queue '{}') because there is "
                     + "running stream member on the node, restarting recovery",
@@ -590,6 +624,22 @@ final class AmqpConnection extends ResourceBase
               publisher.address(),
               ex);
           throw ex;
+        } catch (AmqpException.AmqpResourceClosedException ex) {
+          if (ExceptionUtils.sessionRemotelyClosed(ex)) {
+            LOGGER.warn(
+                "Session closed while trying to recover publisher {} (address '{}'), restarting recovery",
+                publisher.id(),
+                publisher.address(),
+                ex);
+            throw new AmqpException.AmqpConnectionException("Session closed during recovery", ex);
+          } else {
+            LOGGER.warn(
+                "Error while trying to recover publisher {} (address '{}')",
+                publisher.id(),
+                publisher.address(),
+                ex);
+            failedPublishers.add(publisher);
+          }
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover publisher {} (address '{}')",

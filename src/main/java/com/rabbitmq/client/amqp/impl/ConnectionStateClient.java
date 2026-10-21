@@ -121,6 +121,10 @@ final class ConnectionStateClient implements AutoCloseable {
     this.client.submit(state -> state.handleDisconnect(attemptEpoch, event));
   }
 
+  void handleSessionFailure(long attemptEpoch, AmqpException exception) {
+    this.client.submit(state -> state.handleSessionFailure(attemptEpoch, exception));
+  }
+
   void handleNativeRecoverySuccess(AmqpConnection.NativeConnectionWrapper ncw, long attemptEpoch) {
     this.client.submit(state -> state.handleNativeRecoverySuccess(ncw, attemptEpoch));
   }
@@ -175,6 +179,12 @@ final class ConnectionStateClient implements AutoCloseable {
       AmqpException exception = ExceptionUtils.convert(event.failureCause());
       apply(
           onDisconnect(
+              this.internalState, this.epoch, eventEpoch, exception, this.connection.name()));
+    }
+
+    private void handleSessionFailure(long eventEpoch, AmqpException exception) {
+      apply(
+          onSessionFailure(
               this.internalState, this.epoch, eventEpoch, exception, this.connection.name()));
     }
 
@@ -236,7 +246,35 @@ final class ConnectionStateClient implements AutoCloseable {
       // If we are in CONNECTED or RECOVERING_TOPOLOGY, a disconnect is a hard failure.
       // We must transition back to RECOVERING_CONNECTION and start over.
       LOGGER.debug("Valid disconnect detected, initiating recovery...");
-      long newEpoch = epoch + 1;
+      return startRecovery(epoch + 1, exception, false);
+    }
+
+    static TransitionResult onSessionFailure(
+        InternalState state,
+        long epoch,
+        long eventEpoch,
+        AmqpException exception,
+        String connectionName) {
+      if (isStale(state, epoch, eventEpoch) || state == InternalState.RECOVERING_CONNECTION) {
+        LOGGER.debug(
+            "Ignoring session failure from epoch {} for connection {} (state {})",
+            eventEpoch,
+            connectionName,
+            state);
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      // The connection is still up, but resources cannot use its session anymore.
+      // We tear down the connection and recover as for a disconnect.
+      LOGGER.info(
+          "Session of connection '{}' closed by the broker ({}), initiating recovery",
+          connectionName,
+          exception.getMessage());
+      return startRecovery(epoch + 1, exception, true);
+    }
+
+    private static TransitionResult startRecovery(
+        long newEpoch, AmqpException exception, boolean tearDownNativeConnection) {
       return TransitionResult.of(
           InternalState.RECOVERING_CONNECTION,
           newEpoch,
@@ -245,6 +283,9 @@ final class ConnectionStateClient implements AutoCloseable {
             s.connection.updateState(RECOVERING, exception);
             s.updateStateOfResources(RECOVERING, exception);
             s.connection.releaseManagementResources(exception);
+            if (tearDownNativeConnection) {
+              s.tearDownFailedNativeConnection();
+            }
             // Null out native resources
             s.connection.resetNativeResources();
             // Dispatch Phase 1: Native Recovery
@@ -349,9 +390,7 @@ final class ConnectionStateClient implements AutoCloseable {
           nc.closeAsync();
         }
       } catch (Exception e) {
-        LOGGER.debug(
-            "Error while closing native connection in 'handleTopologyRecoveryFailure': {}",
-            e.getMessage());
+        LOGGER.debug("Error while tearing down native connection: {}", e.getMessage());
       }
     }
 

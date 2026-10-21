@@ -79,6 +79,75 @@ class ConnectionStateTransitionsTest {
         });
   }
 
+  @Test
+  void sessionFailureNeverDecreasesEpoch() {
+    Generator<DisconnectInput> inputs =
+        Generator.from(
+            data ->
+                new DisconnectInput(
+                    data.generate(STATES),
+                    data.generate(EPOCHS),
+                    data.generate(EPOCHS),
+                    data.generate(EXCEPTIONS)));
+
+    PropertyChecker.forAll(
+        inputs,
+        input -> {
+          ConnectionStateClient.TransitionResult result =
+              ConnectionStateClient.ConnectionState.onSessionFailure(
+                  input.state, input.epoch, input.eventEpoch, input.exception, "test-connection");
+          return result.epoch() >= input.epoch;
+        });
+  }
+
+  @Test
+  void sessionFailureFromOtherEpochIsANoOp() {
+    Generator<DisconnectInput> inputs =
+        Generator.from(
+            data -> {
+              long epoch = data.generate(EPOCHS);
+              long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
+              long eventEpoch = data.generate(Generator.booleans()) ? epoch - delta : epoch + delta;
+              return new DisconnectInput(
+                  data.generate(STATES), epoch, eventEpoch, data.generate(EXCEPTIONS));
+            });
+
+    PropertyChecker.forAll(
+        inputs,
+        input -> {
+          ConnectionStateClient.TransitionResult result =
+              ConnectionStateClient.ConnectionState.onSessionFailure(
+                  input.state, input.epoch, input.eventEpoch, input.exception, "test-connection");
+          return result.state() == input.state && result.epoch() == input.epoch;
+        });
+  }
+
+  @Test
+  void sessionFailureOfCurrentEpochStartsRecoveryUnlessClosedOrAlreadyRecovering() {
+    Generator<DisconnectInput> inputs =
+        Generator.from(
+            data -> {
+              long epoch = data.generate(EPOCHS);
+              return new DisconnectInput(
+                  data.generate(STATES), epoch, epoch, data.generate(EXCEPTIONS));
+            });
+
+    PropertyChecker.forAll(
+        inputs,
+        input -> {
+          ConnectionStateClient.TransitionResult result =
+              ConnectionStateClient.ConnectionState.onSessionFailure(
+                  input.state, input.epoch, input.eventEpoch, input.exception, "test-connection");
+          if (input.state == ConnectionStateClient.InternalState.CLOSED
+              || input.state == ConnectionStateClient.InternalState.RECOVERING_CONNECTION) {
+            return result.state() == input.state && result.epoch() == input.epoch;
+          } else {
+            return result.state() == ConnectionStateClient.InternalState.RECOVERING_CONNECTION
+                && result.epoch() == input.epoch + 1;
+          }
+        });
+  }
+
   private static final class DisconnectInput {
     final ConnectionStateClient.InternalState state;
     final long epoch;

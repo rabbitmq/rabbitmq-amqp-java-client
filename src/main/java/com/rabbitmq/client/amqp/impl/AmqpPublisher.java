@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.impl.AmqpUtils.mapToPublishDisposition;
 import static com.rabbitmq.client.amqp.impl.Utils.maybeClose;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Message;
 import com.rabbitmq.client.amqp.ObservationCollector;
 import com.rabbitmq.client.amqp.Publisher;
@@ -94,6 +95,13 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
           try {
             return this.doSend((AmqpMessage) msg);
           } catch (ClientIllegalStateException e) {
+            if (this.sessionHandler.sessionFailureHandledByConnection()
+                && ExceptionUtils.sessionRemotelyClosed(e)) {
+              // the connection is about to recover, the publisher must not be closed
+              LOGGER.debug("Error while publishing: '{}'. Session closed.", e.getMessage());
+              throw new AmqpException.AmqpResourceInvalidStateException(
+                  "Publisher session closed, recovery pending", e);
+            }
             // the link is closed
             LOGGER.debug("Error while publishing: '{}'. Closing publisher.", e.getMessage());
             this.close(ExceptionUtils.convert(e));

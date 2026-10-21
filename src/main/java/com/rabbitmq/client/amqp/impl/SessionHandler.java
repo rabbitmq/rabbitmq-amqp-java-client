@@ -35,6 +35,13 @@ interface SessionHandler extends AutoCloseable {
   void close();
 
   /**
+   * Whether the connection recovers from a failure of the session.
+   *
+   * <p>Resources should then not close themselves when the session fails.
+   */
+  boolean sessionFailureHandledByConnection();
+
+  /**
    * Session handler that always returns the session from its connection.
    *
    * <p>This is the default implementation used.
@@ -59,6 +66,11 @@ interface SessionHandler extends AutoCloseable {
 
     @Override
     public void close() {}
+
+    @Override
+    public boolean sessionFailureHandledByConnection() {
+      return true;
+    }
   }
 
   /** Session handler that opens its own session and returns it when queried. */
@@ -94,6 +106,11 @@ interface SessionHandler extends AutoCloseable {
     @Override
     public void close() {
       closeCurrentSession();
+    }
+
+    @Override
+    public boolean sessionFailureHandledByConnection() {
+      return false;
     }
 
     private void closeCurrentSession() {

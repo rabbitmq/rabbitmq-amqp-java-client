@@ -636,6 +636,15 @@ public class ClientSession implements Session {
             openFuture.complete(this);
         }
 
+        final boolean alreadyClosed = closeFuture.isDone();
         closeFuture.complete(this);
+
+        if (!alreadyClosed && options.closeHandler() != null) {
+            try {
+                options.closeHandler().accept(this.failureCause);
+            } catch (Exception e) {
+                LOG.warn("Error in close handler: {}", e.getMessage());
+            }
+        }
     }
 }

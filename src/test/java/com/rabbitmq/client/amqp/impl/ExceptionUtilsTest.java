@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_RESOURCE_DELETE
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_UNAUTHORIZED_ACCESS;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.AmqpException;
@@ -103,5 +104,19 @@ public class ExceptionUtilsTest {
 
   ErrorCondition errorCondition(String condition) {
     return ErrorCondition.create(condition, null);
+  }
+
+  @Test
+  void sessionRemotelyClosedTest() {
+    ClientSessionRemotelyClosedException sessionClosed =
+        new ClientSessionRemotelyClosedException("");
+    assertThat(sessionRemotelyClosed(sessionClosed)).isTrue();
+    assertThat(sessionRemotelyClosed(convert(sessionClosed))).isTrue();
+    assertThat(sessionRemotelyClosed(new ClientIllegalStateException("", sessionClosed))).isTrue();
+    assertThat(sessionRemotelyClosed(convert(new ClientIllegalStateException("", sessionClosed))))
+        .isTrue();
+    assertThat(sessionRemotelyClosed(new ClientLinkRemotelyClosedException(""))).isFalse();
+    assertThat(sessionRemotelyClosed(new ClientIllegalStateException(""))).isFalse();
+    assertThat(sessionRemotelyClosed(null)).isFalse();
   }
 }

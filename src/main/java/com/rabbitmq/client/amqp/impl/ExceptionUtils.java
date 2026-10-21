@@ -139,6 +139,17 @@ abstract class ExceptionUtils {
     return isUnauthorizedAccess(e.getErrorCondition());
   }
 
+  static boolean sessionRemotelyClosed(Throwable e) {
+    Throwable current = e;
+    while (current != null) {
+      if (current instanceof ClientSessionRemotelyClosedException) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
   static boolean noRunningStreamMemberOnNode(Exception e) {
     if (e instanceof AmqpException.AmqpResourceClosedException) {
       String message = e.getMessage();
