@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
-import org.apache.qpid.protonj2.buffer.ProtonBufferAllocator;
+import org.apache.qpid.protonj2.buffer.impl.ProtonByteArrayBufferAllocator;
 import org.apache.qpid.protonj2.codec.DecodeException;
 import org.apache.qpid.protonj2.codec.DecoderState;
 import org.apache.qpid.protonj2.codec.EncoderState;
@@ -36,7 +36,7 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
 
     @Override
     public Binary readValue(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        return new Binary(readValueAsBuffer(buffer, state));
+        return new Binary(readValueAsBuffer(buffer, state), false);
     }
 
     /**
@@ -53,22 +53,7 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      */
     @Override
     public ProtonBuffer readValueAsBuffer(ProtonBuffer buffer, DecoderState state) throws DecodeException {
-        final int length = readSize(buffer, state);
-
-        if (Integer.compareUnsigned(length, buffer.getReadableBytes()) > 0) {
-            throw new DecodeException(
-                String.format("Binary data size %d is specified to be greater than the amount " +
-                              "of data available (%d)", Integer.toUnsignedLong(length), buffer.getReadableBytes()));
-        }
-
-        // Use a heap buffer to avoid retaining any pooled buffers for prolonged periods of time.
-        final ProtonBuffer payload = ProtonBufferAllocator.defaultAllocator().allocateHeapBuffer(length);
-
-        buffer.copyInto(buffer.getReadOffset(), payload, 0, length);
-        buffer.advanceReadOffset(length);
-        payload.advanceWriteOffset(length);
-
-        return payload.convertToReadOnly();
+        return ProtonByteArrayBufferAllocator.wrapped(readValueAsArray(buffer, state)).convertToReadOnly();
     }
 
     /**
@@ -115,7 +100,7 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
 
     @Override
     public Binary readValue(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return new Binary(readValueAsBuffer(stream, state));
+        return new Binary(readValueAsBuffer(stream, state), false);
     }
 
     /**
@@ -132,7 +117,7 @@ public abstract class AbstractBinaryTypeDecoder extends AbstractPrimitiveTypeDec
      */
     @Override
     public ProtonBuffer readValueAsBuffer(InputStream stream, StreamDecoderState state) throws DecodeException {
-        return ProtonBufferAllocator.defaultAllocator().copy(readValueAsArray(stream, state)).convertToReadOnly();
+        return ProtonByteArrayBufferAllocator.wrapped(readValueAsArray(stream, state)).convertToReadOnly();
     }
 
     /**
