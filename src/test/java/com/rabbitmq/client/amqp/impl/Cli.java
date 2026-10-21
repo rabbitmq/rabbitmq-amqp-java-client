@@ -232,6 +232,25 @@ abstract class Cli {
     rabbitmqQueues(" delete_member " + queue + " " + node);
   }
 
+  static void stopQuorumQueueServers(String queue) {
+    quorumQueueServersCommand(queue, "stop_server");
+  }
+
+  static void restartQuorumQueueServers(String queue) {
+    quorumQueueServersCommand(queue, "restart_server");
+  }
+
+  private static void quorumQueueServersCommand(String queue, String function) {
+    rabbitmqctl(
+        "eval '{ok, Q} = rabbit_amqqueue:lookup(rabbit_misc:r(<<\"/\">>, queue, <<\""
+            + queue
+            + "\">>)), "
+            + "{RaName, _} = amqqueue:get_pid(Q), "
+            + "[rabbit_quorum_queue:"
+            + function
+            + "({RaName, N}) || N <- rabbit_queue_type:get_nodes(Q)].'");
+  }
+
   static String quorumStatus(String queue, String node) {
     String cmd = replaceContainerId(rabbitmqQueuesCommand(), node);
     return executeCommand(cmd + " quorum_status --formatter erlang " + queue).output();
