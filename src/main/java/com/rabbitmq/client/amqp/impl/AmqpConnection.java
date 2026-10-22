@@ -129,6 +129,7 @@ final class AmqpConnection extends ResourceBase
   private volatile Session nativeSession;
   private volatile ConsumerWorkService consumerWorkService;
   private volatile Executor dispatchingExecutor;
+  volatile Runnable beforeResourceRecoveryHook = () -> {};
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -545,7 +546,7 @@ final class AmqpConnection extends ResourceBase
     }
   }
 
-  private void recoverConsumers() throws InterruptedException {
+  private void recoverConsumers(long attemptEpoch) throws InterruptedException {
     List<AmqpConsumer> consumersToRecover = this.connectionStateClient.consumers();
     if (consumersToRecover.isEmpty()) {
       LOGGER.debug("No consumers to recover");
@@ -554,6 +555,8 @@ final class AmqpConnection extends ResourceBase
       List<AmqpConsumer> failedConsumers = new ArrayList<>();
       for (AmqpConsumer consumer : consumersToRecover) {
         Utils.throwIfInterrupted();
+        this.beforeResourceRecoveryHook.run();
+        checkRecoveryNotStale(attemptEpoch);
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
           consumer.recoverAfterConnectionFailure();
@@ -588,6 +591,7 @@ final class AmqpConnection extends ResourceBase
                 consumer.id(),
                 consumer.queue(),
                 ex);
+            checkRecoveryNotStale(attemptEpoch);
             failedConsumers.add(consumer);
           }
         } catch (Exception ex) {
@@ -596,14 +600,16 @@ final class AmqpConnection extends ResourceBase
               consumer.id(),
               consumer.queue(),
               ex);
+          checkRecoveryNotStale(attemptEpoch);
           failedConsumers.add(consumer);
         }
       }
+      checkRecoveryNotStale(attemptEpoch);
       failedConsumers.forEach(AmqpConsumer::close);
     }
   }
 
-  private void recoverPublishers() throws InterruptedException {
+  private void recoverPublishers(long attemptEpoch) throws InterruptedException {
     List<AmqpPublisher> publishersToRecover = this.connectionStateClient.publishers();
     if (publishersToRecover.isEmpty()) {
       LOGGER.debug("No publishers to recover");
@@ -612,6 +618,8 @@ final class AmqpConnection extends ResourceBase
       List<AmqpPublisher> failedPublishers = new ArrayList<>();
       for (AmqpPublisher publisher : publishersToRecover) {
         Utils.throwIfInterrupted();
+        this.beforeResourceRecoveryHook.run();
+        checkRecoveryNotStale(attemptEpoch);
         try {
           LOGGER.debug(
               "Recovering publisher {} (address '{}')", publisher.id(), publisher.address());
@@ -640,6 +648,7 @@ final class AmqpConnection extends ResourceBase
                 publisher.id(),
                 publisher.address(),
                 ex);
+            checkRecoveryNotStale(attemptEpoch);
             failedPublishers.add(publisher);
           }
         } catch (Exception ex) {
@@ -648,10 +657,26 @@ final class AmqpConnection extends ResourceBase
               publisher.id(),
               publisher.address(),
               ex);
+          checkRecoveryNotStale(attemptEpoch);
           failedPublishers.add(publisher);
         }
       }
+      checkRecoveryNotStale(attemptEpoch);
       failedPublishers.forEach(AmqpPublisher::close);
+    }
+  }
+
+  private void checkRecoveryNotStale(long attemptEpoch) {
+    // a stale recovery must not touch resources, the newer recovery handles them
+    if (this.connectionStateClient.isStale(attemptEpoch)) {
+      throw new StaleRecoveryException();
+    }
+  }
+
+  private static final class StaleRecoveryException extends RuntimeException {
+
+    private StaleRecoveryException() {
+      super("Stale recovery", null, false, false);
     }
   }
 
@@ -1116,8 +1141,8 @@ final class AmqpConnection extends ResourceBase
       this.managementNoCheck();
 
       this.recoverTopology();
-      this.recoverConsumers();
-      this.recoverPublishers();
+      this.recoverConsumers(attemptEpoch);
+      this.recoverPublishers(attemptEpoch);
 
       LOGGER.debug("Recovered topology of connection '{}'.", this.name());
 
@@ -1133,6 +1158,9 @@ final class AmqpConnection extends ResourceBase
       // Phase 2 complete. Report success to the Event Loop.
       this.connectionStateClient.handleTopologyRecoverySuccess(attemptEpoch);
 
+    } catch (StaleRecoveryException ex) {
+      LOGGER.debug(
+          "Stopping topology recovery of connection '{}', a newer recovery took over", this.name());
     } catch (Exception ex) {
       AmqpException amqpException = ExceptionUtils.convert(ex);
       if (ex instanceof InterruptedException) {

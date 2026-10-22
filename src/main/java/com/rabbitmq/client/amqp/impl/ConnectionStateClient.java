@@ -50,6 +50,11 @@ final class ConnectionStateClient implements AutoCloseable {
     return this.client.query(ConnectionState::epoch);
   }
 
+  boolean isStale(long attemptEpoch) {
+    return this.client.query(
+        state -> ConnectionState.isStale(state.internalState, state.epoch, attemptEpoch));
+  }
+
   List<AmqpConsumer> consumers() {
     return this.client.query(state -> new ArrayList<>(state.consumers));
   }

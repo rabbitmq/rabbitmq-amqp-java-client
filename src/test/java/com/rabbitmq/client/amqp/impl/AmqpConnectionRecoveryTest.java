@@ -26,6 +26,7 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.maybeConfigureWebSocket;
 import static com.rabbitmq.client.amqp.impl.TestUtils.name;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,12 +39,15 @@ import com.rabbitmq.client.amqp.Publisher;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import com.rabbitmq.client.amqp.metrics.NoOpMetricsCollector;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
@@ -383,6 +387,109 @@ public class AmqpConnectionRecoveryTest {
         // the test connection may still be recovering if the test fails
         try (Connection cleanup = environment.connectionBuilder().build()) {
           cleanup.management().queueDelete(downQ);
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
+  @Test
+  void staleTopologyRecoveryShouldNotCloseResources(TestInfo info) throws Exception {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    AtomicReference<Duration> recoveryDelay = new AtomicReference<>(ofMillis(100));
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(RECOVERING, TestUtils.sync(1));
+    stateSync.put(OPEN, TestUtils.sync(2));
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(
+                    context -> {
+                      if (stateSync.containsKey(context.currentState())) {
+                        stateSync.get(context.currentState()).down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(attempt -> recoveryDelay.get())
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      c.management().queue(q).declare();
+      try {
+        TestUtils.Sync consumeSync = TestUtils.sync(2);
+        Consumer consumer1 =
+            c.consumerBuilder()
+                .queue(q)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+        Consumer consumer2 =
+            c.consumerBuilder()
+                .queue(q)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+        Publisher p = c.publisherBuilder().queue(q).build();
+
+        AtomicBoolean blockRecovery = new AtomicBoolean(true);
+        CountDownLatch recoveryBlocked = new CountDownLatch(1);
+        CountDownLatch releaseRecovery = new CountDownLatch(1);
+        c.beforeResourceRecoveryHook =
+            () -> {
+              if (blockRecovery.compareAndSet(true, false)) {
+                recoveryBlocked.countDown();
+                try {
+                  releaseRecovery.await();
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                }
+              }
+            };
+
+        Cli.closeConnection(connectionName);
+        assertThat(stateSync.get(RECOVERING)).completes();
+        assertThat(recoveryBlocked).completes();
+
+        // the first topology recovery is blocked, a second failure starts a new recovery
+        recoveryDelay.set(ofSeconds(2));
+        Cli.closeConnection(connectionName);
+        waitAtMost(
+            () -> {
+              try {
+                c.nativeSession(false);
+                return false;
+              } catch (AmqpException.AmqpResourceInvalidStateException e) {
+                return true;
+              }
+            });
+        releaseRecovery.countDown();
+
+        assertThat(stateSync.get(OPEN)).completes();
+        assertThat(((AmqpConsumer) consumer1).state()).isEqualTo(OPEN);
+        assertThat(((AmqpConsumer) consumer2).state()).isEqualTo(OPEN);
+        assertThat(((AmqpPublisher) p).state()).isEqualTo(OPEN);
+
+        TestUtils.Sync publishSync = TestUtils.sync(2);
+        Publisher.Callback callback =
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            };
+        p.publish(p.message(), callback);
+        p.publish(p.message(), callback);
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+      } finally {
+        c.beforeResourceRecoveryHook = () -> {};
+        try (Connection cleanup = environment.connectionBuilder().build()) {
           cleanup.management().queueDelete(q);
         }
       }
