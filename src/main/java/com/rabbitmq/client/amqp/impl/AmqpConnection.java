@@ -321,6 +321,7 @@ final class AmqpConnection extends ResourceBase
   @Override
   public Management management() {
     checkOpen();
+    this.management.clearClosedByApplication();
     return this.managementNoCheck();
   }
 
@@ -678,10 +679,6 @@ final class AmqpConnection extends ResourceBase
     if (this.connectionStateClient.isStale(attemptEpoch)) {
       throw new StaleRecoveryException();
     }
-  }
-
-  private void closeManagement() {
-    this.management.close();
   }
 
   Session nativeSession() {
@@ -1134,7 +1131,6 @@ final class AmqpConnection extends ResourceBase
     }
 
     try {
-      boolean managementPreviouslyClosed = this.management.isClosed();
       LOGGER.debug("Recovering topology of connection '{}'...", this.name());
 
       checkRecoveryNotStale(attemptEpoch);
@@ -1147,14 +1143,7 @@ final class AmqpConnection extends ResourceBase
 
       LOGGER.debug("Recovered topology of connection '{}'.", this.name());
 
-      if (managementPreviouslyClosed) {
-        LOGGER.debug("Management was closed before recovery, closing it again");
-        try {
-          this.closeManagement();
-        } catch (Exception e) {
-          LOGGER.info("Error while (re)closing management after recovery");
-        }
-      }
+      this.management.closeIfClosedByApplication(this.recoveryGuard(attemptEpoch));
 
       // Phase 2 complete. Report success to the Event Loop.
       this.connectionStateClient.handleTopologyRecoverySuccess(attemptEpoch);

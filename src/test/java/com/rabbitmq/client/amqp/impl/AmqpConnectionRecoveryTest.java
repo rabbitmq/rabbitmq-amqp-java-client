@@ -570,6 +570,99 @@ public class AmqpConnectionRecoveryTest {
     }
   }
 
+  @Test
+  void managementClosedByApplicationShouldBeClosedAfterStaleRecovery(TestInfo info) {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    AtomicReference<Duration> recoveryDelay = new AtomicReference<>(ofMillis(100));
+    TestUtils.Sync openSync = TestUtils.sync(2);
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(
+                    context -> {
+                      if (context.currentState() == OPEN) {
+                        openSync.down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(attempt -> recoveryDelay.get())
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      AmqpManagement management = (AmqpManagement) c.management();
+      management.queue(q).declare();
+      try {
+        c.consumerBuilder().queue(q).messageHandler((ctx, msg) -> ctx.accept()).build();
+        management.close();
+
+        AtomicBoolean disconnect = new AtomicBoolean(true);
+        c.beforeResourceRecoveryHook =
+            () -> {
+              if (disconnect.compareAndSet(true, false)) {
+                // the first recovery has opened management and goes stale
+                recoveryDelay.set(ofSeconds(1));
+                closeConnectionAndWaitForNewRecovery(c, connectionName);
+              }
+            };
+
+        Cli.closeConnection(connectionName);
+        assertThat(openSync).completes();
+        assertThat(disconnect).isFalse();
+        assertThat(management.isClosed()).isTrue();
+      } finally {
+        c.beforeResourceRecoveryHook = () -> {};
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
+  @Test
+  void managementReopenedByApplicationShouldStayOpenAfterRecovery(TestInfo info) {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    AtomicReference<TestUtils.Sync> openSync = new AtomicReference<>(TestUtils.sync());
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(
+                    context -> {
+                      if (context.currentState() == OPEN) {
+                        openSync.get().down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(BackOffDelayPolicy.fixed(ofMillis(100)))
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      assertThat(openSync.get()).completes();
+      AmqpManagement management = (AmqpManagement) c.management();
+      management.close();
+
+      openSync.set(TestUtils.sync());
+      Cli.closeConnection(connectionName);
+      assertThat(openSync.get()).completes();
+      assertThat(management.isClosed()).isTrue();
+
+      assertThat(c.management()).isSameAs(management);
+      management.queue(q).declare();
+      try {
+        openSync.set(TestUtils.sync());
+        Cli.closeConnection(connectionName);
+        assertThat(openSync.get()).completes();
+        assertThat(management.isClosed()).isFalse();
+        assertThat(management.queueInfo(q)).hasName(q);
+      } finally {
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
   private static void closeConnectionAndWaitForNewRecovery(
       AmqpConnection c, String connectionName) {
     Cli.closeConnection(connectionName);
