@@ -31,64 +31,67 @@ final class EntityRecovery {
 
   private final RecordingTopologyListener listener;
   private final AmqpConnection connection;
-  private final RecordingTopologyListener.Visitor recoveryVisitor;
 
   EntityRecovery(AmqpConnection connection, RecordingTopologyListener listener) {
     this.connection = connection;
     this.listener = listener;
-    this.recoveryVisitor =
-        new RecordingTopologyListener.Visitor() {
-          @Override
-          public void visitExchanges(List<RecordingTopologyListener.ExchangeSpec> exchanges) {
-            if (exchanges.isEmpty()) {
-              LOGGER.debug("No exchanges to recover.");
-            } else {
-              LOGGER.debug("Recovering {} exchange(s)...", exchanges.size());
-              for (RecordingTopologyListener.ExchangeSpec spec : exchanges) {
-                recoverExchange(spec);
-              }
-              LOGGER.debug("Exchanges recovered");
-            }
-          }
-
-          @Override
-          public void visitQueues(List<RecordingTopologyListener.QueueSpec> queues) {
-            if (queues.isEmpty()) {
-              LOGGER.debug("No queues to recover");
-            } else {
-              LOGGER.debug("Recovering {} queue(s)...", queues.size());
-              for (RecordingTopologyListener.QueueSpec spec : queues) {
-                recoverQueue(spec);
-              }
-              LOGGER.debug("Queues recovered");
-            }
-          }
-
-          @Override
-          public void visitBindings(
-              Collection<RecordingTopologyListener.BindingSpec> bindings,
-              List<RecordingTopologyListener.ExchangeSpec> exchanges,
-              List<RecordingTopologyListener.QueueSpec> queues) {
-            if (bindings.isEmpty()) {
-              LOGGER.debug("No bindings to recover");
-            } else {
-              LOGGER.debug("Recovering {} binding(s)...", bindings.size());
-              for (RecordingTopologyListener.BindingSpec binding : bindings) {
-                recoverBinding(binding, exchanges, queues);
-              }
-              LOGGER.debug("Bindings recovered");
-            }
-          }
-        };
   }
 
-  void recover() {
+  void recover(Runnable recoveryCheck) {
     LOGGER.debug("Starting topology recovery");
-    this.listener.accept(this.recoveryVisitor);
+    this.listener.accept(recoveryVisitor(recoveryCheck));
     LOGGER.debug("Topology recovered");
   }
 
-  private void recoverExchange(RecordingTopologyListener.ExchangeSpec exchange) {
+  private RecordingTopologyListener.Visitor recoveryVisitor(Runnable recoveryCheck) {
+    return new RecordingTopologyListener.Visitor() {
+      @Override
+      public void visitExchanges(List<RecordingTopologyListener.ExchangeSpec> exchanges) {
+        if (exchanges.isEmpty()) {
+          LOGGER.debug("No exchanges to recover.");
+        } else {
+          LOGGER.debug("Recovering {} exchange(s)...", exchanges.size());
+          for (RecordingTopologyListener.ExchangeSpec spec : exchanges) {
+            recoverExchange(spec, recoveryCheck);
+          }
+          LOGGER.debug("Exchanges recovered");
+        }
+      }
+
+      @Override
+      public void visitQueues(List<RecordingTopologyListener.QueueSpec> queues) {
+        if (queues.isEmpty()) {
+          LOGGER.debug("No queues to recover");
+        } else {
+          LOGGER.debug("Recovering {} queue(s)...", queues.size());
+          for (RecordingTopologyListener.QueueSpec spec : queues) {
+            recoverQueue(spec, recoveryCheck);
+          }
+          LOGGER.debug("Queues recovered");
+        }
+      }
+
+      @Override
+      public void visitBindings(
+          Collection<RecordingTopologyListener.BindingSpec> bindings,
+          List<RecordingTopologyListener.ExchangeSpec> exchanges,
+          List<RecordingTopologyListener.QueueSpec> queues) {
+        if (bindings.isEmpty()) {
+          LOGGER.debug("No bindings to recover");
+        } else {
+          LOGGER.debug("Recovering {} binding(s)...", bindings.size());
+          for (RecordingTopologyListener.BindingSpec binding : bindings) {
+            recoverBinding(binding, exchanges, queues, recoveryCheck);
+          }
+          LOGGER.debug("Bindings recovered");
+        }
+      }
+    };
+  }
+
+  private void recoverExchange(
+      RecordingTopologyListener.ExchangeSpec exchange, Runnable recoveryCheck) {
+    recoveryCheck.run();
     LOGGER.debug("Recovering exchange {}", exchange.name());
 
     try {
@@ -102,17 +105,20 @@ final class EntityRecovery {
       exchange.arguments().forEach(spec::argument);
       spec.declare();
       LOGGER.debug("Exchange {} recovered", exchange.name());
+    } catch (StaleRecoveryException e) {
+      throw e;
     } catch (Exception e) {
       LOGGER.warn("Error while recovering exchange {}", exchange.name(), e);
     }
   }
 
-  void recoverQueue(RecordingTopologyListener.QueueSpec queue) {
+  void recoverQueue(RecordingTopologyListener.QueueSpec queue, Runnable recoveryCheck) {
     if (queue.exclusive() || queue.autoDelete()) {
       LOGGER.debug("Recovering queue {}", queue.name());
       try {
         Callable<Void> queueCreation =
             () -> {
+              recoveryCheck.run();
               Management.QueueSpecification spec =
                   this.connection
                       .managementNoCheck()
@@ -135,6 +141,8 @@ final class EntityRecovery {
           queueCreation.call();
         }
         LOGGER.debug("Queue {} recovered", queue.name());
+      } catch (StaleRecoveryException e) {
+        throw e;
       } catch (Exception e) {
         LOGGER.warn("Error while recovering queue {}", queue.name(), e);
       }
@@ -144,7 +152,9 @@ final class EntityRecovery {
   void recoverBinding(
       RecordingTopologyListener.BindingSpec binding,
       List<RecordingTopologyListener.ExchangeSpec> exchanges,
-      List<RecordingTopologyListener.QueueSpec> queues) {
+      List<RecordingTopologyListener.QueueSpec> queues,
+      Runnable recoveryCheck) {
+    recoveryCheck.run();
     try {
       bind(binding);
     } catch (Exception e) {
@@ -160,13 +170,18 @@ final class EntityRecovery {
         // (e.g. auto-delete exchange removed by the broker), try to recreate them
         // and retry the binding once
         try {
-          findExchange(exchanges, binding.source()).ifPresent(this::recoverExchange);
+          findExchange(exchanges, binding.source())
+              .ifPresent(ex -> recoverExchange(ex, recoveryCheck));
           if (binding.toQueue()) {
-            findQueue(queues, binding.destination()).ifPresent(this::recoverQueue);
+            findQueue(queues, binding.destination()).ifPresent(q -> recoverQueue(q, recoveryCheck));
           } else {
-            findExchange(exchanges, binding.destination()).ifPresent(this::recoverExchange);
+            findExchange(exchanges, binding.destination())
+                .ifPresent(ex -> recoverExchange(ex, recoveryCheck));
           }
+          recoveryCheck.run();
           bind(binding);
+        } catch (StaleRecoveryException retryException) {
+          throw retryException;
         } catch (Exception retryException) {
           LOGGER.warn(
               "Error while retrying to recover binding from {} to {} {} with binding key {}",

@@ -539,10 +539,10 @@ final class AmqpConnection extends ResourceBase
         .build();
   }
 
-  private void recoverTopology() throws InterruptedException {
+  private void recoverTopology(long attemptEpoch) throws InterruptedException {
     if (this.entityRecovery != null) {
       Utils.throwIfInterrupted();
-      this.entityRecovery.recover();
+      this.entityRecovery.recover(() -> checkRecoveryNotStale(attemptEpoch));
     }
   }
 
@@ -670,13 +670,6 @@ final class AmqpConnection extends ResourceBase
     // a stale recovery must not touch resources, the newer recovery handles them
     if (this.connectionStateClient.isStale(attemptEpoch)) {
       throw new StaleRecoveryException();
-    }
-  }
-
-  private static final class StaleRecoveryException extends RuntimeException {
-
-    private StaleRecoveryException() {
-      super("Stale recovery", null, false, false);
     }
   }
 
@@ -1137,10 +1130,11 @@ final class AmqpConnection extends ResourceBase
       boolean managementPreviouslyClosed = this.management.isClosed();
       LOGGER.debug("Recovering topology of connection '{}'...", this.name());
 
+      checkRecoveryNotStale(attemptEpoch);
       // Safely resurrect management via its Event Loop
       this.managementNoCheck();
 
-      this.recoverTopology();
+      this.recoverTopology(attemptEpoch);
       this.recoverConsumers(attemptEpoch);
       this.recoverPublishers(attemptEpoch);
 
