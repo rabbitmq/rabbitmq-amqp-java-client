@@ -380,8 +380,11 @@ public class AmqpConnectionRecoveryTest {
         assertThat(consumeSync).completes();
       } finally {
         Cli.restartQuorumQueueServers(downQ);
-        Cli.deleteQueue(downQ);
-        Cli.deleteQueue(q);
+        // the test connection may still be recovering if the test fails
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(downQ);
+          cleanup.management().queueDelete(q);
+        }
       }
     }
   }
