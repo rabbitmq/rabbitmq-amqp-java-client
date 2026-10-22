@@ -232,6 +232,10 @@ abstract class Cli {
     rabbitmqQueues(" delete_member " + queue + " " + node);
   }
 
+  static void deleteQueue(String queue) {
+    rabbitmqctl("delete_queue " + queue);
+  }
+
   static void stopQuorumQueueServers(String queue) {
     quorumQueueServersCommand(queue, "stop_server");
   }

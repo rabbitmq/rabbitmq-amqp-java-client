@@ -99,7 +99,16 @@ public class ExceptionUtilsTest {
                 new AmqpResourceClosedException(
                     "stream queue 'stream-RecoveryClusterTest_clusterRestart-a69d-db752afee52a' in vhost '/' does not have a running replica on the local node [condition = amqp:internal-error]")))
         .isTrue();
-    assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("noproc"))).isTrue();
+    assertThat(
+            noRunningStreamMemberOnNode(
+                new AmqpResourceClosedException(
+                    "Session error: {case_clause,{error,noproc}} [{rabbit_stream_queue,query_local_pid,1,[]}]")))
+        .isTrue();
+    assertThat(
+            noRunningStreamMemberOnNode(
+                new AmqpResourceClosedException(
+                    "failed consuming from quorum queue 'qq' in vhost '/': noproc [condition = amqp:internal-error]")))
+        .isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("foo"))).isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpConnectionException("foo", null))).isFalse();
   }

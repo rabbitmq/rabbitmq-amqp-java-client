@@ -166,9 +166,11 @@ abstract class ExceptionUtils {
       if (message == null) {
         return false;
       } else {
+        // RabbitMQ < 4.2.5 could crash with a noproc in the stream queue code
+        // when the local stream coordinator member is not running
         return (message.contains("stream queue")
                 && message.contains("does not have a running replica on the local node"))
-            || message.contains("noproc");
+            || (message.contains("noproc") && message.contains("rabbit_stream_queue"));
       }
     } else {
       return false;

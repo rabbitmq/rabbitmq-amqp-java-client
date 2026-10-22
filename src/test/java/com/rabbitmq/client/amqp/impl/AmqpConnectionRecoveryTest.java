@@ -323,6 +323,70 @@ public class AmqpConnectionRecoveryTest {
   }
 
   @Test
+  void consumerOnQuorumQueueWithoutRunningMemberShouldNotBlockRecovery(TestInfo info) {
+    String downQ = name(info) + "-down";
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(RECOVERING, TestUtils.sync(1));
+    stateSync.put(OPEN, TestUtils.sync(2));
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(
+                    context -> {
+                      if (stateSync.containsKey(context.currentState())) {
+                        stateSync.get(context.currentState()).down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
+    try (Connection c = new AmqpConnection(builder)) {
+      c.management().queue(downQ).quorum().queue().declare();
+      c.management().queue(q).declare();
+      try {
+        Consumer downConsumer =
+            c.consumerBuilder().queue(downQ).messageHandler((ctx, msg) -> ctx.accept()).build();
+        TestUtils.Sync consumeSync = TestUtils.sync();
+        c.consumerBuilder()
+            .queue(q)
+            .messageHandler(
+                (ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
+            .build();
+        Publisher p = c.publisherBuilder().queue(q).build();
+
+        Cli.stopQuorumQueueServers(downQ);
+        Cli.closeConnection(connectionName);
+
+        // the quorum queue members stay down, the connection must recover anyway
+        assertThat(stateSync.get(RECOVERING)).completes();
+        assertThat(stateSync.get(OPEN)).completes();
+        waitAtMost(() -> ((AmqpConsumer) downConsumer).state() == CLOSED);
+
+        TestUtils.Sync publishSync = TestUtils.sync();
+        p.publish(
+            p.message(),
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            });
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+      } finally {
+        Cli.restartQuorumQueueServers(downQ);
+        Cli.deleteQueue(downQ);
+        Cli.deleteQueue(q);
+      }
+    }
+  }
+
+  @Test
   void connectionShouldBeClosedWhenBrokerEndsSessionAndRecoveryIsDisabled(TestInfo info) {
     String q = name(info);
     TestUtils.Sync closedSync = TestUtils.sync();
