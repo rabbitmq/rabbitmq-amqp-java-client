@@ -23,18 +23,13 @@ import static com.rabbitmq.client.amqp.impl.Cli.deleteUser;
 import static com.rabbitmq.client.amqp.impl.Cli.deleteVhost;
 import static com.rabbitmq.client.amqp.impl.Cli.setPermissions;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
-import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMostNoException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.AmqpException;
-import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Publisher;
-import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.AfterAll;
@@ -133,11 +128,12 @@ public class AuthorizationTest {
             .hasMessageContaining("access")
             .hasMessageContaining(this.name);
 
-        // the broker closes the whole session, the connection recovers
+        // the whole session is closed
         String authorizedName = "amqp" + this.name;
-        gc.management().exchange(authorizedName).declare();
-        waitAtMostNoException(
-            () -> uc1.publisherBuilder().exchange(authorizedName).build().close());
+        assertThatThrownBy(() -> uc1.publisherBuilder().exchange(authorizedName).build())
+            .isInstanceOf(AmqpException.AmqpSecurityException.class)
+            .hasMessageContaining("access")
+            .hasMessageContaining(this.name);
 
         // same error when key is set
         assertThatThrownBy(() -> uc2.publisherBuilder().exchange(this.name).key("foo").build())
@@ -146,7 +142,6 @@ public class AuthorizationTest {
             .hasMessageContaining(this.name);
       } finally {
         gc.management().exchangeDelete(this.name);
-        gc.management().exchangeDelete("amqp" + this.name);
       }
     }
   }
@@ -172,44 +167,25 @@ public class AuthorizationTest {
         Connection gc = guestConnection()) {
       try {
         gc.management().exchange(this.name).declare();
-        String authorizedName = "amqp" + this.name;
-        gc.management().exchange(authorizedName).declare();
         Publisher publisher = uc.publisherBuilder().build();
-        TestUtils.Sync rejectedSync = TestUtils.sync();
-        AtomicReference<Throwable> failureCause = new AtomicReference<>();
-        publisher.publish(
-            publisher.message().toAddress().exchange(this.name).message(),
-            ctx -> {
-              if (ctx.status() == Publisher.Status.REJECTED) {
-                failureCause.set(ctx.failureCause());
-                rejectedSync.down();
-              }
-            });
-        Assertions.assertThat(rejectedSync).completes();
-        assertThat(failureCause.get())
-            .hasMessageContaining("access")
-            .hasMessageContaining(this.name);
-        // the broker closes the whole session, the connection and the publisher recover
+        AtomicReference<Exception> exception = new AtomicReference<>();
         waitAtMost(
             () -> {
               try {
-                CountDownLatch releasedLatch = new CountDownLatch(1);
                 publisher.publish(
-                    publisher.message().toAddress().exchange(authorizedName).message(),
-                    ctx -> {
-                      // the exchange has no bindings
-                      if (ctx.status() == Publisher.Status.RELEASED) {
-                        releasedLatch.countDown();
-                      }
-                    });
-                return releasedLatch.await(1, TimeUnit.SECONDS);
-              } catch (AmqpException e) {
+                    publisher.message().toAddress().exchange(this.name).message(), ctx -> {});
                 return false;
+              } catch (AmqpException.AmqpSecurityException e) {
+                exception.set(e);
+                return true;
               }
             });
+        assertThat(exception.get())
+            .isInstanceOf(AmqpException.AmqpSecurityException.class)
+            .hasMessageContaining("access")
+            .hasMessageContaining(this.name);
       } finally {
         gc.management().exchangeDelete(this.name);
-        gc.management().exchangeDelete("amqp" + this.name);
       }
     }
   }
@@ -238,9 +214,6 @@ public class AuthorizationTest {
         .virtualHost(VH)
         .username(USERNAME)
         .password(PASSWORD)
-        .recovery()
-        .backOffDelayPolicy(BackOffDelayPolicy.fixed(Duration.ofMillis(100)))
-        .connectionBuilder()
         .build();
   }
 

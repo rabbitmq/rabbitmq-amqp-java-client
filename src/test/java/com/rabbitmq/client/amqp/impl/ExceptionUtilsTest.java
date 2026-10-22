@@ -21,6 +21,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_NOT_FOUND;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_RESOURCE_DELETED;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_UNAUTHORIZED_ACCESS;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convertPublishFailure;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpConnectionException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
+import java.util.concurrent.CompletionException;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
@@ -118,5 +120,17 @@ public class ExceptionUtilsTest {
     assertThat(sessionRemotelyClosed(new ClientLinkRemotelyClosedException(""))).isFalse();
     assertThat(sessionRemotelyClosed(new ClientIllegalStateException(""))).isFalse();
     assertThat(sessionRemotelyClosed(null)).isFalse();
+  }
+
+  @Test
+  void convertPublishFailureTest() {
+    ClientException e =
+        new ClientSessionRemotelyClosedException(
+            "closed", ErrorCondition.create(ERROR_UNAUTHORIZED_ACCESS, "no access", null));
+    assertThat(convertPublishFailure(e)).isInstanceOf(AmqpException.AmqpSecurityException.class);
+    assertThat(convertPublishFailure(new CompletionException(e)))
+        .isInstanceOf(AmqpException.AmqpSecurityException.class);
+    Error error = new Error("fatal");
+    assertThat(convertPublishFailure(error)).isSameAs(error);
   }
 }

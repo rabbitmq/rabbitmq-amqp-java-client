@@ -145,6 +145,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
                 ex = AmqpUtils.maybeMapToRejectedException(remoteDelState);
               } else {
                 status = Status.REJECTED;
+                ex = ExceptionUtils.convertPublishFailure(ex);
               }
               DefaultContext defaultContext = new DefaultContext(message, status, ex);
               this.metricsCollector.publishDisposition(mapToPublishDisposition(status));

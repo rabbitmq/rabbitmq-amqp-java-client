@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
@@ -62,6 +63,15 @@ abstract class ExceptionUtils {
     } else {
       return new AmqpException(e);
     }
+  }
+
+  static Throwable convertPublishFailure(Throwable t) {
+    Throwable cause = t;
+    while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+        && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return cause instanceof Exception ? convert((Exception) cause) : cause;
   }
 
   static AmqpException convert(ClientException e) {

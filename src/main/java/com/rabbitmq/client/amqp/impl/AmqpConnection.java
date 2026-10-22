@@ -479,10 +479,12 @@ final class AmqpConnection extends ResourceBase
       // the session of the connection is closed by the broker, but the connection is still up
       if (e instanceof ClientSessionRemotelyClosedException) {
         AmqpException exception = convert(e);
-        if (this.recoveryConfiguration.activated()) {
+        if (this.recoveryConfiguration.activated()
+            && !(exception instanceof AmqpException.AmqpSecurityException)) {
           this.connectionStateClient.handleSessionFailure(attemptEpoch, exception);
         } else {
-          // closing the connection blocks, it cannot run on the IO thread
+          // security errors are fatal, closing the connection blocks, it cannot run on the IO
+          // thread
           this.environment.executorService().submit(() -> this.close(exception));
         }
       }
