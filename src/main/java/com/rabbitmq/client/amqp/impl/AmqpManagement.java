@@ -328,12 +328,7 @@ class AmqpManagement implements Management {
       this.closeNativeResources(); // Ensure a clean slate
 
       LOGGER.debug("Creating management session ({}).", this);
-      org.apache.qpid.protonj2.client.Connection nativeConnection =
-          this.connection.nativeConnection();
-      if (nativeConnection == null) {
-        throw new AmqpException.AmqpConnectionException("Connection not available", null);
-      }
-      this.session = nativeConnection.openSession(Utils.sessionOptions());
+      this.session = nativeConnection().openSession(Utils.sessionOptions());
       String linkPairName = "management-link-pair";
       Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
 
@@ -392,6 +387,15 @@ class AmqpManagement implements Management {
 
       throw amqpEx;
     }
+  }
+
+  private org.apache.qpid.protonj2.client.Connection nativeConnection() {
+    org.apache.qpid.protonj2.client.Connection nativeConnection =
+        this.connection.nativeConnection();
+    if (nativeConnection == null) {
+      throw new AmqpException.AmqpConnectionException("Connection not available", null);
+    }
+    return nativeConnection;
   }
 
   private Runnable receiveTask() {
