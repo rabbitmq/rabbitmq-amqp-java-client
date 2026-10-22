@@ -533,4 +533,91 @@ public class AmqpConnectionRecoveryTest {
       }
     }
   }
+
+  @Test
+  void isolatedResourcesShouldBeClosedWhenBrokerEndsTheirSession(TestInfo info) {
+    String consumerQ = name(info) + "-consumer";
+    String publisherQ = name(info) + "-publisher";
+    String otherQ = name(info) + "-other";
+    Collection<Resource.State> connectionStates = Collections.synchronizedList(new ArrayList<>());
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .isolateResources(true)
+                .listeners(context -> connectionStates.add(context.currentState()))
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
+    try (Connection c = new AmqpConnection(builder)) {
+      for (String q : new String[] {consumerQ, publisherQ, otherQ}) {
+        c.management().queue(q).declare();
+      }
+      try {
+        TestUtils.Sync consumerClosedSync = TestUtils.sync();
+        AtomicReference<Throwable> consumerCloseCause = new AtomicReference<>();
+        c.consumerBuilder()
+            .queue(consumerQ)
+            .messageHandler((ctx, msg) -> ctx.accept())
+            .listeners(
+                context -> {
+                  if (context.currentState() == CLOSED) {
+                    consumerCloseCause.set(context.failureCause());
+                    consumerClosedSync.down();
+                  }
+                })
+            .build();
+        TestUtils.Sync publisherClosedSync = TestUtils.sync();
+        AtomicReference<Throwable> publisherCloseCause = new AtomicReference<>();
+        c.publisherBuilder()
+            .queue(publisherQ)
+            .listeners(
+                context -> {
+                  if (context.currentState() == CLOSED) {
+                    publisherCloseCause.set(context.failureCause());
+                    publisherClosedSync.down();
+                  }
+                })
+            .build();
+        TestUtils.Sync consumeSync = TestUtils.sync();
+        Consumer otherConsumer =
+            c.consumerBuilder()
+                .queue(otherQ)
+                .messageHandler(
+                    (ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                .build();
+        Publisher otherPublisher = c.publisherBuilder().queue(otherQ).build();
+
+        Cli.endSessionsWithLinkTo(consumerQ);
+        assertThat(consumerClosedSync).completes();
+        assertThat(consumerCloseCause.get())
+            .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+
+        Cli.endSessionsWithLinkTo(publisherQ);
+        assertThat(publisherClosedSync).completes();
+        assertThat(publisherCloseCause.get())
+            .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
+
+        assertThat(connectionStates).doesNotContain(RECOVERING, CLOSED);
+        assertThat(connectionAttemptCount).hasValue(1);
+        assertThat(((AmqpConsumer) otherConsumer).state()).isEqualTo(OPEN);
+        TestUtils.Sync publishSync = TestUtils.sync();
+        otherPublisher.publish(
+            otherPublisher.message(),
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            });
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+      } finally {
+        for (String q : new String[] {consumerQ, publisherQ, otherQ}) {
+          c.management().queueDelete(q);
+        }
+      }
+    }
+  }
 }

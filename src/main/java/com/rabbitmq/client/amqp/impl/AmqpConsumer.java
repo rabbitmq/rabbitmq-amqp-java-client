@@ -1194,7 +1194,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   private static boolean maybeCloseConsumerOnException(AmqpConsumer consumer, Exception ex) {
-    return ExceptionUtils.maybeCloseOnException(consumer::close, ex);
+    return ExceptionUtils.maybeCloseOnException(
+        consumer::close, ex, consumer.sessionHandler.sessionFailureHandledByConnection());
   }
 
   // for testing

@@ -204,7 +204,13 @@ abstract class ExceptionUtils {
     return false;
   }
 
-  static boolean maybeCloseOnException(Consumer<Throwable> closing, Exception ex) {
+  static boolean maybeCloseOnException(
+      Consumer<Throwable> closing, Exception ex, boolean sessionFailureHandledByConnection) {
+    if (!sessionFailureHandledByConnection && ex instanceof ClientSessionRemotelyClosedException) {
+      // nothing recovers the session of the resource, the resource is unusable
+      closing.accept(ExceptionUtils.convert((ClientException) ex));
+      return true;
+    }
     if (ex instanceof ClientLinkRemotelyClosedException
         || ex instanceof ClientSessionRemotelyClosedException) {
       ClientResourceRemotelyClosedException e = (ClientResourceRemotelyClosedException) ex;

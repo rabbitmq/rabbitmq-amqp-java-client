@@ -240,6 +240,17 @@ abstract class Cli {
     quorumQueueServersCommand(queue, "restart_server");
   }
 
+  static void endSessionsWithLinkTo(String queue) {
+    // an unexpected frame makes the broker end the session with an internal error
+    rabbitmqctl(
+        "eval '[gen_server:cast(P, {frame_body, unexpected}) "
+            + "|| P <- rabbit_amqp_session:list_local(), "
+            + "{ok, I} <- [rabbit_amqp_session:info(P)], "
+            + "string:find(lists:flatten(io_lib:format(\"~p\", [I])), \"/queues/"
+            + queue
+            + "\") =/= nomatch].'");
+  }
+
   private static void quorumQueueServersCommand(String queue, String function) {
     rabbitmqctl(
         "eval '{ok, Q} = rabbit_amqqueue:lookup(rabbit_misc:r(<<\"/\">>, queue, <<\""

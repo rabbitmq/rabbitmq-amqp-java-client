@@ -236,7 +236,8 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   }
 
   private static boolean maybeCloseResourceOnException(AmqpPublisher publisher, Exception ex) {
-    return ExceptionUtils.maybeCloseOnException(publisher::close, ex);
+    return ExceptionUtils.maybeCloseOnException(
+        publisher::close, ex, publisher.sessionHandler.sessionFailureHandledByConnection());
   }
 
   private static class DefaultContext implements Publisher.Context {

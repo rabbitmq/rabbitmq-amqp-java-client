@@ -22,6 +22,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_RESOURCE_DELETE
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_UNAUTHORIZED_ACCESS;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convertPublishFailure;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.maybeCloseOnException;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +31,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpConnectionException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
@@ -141,5 +143,31 @@ public class ExceptionUtilsTest {
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
     Error error = new Error("fatal");
     assertThat(convertPublishFailure(error)).isSameAs(error);
+  }
+
+  @Test
+  void maybeCloseOnExceptionTest() {
+    AtomicReference<Throwable> cause = new AtomicReference<>();
+    ClientException internalError =
+        new ClientSessionRemotelyClosedException(
+            "", ErrorCondition.create("amqp:internal-error", "internal error", null));
+    assertThat(maybeCloseOnException(cause::set, internalError, true)).isFalse();
+    assertThat(cause).hasNullValue();
+    assertThat(maybeCloseOnException(cause::set, internalError, false)).isTrue();
+    assertThat(cause.get()).isInstanceOf(AmqpResourceClosedException.class);
+
+    cause.set(null);
+    ClientException linkInternalError =
+        new ClientLinkRemotelyClosedException(
+            "", ErrorCondition.create("amqp:internal-error", "internal error", null));
+    assertThat(maybeCloseOnException(cause::set, linkInternalError, false)).isFalse();
+    assertThat(cause).hasNullValue();
+    assertThat(
+            maybeCloseOnException(
+                cause::set,
+                new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND)),
+                true))
+        .isTrue();
+    assertThat(cause.get()).isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
   }
 }
