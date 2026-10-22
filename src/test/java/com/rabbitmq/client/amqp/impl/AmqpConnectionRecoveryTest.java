@@ -57,6 +57,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @DisabledIfRabbitMqCtlNotSet
@@ -459,16 +460,7 @@ public class AmqpConnectionRecoveryTest {
 
         // the first topology recovery is blocked, a second failure starts a new recovery
         recoveryDelay.set(ofSeconds(2));
-        Cli.closeConnection(connectionName);
-        waitAtMost(
-            () -> {
-              try {
-                c.nativeSession(false);
-                return false;
-              } catch (AmqpException.AmqpResourceInvalidStateException e) {
-                return true;
-              }
-            });
+        closeConnectionAndWaitForNewRecovery(c, connectionName);
         releaseRecovery.countDown();
 
         assertThat(stateSync.get(OPEN)).completes();
@@ -494,6 +486,102 @@ public class AmqpConnectionRecoveryTest {
         }
       }
     }
+  }
+
+  enum StaleRecoveryScenario {
+    OPEN_CONSUMER,
+    OPEN_PUBLISHER,
+    CLOSE_FAILED_CONSUMER
+  }
+
+  @ParameterizedTest
+  @EnumSource(StaleRecoveryScenario.class)
+  void staleTopologyRecoveryShouldNotChangeResourceState(
+      StaleRecoveryScenario scenario, TestInfo info) {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    AtomicReference<Duration> recoveryDelay = new AtomicReference<>(ofMillis(100));
+    TestUtils.Sync openSync = TestUtils.sync(2);
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(
+                    context -> {
+                      if (context.currentState() == OPEN) {
+                        openSync.down();
+                      }
+                    })
+                .recovery()
+                .backOffDelayPolicy(attempt -> recoveryDelay.get())
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      c.management().queue(q).declare();
+      try {
+        TestUtils.Sync consumeSync = TestUtils.sync(1);
+        AmqpConsumer consumer =
+            (AmqpConsumer)
+                c.consumerBuilder()
+                    .queue(q)
+                    .messageHandler(
+                        (ctx, msg) -> {
+                          ctx.accept();
+                          consumeSync.down();
+                        })
+                    .build();
+        AmqpPublisher publisher = (AmqpPublisher) c.publisherBuilder().queue(q).build();
+        ResourceBase resource =
+            scenario == StaleRecoveryScenario.OPEN_PUBLISHER ? publisher : consumer;
+
+        AtomicInteger activationCount = new AtomicInteger();
+        AtomicReference<Resource.State> stateInNewerRecovery = new AtomicReference<>();
+        Runnable hook =
+            () -> {
+              if (activationCount.incrementAndGet() == 1) {
+                // a disconnect between the stale check and the activation
+                recoveryDelay.set(ofSeconds(1));
+                closeConnectionAndWaitForNewRecovery(c, connectionName);
+                if (scenario == StaleRecoveryScenario.CLOSE_FAILED_CONSUMER) {
+                  throw new IllegalStateException("simulated recovery failure");
+                }
+              } else {
+                stateInNewerRecovery.compareAndSet(null, resource.state());
+              }
+            };
+        if (scenario == StaleRecoveryScenario.OPEN_PUBLISHER) {
+          publisher.beforeActivateHook = hook;
+        } else {
+          consumer.beforeActivateHook = hook;
+        }
+
+        Cli.closeConnection(connectionName);
+        assertThat(openSync).completes();
+        assertThat(stateInNewerRecovery).hasValue(RECOVERING);
+        assertThat(consumer.state()).isEqualTo(OPEN);
+        assertThat(publisher.state()).isEqualTo(OPEN);
+
+        publisher.publish(publisher.message(), ctx -> {});
+        assertThat(consumeSync).completes();
+      } finally {
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
+  private static void closeConnectionAndWaitForNewRecovery(
+      AmqpConnection c, String connectionName) {
+    Cli.closeConnection(connectionName);
+    waitAtMost(
+        () -> {
+          try {
+            c.nativeSession(false);
+            return false;
+          } catch (AmqpException.AmqpResourceInvalidStateException e) {
+            return true;
+          }
+        });
   }
 
   @Test

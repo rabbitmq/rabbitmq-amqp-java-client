@@ -28,6 +28,7 @@ import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.apache.qpid.protonj2.client.DisconnectionEvent;
@@ -53,6 +54,30 @@ final class ConnectionStateClient implements AutoCloseable {
   boolean isStale(long attemptEpoch) {
     return this.client.query(
         state -> ConnectionState.isStale(state.internalState, state.epoch, attemptEpoch));
+  }
+
+  // the action runs in the event loop, so it cannot interleave with the start of a newer recovery
+  void runIfCurrent(long attemptEpoch, Runnable action) {
+    AtomicReference<RuntimeException> failure = new AtomicReference<>();
+    Boolean current =
+        this.client.query(
+            state -> {
+              if (ConnectionState.isStale(state.internalState, state.epoch, attemptEpoch)) {
+                return false;
+              }
+              try {
+                action.run();
+              } catch (RuntimeException e) {
+                failure.set(e);
+              }
+              return true;
+            });
+    if (failure.get() != null) {
+      throw failure.get();
+    }
+    if (!Boolean.TRUE.equals(current)) {
+      throw new StaleRecoveryException();
+    }
   }
 
   List<AmqpConsumer> consumers() {

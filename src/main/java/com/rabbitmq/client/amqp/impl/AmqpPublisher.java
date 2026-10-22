@@ -57,6 +57,9 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
   private final String address;
   private final AmqpConnection connection;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  // package-private for testing: runs after the native sender has been reopened during
+  // recovery, immediately before the publisher is moved to OPEN
+  volatile Runnable beforeActivateHook = () -> {};
   private final MetricsCollector metricsCollector;
   private final ObservationCollector observationCollector;
   private final Function<Message, Tracker> publishCall;
@@ -161,7 +164,7 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     return this.sender.send(msg.nativeMessage());
   }
 
-  void recoverAfterConnectionFailure() {
+  void recoverAfterConnectionFailure(RecoveryGuard guard) {
     if (this.closed.get()) {
       LOGGER.debug("Publisher {} is closed, skipping recovery", this.id);
       return;
@@ -185,7 +188,18 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
       return;
     }
 
-    this.sender = newSender;
+    this.beforeActivateHook.run();
+    try {
+      guard.runIfCurrent(
+          () -> {
+            this.sender = newSender;
+            this.state(OPEN);
+          });
+    } catch (StaleRecoveryException e) {
+      LOGGER.debug("Recovery of publisher {} is stale, closing new sender", this.id);
+      maybeClose(newSender, ex -> LOGGER.debug("Error while closing sender: {}", ex.getMessage()));
+      throw e;
+    }
   }
 
   @Override

@@ -135,6 +135,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
 
   // Arbitrates the two writers of the consumer lifecycle: close() and the tail of
   // recoverAfterConnectionFailure. Held only across field writes, never across I/O.
+  // Recovery takes it in the connection event loop, so never wait on the loop while holding it.
   private final Object lifecycleLock = new Object();
 
   // One instance per receiver generation. Everything the credit path touches lives here, so a
@@ -557,7 +558,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     }
   }
 
-  void recoverAfterConnectionFailure() {
+  void recoverAfterConnectionFailure(RecoveryGuard guard) {
     // optimization that avoids a pointless retry loop for a consumer already closed;
     // activate() is the actual guarantee
     if (this.closed.get()) {
@@ -598,7 +599,15 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       Link newLink = this.buildLink(newReceiver, holder);
       this.directReplyToAddress = newReceiver.address();
       this.beforeActivateHook.run();
-      if (!this.activate(newLink)) {
+      AtomicBoolean activated = new AtomicBoolean(false);
+      try {
+        guard.runIfCurrent(() -> activated.set(this.activate(newLink)));
+      } catch (StaleRecoveryException e) {
+        LOGGER.debug("Recovery of consumer {} is stale, closing new receiver", this.id);
+        closeQuietly(newReceiver);
+        throw e;
+      }
+      if (!activated.get()) {
         LOGGER.debug("Consumer {} was closed during recovery, closing new receiver", this.id);
         closeQuietly(newReceiver);
         return;

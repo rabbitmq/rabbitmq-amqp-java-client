@@ -552,6 +552,7 @@ final class AmqpConnection extends ResourceBase
       LOGGER.debug("No consumers to recover");
     } else {
       LOGGER.debug("{} consumer(s) to recover", consumersToRecover.size());
+      RecoveryGuard guard = recoveryGuard(attemptEpoch);
       List<AmqpConsumer> failedConsumers = new ArrayList<>();
       for (AmqpConsumer consumer : consumersToRecover) {
         Utils.throwIfInterrupted();
@@ -559,7 +560,7 @@ final class AmqpConnection extends ResourceBase
         checkRecoveryNotStale(attemptEpoch);
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
-          consumer.recoverAfterConnectionFailure();
+          consumer.recoverAfterConnectionFailure(guard);
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
         } catch (AmqpException.AmqpConnectionException ex) {
           LOGGER.warn(
@@ -591,20 +592,21 @@ final class AmqpConnection extends ResourceBase
                 consumer.id(),
                 consumer.queue(),
                 ex);
-            checkRecoveryNotStale(attemptEpoch);
             failedConsumers.add(consumer);
           }
+        } catch (StaleRecoveryException ex) {
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover consumer {} (queue '{}')",
               consumer.id(),
               consumer.queue(),
               ex);
-          checkRecoveryNotStale(attemptEpoch);
           failedConsumers.add(consumer);
         }
       }
-      checkRecoveryNotStale(attemptEpoch);
+      // a newer recovery must not pick up the resources this recovery decides to close
+      guard.runIfCurrent(() -> failedConsumers.forEach(this.connectionStateClient::removeConsumer));
       failedConsumers.forEach(AmqpConsumer::close);
     }
   }
@@ -615,6 +617,7 @@ final class AmqpConnection extends ResourceBase
       LOGGER.debug("No publishers to recover");
     } else {
       LOGGER.debug("{} publisher(s) to recover", publishersToRecover.size());
+      RecoveryGuard guard = recoveryGuard(attemptEpoch);
       List<AmqpPublisher> failedPublishers = new ArrayList<>();
       for (AmqpPublisher publisher : publishersToRecover) {
         Utils.throwIfInterrupted();
@@ -623,8 +626,7 @@ final class AmqpConnection extends ResourceBase
         try {
           LOGGER.debug(
               "Recovering publisher {} (address '{}')", publisher.id(), publisher.address());
-          publisher.recoverAfterConnectionFailure();
-          publisher.state(OPEN);
+          publisher.recoverAfterConnectionFailure(guard);
           LOGGER.debug(
               "Recovered publisher {} (address '{}')", publisher.id(), publisher.address());
         } catch (AmqpException.AmqpConnectionException ex) {
@@ -648,22 +650,27 @@ final class AmqpConnection extends ResourceBase
                 publisher.id(),
                 publisher.address(),
                 ex);
-            checkRecoveryNotStale(attemptEpoch);
             failedPublishers.add(publisher);
           }
+        } catch (StaleRecoveryException ex) {
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover publisher {} (address '{}')",
               publisher.id(),
               publisher.address(),
               ex);
-          checkRecoveryNotStale(attemptEpoch);
           failedPublishers.add(publisher);
         }
       }
-      checkRecoveryNotStale(attemptEpoch);
+      guard.runIfCurrent(
+          () -> failedPublishers.forEach(this.connectionStateClient::removePublisher));
       failedPublishers.forEach(AmqpPublisher::close);
     }
+  }
+
+  private RecoveryGuard recoveryGuard(long attemptEpoch) {
+    return action -> this.connectionStateClient.runIfCurrent(attemptEpoch, action);
   }
 
   private void checkRecoveryNotStale(long attemptEpoch) {
