@@ -60,6 +60,14 @@ Under `src/main/java/com/rabbitmq/client/amqp/`:
 
 * Format code with `./mvnw spotless:apply` at the end of each task
 
+## Static Analysis
+
+* Run SpotBugs once done with the code, it is part of the CI build, so fix any reported bug before handing over the changes:
+
+```bash
+./mvnw compile spotbugs:check
+```
+
 ## Comments
 
 * Only add very important comments, both in tests and in the implementation

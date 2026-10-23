@@ -18,6 +18,7 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.AmqpException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
@@ -62,6 +63,15 @@ abstract class ExceptionUtils {
     } else {
       return new AmqpException(e);
     }
+  }
+
+  static Throwable convertPublishFailure(Throwable t) {
+    Throwable cause = t;
+    while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+        && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return cause instanceof Exception ? convert((Exception) cause) : cause;
   }
 
   static AmqpException convert(ClientException e) {
@@ -139,15 +149,28 @@ abstract class ExceptionUtils {
     return isUnauthorizedAccess(e.getErrorCondition());
   }
 
+  static boolean sessionRemotelyClosed(Throwable e) {
+    Throwable current = e;
+    while (current != null) {
+      if (current instanceof ClientSessionRemotelyClosedException) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
   static boolean noRunningStreamMemberOnNode(Exception e) {
     if (e instanceof AmqpException.AmqpResourceClosedException) {
       String message = e.getMessage();
       if (message == null) {
         return false;
       } else {
+        // RabbitMQ < 4.2.5 could crash with a noproc in the stream queue code
+        // when the local stream coordinator member is not running
         return (message.contains("stream queue")
                 && message.contains("does not have a running replica on the local node"))
-            || message.contains("noproc");
+            || (message.contains("noproc") && message.contains("rabbit_stream_queue"));
       }
     } else {
       return false;
@@ -181,7 +204,13 @@ abstract class ExceptionUtils {
     return false;
   }
 
-  static boolean maybeCloseOnException(Consumer<Throwable> closing, Exception ex) {
+  static boolean maybeCloseOnException(
+      Consumer<Throwable> closing, Exception ex, boolean sessionFailureHandledByConnection) {
+    if (!sessionFailureHandledByConnection && ex instanceof ClientSessionRemotelyClosedException) {
+      // nothing recovers the session of the resource, the resource is unusable
+      closing.accept(ExceptionUtils.convert((ClientException) ex));
+      return true;
+    }
     if (ex instanceof ClientLinkRemotelyClosedException
         || ex instanceof ClientSessionRemotelyClosedException) {
       ClientResourceRemotelyClosedException e = (ClientResourceRemotelyClosedException) ex;

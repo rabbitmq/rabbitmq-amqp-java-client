@@ -219,6 +219,7 @@ class AmqpManagement implements Management {
       boolean shouldClose =
           this.stateClient.query(
               s -> {
+                s.closedByApplication = true;
                 if (s.state == CLOSED) return false;
                 s.state = CLOSED;
                 return true;
@@ -247,24 +248,62 @@ class AmqpManagement implements Management {
     }
   }
 
+  void clearClosedByApplication() {
+    try {
+      this.stateClient.submit(s -> s.closedByApplication = false);
+    } catch (IllegalStateException e) {
+      // ignore, loop is dead
+    }
+  }
+
+  /**
+   * Close management again if the application closed it, as a recovery opens it for its own needs.
+   *
+   * @throws StaleRecoveryException if a newer recovery took over
+   */
+  void closeIfClosedByApplication(RecoveryGuard guard) {
+    AtomicReference<Runnable> closeNativeResources = new AtomicReference<>();
+    // a newer recovery may be using management, so the decision must be atomic with its start
+    guard.runIfCurrent(
+        () -> {
+          Boolean shouldClose =
+              this.stateClient.query(s -> s.closedByApplication && s.state != CLOSED);
+          if (Boolean.TRUE.equals(shouldClose)) {
+            this.releaseResources(null, CLOSED);
+            Receiver r = this.receiver;
+            Sender snd = this.sender;
+            Session ss = this.session;
+            closeNativeResources.set(() -> closeNativeResources(r, snd, ss));
+          }
+        });
+    if (closeNativeResources.get() != null) {
+      LOGGER.debug("Management was closed by the application, closing it after recovery");
+      closeNativeResources.get().run();
+    }
+  }
+
   private void closeNativeResources() {
-    if (this.receiver != null) {
+    closeNativeResources(this.receiver, this.sender, this.session);
+  }
+
+  private static void closeNativeResources(Receiver receiver, Sender sender, Session session) {
+    if (receiver != null) {
       try {
-        this.receiver.close();
+        receiver.close();
       } catch (Exception e) {
         LOGGER.debug("Error while closing receiver: {}", e.getMessage());
       }
     }
-    if (this.sender != null) {
+    if (sender != null) {
       try {
-        this.sender.close();
+        sender.close();
       } catch (Exception e) {
         LOGGER.debug("Error while closing sender: {}", e.getMessage());
       }
     }
-    if (this.session != null) {
+    if (session != null) {
       try {
-        this.session.close();
+        session.close();
       } catch (Exception e) {
         LOGGER.debug("Error while closing session: {}", e.getMessage());
       }
@@ -328,7 +367,7 @@ class AmqpManagement implements Management {
       this.closeNativeResources(); // Ensure a clean slate
 
       LOGGER.debug("Creating management session ({}).", this);
-      this.session = this.connection.nativeConnection().openSession(Utils.sessionOptions());
+      this.session = nativeConnection().openSession(Utils.sessionOptions());
       String linkPairName = "management-link-pair";
       Map<String, Object> properties = Collections.singletonMap("paired", Boolean.TRUE);
 
@@ -387,6 +426,15 @@ class AmqpManagement implements Management {
 
       throw amqpEx;
     }
+  }
+
+  private org.apache.qpid.protonj2.client.Connection nativeConnection() {
+    org.apache.qpid.protonj2.client.Connection nativeConnection =
+        this.connection.nativeConnection();
+    if (nativeConnection == null) {
+      throw new AmqpException.AmqpConnectionException("Connection not available", null);
+    }
+    return nativeConnection;
   }
 
   private Runnable receiveTask() {
@@ -1000,6 +1048,8 @@ class AmqpManagement implements Management {
 
   private static class ManagementState {
     private State state = CREATED;
+    // survives the opening of management by a recovery, unlike the CLOSED state
+    private boolean closedByApplication;
     private final Map<UUID, OutstandingRequest> outstandingRequests = new HashMap<>();
     // Tracks the ongoing initialization
     private CompletableFuture<Void> initFuture;

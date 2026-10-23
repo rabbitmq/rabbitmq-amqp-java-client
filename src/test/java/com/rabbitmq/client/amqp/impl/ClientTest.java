@@ -43,6 +43,7 @@ import com.rabbitmq.client.amqp.impl.TestUtils.DisabledIfRabbitMqCtlNotSet;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -316,6 +317,31 @@ public class ClientTest {
         fail("Receiver should have been closed after queue deletion");
       } catch (ClientLinkRemotelyClosedException e) {
         assertThat(e.getErrorCondition().condition()).isEqualTo("amqp:resource-deleted");
+      }
+    }
+  }
+
+  @Test
+  @DisabledIfRabbitMqCtlNotSet
+  void receiverCloseShouldNotHangWhenBrokerEndsSessionOnDetach(TestInfo info) throws Exception {
+    String queue = name(info);
+    try (Environment env = TestUtils.environmentBuilder().build();
+        com.rabbitmq.client.amqp.Connection connection = env.connectionBuilder().build();
+        Client client = client()) {
+      connection.management().queue(queue).quorum().queue().declare();
+      try {
+        org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
+        Session session = protonConnection.openSession();
+        Receiver receiver = session.openReceiver("/queues/" + queue);
+        receiver.openFuture().get(10, SECONDS);
+        // the broker ends the session when it cannot remove the consumer on detach
+        Cli.stopQuorumQueueServers(queue);
+        long start = System.nanoTime();
+        receiver.close();
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(10));
+      } finally {
+        Cli.restartQuorumQueueServers(queue);
+        connection.management().queueDelete(queue);
       }
     }
   }

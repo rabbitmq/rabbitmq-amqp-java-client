@@ -20,7 +20,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
+import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientOperationTimedOutException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSendTimedOutException;
 
@@ -52,6 +54,7 @@ public class SessionOptions implements Cloneable {
     private String[] desiredCapabilities;
     private Map<String, Object> properties;
     private NextReceiverPolicy nextReceiverPolicy = ConnectionOptions.DEFAULT_NEXT_RECEIVER_POLICY;
+    private Consumer<ClientException> closeHandler;
 
     /**
      * Create a new {@link SessionOptions} instance configured with default configuration settings.
@@ -94,6 +97,7 @@ public class SessionOptions implements Cloneable {
         other.incomingCapacity(incomingCapacity);
         other.outgoingCapacity(outgoingCapacity);
         other.defaultNextReceiverPolicy(nextReceiverPolicy);
+        other.closeHandler(closeHandler);
 
         if (offeredCapabilities != null) {
             other.offeredCapabilities(Arrays.copyOf(offeredCapabilities, offeredCapabilities.length));
@@ -420,5 +424,25 @@ public class SessionOptions implements Cloneable {
     public SessionOptions defaultNextReceiverPolicy(NextReceiverPolicy policy) {
         this.nextReceiverPolicy = policy;
         return this;
+    }
+
+    /**
+     * Callback when the session is closed / shut down.
+     *
+     * @param closeHandler close / shutdown handler
+     * @return this {@link SessionOptions} instance.
+     */
+    public SessionOptions closeHandler(Consumer<ClientException> closeHandler) {
+        this.closeHandler = closeHandler;
+        return this;
+    }
+
+    /**
+     * Configured close / shutdown handler.
+     *
+     * @return the configured handler
+     */
+    public Consumer<ClientException> closeHandler() {
+        return this.closeHandler;
     }
 }

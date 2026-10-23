@@ -26,6 +26,8 @@ import static com.rabbitmq.client.amqp.impl.TestUtils.closedOnSecurityExceptionL
 import static com.rabbitmq.client.amqp.impl.TestUtils.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Connection;
@@ -80,6 +82,17 @@ public class ManagementTest {
     queueInfo = management.queue().exclusive(true).autoDelete(false).declare();
     assertThat(queueInfo.name()).isNotEqualTo(q);
     assertThat(nameSupplierCallCount).hasValue(1 + 2);
+  }
+
+  @Test
+  void initShouldFailWithConnectionExceptionWhenNativeConnectionIsNotAvailable() {
+    AmqpConnection c = mock(AmqpConnection.class);
+    when(c.environment()).thenReturn((AmqpEnvironment) environment);
+    when(c.name()).thenReturn("test-connection");
+    management = new AmqpManagement(new AmqpManagementParameters(c));
+    assertThatThrownBy(() -> management.init())
+        .isInstanceOf(AmqpException.AmqpConnectionException.class)
+        .hasMessage("Connection not available");
   }
 
   @Test

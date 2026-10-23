@@ -72,6 +72,7 @@ import org.apache.qpid.protonj2.client.DisconnectionEvent;
 import org.apache.qpid.protonj2.client.Session;
 import org.apache.qpid.protonj2.client.SslOptions;
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
+import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +129,7 @@ final class AmqpConnection extends ResourceBase
   private volatile Session nativeSession;
   private volatile ConsumerWorkService consumerWorkService;
   private volatile Executor dispatchingExecutor;
+  volatile Runnable beforeResourceRecoveryHook = () -> {};
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -172,6 +174,8 @@ final class AmqpConnection extends ResourceBase
             this.close(failureCause);
           };
     }
+    java.util.function.Consumer<ClientException> sessionCloseHandler =
+        createSessionCloseHandler(this.connectionStateClient.epoch());
     if (this.connectionSettings.affinity().activated()) {
       this.affinity =
           new ConnectionUtils.AffinityContext(
@@ -212,7 +216,12 @@ final class AmqpConnection extends ResourceBase
           ConnectionUtils.enforceAffinity(
               addrs -> {
                 NativeConnectionWrapper wrapper =
-                    connect(this.connectionSettings, this.name(), disconnectHandler, addrs);
+                    connect(
+                        this.connectionSettings,
+                        this.name(),
+                        disconnectHandler,
+                        sessionCloseHandler,
+                        addrs);
                 this.nativeConnection = wrapper.connection();
                 return wrapper;
               },
@@ -312,6 +321,7 @@ final class AmqpConnection extends ResourceBase
   @Override
   public Management management() {
     checkOpen();
+    this.management.clearClosedByApplication();
     return this.managementNoCheck();
   }
 
@@ -364,6 +374,7 @@ final class AmqpConnection extends ResourceBase
       DefaultConnectionSettings<?> connectionSettings,
       String name,
       BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler,
+      java.util.function.Consumer<ClientException> sessionCloseHandler,
       List<Address> addresses) {
 
     ConnectionOptions connectionOptions = new ConnectionOptions();
@@ -414,7 +425,8 @@ final class AmqpConnection extends ResourceBase
       LOGGER.debug("Connection attempt '{}' succeeded", this.name());
       checkBroker(connection);
       checkBrokerVersion(connection);
-      Session session = connection.openSession(Utils.sessionOptions());
+      Session session =
+          connection.openSession(Utils.sessionOptions().closeHandler(sessionCloseHandler));
       return new NativeConnectionWrapper(connection, session, extractNode(connection), address);
     } catch (ClientException e) {
       throw convert(e);
@@ -463,6 +475,24 @@ final class AmqpConnection extends ResourceBase
     };
   }
 
+  private java.util.function.Consumer<ClientException> createSessionCloseHandler(
+      long attemptEpoch) {
+    return e -> {
+      // the session of the connection is closed by the broker, but the connection is still up
+      if (e instanceof ClientSessionRemotelyClosedException) {
+        AmqpException exception = convert(e);
+        if (this.recoveryConfiguration.activated()
+            && !(exception instanceof AmqpException.AmqpSecurityException)) {
+          this.connectionStateClient.handleSessionFailure(attemptEpoch, exception);
+        } else {
+          // security errors are fatal, closing the connection blocks, it cannot run on the IO
+          // thread
+          this.environment.executorService().submit(() -> this.close(exception));
+        }
+      }
+    };
+  }
+
   private CompletableFuture<NativeConnectionWrapper> recoverNativeConnection(
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
@@ -476,6 +506,7 @@ final class AmqpConnection extends ResourceBase
                               this.connectionSettings,
                               connectionName,
                               createDisconnectHandler(attemptEpoch),
+                              createSessionCloseHandler(attemptEpoch),
                               addrs);
                       // Temporarily assign the native connection so AmqpManagement can use it to
                       // open its session and query the broker for queue leader information
@@ -509,25 +540,28 @@ final class AmqpConnection extends ResourceBase
         .build();
   }
 
-  private void recoverTopology() throws InterruptedException {
+  private void recoverTopology(long attemptEpoch) throws InterruptedException {
     if (this.entityRecovery != null) {
       Utils.throwIfInterrupted();
-      this.entityRecovery.recover();
+      this.entityRecovery.recover(() -> checkRecoveryNotStale(attemptEpoch));
     }
   }
 
-  private void recoverConsumers() throws InterruptedException {
+  private void recoverConsumers(long attemptEpoch) throws InterruptedException {
     List<AmqpConsumer> consumersToRecover = this.connectionStateClient.consumers();
     if (consumersToRecover.isEmpty()) {
       LOGGER.debug("No consumers to recover");
     } else {
       LOGGER.debug("{} consumer(s) to recover", consumersToRecover.size());
+      RecoveryGuard guard = recoveryGuard(attemptEpoch);
       List<AmqpConsumer> failedConsumers = new ArrayList<>();
       for (AmqpConsumer consumer : consumersToRecover) {
         Utils.throwIfInterrupted();
+        this.beforeResourceRecoveryHook.run();
+        checkRecoveryNotStale(attemptEpoch);
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
-          consumer.recoverAfterConnectionFailure();
+          consumer.recoverAfterConnectionFailure(guard);
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
         } catch (AmqpException.AmqpConnectionException ex) {
           LOGGER.warn(
@@ -537,7 +571,14 @@ final class AmqpConnection extends ResourceBase
               ex);
           throw ex;
         } catch (AmqpException.AmqpResourceClosedException ex) {
-          if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
+          if (ExceptionUtils.sessionRemotelyClosed(ex)) {
+            LOGGER.warn(
+                "Session closed while trying to recover consumer {} (queue '{}'), restarting recovery",
+                consumer.id(),
+                consumer.queue(),
+                ex);
+            throw new AmqpException.AmqpConnectionException("Session closed during recovery", ex);
+          } else if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
             LOGGER.warn(
                 "Could not recover consumer {} (queue '{}') because there is "
                     + "running stream member on the node, restarting recovery",
@@ -554,6 +595,8 @@ final class AmqpConnection extends ResourceBase
                 ex);
             failedConsumers.add(consumer);
           }
+        } catch (StaleRecoveryException ex) {
+          throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
               "Error while trying to recover consumer {} (queue '{}')",
@@ -563,24 +606,28 @@ final class AmqpConnection extends ResourceBase
           failedConsumers.add(consumer);
         }
       }
+      // a newer recovery must not pick up the resources this recovery decides to close
+      guard.runIfCurrent(() -> failedConsumers.forEach(this.connectionStateClient::removeConsumer));
       failedConsumers.forEach(AmqpConsumer::close);
     }
   }
 
-  private void recoverPublishers() throws InterruptedException {
+  private void recoverPublishers(long attemptEpoch) throws InterruptedException {
     List<AmqpPublisher> publishersToRecover = this.connectionStateClient.publishers();
     if (publishersToRecover.isEmpty()) {
       LOGGER.debug("No publishers to recover");
     } else {
       LOGGER.debug("{} publisher(s) to recover", publishersToRecover.size());
+      RecoveryGuard guard = recoveryGuard(attemptEpoch);
       List<AmqpPublisher> failedPublishers = new ArrayList<>();
       for (AmqpPublisher publisher : publishersToRecover) {
         Utils.throwIfInterrupted();
+        this.beforeResourceRecoveryHook.run();
+        checkRecoveryNotStale(attemptEpoch);
         try {
           LOGGER.debug(
               "Recovering publisher {} (address '{}')", publisher.id(), publisher.address());
-          publisher.recoverAfterConnectionFailure();
-          publisher.state(OPEN);
+          publisher.recoverAfterConnectionFailure(guard);
           LOGGER.debug(
               "Recovered publisher {} (address '{}')", publisher.id(), publisher.address());
         } catch (AmqpException.AmqpConnectionException ex) {
@@ -589,6 +636,24 @@ final class AmqpConnection extends ResourceBase
               publisher.id(),
               publisher.address(),
               ex);
+          throw ex;
+        } catch (AmqpException.AmqpResourceClosedException ex) {
+          if (ExceptionUtils.sessionRemotelyClosed(ex)) {
+            LOGGER.warn(
+                "Session closed while trying to recover publisher {} (address '{}'), restarting recovery",
+                publisher.id(),
+                publisher.address(),
+                ex);
+            throw new AmqpException.AmqpConnectionException("Session closed during recovery", ex);
+          } else {
+            LOGGER.warn(
+                "Error while trying to recover publisher {} (address '{}')",
+                publisher.id(),
+                publisher.address(),
+                ex);
+            failedPublishers.add(publisher);
+          }
+        } catch (StaleRecoveryException ex) {
           throw ex;
         } catch (Exception ex) {
           LOGGER.warn(
@@ -599,12 +664,21 @@ final class AmqpConnection extends ResourceBase
           failedPublishers.add(publisher);
         }
       }
+      guard.runIfCurrent(
+          () -> failedPublishers.forEach(this.connectionStateClient::removePublisher));
       failedPublishers.forEach(AmqpPublisher::close);
     }
   }
 
-  private void closeManagement() {
-    this.management.close();
+  private RecoveryGuard recoveryGuard(long attemptEpoch) {
+    return action -> this.connectionStateClient.runIfCurrent(attemptEpoch, action);
+  }
+
+  private void checkRecoveryNotStale(long attemptEpoch) {
+    // a stale recovery must not touch resources, the newer recovery handles them
+    if (this.connectionStateClient.isStale(attemptEpoch)) {
+      throw new StaleRecoveryException();
+    }
   }
 
   Session nativeSession() {
@@ -1057,30 +1131,26 @@ final class AmqpConnection extends ResourceBase
     }
 
     try {
-      boolean managementPreviouslyClosed = this.management.isClosed();
       LOGGER.debug("Recovering topology of connection '{}'...", this.name());
 
+      checkRecoveryNotStale(attemptEpoch);
       // Safely resurrect management via its Event Loop
       this.managementNoCheck();
 
-      this.recoverTopology();
-      this.recoverConsumers();
-      this.recoverPublishers();
+      this.recoverTopology(attemptEpoch);
+      this.recoverConsumers(attemptEpoch);
+      this.recoverPublishers(attemptEpoch);
 
       LOGGER.debug("Recovered topology of connection '{}'.", this.name());
 
-      if (managementPreviouslyClosed) {
-        LOGGER.debug("Management was closed before recovery, closing it again");
-        try {
-          this.closeManagement();
-        } catch (Exception e) {
-          LOGGER.info("Error while (re)closing management after recovery");
-        }
-      }
+      this.management.closeIfClosedByApplication(this.recoveryGuard(attemptEpoch));
 
       // Phase 2 complete. Report success to the Event Loop.
       this.connectionStateClient.handleTopologyRecoverySuccess(attemptEpoch);
 
+    } catch (StaleRecoveryException ex) {
+      LOGGER.debug(
+          "Stopping topology recovery of connection '{}', a newer recovery took over", this.name());
     } catch (Exception ex) {
       AmqpException amqpException = ExceptionUtils.convert(ex);
       if (ex instanceof InterruptedException) {

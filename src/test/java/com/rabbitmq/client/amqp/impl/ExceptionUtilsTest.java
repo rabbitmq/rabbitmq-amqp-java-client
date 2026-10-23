@@ -21,12 +21,17 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_NOT_FOUND;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_RESOURCE_DELETED;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.ERROR_UNAUTHORIZED_ACCESS;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convertPublishFailure;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.maybeCloseOnException;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpConnectionException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLException;
 import org.apache.qpid.protonj2.client.ErrorCondition;
 import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
@@ -96,12 +101,73 @@ public class ExceptionUtilsTest {
                 new AmqpResourceClosedException(
                     "stream queue 'stream-RecoveryClusterTest_clusterRestart-a69d-db752afee52a' in vhost '/' does not have a running replica on the local node [condition = amqp:internal-error]")))
         .isTrue();
-    assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("noproc"))).isTrue();
+    assertThat(
+            noRunningStreamMemberOnNode(
+                new AmqpResourceClosedException(
+                    "Session error: {case_clause,{error,noproc}} [{rabbit_stream_queue,query_local_pid,1,[]}]")))
+        .isTrue();
+    assertThat(
+            noRunningStreamMemberOnNode(
+                new AmqpResourceClosedException(
+                    "failed consuming from quorum queue 'qq' in vhost '/': noproc [condition = amqp:internal-error]")))
+        .isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("foo"))).isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpConnectionException("foo", null))).isFalse();
   }
 
   ErrorCondition errorCondition(String condition) {
     return ErrorCondition.create(condition, null);
+  }
+
+  @Test
+  void sessionRemotelyClosedTest() {
+    ClientSessionRemotelyClosedException sessionClosed =
+        new ClientSessionRemotelyClosedException("");
+    assertThat(sessionRemotelyClosed(sessionClosed)).isTrue();
+    assertThat(sessionRemotelyClosed(convert(sessionClosed))).isTrue();
+    assertThat(sessionRemotelyClosed(new ClientIllegalStateException("", sessionClosed))).isTrue();
+    assertThat(sessionRemotelyClosed(convert(new ClientIllegalStateException("", sessionClosed))))
+        .isTrue();
+    assertThat(sessionRemotelyClosed(new ClientLinkRemotelyClosedException(""))).isFalse();
+    assertThat(sessionRemotelyClosed(new ClientIllegalStateException(""))).isFalse();
+    assertThat(sessionRemotelyClosed(null)).isFalse();
+  }
+
+  @Test
+  void convertPublishFailureTest() {
+    ClientException e =
+        new ClientSessionRemotelyClosedException(
+            "closed", ErrorCondition.create(ERROR_UNAUTHORIZED_ACCESS, "no access", null));
+    assertThat(convertPublishFailure(e)).isInstanceOf(AmqpException.AmqpSecurityException.class);
+    assertThat(convertPublishFailure(new CompletionException(e)))
+        .isInstanceOf(AmqpException.AmqpSecurityException.class);
+    Error error = new Error("fatal");
+    assertThat(convertPublishFailure(error)).isSameAs(error);
+  }
+
+  @Test
+  void maybeCloseOnExceptionTest() {
+    AtomicReference<Throwable> cause = new AtomicReference<>();
+    ClientException internalError =
+        new ClientSessionRemotelyClosedException(
+            "", ErrorCondition.create("amqp:internal-error", "internal error", null));
+    assertThat(maybeCloseOnException(cause::set, internalError, true)).isFalse();
+    assertThat(cause).hasNullValue();
+    assertThat(maybeCloseOnException(cause::set, internalError, false)).isTrue();
+    assertThat(cause.get()).isInstanceOf(AmqpResourceClosedException.class);
+
+    cause.set(null);
+    ClientException linkInternalError =
+        new ClientLinkRemotelyClosedException(
+            "", ErrorCondition.create("amqp:internal-error", "internal error", null));
+    assertThat(maybeCloseOnException(cause::set, linkInternalError, false)).isFalse();
+    assertThat(cause).hasNullValue();
+    assertThat(
+            maybeCloseOnException(
+                cause::set,
+                new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND)),
+                true))
+        .isTrue();
+    assertThat(cause.get()).isInstanceOf(AmqpException.AmqpEntityDoesNotExistException.class);
   }
 }

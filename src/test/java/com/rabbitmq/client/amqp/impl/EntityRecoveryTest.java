@@ -17,9 +17,11 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -34,6 +36,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +52,7 @@ class EntityRecoveryTest {
       "Unexpected response code: 400 instead of 204 (message: 'no exchange '%s' in vhost '/'')";
   private static final String NO_QUEUE_MSG_FORMAT =
       "Unexpected response code: 400 instead of 204 (message: 'no queue '%s' in vhost '/'')";
+  private static final Runnable NO_CHECK = () -> {};
 
   @Mock AmqpConnection connection;
   @Mock RecordingTopologyListener topologyListener;
@@ -100,7 +104,7 @@ class EntityRecoveryTest {
     when(mockQueueSpec.autoDelete()).thenReturn(false);
     when(mockQueueSpec.arguments()).thenReturn(Collections.emptyMap());
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(connection).managementNoCheck();
     verify(management).queue();
@@ -117,7 +121,7 @@ class EntityRecoveryTest {
     when(mockQueueSpec.autoDelete()).thenReturn(true);
     when(mockQueueSpec.arguments()).thenReturn(Collections.emptyMap());
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(connection).managementNoCheck();
     verify(management).queue();
@@ -140,7 +144,7 @@ class EntityRecoveryTest {
 
     when(queueSpec.declare()).thenThrow(exclusiveAccessException).thenReturn(queueInfo);
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(queueSpec, times(2)).declare();
   }
@@ -158,7 +162,7 @@ class EntityRecoveryTest {
 
     when(queueSpec.declare()).thenThrow(exclusiveAccessException);
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(queueSpec, times(1)).declare();
   }
@@ -174,7 +178,7 @@ class EntityRecoveryTest {
 
     when(queueSpec.declare()).thenThrow(otherException);
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(queueSpec, times(1)).declare();
   }
@@ -184,7 +188,7 @@ class EntityRecoveryTest {
     when(mockQueueSpec.exclusive()).thenReturn(false);
     when(mockQueueSpec.autoDelete()).thenReturn(false);
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(connection, never()).managementNoCheck();
     verify(management, never()).queue();
@@ -201,7 +205,7 @@ class EntityRecoveryTest {
     when(mockQueueSpec.autoDelete()).thenReturn(false);
     when(mockQueueSpec.arguments()).thenReturn(arguments);
 
-    entityRecovery.recoverQueue(mockQueueSpec);
+    entityRecovery.recoverQueue(mockQueueSpec, NO_CHECK);
 
     verify(queueSpec).argument("x-max-length", 1000);
     verify(queueSpec).argument("x-message-ttl", 60000);
@@ -216,7 +220,7 @@ class EntityRecoveryTest {
     when(mockBindingSpec.toQueue()).thenReturn(true);
     when(mockBindingSpec.arguments()).thenReturn(Collections.emptyMap());
 
-    entityRecovery.recoverBinding(mockBindingSpec, List.of(), List.of());
+    entityRecovery.recoverBinding(mockBindingSpec, List.of(), List.of(), NO_CHECK);
 
     verify(bindingSpec).bind();
     verify(management, never()).exchange();
@@ -248,7 +252,7 @@ class EntityRecoveryTest {
     when(mockQueueSpec.arguments()).thenReturn(Collections.emptyMap());
 
     entityRecovery.recoverBinding(
-        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec));
+        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec), NO_CHECK);
 
     verify(bindingSpec, times(2)).bind();
     verify(exchangeSpec).declare();
@@ -280,7 +284,7 @@ class EntityRecoveryTest {
     when(mockExchangeSpec.arguments()).thenReturn(Collections.emptyMap());
 
     entityRecovery.recoverBinding(
-        mockBindingSpec, List.of(mockSourceExchangeSpec, mockExchangeSpec), List.of());
+        mockBindingSpec, List.of(mockSourceExchangeSpec, mockExchangeSpec), List.of(), NO_CHECK);
 
     verify(bindingSpec, times(2)).bind();
     verify(exchangeSpec, times(2)).declare();
@@ -298,7 +302,7 @@ class EntityRecoveryTest {
     doThrow(new AmqpException("Some other error")).when(bindingSpec).bind();
 
     entityRecovery.recoverBinding(
-        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec));
+        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec), NO_CHECK);
 
     verify(bindingSpec, times(1)).bind();
     verify(management, never()).exchange();
@@ -330,8 +334,81 @@ class EntityRecoveryTest {
     when(mockQueueSpec.arguments()).thenReturn(Collections.emptyMap());
 
     entityRecovery.recoverBinding(
-        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec));
+        mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec), NO_CHECK);
 
     verify(bindingSpec, times(2)).bind();
+  }
+
+  @Test
+  void recoverShouldStopWhenRecoveryBecomesStale() {
+    when(mockExchangeSpec.name()).thenReturn("ex");
+    when(mockExchangeSpec.autoDelete()).thenReturn(false);
+    when(mockExchangeSpec.type()).thenReturn("direct");
+    when(mockExchangeSpec.arguments()).thenReturn(Collections.emptyMap());
+    doAnswer(
+            invocation -> {
+              RecordingTopologyListener.Visitor visitor = invocation.getArgument(0);
+              visitor.visitExchanges(List.of(mockExchangeSpec, mockSourceExchangeSpec));
+              visitor.visitQueues(List.of(mockQueueSpec));
+              visitor.visitBindings(List.of(mockBindingSpec), List.of(), List.of());
+              return null;
+            })
+        .when(topologyListener)
+        .accept(any());
+
+    assertThatThrownBy(() -> entityRecovery.recover(staleAfter(1)))
+        .isInstanceOf(StaleRecoveryException.class);
+
+    verify(exchangeSpec, times(1)).declare();
+    verify(management, never()).queue();
+    verify(management, never()).binding();
+  }
+
+  @Test
+  void recoverQueueShouldStopRetryingWhenRecoveryBecomesStale() {
+    String q = "test-queue";
+    when(mockQueueSpec.name()).thenReturn(q);
+    when(mockQueueSpec.exclusive()).thenReturn(true);
+    when(mockQueueSpec.autoDelete()).thenReturn(false);
+    when(mockQueueSpec.arguments()).thenReturn(Collections.emptyMap());
+    when(queueSpec.declare())
+        .thenThrow(new AmqpException(String.format(EXCLUSIVE_ACCESS_MSG_FORMAT, q)));
+
+    assertThatThrownBy(() -> entityRecovery.recoverQueue(mockQueueSpec, staleAfter(1)))
+        .isInstanceOf(StaleRecoveryException.class);
+
+    verify(queueSpec, times(1)).declare();
+  }
+
+  @Test
+  void recoverBindingShouldNotRetryWhenRecoveryBecomesStale() {
+    String exchangeName = "ex";
+    when(mockBindingSpec.source()).thenReturn(exchangeName);
+    when(mockBindingSpec.destination()).thenReturn("q");
+    when(mockBindingSpec.key()).thenReturn("foo");
+    when(mockBindingSpec.toQueue()).thenReturn(true);
+    when(mockBindingSpec.arguments()).thenReturn(Collections.emptyMap());
+    when(mockExchangeSpec.name()).thenReturn(exchangeName);
+    doThrow(new AmqpException(String.format(NO_EXCHANGE_MSG_FORMAT, exchangeName)))
+        .when(bindingSpec)
+        .bind();
+
+    assertThatThrownBy(
+            () ->
+                entityRecovery.recoverBinding(
+                    mockBindingSpec, List.of(mockExchangeSpec), List.of(), staleAfter(1)))
+        .isInstanceOf(StaleRecoveryException.class);
+
+    verify(bindingSpec, times(1)).bind();
+    verify(management, never()).exchange();
+  }
+
+  private static Runnable staleAfter(int passingChecks) {
+    AtomicInteger checks = new AtomicInteger();
+    return () -> {
+      if (checks.incrementAndGet() > passingChecks) {
+        throw new StaleRecoveryException();
+      }
+    };
   }
 }
