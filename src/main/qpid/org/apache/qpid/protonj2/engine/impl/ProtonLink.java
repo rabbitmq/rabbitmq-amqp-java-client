@@ -513,8 +513,8 @@ public abstract class ProtonLink<L extends Link<L>> extends ProtonEndpoint<L> im
     }
 
     L fireParentEndpointClosed() {
-        // A link closed locally but still waiting for the remote detach must be notified as well,
-        // as the remote detach will never arrive once the parent endpoint is closed.
+        // A link that was locally closed or detached but is still awaiting the remote response
+        // must also be notified as that response will never arrive once the parent is closed.
         if (parentEndpointClosedEventHandler != null &&
             (isLocallyOpen() || (isLocallyClosedOrDetached() && !isRemotelyClosedOrDetached()))) {
             parentEndpointClosedEventHandler.handle(self());
