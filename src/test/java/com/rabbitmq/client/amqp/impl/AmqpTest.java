@@ -1275,6 +1275,37 @@ public class AmqpTest {
     waitAtMost(() -> receivedCount.get() > messageCount / 5);
   }
 
+  @ParameterizedTest
+  @EnumSource(
+      value = Management.QueueType.class,
+      names = {"QUORUM", "CLASSIC"})
+  void publishersSharingSessionShouldNotStallWhenSessionWindowReopens(Management.QueueType type) {
+    // the session window can be reopened by a flow frame of another link
+    int publisherCount = 4;
+    int messageCount = 20_000;
+    List<String> queues = new ArrayList<>();
+    List<Publisher> publishers = new ArrayList<>();
+    try {
+      for (int i = 0; i < publisherCount; i++) {
+        String q = this.name + "-" + i;
+        connection.management().queue(q).type(type).declare();
+        queues.add(q);
+        publishers.add(
+            connection.publisherBuilder().queue(q).publishTimeout(Duration.ofSeconds(10)).build());
+      }
+      byte[] body = new byte[1000];
+      Sync confirmSync = sync(messageCount);
+      for (int i = 0; i < messageCount; i++) {
+        Publisher publisher = publishers.get(i % publisherCount);
+        publisher.publish(publisher.message(body), acceptedCallback(confirmSync));
+      }
+      assertThat(confirmSync).completes();
+    } finally {
+      publishers.forEach(Publisher::close);
+      queues.forEach(q -> connection.management().queueDelete(q));
+    }
+  }
+
   @Test
   void batchAcceptShouldAcceptAllMessages() {
     connection.management().queue(name).exclusive(true).declare();
