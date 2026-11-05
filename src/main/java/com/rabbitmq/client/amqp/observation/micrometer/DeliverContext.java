@@ -31,14 +31,13 @@ public class DeliverContext extends ReceiverContext<Message> {
   private final String correlationId;
 
   DeliverContext(String exchange, String routingKey, String queue, Message message) {
-    super(
-        (carrier, key) -> {
-          Object result = carrier.annotation(Utils.annotationKey(key));
-          if (result == null) {
-            result = carrier.property(key);
-          }
-          return result == null ? null : result.toString();
-        });
+    super((carrier, key) -> {
+      Object result = carrier.annotation(Utils.annotationKey(key));
+      if (result == null) {
+        result = carrier.property(key);
+      }
+      return result == null ? null : result.toString();
+    });
     if (exchange == null && routingKey == null) {
       String to = message.to();
       String[] exRk = Utils.exchangeRoutingKeyFromTo(to);

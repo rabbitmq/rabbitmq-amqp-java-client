@@ -217,13 +217,12 @@ class AmqpManagement implements Management {
     try {
       // 1. Transactional gatekeeper
       boolean shouldClose =
-          this.stateClient.query(
-              s -> {
-                s.closedByApplication = true;
-                if (s.state == CLOSED) return false;
-                s.state = CLOSED;
-                return true;
-              });
+          this.stateClient.query(s -> {
+            s.closedByApplication = true;
+            if (s.state == CLOSED) return false;
+            s.state = CLOSED;
+            return true;
+          });
 
       if (!shouldClose) return;
 
@@ -264,18 +263,16 @@ class AmqpManagement implements Management {
   void closeIfClosedByApplication(RecoveryGuard guard) {
     AtomicReference<Runnable> closeNativeResources = new AtomicReference<>();
     // a newer recovery may be using management, so the decision must be atomic with its start
-    guard.runIfCurrent(
-        () -> {
-          Boolean shouldClose =
-              this.stateClient.query(s -> s.closedByApplication && s.state != CLOSED);
-          if (Boolean.TRUE.equals(shouldClose)) {
-            this.releaseResources(null, CLOSED);
-            Receiver r = this.receiver;
-            Sender snd = this.sender;
-            Session ss = this.session;
-            closeNativeResources.set(() -> closeNativeResources(r, snd, ss));
-          }
-        });
+    guard.runIfCurrent(() -> {
+      Boolean shouldClose = this.stateClient.query(s -> s.closedByApplication && s.state != CLOSED);
+      if (Boolean.TRUE.equals(shouldClose)) {
+        this.releaseResources(null, CLOSED);
+        Receiver r = this.receiver;
+        Sender snd = this.sender;
+        Session ss = this.session;
+        closeNativeResources.set(() -> closeNativeResources(r, snd, ss));
+      }
+    });
     if (closeNativeResources.get() != null) {
       LOGGER.debug("Management was closed by the application, closing it after recovery");
       closeNativeResources.get().run();
@@ -321,26 +318,25 @@ class AmqpManagement implements Management {
 
     try {
       election =
-          this.stateClient.query(
-              s -> {
-                // Fast path: already open
-                if (s.state == OPEN) {
-                  return new ElectionResult(false, CompletableFuture.completedFuture(null));
-                }
-                // Someone else is already initializing it; we are a Follower
-                if (s.initFuture != null) {
-                  return new ElectionResult(false, s.initFuture);
-                }
+          this.stateClient.query(s -> {
+            // Fast path: already open
+            if (s.state == OPEN) {
+              return new ElectionResult(false, CompletableFuture.completedFuture(null));
+            }
+            // Someone else is already initializing it; we are a Follower
+            if (s.initFuture != null) {
+              return new ElectionResult(false, s.initFuture);
+            }
 
-                // We are the Leader! Claim the initialization process.
-                s.initFuture = new CompletableFuture<>();
+            // We are the Leader! Claim the initialization process.
+            s.initFuture = new CompletableFuture<>();
 
-                if (s.receiveLoop != null) {
-                  s.receiveLoop.cancel(true);
-                  s.receiveLoop = null;
-                }
-                return new ElectionResult(true, s.initFuture);
-              });
+            if (s.receiveLoop != null) {
+              s.receiveLoop.cancel(true);
+              s.receiveLoop = null;
+            }
+            return new ElectionResult(true, s.initFuture);
+          });
     } catch (IllegalStateException e) {
       throw new AmqpException.AmqpResourceClosedException("Management is closed");
     }
@@ -397,11 +393,10 @@ class AmqpManagement implements Management {
 
       // 1. Tell Event Loop to officially open
       try {
-        this.stateClient.submit(
-            s -> {
-              s.state = OPEN;
-              s.initFuture = null; // Reset for next lifecycle
-            });
+        this.stateClient.submit(s -> {
+          s.state = OPEN;
+          s.initFuture = null; // Reset for next lifecycle
+        });
       } catch (IllegalStateException e) {
         // Event loop was closed concurrently, ignore.
         LOGGER.debug("Error in event loop: {}", e.getMessage());
@@ -501,18 +496,17 @@ class AmqpManagement implements Management {
   void releaseResources(AmqpException e, State state) {
     if (!this.stateClient.isClosed()) {
       try {
-        this.stateClient.submit(
-            s -> {
-              // If explicitly passed a state (like CLOSED from close()), use it.
-              // Otherwise, it's a network drop: only downgrade to UNAVAILABLE if not already
-              // CLOSED.
-              s.state = state != null ? state : (s.state == CLOSED ? CLOSED : UNAVAILABLE);
-              if (s.receiveLoop != null) {
-                s.receiveLoop.cancel(true);
-                s.receiveLoop = null;
-              }
-              s.failRequests(e);
-            });
+        this.stateClient.submit(s -> {
+          // If explicitly passed a state (like CLOSED from close()), use it.
+          // Otherwise, it's a network drop: only downgrade to UNAVAILABLE if not already
+          // CLOSED.
+          s.state = state != null ? state : (s.state == CLOSED ? CLOSED : UNAVAILABLE);
+          if (s.receiveLoop != null) {
+            s.receiveLoop.cancel(true);
+            s.receiveLoop = null;
+          }
+          s.failRequests(e);
+        });
       } catch (IllegalStateException ex) {
         // ignore, loop is dead
       }
@@ -584,14 +578,13 @@ class AmqpManagement implements Management {
 
     // Strict, lock-free transactional registration
     boolean registered =
-        this.stateClient.query(
-            s -> {
-              if (s.state != OPEN) {
-                return false;
-              }
-              s.outstandingRequests.put(requestId, outstandingRequest);
-              return true;
-            });
+        this.stateClient.query(s -> {
+          if (s.state != OPEN) {
+            return false;
+          }
+          s.outstandingRequests.put(requestId, outstandingRequest);
+          return true;
+        });
 
     if (!registered) {
       checkAvailable(); // This will throw the correct AmqpException if closed/unavailable
@@ -600,14 +593,13 @@ class AmqpManagement implements Management {
     LOGGER.debug("Sending request {}", requestId);
     this.sender.send(request);
     // FIXME use async callback for management responses
-    this.stateClient.submit(
-        s -> {
-          if (s.receiveLoop == null) {
-            LOGGER.debug("Starting management receive loop ({}).", this);
-            s.receiveLoop = this.connection.environment().executorService().submit(receiveTask());
-            LOGGER.debug("Management initialized ({}).", this);
-          }
-        });
+    this.stateClient.submit(s -> {
+      if (s.receiveLoop == null) {
+        LOGGER.debug("Starting management receive loop ({}).", this);
+        s.receiveLoop = this.connection.environment().executorService().submit(receiveTask());
+        LOGGER.debug("Management initialized ({}).", this);
+      }
+    });
     return outstandingRequest;
   }
 
@@ -721,19 +713,17 @@ class AmqpManagement implements Management {
     if (!bindings.isEmpty()) {
       uri =
           bindings.stream()
-              .filter(
-                  binding -> {
-                    String bindingKey = (String) binding.get("binding_key");
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> bindingArguments =
-                        (Map<String, Object>) binding.get("arguments");
-                    if (key == null && bindingKey == null
-                        || key != null && key.equals(bindingKey)) {
-                      return arguments == null && bindingArguments == null
-                          || arguments != null && arguments.equals(bindingArguments);
-                    }
-                    return false;
-                  })
+              .filter(binding -> {
+                String bindingKey = (String) binding.get("binding_key");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> bindingArguments =
+                    (Map<String, Object>) binding.get("arguments");
+                if (key == null && bindingKey == null || key != null && key.equals(bindingKey)) {
+                  return arguments == null && bindingArguments == null
+                      || arguments != null && arguments.equals(bindingArguments);
+                }
+                return false;
+              })
               .map(b -> b.get("location").toString())
               .findFirst();
     } else {

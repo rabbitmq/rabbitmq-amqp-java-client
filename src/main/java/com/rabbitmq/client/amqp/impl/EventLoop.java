@@ -54,17 +54,16 @@ final class EventLoop implements AutoCloseable {
     Client<S> client = new Client<>(this);
     CountDownLatch latch = new CountDownLatch(1);
 
-    eventExecutor.execute(
-        () -> {
-          try {
-            S state = stateSupplier.get();
-            activeClients.put(client.id, state);
-          } catch (Exception e) {
-            LOGGER.warn("Error during registration", e);
-          } finally {
-            latch.countDown();
-          }
-        });
+    eventExecutor.execute(() -> {
+      try {
+        S state = stateSupplier.get();
+        activeClients.put(client.id, state);
+      } catch (Exception e) {
+        LOGGER.warn("Error during registration", e);
+      } finally {
+        latch.countDown();
+      }
+    });
 
     try {
       boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
@@ -88,14 +87,13 @@ final class EventLoop implements AutoCloseable {
     } else {
       CountDownLatch latch = new CountDownLatch(1);
 
-      eventExecutor.execute(
-          () -> {
-            try {
-              executeTask(client, task);
-            } finally {
-              latch.countDown();
-            }
-          });
+      eventExecutor.execute(() -> {
+        try {
+          executeTask(client, task);
+        } finally {
+          latch.countDown();
+        }
+      });
 
       try {
         boolean completed = latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);

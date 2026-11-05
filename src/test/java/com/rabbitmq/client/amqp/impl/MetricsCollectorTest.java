@@ -88,12 +88,11 @@ public class MetricsCollectorTest {
               .recovery()
               .activated(false)
               .connectionBuilder()
-              .listeners(
-                  context -> {
-                    if (context.currentState() == Resource.State.CLOSED) {
-                      c2Closed.set(true);
-                    }
-                  })
+              .listeners(context -> {
+                if (context.currentState() == Resource.State.CLOSED) {
+                  c2Closed.set(true);
+                }
+              })
               .build();
       verify(metricsCollector, times(2)).openConnection();
 
@@ -147,26 +146,23 @@ public class MetricsCollectorTest {
                 invocation.getArgument(0, Consumer.Context.class).accept();
                 return null;
               })
-          .doAnswer(
-              invocation -> {
-                invocation.getArgument(0, Consumer.Context.class).requeue();
-                return null;
-              })
-          .doAnswer(
-              invocation -> {
-                invocation.getArgument(0, Consumer.Context.class).discard();
-                return null;
-              })
+          .doAnswer(invocation -> {
+            invocation.getArgument(0, Consumer.Context.class).requeue();
+            return null;
+          })
+          .doAnswer(invocation -> {
+            invocation.getArgument(0, Consumer.Context.class).discard();
+            return null;
+          })
           .when(handler)
           .accept(any());
       Consumer consumer =
           c1.consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (ctx, msg) -> {
-                    handler.accept(ctx);
-                    consumedCount.incrementAndGet();
-                  })
+              .messageHandler((ctx, msg) -> {
+                handler.accept(ctx);
+                consumedCount.incrementAndGet();
+              })
               .build();
       waitAtMost(
           () -> consumedCount.get() == 1,

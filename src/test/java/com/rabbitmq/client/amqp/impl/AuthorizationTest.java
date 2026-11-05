@@ -104,15 +104,14 @@ public class AuthorizationTest {
           .hasMessageContaining(name)
           .hasCauseInstanceOf(ClientSessionRemotelyClosedException.class);
       // management should recover
-      waitAtMost(
-          () -> {
-            try {
-              c.management().queueDelete(authorizedName);
-              return true;
-            } catch (AmqpException e) {
-              return false;
-            }
-          });
+      waitAtMost(() -> {
+        try {
+          c.management().queueDelete(authorizedName);
+          return true;
+        } catch (AmqpException e) {
+          return false;
+        }
+      });
     }
   }
 
@@ -169,17 +168,16 @@ public class AuthorizationTest {
         gc.management().exchange(this.name).declare();
         Publisher publisher = uc.publisherBuilder().build();
         AtomicReference<Exception> exception = new AtomicReference<>();
-        waitAtMost(
-            () -> {
-              try {
-                publisher.publish(
-                    publisher.message().toAddress().exchange(this.name).message(), ctx -> {});
-                return false;
-              } catch (AmqpException.AmqpSecurityException e) {
-                exception.set(e);
-                return true;
-              }
-            });
+        waitAtMost(() -> {
+          try {
+            publisher.publish(
+                publisher.message().toAddress().exchange(this.name).message(), ctx -> {});
+            return false;
+          } catch (AmqpException.AmqpSecurityException e) {
+            exception.set(e);
+            return true;
+          }
+        });
         assertThat(exception.get())
             .isInstanceOf(AmqpException.AmqpSecurityException.class)
             .hasMessageContaining("access")
@@ -196,9 +194,8 @@ public class AuthorizationTest {
         Connection gc = guestConnection()) {
       try {
         gc.management().queue(this.name).declare();
-        assertThatThrownBy(
-                () ->
-                    uc.consumerBuilder().queue(this.name).messageHandler((ctx, msg) -> {}).build())
+        assertThatThrownBy(() ->
+                uc.consumerBuilder().queue(this.name).messageHandler((ctx, msg) -> {}).build())
             .isInstanceOf(AmqpException.AmqpSecurityException.class)
             .hasMessageContaining("access")
             .hasMessageContaining(this.name);

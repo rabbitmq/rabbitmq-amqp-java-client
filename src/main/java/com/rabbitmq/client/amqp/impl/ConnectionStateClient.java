@@ -60,18 +60,17 @@ final class ConnectionStateClient implements AutoCloseable {
   void runIfCurrent(long attemptEpoch, Runnable action) {
     AtomicReference<RuntimeException> failure = new AtomicReference<>();
     Boolean current =
-        this.client.query(
-            state -> {
-              if (ConnectionState.isStale(state.internalState, state.epoch, attemptEpoch)) {
-                return false;
-              }
-              try {
-                action.run();
-              } catch (RuntimeException e) {
-                failure.set(e);
-              }
-              return true;
-            });
+        this.client.query(state -> {
+          if (ConnectionState.isStale(state.internalState, state.epoch, attemptEpoch)) {
+            return false;
+          }
+          try {
+            action.run();
+          } catch (RuntimeException e) {
+            failure.set(e);
+          }
+          return true;
+        });
     if (failure.get() != null) {
       throw failure.get();
     }
@@ -133,14 +132,13 @@ final class ConnectionStateClient implements AutoCloseable {
   }
 
   private boolean registerEntity(Consumer<ConnectionState> registration) {
-    return this.client.query(
-        state -> {
-          if (state.connection.state() != OPEN) {
-            return false;
-          }
-          registration.accept(state);
-          return true;
-        });
+    return this.client.query(state -> {
+      if (state.connection.state() != OPEN) {
+        return false;
+      }
+      registration.accept(state);
+      return true;
+    });
   }
 
   // --------------------------------------------------------------

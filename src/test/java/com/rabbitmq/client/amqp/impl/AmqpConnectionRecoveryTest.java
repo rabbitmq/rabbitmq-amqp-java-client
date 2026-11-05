@@ -71,11 +71,10 @@ public class AmqpConnectionRecoveryTest {
   static void initAll() {
     DefaultConnectionSettings<?> connectionSettings = DefaultConnectionSettings.instance();
     maybeConfigureWebSocket(connectionSettings);
-    connectionSettings.addressSelector(
-        addresses -> {
-          connectionAttemptCount.incrementAndGet();
-          return addresses.get(0);
-        });
+    connectionSettings.addressSelector(addresses -> {
+      connectionAttemptCount.incrementAndGet();
+      return addresses.get(0);
+    });
     environment =
         new AmqpEnvironment(
             null,
@@ -110,12 +109,11 @@ public class AmqpConnectionRecoveryTest {
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
                 .isolateResources(isolateResources)
-                .listeners(
-                    context -> {
-                      if (stateSync.containsKey(context.currentState())) {
-                        stateSync.get(context.currentState()).down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
@@ -128,30 +126,27 @@ public class AmqpConnectionRecoveryTest {
       TestUtils.Sync consumeSync = TestUtils.sync();
       c.consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                receivedMessageIds.add(message.messageIdAsUuid());
-                consumeSync.down();
-              })
-          .listeners(
-              context -> {
-                if (context.currentState() == OPEN) {
-                  consumerOpenCount.incrementAndGet();
-                }
-              })
+          .messageHandler((context, message) -> {
+            context.accept();
+            receivedMessageIds.add(message.messageIdAsUuid());
+            consumeSync.down();
+          })
+          .listeners(context -> {
+            if (context.currentState() == OPEN) {
+              consumerOpenCount.incrementAndGet();
+            }
+          })
           .build();
       TestUtils.Sync publishSync = TestUtils.sync();
       AtomicInteger publisherOpenCount = new AtomicInteger(0);
       Publisher p =
           c.publisherBuilder()
               .queue(q)
-              .listeners(
-                  context -> {
-                    if (context.currentState() == OPEN) {
-                      publisherOpenCount.incrementAndGet();
-                    }
-                  })
+              .listeners(context -> {
+                if (context.currentState() == OPEN) {
+                  publisherOpenCount.incrementAndGet();
+                }
+              })
               .build();
       Collection<UUID> publishedMessageIds = Collections.synchronizedList(new ArrayList<>());
       Publisher.Callback outboundMessageCallback =
@@ -208,12 +203,11 @@ public class AmqpConnectionRecoveryTest {
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
                 .isolateResources(isolateResources)
-                .listeners(
-                    context -> {
-                      if (stateSync.containsKey(context.currentState())) {
-                        stateSync.get(context.currentState()).down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(BackOffDelayPolicy.fixed(ofMillis(500)))
                 .connectionBuilder();
@@ -229,11 +223,10 @@ public class AmqpConnectionRecoveryTest {
                   () -> c.publisherBuilder(),
                   () -> c.consumerBuilder()
                 })
-            .forEach(
-                op ->
-                    assertThatThrownBy(op)
-                        .isInstanceOf(AmqpException.class)
-                        .hasMessageContaining(RECOVERING.name()));
+            .forEach(op ->
+                assertThatThrownBy(op)
+                    .isInstanceOf(AmqpException.class)
+                    .hasMessageContaining(RECOVERING.name()));
       } finally {
         Cli.startBroker();
       }
@@ -253,12 +246,11 @@ public class AmqpConnectionRecoveryTest {
     AmqpConnectionBuilder builder =
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
-                .listeners(
-                    context -> {
-                      if (stateSync.containsKey(context.currentState())) {
-                        stateSync.get(context.currentState()).down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
@@ -272,28 +264,25 @@ public class AmqpConnectionRecoveryTest {
         AtomicInteger consumerOpenCount = new AtomicInteger(0);
         c.consumerBuilder()
             .queue(q)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
-            .listeners(
-                context -> {
-                  if (context.currentState() == OPEN) {
-                    consumerOpenCount.incrementAndGet();
-                  }
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
+            .listeners(context -> {
+              if (context.currentState() == OPEN) {
+                consumerOpenCount.incrementAndGet();
+              }
+            })
             .build();
         AtomicInteger publisherOpenCount = new AtomicInteger(0);
         Publisher p =
             c.publisherBuilder()
                 .queue(q)
-                .listeners(
-                    context -> {
-                      if (context.currentState() == OPEN) {
-                        publisherOpenCount.incrementAndGet();
-                      }
-                    })
+                .listeners(context -> {
+                  if (context.currentState() == OPEN) {
+                    publisherOpenCount.incrementAndGet();
+                  }
+                })
                 .build();
 
         // the broker ends the session when it cannot remove the consumer on detach
@@ -339,12 +328,11 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
-                .listeners(
-                    context -> {
-                      if (stateSync.containsKey(context.currentState())) {
-                        stateSync.get(context.currentState()).down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
@@ -357,11 +345,10 @@ public class AmqpConnectionRecoveryTest {
         TestUtils.Sync consumeSync = TestUtils.sync();
         c.consumerBuilder()
             .queue(q)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
             .build();
         Publisher p = c.publisherBuilder().queue(q).build();
 
@@ -406,12 +393,11 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
-                .listeners(
-                    context -> {
-                      if (stateSync.containsKey(context.currentState())) {
-                        stateSync.get(context.currentState()).down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(attempt -> recoveryDelay.get())
                 .connectionBuilder();
@@ -422,20 +408,18 @@ public class AmqpConnectionRecoveryTest {
         Consumer consumer1 =
             c.consumerBuilder()
                 .queue(q)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
         Consumer consumer2 =
             c.consumerBuilder()
                 .queue(q)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
         Publisher p = c.publisherBuilder().queue(q).build();
 
@@ -506,12 +490,11 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
-                .listeners(
-                    context -> {
-                      if (context.currentState() == OPEN) {
-                        openSync.down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (context.currentState() == OPEN) {
+                    openSync.down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(attempt -> recoveryDelay.get())
                 .connectionBuilder();
@@ -523,11 +506,10 @@ public class AmqpConnectionRecoveryTest {
             (AmqpConsumer)
                 c.consumerBuilder()
                     .queue(q)
-                    .messageHandler(
-                        (ctx, msg) -> {
-                          ctx.accept();
-                          consumeSync.down();
-                        })
+                    .messageHandler((ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
                     .build();
         AmqpPublisher publisher = (AmqpPublisher) c.publisherBuilder().queue(q).build();
         ResourceBase resource =
@@ -580,12 +562,11 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
-                .listeners(
-                    context -> {
-                      if (context.currentState() == OPEN) {
-                        openSync.down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (context.currentState() == OPEN) {
+                    openSync.down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(attempt -> recoveryDelay.get())
                 .connectionBuilder();
@@ -628,12 +609,11 @@ public class AmqpConnectionRecoveryTest {
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
                 .name(connectionName)
-                .listeners(
-                    context -> {
-                      if (context.currentState() == OPEN) {
-                        openSync.down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (context.currentState() == OPEN) {
+                    openSync.down();
+                  }
+                })
                 .recovery()
                 .backOffDelayPolicy(BackOffDelayPolicy.fixed(ofMillis(100)))
                 .connectionBuilder();
@@ -666,15 +646,14 @@ public class AmqpConnectionRecoveryTest {
   private static void closeConnectionAndWaitForNewRecovery(
       AmqpConnection c, String connectionName) {
     Cli.closeConnection(connectionName);
-    waitAtMost(
-        () -> {
-          try {
-            c.nativeSession(false);
-            return false;
-          } catch (AmqpException.AmqpResourceInvalidStateException e) {
-            return true;
-          }
-        });
+    waitAtMost(() -> {
+      try {
+        c.nativeSession(false);
+        return false;
+      } catch (AmqpException.AmqpResourceInvalidStateException e) {
+        return true;
+      }
+    });
   }
 
   @Test
@@ -685,13 +664,12 @@ public class AmqpConnectionRecoveryTest {
     AmqpConnectionBuilder builder =
         (AmqpConnectionBuilder)
             new AmqpConnectionBuilder(environment)
-                .listeners(
-                    context -> {
-                      if (context.currentState() == CLOSED) {
-                        closeCause.set(context.failureCause());
-                        closedSync.down();
-                      }
-                    })
+                .listeners(context -> {
+                  if (context.currentState() == CLOSED) {
+                    closeCause.set(context.failureCause());
+                    closedSync.down();
+                  }
+                })
                 .recovery()
                 .activated(false)
                 .connectionBuilder();
@@ -739,35 +717,32 @@ public class AmqpConnectionRecoveryTest {
         c.consumerBuilder()
             .queue(consumerQ)
             .messageHandler((ctx, msg) -> ctx.accept())
-            .listeners(
-                context -> {
-                  if (context.currentState() == CLOSED) {
-                    consumerCloseCause.set(context.failureCause());
-                    consumerClosedSync.down();
-                  }
-                })
+            .listeners(context -> {
+              if (context.currentState() == CLOSED) {
+                consumerCloseCause.set(context.failureCause());
+                consumerClosedSync.down();
+              }
+            })
             .build();
         TestUtils.Sync publisherClosedSync = TestUtils.sync();
         AtomicReference<Throwable> publisherCloseCause = new AtomicReference<>();
         c.publisherBuilder()
             .queue(publisherQ)
-            .listeners(
-                context -> {
-                  if (context.currentState() == CLOSED) {
-                    publisherCloseCause.set(context.failureCause());
-                    publisherClosedSync.down();
-                  }
-                })
+            .listeners(context -> {
+              if (context.currentState() == CLOSED) {
+                publisherCloseCause.set(context.failureCause());
+                publisherClosedSync.down();
+              }
+            })
             .build();
         TestUtils.Sync consumeSync = TestUtils.sync();
         Consumer otherConsumer =
             c.consumerBuilder()
                 .queue(otherQ)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
         Publisher otherPublisher = c.publisherBuilder().queue(otherQ).build();
 

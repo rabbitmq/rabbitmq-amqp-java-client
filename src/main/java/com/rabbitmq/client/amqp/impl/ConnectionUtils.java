@@ -180,20 +180,19 @@ final class ConnectionUtils {
       AffinityContext affinity,
       AffinityCache cache,
       RetryStrategy retryStrategy) {
-    return retryStrategy.maybeRetry(
-        () -> {
-          Management.QueueInfo info = null;
-          management.init();
-          try {
-            info = management.queueInfo(affinity.queue());
-            cache.queueInfo(info);
-          } catch (AmqpException.AmqpEntityDoesNotExistException e) {
-            LOGGER.debug("Queue '{}' does not exist.", affinity.queue());
-            cache.clearQueueInfoEntry(affinity.queue());
-            // we just return null, caller will have to return the last connection
-          }
-          return info;
-        });
+    return retryStrategy.maybeRetry(() -> {
+      Management.QueueInfo info = null;
+      management.init();
+      try {
+        info = management.queueInfo(affinity.queue());
+        cache.queueInfo(info);
+      } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+        LOGGER.debug("Queue '{}' does not exist.", affinity.queue());
+        cache.clearQueueInfoEntry(affinity.queue());
+        // we just return null, caller will have to return the last connection
+      }
+      return info;
+    });
   }
 
   // TODO clean affinity cache (LRU or size-based)

@@ -195,17 +195,16 @@ public class TopologyRecoveryTest {
       closeConnectionAndWaitForRecovery();
       assertThat(connectionAttemptCount).hasValue(2);
       // make sure the exclusive queue does not exist
-      waitAtMost(
-          () -> {
-            try {
-              connection.management().queueInfo(q);
-              return false;
-            } catch (AmqpException.AmqpEntityDoesNotExistException e) {
-              return true;
-            } catch (Exception e) {
-              return false;
-            }
-          });
+      waitAtMost(() -> {
+        try {
+          connection.management().queueInfo(q);
+          return false;
+        } catch (AmqpException.AmqpEntityDoesNotExistException e) {
+          return true;
+        } catch (Exception e) {
+          return false;
+        }
+      });
       // try to re-create it for the new underlying connection
       connection.management().queue(q).autoDelete(true).exclusive(true).declare();
     }
@@ -302,11 +301,10 @@ public class TopologyRecoveryTest {
           connection
               .consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (context, message) -> {
-                    context.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((context, message) -> {
+                context.accept();
+                consumeSync.down();
+              })
               .build();
 
       publisher.publish(publisher.message(), context -> {});
@@ -345,11 +343,10 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (context, message) -> {
-                context.accept();
-                consumeSync.down();
-              })
+          .messageHandler((context, message) -> {
+            context.accept();
+            consumeSync.down();
+          })
           .build();
 
       publisher.publish(publisher.message(), context -> {});
@@ -384,11 +381,10 @@ public class TopologyRecoveryTest {
           connection
               .consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (context, message) -> {
-                    context.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((context, message) -> {
+                context.accept();
+                consumeSync.down();
+              })
               .build();
 
       publisher.publish(publisher.message(), context -> {});
@@ -440,11 +436,10 @@ public class TopologyRecoveryTest {
           connection
               .consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (context, message) -> {
-                    context.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((context, message) -> {
+                context.accept();
+                consumeSync.down();
+              })
               .build();
 
       publisher.publish(publisher.message(), context -> {});
@@ -582,23 +577,21 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, m) -> {
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       IntStream.range(0, 10)
-          .forEach(
-              i -> {
-                closeConnectionAndWaitForRecovery();
-                assertThat(connectionAttemptCount).hasValue(2 + i);
-                consumeSync.reset();
-                publisher.publish(publisher.message(), ctx -> {});
-                assertThat(consumeSync).completes();
-                assertThat(connection.management().queueInfo(q)).isEmpty().hasConsumerCount(1);
-              });
+          .forEach(i -> {
+            closeConnectionAndWaitForRecovery();
+            assertThat(connectionAttemptCount).hasValue(2 + i);
+            consumeSync.reset();
+            publisher.publish(publisher.message(), ctx -> {});
+            assertThat(consumeSync).completes();
+            assertThat(connection.management().queueInfo(q)).isEmpty().hasConsumerCount(1);
+          });
 
     } finally {
       connection.management().queueDelete(q);
@@ -621,11 +614,10 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                messageContexts.add(ctx);
-                consumeLatch.countDown();
-              })
+          .messageHandler((ctx, m) -> {
+            messageContexts.add(ctx);
+            consumeLatch.countDown();
+          })
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});
@@ -698,11 +690,10 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, message) -> {
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, message) -> {
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       waitAtMost(() -> management.queueInfo(q).consumerCount() == 1);
@@ -779,18 +770,16 @@ public class TopologyRecoveryTest {
     builder
         .name(name)
         .isolateResources(isolateResources)
-        .addressSelector(
-            addresses -> {
-              connectionAttemptCount.incrementAndGet();
-              return addresses.get(0);
-            })
-        .listeners(
-            context -> {
-              if (context.previousState() == Resource.State.RECOVERING
-                  && context.currentState() == Resource.State.OPEN) {
-                recoveredSync.down();
-              }
-            })
+        .addressSelector(addresses -> {
+          connectionAttemptCount.incrementAndGet();
+          return addresses.get(0);
+        })
+        .listeners(context -> {
+          if (context.previousState() == Resource.State.RECOVERING
+              && context.currentState() == Resource.State.OPEN) {
+            recoveredSync.down();
+          }
+        })
         .recovery()
         .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
         .connectionBuilder();
@@ -824,11 +813,10 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(queueName)
-          .messageHandler(
-              (ctx, message) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
+          .messageHandler((ctx, message) -> {
+            ctx.accept();
+            consumeSync.down();
+          })
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});
@@ -864,11 +852,10 @@ public class TopologyRecoveryTest {
       connection
           .consumerBuilder()
           .queue(queueName)
-          .messageHandler(
-              (ctx, message) -> {
-                ctx.accept();
-                sync.down();
-              })
+          .messageHandler((ctx, message) -> {
+            ctx.accept();
+            sync.down();
+          })
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});

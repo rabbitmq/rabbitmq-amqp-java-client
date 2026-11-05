@@ -78,13 +78,12 @@ public class ConnectionStateClientTest {
   @Test
   void runIfCurrentShouldPropagateActionFailure() {
     IllegalStateException failure = new IllegalStateException("simulated failure");
-    assertThatThrownBy(
-            () ->
-                client.runIfCurrent(
-                    client.epoch(),
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            client.runIfCurrent(
+                client.epoch(),
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 }

@@ -156,16 +156,12 @@ public class AmqpTest {
       int messageCount = 100;
       Sync confirmSync = sync(messageCount);
       range(0, messageCount)
-          .forEach(
-              ignored -> {
-                UUID messageId = UUID.randomUUID();
-                publisher.publish(
-                    publisher
-                        .message("hello".getBytes(UTF_8))
-                        .messageId(messageId)
-                        .subject(subject),
-                    acceptedCallback(confirmSync));
-              });
+          .forEach(ignored -> {
+            UUID messageId = UUID.randomUUID();
+            publisher.publish(
+                publisher.message("hello".getBytes(UTF_8)).messageId(messageId).subject(subject),
+                acceptedCallback(confirmSync));
+          });
 
       assertThat(confirmSync).completes();
 
@@ -178,12 +174,11 @@ public class AmqpTest {
           connection
               .consumerBuilder()
               .queue(name)
-              .messageHandler(
-                  (context, message) -> {
-                    receivedSubject.set(message.subject());
-                    context.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((context, message) -> {
+                receivedSubject.set(message.subject());
+                context.accept();
+                consumeSync.down();
+              })
               .build();
 
       assertThat(consumeSync).completes();
@@ -255,11 +250,10 @@ public class AmqpTest {
           connection
               .consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (context, message) -> {
-                    context.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((context, message) -> {
+                context.accept();
+                consumeSync.down();
+              })
               .build();
       assertThat(consumeSync).completes();
       publisher1.close();
@@ -295,12 +289,11 @@ public class AmqpTest {
     connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, message) -> {
-              ctx.accept();
-              messageBodies.add(message.body());
-              consumeLatch.countDown();
-            })
+        .messageHandler((ctx, message) -> {
+          ctx.accept();
+          messageBodies.add(message.body());
+          consumeLatch.countDown();
+        })
         .build();
 
     publisher.publish(publisher.message("one".getBytes(UTF_8)), ctx -> {});
@@ -377,24 +370,22 @@ public class AmqpTest {
       connection.management().exchangeDelete(name);
     }
     AtomicReference<Exception> exception = new AtomicReference<>();
-    waitAtMost(
-        () -> {
-          try {
-            publisher.publish(publisher.message(), ctx -> {});
-            return false;
-          } catch (AmqpEntityDoesNotExistException e) {
-            exception.set(e);
-            return true;
-          }
-        });
+    waitAtMost(() -> {
+      try {
+        publisher.publish(publisher.message(), ctx -> {});
+        return false;
+      } catch (AmqpEntityDoesNotExistException e) {
+        exception.set(e);
+        return true;
+      }
+    });
     assertThat(closedSync).completes();
     of(exception.get(), closedException.get())
-        .forEach(
-            e ->
-                assertThat(e)
-                    .isInstanceOf(AmqpEntityDoesNotExistException.class)
-                    .hasMessageContaining(name)
-                    .hasMessageContaining(ExceptionUtils.ERROR_NOT_FOUND));
+        .forEach(e ->
+            assertThat(e)
+                .isInstanceOf(AmqpEntityDoesNotExistException.class)
+                .hasMessageContaining(name)
+                .hasMessageContaining(ExceptionUtils.ERROR_NOT_FOUND));
   }
 
   @Test
@@ -425,16 +416,15 @@ public class AmqpTest {
       connection.management().queueDelete(name);
     }
     AtomicReference<Exception> exception = new AtomicReference<>();
-    waitAtMost(
-        () -> {
-          try {
-            publisher.publish(publisher.message(), ctx -> {});
-            return false;
-          } catch (AmqpEntityDoesNotExistException | AmqpResourceInvalidStateException e) {
-            exception.set(e);
-            return true;
-          }
-        });
+    waitAtMost(() -> {
+      try {
+        publisher.publish(publisher.message(), ctx -> {});
+        return false;
+      } catch (AmqpEntityDoesNotExistException | AmqpResourceInvalidStateException e) {
+        exception.set(e);
+        return true;
+      }
+    });
     assertThat(closedSync).completes();
 
     assertThat(exception.get())
@@ -456,11 +446,10 @@ public class AmqpTest {
     connection
         .consumerBuilder()
         .queue(name)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumedSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          ctx.accept();
+          consumedSync.down();
+        })
         .build();
     Sync acceptedSync = sync();
     publisher.publish(
@@ -488,13 +477,12 @@ public class AmqpTest {
   @DisabledIfAddressV1Permitted
   void consumerShouldThrowWhenQueueDoesNotExist() {
     String doesNotExist = uuid();
-    assertThatThrownBy(
-            () ->
-                connection
-                    .consumerBuilder()
-                    .queue(doesNotExist)
-                    .messageHandler((ctx, msg) -> {})
-                    .build())
+    assertThatThrownBy(() ->
+            connection
+                .consumerBuilder()
+                .queue(doesNotExist)
+                .messageHandler((ctx, msg) -> {})
+                .build())
         .isInstanceOf(AmqpEntityDoesNotExistException.class)
         .hasMessageContaining(doesNotExist);
   }
@@ -508,18 +496,16 @@ public class AmqpTest {
     connection
         .consumerBuilder()
         .queue(name)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumeSync.down();
-            })
-        .listeners(
-            context -> {
-              if (context.currentState() == Resource.State.CLOSED) {
-                exception.set(context.failureCause());
-                closedSync.down();
-              }
-            })
+        .messageHandler((ctx, msg) -> {
+          ctx.accept();
+          consumeSync.down();
+        })
+        .listeners(context -> {
+          if (context.currentState() == Resource.State.CLOSED) {
+            exception.set(context.failureCause());
+            closedSync.down();
+          }
+        })
         .build();
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     publisher.publish(publisher.message(), ctx -> {});
@@ -550,14 +536,13 @@ public class AmqpTest {
             .consumerBuilder()
             .queue(name)
             .initialCredits(messageCount / 10)
-            .messageHandler(
-                (ctx, msg) -> {
-                  if (receivedCount.incrementAndGet() <= initialCredits) {
-                    ctx.accept();
-                  } else {
-                    unsettledMessages.add(ctx);
-                  }
-                })
+            .messageHandler((ctx, msg) -> {
+              if (receivedCount.incrementAndGet() <= initialCredits) {
+                ctx.accept();
+              } else {
+                unsettledMessages.add(ctx);
+              }
+            })
             .build();
 
     int unsettledMessageCount = waitUntilStable(unsettledMessages::size);
@@ -589,13 +574,12 @@ public class AmqpTest {
             .consumerBuilder()
             .queue(name)
             .initialCredits(initialCredits)
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  int processTime = random.nextInt(10) + 1;
-                  TestUtils.simulateActivity(processTime);
-                  ctx.accept();
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              int processTime = random.nextInt(10) + 1;
+              TestUtils.simulateActivity(processTime);
+              ctx.accept();
+            })
             .build();
 
     waitAtMost(() -> receivedCount.get() > initialCredits * 2);
@@ -624,13 +608,12 @@ public class AmqpTest {
             .consumerBuilder()
             .queue(name)
             .initialCredits(initialCredits)
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  if (receivedCount.get() <= settledCount) {
-                    ctx.accept();
-                  }
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              if (receivedCount.get() <= settledCount) {
+                ctx.accept();
+              }
+            })
             .build();
 
     waitAtMost(() -> receivedCount.get() > settledCount);
@@ -651,12 +634,11 @@ public class AmqpTest {
             .consumerBuilder()
             .queue(name)
             .priority(1)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  lowCount.incrementAndGet();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              lowCount.incrementAndGet();
+              consumeSync.down();
+            })
             .build();
 
     com.rabbitmq.client.amqp.Consumer highPriorityConsumer =
@@ -664,12 +646,11 @@ public class AmqpTest {
             .consumerBuilder()
             .queue(name)
             .priority(5)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  highCount.incrementAndGet();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              highCount.incrementAndGet();
+              consumeSync.down();
+            })
             .build();
 
     Publisher publisher = connection.publisherBuilder().queue(name).build();
@@ -713,12 +694,11 @@ public class AmqpTest {
           (c, count) ->
               c.consumerBuilder()
                   .queue(name)
-                  .messageHandler(
-                      (ctx, msg) -> {
-                        ctx.accept();
-                        count.incrementAndGet();
-                        consumeSync.down();
-                      })
+                  .messageHandler((ctx, msg) -> {
+                    ctx.accept();
+                    count.incrementAndGet();
+                    consumeSync.down();
+                  })
                   .build();
       Consumer consumer1 = createConsumer.apply(c1, count1);
       Consumer consumer2 = createConsumer.apply(c2, count2);
@@ -788,15 +768,14 @@ public class AmqpTest {
             m -> m.queue(name).type(CLASSIC).argument("x-max-age", "1000s").declare(),
             m -> m.queue(name).type(QUORUM).argument("x-max-age", "1000s").declare(),
             m -> m.queue(name).type(STREAM).deadLetterRoutingKey("not-supported").declare());
-    operations.forEach(
-        operation -> {
-          try {
-            operation.accept(management);
-            fail("Creating a queue with unsupported arguments should trigger an exception");
-          } catch (AmqpException e) {
-            assertThat(e).hasMessageContaining("409");
-          }
-        });
+    operations.forEach(operation -> {
+      try {
+        operation.accept(management);
+        fail("Creating a queue with unsupported arguments should trigger an exception");
+      } catch (AmqpException e) {
+        assertThat(e).hasMessageContaining("409");
+      }
+    });
   }
 
   @Test
@@ -899,12 +878,11 @@ public class AmqpTest {
     connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              message.set(msg);
-              ctx.accept();
-              consumeSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          message.set(msg);
+          ctx.accept();
+          consumeSync.down();
+        })
         .build();
     assertThat(consumeSync).completes();
     assertThat(message.get())
@@ -939,12 +917,11 @@ public class AmqpTest {
             AtomicReference<String> threadName = new AtomicReference<>();
             c.consumerBuilder()
                 .queue(q)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      threadName.set(Thread.currentThread().getName());
-                      sync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  threadName.set(Thread.currentThread().getName());
+                  sync.down();
+                })
                 .build();
             assertThat(sync).completes();
             assertThat(threadName.get()).startsWith(prefix);
@@ -994,12 +971,11 @@ public class AmqpTest {
     connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, m) -> {
-              inMessage.set(m);
-              context.accept();
-              consumeSync.down();
-            })
+        .messageHandler((context, m) -> {
+          inMessage.set(m);
+          context.accept();
+          consumeSync.down();
+        })
         .build();
 
     assertThat(consumeSync).completes();
@@ -1049,12 +1025,11 @@ public class AmqpTest {
           connection
               .consumerBuilder()
               .queue(this.name)
-              .messageHandler(
-                  (context, message) -> {
-                    messageRef.set(message);
-                    context.accept();
-                    consumeSync.down();
-                  });
+              .messageHandler((context, message) -> {
+                messageRef.set(message);
+                context.accept();
+                consumeSync.down();
+              });
       if (type == STREAM) {
         builder.stream().offset(ConsumerBuilder.StreamOffsetSpecification.FIRST);
       }
@@ -1089,20 +1064,19 @@ public class AmqpTest {
               connection
                   .consumerBuilder()
                   .queue(name)
-                  .messageHandler(
-                      (ctx, msg) -> {
-                        if (oneTimedOut.compareAndSet(false, true)) {
-                          new Thread(
-                                  () -> {
-                                    simulateActivity(timeout.plus(Duration.ofSeconds(1)));
-                                    ctx.accept();
-                                  })
-                              .start();
-                        } else {
-                          ctx.accept();
-                        }
-                        consumeSync.down();
-                      })
+                  .messageHandler((ctx, msg) -> {
+                    if (oneTimedOut.compareAndSet(false, true)) {
+                      new Thread(
+                              () -> {
+                                simulateActivity(timeout.plus(Duration.ofSeconds(1)));
+                                ctx.accept();
+                              })
+                          .start();
+                    } else {
+                      ctx.accept();
+                    }
+                    consumeSync.down();
+                  })
                   .build();
 
       assertThat(consumeSync).completes();
@@ -1129,12 +1103,11 @@ public class AmqpTest {
           connection
               .consumerBuilder()
               .queue(this.name)
-              .messageHandler(
-                  (context, message) -> {
-                    messageRef.set(message);
-                    context.accept();
-                    consumeSync.down();
-                  });
+              .messageHandler((context, message) -> {
+                messageRef.set(message);
+                context.accept();
+                consumeSync.down();
+              });
       if (type == STREAM) {
         builder.stream().offset(ConsumerBuilder.StreamOffsetSpecification.FIRST);
       }
@@ -1167,17 +1140,16 @@ public class AmqpTest {
                 .queue(name)
                 .initialCredits(initialCredits)
                 .preSettled()
-                .messageHandler(
-                    (ctx, msg) -> {
-                      if (exception.get() == null) {
-                        try {
-                          ctx.accept();
-                        } catch (Exception e) {
-                          exception.set(e);
-                        }
-                      }
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  if (exception.get() == null) {
+                    try {
+                      ctx.accept();
+                    } catch (Exception e) {
+                      exception.set(e);
+                    }
+                  }
+                  consumeSync.down();
+                })
                 .build();
 
     assertThat(consumeSync).completes();
@@ -1210,11 +1182,10 @@ public class AmqpTest {
         (AmqpConsumer)
             builder
                 .queue(name)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      consumeSync.down();
-                      throw new RuntimeException("simulated exception in message handler");
-                    })
+                .messageHandler((ctx, msg) -> {
+                  consumeSync.down();
+                  throw new RuntimeException("simulated exception in message handler");
+                })
                 .build();
 
     assertThat(consumeSync).completes();
@@ -1245,16 +1216,15 @@ public class AmqpTest {
         .queue(this.name)
         .preSettled()
         .initialCredits(messageCount / 10)
-        .messageHandler(
-            (ctx, msg) -> {
-              receivedCount.incrementAndGet();
-              try {
-                Thread.sleep(1);
-                publisher2.publish(publisher2.message(), publishCtx -> {});
-              } catch (Exception e) {
-                // OK
-              }
-            })
+        .messageHandler((ctx, msg) -> {
+          receivedCount.incrementAndGet();
+          try {
+            Thread.sleep(1);
+            publisher2.publish(publisher2.message(), publishCtx -> {});
+          } catch (Exception e) {
+            // OK
+          }
+        })
         .build();
 
     Connection publisherConnection = environment.connectionBuilder().build();
@@ -1264,10 +1234,9 @@ public class AmqpTest {
           Sync publishSync = sync(messageCount);
           Publisher.Callback callback = ctx -> publishSync.down();
           IntStream.range(0, messageCount)
-              .forEach(
-                  ignored -> {
-                    publisher.publish(publisher.message(), callback);
-                  });
+              .forEach(ignored -> {
+                publisher.publish(publisher.message(), callback);
+              });
           assertThat(publishSync).completes();
         };
 
@@ -1435,11 +1404,10 @@ public class AmqpTest {
     Publisher publisher = connection.publisherBuilder().queue(name).build();
     Sync publishSync = sync(messageCount);
     range(0, messageCount)
-        .forEach(
-            i ->
-                publisher.publish(
-                    publisher.message().body(String.valueOf(i).getBytes(UTF_8)),
-                    ctx -> publishSync.down()));
+        .forEach(i ->
+            publisher.publish(
+                publisher.message().body(String.valueOf(i).getBytes(UTF_8)),
+                ctx -> publishSync.down()));
     assertThat(publishSync).completes();
     publisher.close();
 
@@ -1546,11 +1514,10 @@ public class AmqpTest {
               .consumerBuilder()
               .queue(this.name)
               .initialCredits(initialCredits)
-              .messageHandler(
-                  (ctx, msg) -> {
-                    ctx.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((ctx, msg) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
               .build();
 
       assertThat(consumeSync).completes();
@@ -1682,10 +1649,9 @@ public class AmqpTest {
     try {
       Sync publishSync = sync(messageCount);
       range(0, messageCount)
-          .forEach(
-              ignored ->
-                  publisher.publish(
-                      publisher.message("hello".getBytes(UTF_8)), acceptedCallback(publishSync)));
+          .forEach(ignored ->
+              publisher.publish(
+                  publisher.message("hello".getBytes(UTF_8)), acceptedCallback(publishSync)));
 
       assertThat(publishSync).completes();
       publisher.close();
@@ -1703,22 +1669,20 @@ public class AmqpTest {
           connection
               .consumerBuilder()
               .queue(name)
-              .messageHandler(
-                  (context, message) -> {
-                    received.incrementAndGet();
-                    executorService
-                        .get()
-                        .submit(
-                            () -> {
-                              executed.incrementAndGet();
-                              TestUtils.simulateActivity(latency.get());
-                              processed.incrementAndGet();
-                              context.accept();
-                              accepted.incrementAndGet();
-                              consumeSync.down();
-                            });
-                    dispatched.incrementAndGet();
-                  })
+              .messageHandler((context, message) -> {
+                received.incrementAndGet();
+                executorService
+                    .get()
+                    .submit(() -> {
+                      executed.incrementAndGet();
+                      TestUtils.simulateActivity(latency.get());
+                      processed.incrementAndGet();
+                      context.accept();
+                      accepted.incrementAndGet();
+                      consumeSync.down();
+                    });
+                dispatched.incrementAndGet();
+              })
               .build();
 
       // 10,000 messages flowing through a 100-credit window plus a 100-thread executor
@@ -1775,12 +1739,11 @@ public class AmqpTest {
           connection.consumerBuilder().queue(this.name).stream()
               .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
               .builder()
-              .messageHandler(
-                  (context, message) -> {
-                    firstOffset.set(((Number) message.annotation("x-stream-offset")).longValue());
-                    context.accept();
-                    consumeSync.down();
-                  });
+              .messageHandler((context, message) -> {
+                firstOffset.set(((Number) message.annotation("x-stream-offset")).longValue());
+                context.accept();
+                consumeSync.down();
+              });
       Consumer consumer = builder.build();
       assertThat(consumeSync).completes();
       assertThat(firstOffset).hasValue(initialOffset);
@@ -1794,12 +1757,11 @@ public class AmqpTest {
   @BrokerVersionAtLeast(RABBITMQ_4_4_0)
   void streamCreatorShouldThrowForIncorrectInitialOffset() {
     long initialOffset = AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET + 1;
-    assertThatThrownBy(
-            () ->
-                connection.management().queue(this.name).stream()
-                    .initialOffset(initialOffset)
-                    .queue()
-                    .declare())
+    assertThatThrownBy(() ->
+            connection.management().queue(this.name).stream()
+                .initialOffset(initialOffset)
+                .queue()
+                .declare())
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

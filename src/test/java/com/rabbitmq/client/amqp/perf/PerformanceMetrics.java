@@ -95,16 +95,14 @@ class PerformanceMetrics implements AutoCloseable {
                 StringBuilder builder = new StringBuilder().append(reportCount.get()).append(", ");
                 String counterReport =
                     counters.stream()
-                        .map(
-                            counter -> {
-                              String meterName = counter.getId().getName();
-                              long lastValue = lastMetersValues.get(meterName);
-                              long currentValue = (long) counter.count();
-                              long rate = 1000 * (currentValue - lastValue) / elapsed.toMillis();
-                              lastMetersValues.put(meterName, currentValue);
-                              return String.format(
-                                  "%s %d msg/s", counterLabels.get(meterName), rate);
-                            })
+                        .map(counter -> {
+                          String meterName = counter.getId().getName();
+                          long lastValue = lastMetersValues.get(meterName);
+                          long currentValue = (long) counter.count();
+                          long rate = 1000 * (currentValue - lastValue) / elapsed.toMillis();
+                          lastMetersValues.put(meterName, currentValue);
+                          return String.format("%s %d msg/s", counterLabels.get(meterName), rate);
+                        })
                         .collect(Collectors.joining(", "));
                 builder
                     .append(counterReport)
@@ -127,10 +125,8 @@ class PerformanceMetrics implements AutoCloseable {
           Duration duration = d.getSeconds() <= 0 ? Duration.ofSeconds(1) : d;
 
           StringBuilder builder = new StringBuilder("Summary: ");
-          counterLabels.forEach(
-              (name, label) ->
-                  builder.append(
-                      formatMeterSummary(label, registry.get(name).counter(), duration)));
+          counterLabels.forEach((name, label) ->
+              builder.append(formatMeterSummary(label, registry.get(name).counter(), duration)));
           builder
               .append(formatLatencySummary("p. accepted latency", publishedAcceptedLatency))
               .append(", ");

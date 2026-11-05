@@ -85,10 +85,9 @@ public class BatchDispositionTest {
         };
 
     IntStream.range(0, messageCount)
-        .forEach(
-            i -> {
-              handler.handle(new TestContext(i), null);
-            });
+        .forEach(i -> {
+          handler.handle(new TestContext(i), null);
+        });
 
     if (batchReference.get() == null) {
       batchReference.get().accept();

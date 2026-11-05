@@ -31,22 +31,20 @@ class ConnectionStateTransitionsTest {
 
   private static final Generator<AmqpException> EXCEPTIONS =
       Generator.booleans()
-          .map(
-              recoverable ->
-                  recoverable
-                      ? new AmqpException.AmqpConnectionException("simulated failure", null)
-                      : new AmqpException("simulated failure"));
+          .map(recoverable ->
+              recoverable
+                  ? new AmqpException.AmqpConnectionException("simulated failure", null)
+                  : new AmqpException("simulated failure"));
 
   @Test
   void disconnectNeverDecreasesEpoch() {
     Generator<DisconnectInput> inputs =
-        Generator.from(
-            data ->
-                new DisconnectInput(
-                    data.generate(STATES),
-                    data.generate(EPOCHS),
-                    data.generate(EPOCHS),
-                    data.generate(EXCEPTIONS)));
+        Generator.from(data ->
+            new DisconnectInput(
+                data.generate(STATES),
+                data.generate(EPOCHS),
+                data.generate(EPOCHS),
+                data.generate(EXCEPTIONS)));
 
     PropertyChecker.forAll(
         inputs,
@@ -61,13 +59,12 @@ class ConnectionStateTransitionsTest {
   @Test
   void staleDisconnectIsANoOp() {
     Generator<DisconnectInput> staleInputs =
-        Generator.from(
-            data -> {
-              long epoch = data.generate(EPOCHS);
-              long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
-              return new DisconnectInput(
-                  data.generate(STATES), epoch, epoch - delta, data.generate(EXCEPTIONS));
-            });
+        Generator.from(data -> {
+          long epoch = data.generate(EPOCHS);
+          long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
+          return new DisconnectInput(
+              data.generate(STATES), epoch, epoch - delta, data.generate(EXCEPTIONS));
+        });
 
     PropertyChecker.forAll(
         staleInputs,
@@ -82,13 +79,12 @@ class ConnectionStateTransitionsTest {
   @Test
   void sessionFailureNeverDecreasesEpoch() {
     Generator<DisconnectInput> inputs =
-        Generator.from(
-            data ->
-                new DisconnectInput(
-                    data.generate(STATES),
-                    data.generate(EPOCHS),
-                    data.generate(EPOCHS),
-                    data.generate(EXCEPTIONS)));
+        Generator.from(data ->
+            new DisconnectInput(
+                data.generate(STATES),
+                data.generate(EPOCHS),
+                data.generate(EPOCHS),
+                data.generate(EXCEPTIONS)));
 
     PropertyChecker.forAll(
         inputs,
@@ -103,14 +99,13 @@ class ConnectionStateTransitionsTest {
   @Test
   void sessionFailureFromOtherEpochIsANoOp() {
     Generator<DisconnectInput> inputs =
-        Generator.from(
-            data -> {
-              long epoch = data.generate(EPOCHS);
-              long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
-              long eventEpoch = data.generate(Generator.booleans()) ? epoch - delta : epoch + delta;
-              return new DisconnectInput(
-                  data.generate(STATES), epoch, eventEpoch, data.generate(EXCEPTIONS));
-            });
+        Generator.from(data -> {
+          long epoch = data.generate(EPOCHS);
+          long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
+          long eventEpoch = data.generate(Generator.booleans()) ? epoch - delta : epoch + delta;
+          return new DisconnectInput(
+              data.generate(STATES), epoch, eventEpoch, data.generate(EXCEPTIONS));
+        });
 
     PropertyChecker.forAll(
         inputs,
@@ -125,12 +120,11 @@ class ConnectionStateTransitionsTest {
   @Test
   void sessionFailureOfCurrentEpochStartsRecoveryUnlessClosedOrAlreadyRecovering() {
     Generator<DisconnectInput> inputs =
-        Generator.from(
-            data -> {
-              long epoch = data.generate(EPOCHS);
-              return new DisconnectInput(
-                  data.generate(STATES), epoch, epoch, data.generate(EXCEPTIONS));
-            });
+        Generator.from(data -> {
+          long epoch = data.generate(EPOCHS);
+          return new DisconnectInput(
+              data.generate(STATES), epoch, epoch, data.generate(EXCEPTIONS));
+        });
 
     PropertyChecker.forAll(
         inputs,

@@ -81,11 +81,10 @@ public class MicrometerObservationCollectorTest {
           consumerConnection
               .consumerBuilder()
               .queue(q)
-              .messageHandler(
-                  (ctx, msg) -> {
-                    ctx.accept();
-                    consumeSync.down();
-                  })
+              .messageHandler((ctx, msg) -> {
+                ctx.accept();
+                consumeSync.down();
+              })
               .build();
 
           Publisher publisher =
@@ -123,10 +122,9 @@ public class MicrometerObservationCollectorTest {
               .hasTag("messaging.message.conversation_id", String.valueOf(correlationId))
               .hasTag("net.protocol.name", "amqp")
               .hasTag("net.protocol.version", "1.0");
-          TestUtils.waitAtMost(
-              () ->
-                  getMeterRegistry().find("rabbitmq.amqp.publish").timer() != null
-                      && getMeterRegistry().find("rabbitmq.amqp.process").timer() != null);
+          TestUtils.waitAtMost(() ->
+              getMeterRegistry().find("rabbitmq.amqp.publish").timer() != null
+                  && getMeterRegistry().find("rabbitmq.amqp.process").timer() != null);
           getMeterRegistry()
               .get("rabbitmq.amqp.publish")
               .tag("messaging.operation", "publish")

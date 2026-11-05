@@ -88,20 +88,19 @@ public class DelayedRetryTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              deliveryCount.incrementAndGet();
-              messages.offer(message);
-              if (deliveryCount.get() == 1) {
-                timeBetweenDeliveriesNs.set(System.nanoTime());
-                context.requeue();
-              } else {
-                long now = System.nanoTime();
-                timeBetweenDeliveriesNs.set(now - timeBetweenDeliveriesNs.get());
-                context.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((context, message) -> {
+          deliveryCount.incrementAndGet();
+          messages.offer(message);
+          if (deliveryCount.get() == 1) {
+            timeBetweenDeliveriesNs.set(System.nanoTime());
+            context.requeue();
+          } else {
+            long now = System.nanoTime();
+            timeBetweenDeliveriesNs.set(now - timeBetweenDeliveriesNs.get());
+            context.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -142,17 +141,16 @@ public class DelayedRetryTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              if (count.incrementAndGet() == 1) {
-                timeBetweenDeliveriesNs.set(System.nanoTime());
-                strategy.apply(context, deliveryTimeOffset);
-              } else {
-                timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
-                context.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((context, message) -> {
+          if (count.incrementAndGet() == 1) {
+            timeBetweenDeliveriesNs.set(System.nanoTime());
+            strategy.apply(context, deliveryTimeOffset);
+          } else {
+            timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
+            context.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -184,17 +182,16 @@ public class DelayedRetryTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              if (count.incrementAndGet() == 1) {
-                timeBetweenDeliveriesNs.set(System.nanoTime());
-                strategy.apply(context, retryDelay);
-              } else {
-                timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
-                context.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((context, message) -> {
+          if (count.incrementAndGet() == 1) {
+            timeBetweenDeliveriesNs.set(System.nanoTime());
+            strategy.apply(context, retryDelay);
+          } else {
+            timeBetweenDeliveriesNs.set(System.nanoTime() - timeBetweenDeliveriesNs.get());
+            context.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -226,16 +223,15 @@ public class DelayedRetryTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              if (count.incrementAndGet() == 1) {
-                context.delayedRetry(retryDelay, deliveryFailed);
-              } else {
-                messages.offer(message);
-                context.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((context, message) -> {
+          if (count.incrementAndGet() == 1) {
+            context.delayedRetry(retryDelay, deliveryFailed);
+          } else {
+            messages.offer(message);
+            context.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -262,17 +258,16 @@ public class DelayedRetryTest {
         this.connection
             .consumerBuilder()
             .queue(q)
-            .messageHandler(
-                (context, message) -> {
-                  if (deliveryCount.incrementAndGet() == 1) {
-                    context.defer(token, ofMillis(60_000));
-                    parkedSync.down();
-                  } else {
-                    messages.offer(message);
-                    context.accept();
-                    redeliveredSync.down();
-                  }
-                })
+            .messageHandler((context, message) -> {
+              if (deliveryCount.incrementAndGet() == 1) {
+                context.defer(token, ofMillis(60_000));
+                parkedSync.down();
+              } else {
+                messages.offer(message);
+                context.accept();
+                redeliveredSync.down();
+              }
+            })
             .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -306,23 +301,22 @@ public class DelayedRetryTest {
         this.connection
             .consumerBuilder()
             .queue(q)
-            .messageHandler(
-                (context, message) -> {
-                  if (deliveryCount.incrementAndGet() <= 2) {
-                    Consumer.BatchContext batch =
-                        batchRef.get() == null ? context.batch(2) : batchRef.get();
-                    batchRef.set(batch);
-                    batch.add(context);
-                    if (batch.size() == 2) {
-                      batch.defer(token, ofMillis(60_000));
-                      parkedSync.down();
-                    }
-                  } else {
-                    redelivered.offer(message);
-                    context.accept();
-                    redeliveredSync.down();
-                  }
-                })
+            .messageHandler((context, message) -> {
+              if (deliveryCount.incrementAndGet() <= 2) {
+                Consumer.BatchContext batch =
+                    batchRef.get() == null ? context.batch(2) : batchRef.get();
+                batchRef.set(batch);
+                batch.add(context);
+                if (batch.size() == 2) {
+                  batch.defer(token, ofMillis(60_000));
+                  parkedSync.down();
+                }
+              } else {
+                redelivered.offer(message);
+                context.accept();
+                redeliveredSync.down();
+              }
+            })
             .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -353,17 +347,16 @@ public class DelayedRetryTest {
             .consumerBuilder()
             .queue(q)
             .initialCredits(1)
-            .messageHandler(
-                (context, message) -> {
-                  if (deliveryCount.incrementAndGet() <= 2) {
-                    context.defer(token, ofMillis(60_000));
-                    parkedSync.down();
-                  } else {
-                    redelivered.offer(message);
-                    context.accept();
-                    redeliveredSync.down();
-                  }
-                })
+            .messageHandler((context, message) -> {
+              if (deliveryCount.incrementAndGet() <= 2) {
+                context.defer(token, ofMillis(60_000));
+                parkedSync.down();
+              } else {
+                redelivered.offer(message);
+                context.accept();
+                redeliveredSync.down();
+              }
+            })
             .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -426,11 +419,10 @@ public class DelayedRetryTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              contextRef.set(context);
-              deliveredSync.down();
-            })
+        .messageHandler((context, message) -> {
+          contextRef.set(context);
+          deliveredSync.down();
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});

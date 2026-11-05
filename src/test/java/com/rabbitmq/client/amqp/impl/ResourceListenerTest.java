@@ -67,13 +67,12 @@ public class ResourceListenerTest {
       declare.run();
 
       PublisherBuilder builder = connection.publisherBuilder();
-      builder.listeners(
-          context -> {
-            if (context.currentState() == Resource.State.CLOSED) {
-              closedCause.set(context.failureCause());
-              closedLatch.countDown();
-            }
-          });
+      builder.listeners(context -> {
+        if (context.currentState() == Resource.State.CLOSED) {
+          closedCause.set(context.failureCause());
+          closedLatch.countDown();
+        }
+      });
 
       builderConfigurator.accept(builder);
       publisher = builder.build();
@@ -119,13 +118,12 @@ public class ResourceListenerTest {
           .consumerBuilder()
           .messageHandler((ctx, msg) -> consumeLatch.countDown())
           .queue(q)
-          .listeners(
-              ctx -> {
-                if (ctx.currentState() == Resource.State.CLOSED) {
-                  closeCause.set(ctx.failureCause());
-                  closedLatch.countDown();
-                }
-              })
+          .listeners(ctx -> {
+            if (ctx.currentState() == Resource.State.CLOSED) {
+              closeCause.set(ctx.failureCause());
+              closedLatch.countDown();
+            }
+          })
           .build();
 
       Publisher publisher = connection.publisherBuilder().queue(q).build();

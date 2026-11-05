@@ -80,11 +80,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
     this.sessionHandler = this.connection.createSessionHandler();
     this.nativeCloseHandler =
         e -> {
-          this.executorService.submit(
-              () -> {
-                // get result to make spotbugs happy
-                boolean ignored = maybeCloseResourceOnException(this, e);
-              });
+          this.executorService.submit(() -> {
+            // get result to make spotbugs happy
+            boolean ignored = maybeCloseResourceOnException(this, e);
+          });
         };
     this.sender =
         this.createSender(
@@ -190,11 +189,10 @@ final class AmqpPublisher extends ResourceBase implements Publisher {
 
     this.beforeActivateHook.run();
     try {
-      guard.runIfCurrent(
-          () -> {
-            this.sender = newSender;
-            this.state(OPEN);
-          });
+      guard.runIfCurrent(() -> {
+        this.sender = newSender;
+        this.state(OPEN);
+      });
     } catch (StaleRecoveryException e) {
       LOGGER.debug("Recovery of publisher {} is stale, closing new sender", this.id);
       maybeClose(newSender, ex -> LOGGER.debug("Error while closing sender: {}", ex.getMessage()));

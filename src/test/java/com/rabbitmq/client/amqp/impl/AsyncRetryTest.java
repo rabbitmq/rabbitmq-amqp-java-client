@@ -82,11 +82,10 @@ public class AsyncRetryTest {
         AsyncRetry.asyncRetry(task).scheduler(scheduler).delay(Duration.ofMillis(50)).build();
     CountDownLatch latch = new CountDownLatch(1);
     AtomicInteger result = new AtomicInteger(0);
-    completableFuture.thenAccept(
-        value -> {
-          result.set(value);
-          latch.countDown();
-        });
+    completableFuture.thenAccept(value -> {
+      result.set(value);
+      latch.countDown();
+    });
     assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
     assertThat(result.get()).isEqualTo(42);
     verify(task, times(3)).call();
@@ -106,16 +105,14 @@ public class AsyncRetryTest {
     AtomicBoolean acceptCalled = new AtomicBoolean(false);
     AtomicBoolean exceptionallyCalled = new AtomicBoolean(false);
     completableFuture
-        .thenAccept(
-            value -> {
-              acceptCalled.set(true);
-            })
-        .exceptionally(
-            e -> {
-              exceptionallyCalled.set(true);
-              latch.countDown();
-              return null;
-            });
+        .thenAccept(value -> {
+          acceptCalled.set(true);
+        })
+        .exceptionally(e -> {
+          exceptionallyCalled.set(true);
+          latch.countDown();
+          return null;
+        });
     assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
     assertThat(acceptCalled.get()).isFalse();
     assertThat(exceptionallyCalled.get()).isTrue();
@@ -136,11 +133,10 @@ public class AsyncRetryTest {
             .build();
     CountDownLatch latch = new CountDownLatch(1);
     AtomicInteger result = new AtomicInteger(0);
-    completableFuture.thenAccept(
-        value -> {
-          result.set(value);
-          latch.countDown();
-        });
+    completableFuture.thenAccept(value -> {
+      result.set(value);
+      latch.countDown();
+    });
     assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
     assertThat(result.get()).isEqualTo(42);
     verify(task, times(3)).call();
@@ -162,16 +158,14 @@ public class AsyncRetryTest {
     AtomicBoolean acceptCalled = new AtomicBoolean(false);
     AtomicBoolean exceptionallyCalled = new AtomicBoolean(false);
     completableFuture
-        .thenAccept(
-            value -> {
-              acceptCalled.set(true);
-            })
-        .exceptionally(
-            e -> {
-              exceptionallyCalled.set(true);
-              latch.countDown();
-              return null;
-            });
+        .thenAccept(value -> {
+          acceptCalled.set(true);
+        })
+        .exceptionally(e -> {
+          exceptionallyCalled.set(true);
+          latch.countDown();
+          return null;
+        });
     assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
     assertThat(acceptCalled.get()).isFalse();
     assertThat(exceptionallyCalled.get()).isTrue();

@@ -332,11 +332,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
       int defaultPort = tls ? defaultTlsPort() : defaultPort();
       List<Address> addrs =
           this.uris.stream()
-              .map(
-                  uriItem ->
-                      new Address(
-                          uriItem.getHost() == null ? DEFAULT_HOST : uriItem.getHost(),
-                          uriItem.getPort() == -1 ? defaultPort : uriItem.getPort()))
+              .map(uriItem ->
+                  new Address(
+                      uriItem.getHost() == null ? DEFAULT_HOST : uriItem.getHost(),
+                      uriItem.getPort() == -1 ? defaultPort : uriItem.getPort()))
               .collect(toList());
       this.addresses.clear();
       this.addresses.addAll(addrs);

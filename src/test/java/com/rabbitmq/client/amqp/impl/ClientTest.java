@@ -123,10 +123,9 @@ public class ClientTest {
       int messageCount = 10;
       CountDownLatch publishLatch = new CountDownLatch(5);
       IntStream.range(0, messageCount)
-          .forEach(
-              ignored ->
-                  publisher.publish(
-                      publisher.message("".getBytes(UTF_8)), context -> publishLatch.countDown()));
+          .forEach(ignored ->
+              publisher.publish(
+                  publisher.message("".getBytes(UTF_8)), context -> publishLatch.countDown()));
 
       org.apache.qpid.protonj2.client.Connection protonConnection = connection(client);
       Receiver receiver = protonConnection.openReceiver("/queues/" + q, new ReceiverOptions());
@@ -437,21 +436,18 @@ public class ClientTest {
                             // called when connected for the first time
                             connectedLatch.countDown();
                           })
-                      .disconnectedHandler(
-                          (conn, disconnectionEvent) -> {
-                            // called when the connection fails
-                            called.set(true);
-                          })
-                      .interruptedHandler(
-                          (conn, disconnectionEvent) -> {
-                            // called when the connection fails and recovery is activated
-                            called.set(true);
-                          })
-                      .reconnectedHandler(
-                          (conn, connectionEvent) -> {
-                            // called when the connection reconnects after a failure
-                            called.set(true);
-                          }));
+                      .disconnectedHandler((conn, disconnectionEvent) -> {
+                        // called when the connection fails
+                        called.set(true);
+                      })
+                      .interruptedHandler((conn, disconnectionEvent) -> {
+                        // called when the connection fails and recovery is activated
+                        called.set(true);
+                      })
+                      .reconnectedHandler((conn, connectionEvent) -> {
+                        // called when the connection reconnects after a failure
+                        called.set(true);
+                      }));
 
       Assertions.assertThat(connectedLatch).completes();
       c.close();
@@ -557,11 +553,10 @@ public class ClientTest {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
       Session s = c.openSession().openFuture().get(10, SECONDS);
-      assertThatThrownBy(
-              () ->
-                  ExceptionUtils.wrapGet(
-                      s.openReceiver("/queues/missing", new ReceiverOptions().creditWindow(0))
-                          .openFuture()))
+      assertThatThrownBy(() ->
+              ExceptionUtils.wrapGet(
+                  s.openReceiver("/queues/missing", new ReceiverOptions().creditWindow(0))
+                      .openFuture()))
           .isInstanceOf(ClientLinkRemotelyClosedException.class)
           .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
           .matches(e -> "amqp:not-found".equals(e.getErrorCondition().condition()));
@@ -575,11 +570,10 @@ public class ClientTest {
     try (Client client = client()) {
       org.apache.qpid.protonj2.client.Connection c = connection(client);
       Session s = c.openSession().openFuture().get(10, SECONDS);
-      assertThatThrownBy(
-              () ->
-                  ExceptionUtils.wrapGet(
-                      s.openReceiver("/fruit/orange", new ReceiverOptions().creditWindow(0))
-                          .openFuture()))
+      assertThatThrownBy(() ->
+              ExceptionUtils.wrapGet(
+                  s.openReceiver("/fruit/orange", new ReceiverOptions().creditWindow(0))
+                      .openFuture()))
           .isInstanceOf(ClientLinkRemotelyClosedException.class)
           .asInstanceOf(throwable(ClientLinkRemotelyClosedException.class))
           .matches(e -> "amqp:invalid-field".equals(e.getErrorCondition().condition()));

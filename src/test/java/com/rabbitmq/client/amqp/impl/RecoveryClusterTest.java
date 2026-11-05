@@ -168,50 +168,46 @@ public class RecoveryClusterTest {
       AtomicInteger counter = new AtomicInteger(0);
       consumerStates =
           queueConfigurations.stream()
-              .map(
-                  conf -> {
-                    AmqpConnection c;
-                    String cName = "consumer-" + counter.getAndIncrement();
-                    if (conf.exclusive) {
-                      c = connection(b -> b.name(cName));
-                      conf.configurationCallback.apply(c.management().queue(conf.name)).declare();
-                      c.management()
-                          .binding()
-                          .sourceExchange("amq.direct")
-                          .key(conf.name)
-                          .destinationQueue(conf.name)
-                          .bind();
-                    } else {
-                      boolean isolate = conf.type == Management.QueueType.STREAM;
-                      c =
-                          connection(
-                              b ->
-                                  b.name(cName)
-                                      .isolateResources(isolate)
-                                      .affinity()
-                                      .queue(conf.name)
-                                      .operation(CONSUME)
-                                      .connection());
-                    }
-                    return new ConsumerState(conf.name, c);
-                  })
+              .map(conf -> {
+                AmqpConnection c;
+                String cName = "consumer-" + counter.getAndIncrement();
+                if (conf.exclusive) {
+                  c = connection(b -> b.name(cName));
+                  conf.configurationCallback.apply(c.management().queue(conf.name)).declare();
+                  c.management()
+                      .binding()
+                      .sourceExchange("amq.direct")
+                      .key(conf.name)
+                      .destinationQueue(conf.name)
+                      .bind();
+                } else {
+                  boolean isolate = conf.type == Management.QueueType.STREAM;
+                  c =
+                      connection(b ->
+                          b.name(cName)
+                              .isolateResources(isolate)
+                              .affinity()
+                              .queue(conf.name)
+                              .operation(CONSUME)
+                              .connection());
+                }
+                return new ConsumerState(conf.name, c);
+              })
               .collect(toList());
 
       counter.set(0);
       publisherStates =
           queueConfigurations.stream()
-              .map(
-                  c ->
-                      new PublisherState(
-                          c.name,
-                          c.exclusive,
-                          connection(
-                              b ->
-                                  b.name("publisher-" + counter.getAndIncrement())
-                                      .affinity()
-                                      .queue(c.name)
-                                      .operation(PUBLISH)
-                                      .connection())))
+              .map(c ->
+                  new PublisherState(
+                      c.name,
+                      c.exclusive,
+                      connection(b ->
+                          b.name("publisher-" + counter.getAndIncrement())
+                              .affinity()
+                              .queue(c.name)
+                              .operation(PUBLISH)
+                              .connection())))
               .collect(toList());
 
       publisherStates.forEach(PublisherState::start);
@@ -220,12 +216,11 @@ public class RecoveryClusterTest {
           consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
       syncs.forEach(s -> assertThat(s).completes());
 
-      nodes.forEach(
-          n -> {
-            LOGGER.info("Restarting node {}...", n);
-            Cli.restartNode(n);
-            LOGGER.info("Restarted node {}.", n);
-          });
+      nodes.forEach(n -> {
+        LOGGER.info("Restarting node {}...", n);
+        Cli.restartNode(n);
+        LOGGER.info("Restarted node {}.", n);
+      });
       LOGGER.info("Rebalancing...");
       Cli.rebalance();
       LOGGER.info("Rebalancing over.");
@@ -236,44 +231,40 @@ public class RecoveryClusterTest {
           () -> format("Test connection state is %s, expecting %s", connection.state(), OPEN));
       LOGGER.info("Test connection has recovered");
 
-      queueNames.forEach(
-          n -> {
-            LOGGER.info("Getting info for queue {}", n);
-            waitAtMostNoException(TIMEOUT, () -> management.queueInfo(n));
-          });
+      queueNames.forEach(n -> {
+        LOGGER.info("Getting info for queue {}", n);
+        waitAtMostNoException(TIMEOUT, () -> management.queueInfo(n));
+      });
       LOGGER.info("Retrieved info for each queue.");
 
-      queueConfigurations.forEach(
-          c -> {
-            if (c.type == Management.QueueType.QUORUM || c.type == Management.QueueType.STREAM) {
-              assertThat(management.queueInfo(c.name).members())
-                  .hasSameSizeAs(nodes)
-                  .containsExactlyInAnyOrderElementsOf(nodes);
-            } else {
-              assertThat(management.queueInfo(c.name).members())
-                  .hasSize(1)
-                  .containsAnyElementsOf(nodes);
-            }
-          });
+      queueConfigurations.forEach(c -> {
+        if (c.type == Management.QueueType.QUORUM || c.type == Management.QueueType.STREAM) {
+          assertThat(management.queueInfo(c.name).members())
+              .hasSameSizeAs(nodes)
+              .containsExactlyInAnyOrderElementsOf(nodes);
+        } else {
+          assertThat(management.queueInfo(c.name).members())
+              .hasSize(1)
+              .containsAnyElementsOf(nodes);
+        }
+      });
 
       LOGGER.info("Checked replica info for each queue.");
 
       syncs = publisherStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
-      syncs.forEach(
-          s -> {
-            LOGGER.info("Publishing messages ('{}')", s);
-            assertThat(s).completes(TIMEOUT);
-            LOGGER.info("Messages published and settled ('{}')", s);
-          });
+      syncs.forEach(s -> {
+        LOGGER.info("Publishing messages ('{}')", s);
+        assertThat(s).completes(TIMEOUT);
+        LOGGER.info("Messages published and settled ('{}')", s);
+      });
       LOGGER.info("Checked publishers have recovered.");
 
       syncs = consumerStates.stream().map(s -> s.waitForNewMessages(10)).collect(toList());
-      syncs.forEach(
-          s -> {
-            LOGGER.info("Waiting for new messages ('{}')", s);
-            assertThat(s).completes(TIMEOUT);
-            LOGGER.info("Expected messages received ('{}')", s);
-          });
+      syncs.forEach(s -> {
+        LOGGER.info("Waiting for new messages ('{}')", s);
+        assertThat(s).completes(TIMEOUT);
+        LOGGER.info("Expected messages received ('{}')", s);
+      });
       LOGGER.info("Checked consumers have recovered.");
 
       assertThat(publisherStates).allMatch(s -> s.state() == OPEN);
@@ -294,49 +285,45 @@ public class RecoveryClusterTest {
       throw e;
     } finally {
       System.out.println("Queues:");
-      queueNames.forEach(
-          q -> {
-            try {
-              Management.QueueInfo queueInfo = management.queueInfo(q);
-              System.out.printf(
-                  "Queue '%s': leader '%s', followers '%s', consumer(s) %d, message(s) %d%n",
-                  q,
-                  queueInfo.leader(),
-                  queueInfo.members().stream()
-                      .filter(n -> !n.equals(queueInfo.leader()))
-                      .collect(toList()),
-                  queueInfo.consumerCount(),
-                  queueInfo.messageCount());
-            } catch (Exception ex) {
-              LOGGER.info(
-                  "Error while retrieving queue information for '{}': {}", q, ex.getMessage());
-            }
-          });
+      queueNames.forEach(q -> {
+        try {
+          Management.QueueInfo queueInfo = management.queueInfo(q);
+          System.out.printf(
+              "Queue '%s': leader '%s', followers '%s', consumer(s) %d, message(s) %d%n",
+              q,
+              queueInfo.leader(),
+              queueInfo.members().stream()
+                  .filter(n -> !n.equals(queueInfo.leader()))
+                  .collect(toList()),
+              queueInfo.consumerCount(),
+              queueInfo.messageCount());
+        } catch (Exception ex) {
+          LOGGER.info("Error while retrieving queue information for '{}': {}", q, ex.getMessage());
+        }
+      });
 
       System.out.println("Publishers:");
-      publisherStates.forEach(
-          p -> {
-            try {
-              System.out.printf(
-                  "  queue %s, is on leader? %s, state %s, last exception '%s', last failed status '%s'%n",
-                  p.queue, p.isOnLeader(), p.state(), p.lastException(), p.lastFailedStatus());
-            } catch (Exception ex) {
-              LOGGER.info(
-                  "Error while checking publisher '{}' is on leader node: {}", p, ex.getMessage());
-            }
-          });
+      publisherStates.forEach(p -> {
+        try {
+          System.out.printf(
+              "  queue %s, is on leader? %s, state %s, last exception '%s', last failed status '%s'%n",
+              p.queue, p.isOnLeader(), p.state(), p.lastException(), p.lastFailedStatus());
+        } catch (Exception ex) {
+          LOGGER.info(
+              "Error while checking publisher '{}' is on leader node: {}", p, ex.getMessage());
+        }
+      });
 
       System.out.println("Consumers:");
-      consumerStates.forEach(
-          c -> {
-            try {
-              System.out.printf("  queue %s, is on member? %s%n", c.queue, c.isOnMember());
-              System.out.println(c.consumer.diagnosticState());
-            } catch (Exception ex) {
-              LOGGER.info(
-                  "Error while checking consumer '{}' is on a member node: {}", c, ex.getMessage());
-            }
-          });
+      consumerStates.forEach(c -> {
+        try {
+          System.out.printf("  queue %s, is on member? %s%n", c.queue, c.isOnMember());
+          System.out.println(c.consumer.diagnosticState());
+        } catch (Exception ex) {
+          LOGGER.info(
+              "Error while checking consumer '{}' is on a member node: {}", c, ex.getMessage());
+        }
+      });
 
       publisherStates.forEach(PublisherState::close);
       consumerStates.forEach(ConsumerState::close);
@@ -356,17 +343,16 @@ public class RecoveryClusterTest {
             (Function<Management.QueueType, Stream<QueueConfiguration>>)
                 type ->
                     IntStream.range(0, queueCount)
-                        .mapToObj(
-                            i -> {
-                              boolean exclusive =
-                                  type == Management.QueueType.CLASSIC
-                                      && classicQueueCount.incrementAndGet() > queueCount;
-                              String prefix = type.name().toLowerCase() + (exclusive ? "-ex" : "");
-                              String n = String.format("%s-%s-%02d", prefix, suffix, i);
-                              UnaryOperator<Management.QueueSpecification> c =
-                                  s -> s.type(type).exclusive(exclusive);
-                              return new QueueConfiguration(n, type, exclusive, c);
-                            }))
+                        .mapToObj(i -> {
+                          boolean exclusive =
+                              type == Management.QueueType.CLASSIC
+                                  && classicQueueCount.incrementAndGet() > queueCount;
+                          String prefix = type.name().toLowerCase() + (exclusive ? "-ex" : "");
+                          String n = String.format("%s-%s-%02d", prefix, suffix, i);
+                          UnaryOperator<Management.QueueSpecification> c =
+                              s -> s.type(type).exclusive(exclusive);
+                          return new QueueConfiguration(n, type, exclusive, c);
+                        }))
         .collect(toList());
   }
 
@@ -412,20 +398,19 @@ public class RecoveryClusterTest {
             }
           };
       this.task =
-          THREAD_FACTORY.newThread(
-              () -> {
-                while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
-                  if (state.get() == OPEN) {
-                    try {
-                      this.limiter.acquire(1);
-                      this.publisher.publish(publisher.message(BODY), callback);
-                    } catch (Exception e) {
-                      this.lastException.set(e);
-                      this.lastExceptionInstant.set(Instant.now());
-                    }
-                  }
+          THREAD_FACTORY.newThread(() -> {
+            while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
+              if (state.get() == OPEN) {
+                try {
+                  this.limiter.acquire(1);
+                  this.publisher.publish(publisher.message(BODY), callback);
+                } catch (Exception e) {
+                  this.lastException.set(e);
+                  this.lastExceptionInstant.set(Instant.now());
                 }
-              });
+              }
+            }
+          });
       this.task.start();
     }
 
@@ -493,16 +478,15 @@ public class RecoveryClusterTest {
               connection
                   .consumerBuilder()
                   .queue(queue)
-                  .messageHandler(
-                      (ctx, msg) -> {
-                        receivedCount.incrementAndGet();
-                        postHandle.get().run();
-                        try {
-                          ctx.accept();
-                        } catch (Exception e) {
+                  .messageHandler((ctx, msg) -> {
+                    receivedCount.incrementAndGet();
+                    postHandle.get().run();
+                    try {
+                      ctx.accept();
+                    } catch (Exception e) {
 
-                        }
-                      })
+                    }
+                  })
                   .build();
     }
 

@@ -179,11 +179,10 @@ public class ManagementTest {
               .build();
       c.consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
+          .messageHandler((ctx, msg) -> {
+            ctx.accept();
+            consumeSync.down();
+          })
           .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
           .build();
 

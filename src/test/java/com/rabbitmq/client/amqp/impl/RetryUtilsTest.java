@@ -61,10 +61,8 @@ public class RetryUtilsTest {
   void callAndMaybeRetryShouldFailAfterTooManyAttempts() throws Exception {
     when(operation.call()).thenThrow(new AmqpException.AmqpResourceInvalidStateException(""));
     List<Duration> waitTimes = of(ofMillis(1), ofMillis(1), ofMillis(1));
-    assertThatThrownBy(
-            () ->
-                callAndMaybeRetry(
-                    operation, EXCEPTION_PREDICATE, waitTimes, "operation %s", "test"))
+    assertThatThrownBy(() ->
+            callAndMaybeRetry(operation, EXCEPTION_PREDICATE, waitTimes, "operation %s", "test"))
         .isInstanceOf(AmqpException.AmqpResourceInvalidStateException.class);
     verify(operation, times(waitTimes.size() + 1)).call();
   }
@@ -73,10 +71,8 @@ public class RetryUtilsTest {
   void callAndMaybeRetryShouldFailIfUnexpectedException() throws Exception {
     when(operation.call()).thenThrow(new AmqpException.AmqpResourceClosedException(""));
     List<Duration> waitTimes = of(ofMillis(1), ofMillis(1), ofMillis(1));
-    assertThatThrownBy(
-            () ->
-                callAndMaybeRetry(
-                    operation, EXCEPTION_PREDICATE, waitTimes, "operation %s", "test"))
+    assertThatThrownBy(() ->
+            callAndMaybeRetry(operation, EXCEPTION_PREDICATE, waitTimes, "operation %s", "test"))
         .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
     verify(operation, times(1)).call();
   }

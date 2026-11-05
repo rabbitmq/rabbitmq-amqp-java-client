@@ -51,17 +51,15 @@ public class EventLoopTest {
   void submitTasks() {
     AtomicInteger buffer = new AtomicInteger();
     client.submit(s -> s.a = 42);
-    client.submit(
-        s -> {
-          buffer.set(s.a);
-        });
+    client.submit(s -> {
+      buffer.set(s.a);
+    });
     assertThat(buffer).hasValue(42);
 
-    client.submit(
-        s -> {
-          s.a = 1;
-          s.b = 2;
-        });
+    client.submit(s -> {
+      s.a = 1;
+      s.b = 2;
+    });
     client.submit(s -> buffer.set(s.a));
     assertThat(buffer).hasValue(1);
     client.submit(s -> buffer.set(s.b));
@@ -76,10 +74,9 @@ public class EventLoopTest {
   @Test
   void taskThrowingExceptionUnblocksCallerAndLoopContinues() {
     AtomicInteger buffer = new AtomicInteger();
-    client.submit(
-        s -> {
-          throw new RuntimeException("task failure (expected test failure)");
-        });
+    client.submit(s -> {
+      throw new RuntimeException("task failure (expected test failure)");
+    });
     client.submit(s -> buffer.set(42));
     assertThat(buffer).hasValue(42);
   }

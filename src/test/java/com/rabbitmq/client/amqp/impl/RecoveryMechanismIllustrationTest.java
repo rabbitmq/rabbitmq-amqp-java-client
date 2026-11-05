@@ -316,22 +316,20 @@ class RecoveryMechanismIllustrationTest {
 
   private static final Generator<Throwable> CAUSES =
       Generator.booleans()
-          .map(
-              recoverable ->
-                  recoverable
-                      ? new RecoverableFailure("simulated failure")
-                      : new RuntimeException("simulated failure"));
+          .map(recoverable ->
+              recoverable
+                  ? new RecoverableFailure("simulated failure")
+                  : new RuntimeException("simulated failure"));
 
   @Test
   void disconnectNeverDecreasesEpoch() {
     Generator<DisconnectInput> inputs =
-        Generator.from(
-            data ->
-                new DisconnectInput(
-                    data.generate(STATES),
-                    data.generate(EPOCHS),
-                    data.generate(EPOCHS),
-                    data.generate(CAUSES)));
+        Generator.from(data ->
+            new DisconnectInput(
+                data.generate(STATES),
+                data.generate(EPOCHS),
+                data.generate(EPOCHS),
+                data.generate(CAUSES)));
 
     PropertyChecker.forAll(
         inputs,
@@ -345,13 +343,12 @@ class RecoveryMechanismIllustrationTest {
   @Test
   void staleDisconnectIsANoOp() {
     Generator<DisconnectInput> staleInputs =
-        Generator.from(
-            data -> {
-              long epoch = data.generate(EPOCHS);
-              long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
-              return new DisconnectInput(
-                  data.generate(STATES), epoch, epoch - delta, data.generate(CAUSES));
-            });
+        Generator.from(data -> {
+          long epoch = data.generate(EPOCHS);
+          long delta = data.generate(Generator.integers(1, 1000).map(i -> (long) i));
+          return new DisconnectInput(
+              data.generate(STATES), epoch, epoch - delta, data.generate(CAUSES));
+        });
 
     PropertyChecker.forAll(
         staleInputs,

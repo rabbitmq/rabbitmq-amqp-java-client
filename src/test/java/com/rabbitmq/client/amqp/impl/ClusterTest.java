@@ -125,13 +125,12 @@ public class ClusterTest {
 
       Sync recoveredSync = sync();
       AmqpConnection publishConnection =
-          connection(
-              b ->
-                  b.name(name)
-                      .listeners(recoveryListener(recoveredSync))
-                      .affinity()
-                      .queue(q)
-                      .operation(PUBLISH));
+          connection(b ->
+              b.name(name)
+                  .listeners(recoveryListener(recoveredSync))
+                  .affinity()
+                  .queue(q)
+                  .operation(PUBLISH));
       assertThat(publishConnection).hasNodename(initialLeader);
 
       String newLeader = moveQqLeader();
@@ -174,12 +173,11 @@ public class ClusterTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L, 3L);
@@ -201,12 +199,11 @@ public class ClusterTest {
       consumeConnection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       Publisher publisher = connection.publisherBuilder().queue(q).build();
@@ -258,12 +255,11 @@ public class ClusterTest {
       consumeConnection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(PUBLISH));
@@ -323,12 +319,11 @@ public class ClusterTest {
       consumeConnection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       AmqpConnection publishConnection = connection(b -> b.affinity().queue(q).operation(CONSUME));
@@ -442,12 +437,11 @@ public class ClusterTest {
       connection.consumerBuilder().queue(q).stream()
           .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
           .builder()
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
       assertThat(consumeSync).completes();
       assertThat(messageIds).containsExactlyInAnyOrder(1L, 2L);
@@ -469,12 +463,11 @@ public class ClusterTest {
       consumeConnection.consumerBuilder().queue(q).stream()
           .offset(ConsumerBuilder.StreamOffsetSpecification.FIRST)
           .builder()
-          .messageHandler(
-              (ctx, msg) -> {
-                messageIds.add(msg.messageIdAsLong());
-                consumeSync.down();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            messageIds.add(msg.messageIdAsLong());
+            consumeSync.down();
+            ctx.accept();
+          })
           .build();
 
       Publisher publisher = connection.publisherBuilder().queue(q).build();
@@ -506,26 +499,23 @@ public class ClusterTest {
     try {
       List<Connection> connections =
           stream(URIS)
-              .map(
-                  uri ->
-                      connection(
-                          b ->
-                              b.uri(uri)
-                                  .affinity()
-                                  .strategy(
-                                      ConnectionUtils
-                                          .LEADER_FOR_PUBLISHING_MEMBERS_FOR_CONSUMING_STRATEGY)))
+              .map(uri ->
+                  connection(b ->
+                      b.uri(uri)
+                          .affinity()
+                          .strategy(
+                              ConnectionUtils
+                                  .LEADER_FOR_PUBLISHING_MEMBERS_FOR_CONSUMING_STRATEGY)))
               .collect(toList());
       List<Management.QueueInfo> queueInfos =
           range(0, URIS.length)
-              .mapToObj(
-                  i ->
-                      connections
-                          .get(i)
-                          .management()
-                          .queue(names.get(i))
-                          .type(Management.QueueType.CLASSIC)
-                          .declare())
+              .mapToObj(i ->
+                  connections
+                      .get(i)
+                      .management()
+                      .queue(names.get(i))
+                      .type(Management.QueueType.CLASSIC)
+                      .declare())
               .collect(toList());
       assertThat(queueInfos.stream().map(Management.QueueInfo::leader).collect(Collectors.toSet()))
           .hasSameSizeAs(URIS);
@@ -534,10 +524,8 @@ public class ClusterTest {
           names.stream().map(n -> connection(b -> b.affinity().queue(n))).collect(toList());
 
       range(0, URIS.length)
-          .forEach(
-              i ->
-                  assertThat(connectionsWithAffinity.get(i))
-                      .hasNodename(queueInfos.get(i).leader()));
+          .forEach(i ->
+              assertThat(connectionsWithAffinity.get(i)).hasNodename(queueInfos.get(i).leader()));
 
     } finally {
       names.forEach(n -> management.queueDelete(n));
@@ -576,13 +564,12 @@ public class ClusterTest {
               .findAny()
               .get();
 
-      assertThatThrownBy(
-              () ->
-                  cWithNoMember
-                      .consumerBuilder()
-                      .queue(this.name)
-                      .messageHandler((ctx, msg) -> ctx.accept())
-                      .build())
+      assertThatThrownBy(() ->
+              cWithNoMember
+                  .consumerBuilder()
+                  .queue(this.name)
+                  .messageHandler((ctx, msg) -> ctx.accept())
+                  .build())
           .isInstanceOf(AmqpResourceClosedException.class)
           .is(
               new Condition<>(

@@ -497,42 +497,41 @@ final class AmqpConnection extends ResourceBase
       AmqpConnectionBuilder.AmqpRecoveryConfiguration recoveryConfiguration,
       String connectionName,
       long attemptEpoch) {
-    return AsyncRetry.asyncRetry(
-            () ->
-                ConnectionUtils.enforceAffinity(
-                    addrs -> {
-                      NativeConnectionWrapper wrapper =
-                          connect(
-                              this.connectionSettings,
-                              connectionName,
-                              createDisconnectHandler(attemptEpoch),
-                              createSessionCloseHandler(attemptEpoch),
-                              addrs);
-                      // Temporarily assign the native connection so AmqpManagement can use it to
-                      // open its session and query the broker for queue leader information
-                      // during the loop.
-                      this.nativeConnection = wrapper.connection();
-                      return wrapper;
-                    },
-                    this.management,
-                    this.affinity,
-                    this.environment.affinityCache(),
-                    this.affinityStrategy,
-                    new ConnectionUtils.RetryStrategy() {
-                      @Override
-                      public <T> T maybeRetry(Supplier<T> task) {
-                        return RetryUtils.callAndMaybeRetry(
-                            task::get,
-                            // no need to retry if the connection is closed
-                            // the affinity task will fail and AsyncRetry will take care
-                            // of retrying later
-                            e -> RECOVERY_PREDICATE.negate().test(e),
-                            Duration.ofMillis(10),
-                            5,
-                            "Connection affinity operation");
-                      }
-                    },
-                    connectionName))
+    return AsyncRetry.asyncRetry(() ->
+            ConnectionUtils.enforceAffinity(
+                addrs -> {
+                  NativeConnectionWrapper wrapper =
+                      connect(
+                          this.connectionSettings,
+                          connectionName,
+                          createDisconnectHandler(attemptEpoch),
+                          createSessionCloseHandler(attemptEpoch),
+                          addrs);
+                  // Temporarily assign the native connection so AmqpManagement can use it to
+                  // open its session and query the broker for queue leader information
+                  // during the loop.
+                  this.nativeConnection = wrapper.connection();
+                  return wrapper;
+                },
+                this.management,
+                this.affinity,
+                this.environment.affinityCache(),
+                this.affinityStrategy,
+                new ConnectionUtils.RetryStrategy() {
+                  @Override
+                  public <T> T maybeRetry(Supplier<T> task) {
+                    return RetryUtils.callAndMaybeRetry(
+                        task::get,
+                        // no need to retry if the connection is closed
+                        // the affinity task will fail and AsyncRetry will take care
+                        // of retrying later
+                        e -> RECOVERY_PREDICATE.negate().test(e),
+                        Duration.ofMillis(10),
+                        5,
+                        "Connection affinity operation");
+                  }
+                },
+                connectionName))
         .description("Recovering native connection for '%s'.", connectionName)
         .delayPolicy(recoveryConfiguration.backOffDelayPolicy())
         .retry(RECOVERY_PREDICATE)
@@ -729,21 +728,20 @@ final class AmqpConnection extends ResourceBase
     }
 
     // Slow-path initialization serialized in the Event Loop
-    return this.connectionStateClient.executeInLoop(
-        () -> {
-          if (this.state() == CLOSED || this.state() == CLOSING) {
-            throw new AmqpException.AmqpResourceClosedException("Connection is closed");
-          }
-          if (this.consumerWorkService == null) {
-            if (this.privateDispatchingExecutor) {
-              this.dispatchingExecutor =
-                  Executors.newFixedThreadPool(
-                      DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
-            }
-            this.consumerWorkService = new WorkPoolConsumerWorkService(this.dispatchingExecutor);
-          }
-          return this.consumerWorkService;
-        });
+    return this.connectionStateClient.executeInLoop(() -> {
+      if (this.state() == CLOSED || this.state() == CLOSING) {
+        throw new AmqpException.AmqpResourceClosedException("Connection is closed");
+      }
+      if (this.consumerWorkService == null) {
+        if (this.privateDispatchingExecutor) {
+          this.dispatchingExecutor =
+              Executors.newFixedThreadPool(
+                  DEFAULT_NUM_THREADS, Utils.threadFactory("dispatching-" + this.name() + "-"));
+        }
+        this.consumerWorkService = new WorkPoolConsumerWorkService(this.dispatchingExecutor);
+      }
+      return this.consumerWorkService;
+    });
   }
 
   Clock clock() {
@@ -1100,18 +1098,17 @@ final class AmqpConnection extends ResourceBase
               this.connectionStateClient.handleNativeRecoverySuccess(ncw, attemptEpoch);
             },
             this.environment.executorService())
-        .exceptionally(
-            t -> {
-              if (t instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-              }
-              LOGGER.warn(
-                  "Native connection recovery for '{}' failed fundamentally: {}",
-                  this.name(),
-                  t.getMessage());
-              this.close(t);
-              return null;
-            });
+        .exceptionally(t -> {
+          if (t instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+          }
+          LOGGER.warn(
+              "Native connection recovery for '{}' failed fundamentally: {}",
+              this.name(),
+              t.getMessage());
+          this.close(t);
+          return null;
+        });
   }
 
   @Override

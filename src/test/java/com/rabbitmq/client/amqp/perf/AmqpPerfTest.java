@@ -137,68 +137,65 @@ public class AmqpPerfTest {
 
       connection
           .consumerBuilder()
-          .listeners(
-              context -> {
-                if (context.currentState() == Resource.State.RECOVERING) {
-                  LOGGER.info("Consumer is recovering...");
-                }
-              })
+          .listeners(context -> {
+            if (context.currentState() == Resource.State.RECOVERING) {
+              LOGGER.info("Consumer is recovering...");
+            }
+          })
           .queue(q)
           .initialCredits(initialCredits)
           .messageHandler(handler)
           .build();
 
-      executorService.submit(
-          () -> {
-            AtomicBoolean shouldPublish = new AtomicBoolean(false);
-            Publisher publisher =
-                connection
-                    .publisherBuilder()
-                    .exchange(e)
-                    .key(rk)
-                    .listeners(
-                        context -> {
-                          if (context.currentState() == Resource.State.OPEN) {
-                            shouldPublish.set(true);
-                          } else {
-                            if (context.currentState() == Resource.State.RECOVERING) {
-                              LOGGER.info("Publisher is recovering...");
-                            }
-                            shouldPublish.set(false);
-                          }
-                        })
-                    .build();
-            Publisher.Callback callback =
-                context -> {
-                  try {
-                    long time = readLong(context.message().body());
-                    metrics.publishedAcceptedlatency(
-                        System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
-                  } catch (Exception ex) {
-                    // not able to read the body, should not happen
+      executorService.submit(() -> {
+        AtomicBoolean shouldPublish = new AtomicBoolean(false);
+        Publisher publisher =
+            connection
+                .publisherBuilder()
+                .exchange(e)
+                .key(rk)
+                .listeners(context -> {
+                  if (context.currentState() == Resource.State.OPEN) {
+                    shouldPublish.set(true);
+                  } else {
+                    if (context.currentState() == Resource.State.RECOVERING) {
+                      LOGGER.info("Publisher is recovering...");
+                    }
+                    shouldPublish.set(false);
                   }
-                };
-            int msgSize = 10;
-            while (!Thread.currentThread().isInterrupted()) {
-              if (shouldPublish.get()) {
-                long creationTime = System.currentTimeMillis();
-                byte[] payload = new byte[msgSize];
-                writeLong(payload, creationTime);
-                try {
-                  Message message = publisher.message(payload);
-                  publisher.publish(message, callback);
-                } catch (Exception ex) {
-                  LOGGER.info("Error while trying to publish: {}", ex.getMessage());
-                }
-              } else {
-                try {
-                  Thread.sleep(1000L);
-                } catch (InterruptedException ex) {
-                  Thread.interrupted();
-                }
+                })
+                .build();
+        Publisher.Callback callback =
+            context -> {
+              try {
+                long time = readLong(context.message().body());
+                metrics.publishedAcceptedlatency(
+                    System.currentTimeMillis() - time, TimeUnit.MILLISECONDS);
+              } catch (Exception ex) {
+                // not able to read the body, should not happen
               }
+            };
+        int msgSize = 10;
+        while (!Thread.currentThread().isInterrupted()) {
+          if (shouldPublish.get()) {
+            long creationTime = System.currentTimeMillis();
+            byte[] payload = new byte[msgSize];
+            writeLong(payload, creationTime);
+            try {
+              Message message = publisher.message(payload);
+              publisher.publish(message, callback);
+            } catch (Exception ex) {
+              LOGGER.info("Error while trying to publish: {}", ex.getMessage());
             }
-          });
+          } else {
+            try {
+              Thread.sleep(1000L);
+            } catch (InterruptedException ex) {
+              Thread.interrupted();
+            }
+          }
+        }
+      });
       out.println("Prometheus endpoint started on http://localhost:" + monitoringPort + "/metrics");
       metrics.start();
       shutdownLatch.await();

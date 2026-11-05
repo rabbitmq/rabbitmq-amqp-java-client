@@ -61,11 +61,10 @@ public class AddressFormatTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                ctx.accept();
-                consumeLatch.countDown();
-              })
+          .messageHandler((ctx, m) -> {
+            ctx.accept();
+            consumeLatch.countDown();
+          })
           .build();
 
       management.binding().sourceExchange(e).key(k).destinationQueue(q).bind();
@@ -102,11 +101,10 @@ public class AddressFormatTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                ctx.accept();
-                consumeLatch.countDown();
-              })
+          .messageHandler((ctx, m) -> {
+            ctx.accept();
+            consumeLatch.countDown();
+          })
           .build();
 
       management.binding().sourceExchange(e).destinationQueue(q).bind();
@@ -131,11 +129,10 @@ public class AddressFormatTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                ctx.accept();
-                consumeLatch.countDown();
-              })
+          .messageHandler((ctx, m) -> {
+            ctx.accept();
+            consumeLatch.countDown();
+          })
           .build();
 
       publisher.publish(publisher.message(), ctx -> {});
@@ -179,11 +176,10 @@ public class AddressFormatTest {
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, m) -> {
-                ctx.accept();
-                consumeLatch.countDown();
-              })
+          .messageHandler((ctx, m) -> {
+            ctx.accept();
+            consumeLatch.countDown();
+          })
           .build();
 
       publisher.publish(publisher.message().toAddress().exchange(e).key(k).message(), ctx -> {});
@@ -204,23 +200,21 @@ public class AddressFormatTest {
         connection
             .consumerBuilder()
             .queue(q)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  sync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              sync.down();
+            })
             .build();
     try {
       TestUtils.Sync pubClosed = TestUtils.sync(1);
       Publisher p1 =
           connection
               .publisherBuilder()
-              .listeners(
-                  ctx -> {
-                    if (ctx.currentState() == Resource.State.CLOSED) {
-                      pubClosed.down();
-                    }
-                  })
+              .listeners(ctx -> {
+                if (ctx.currentState() == Resource.State.CLOSED) {
+                  pubClosed.down();
+                }
+              })
               .build();
       p1.publish(p1.message().toAddress().queue(q).message(), ctx -> {});
       Assertions.assertThat(sync).completes();

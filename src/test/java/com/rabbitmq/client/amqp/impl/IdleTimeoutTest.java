@@ -52,12 +52,11 @@ public class IdleTimeoutTest {
           .activated(false)
           .connectionBuilder()
           .idleTimeout(idleTimeout)
-          .listeners(
-              context -> {
-                if (context.currentState() == Resource.State.CLOSED) {
-                  closedLatch.countDown();
-                }
-              })
+          .listeners(context -> {
+            if (context.currentState() == Resource.State.CLOSED) {
+              closedLatch.countDown();
+            }
+          })
           .build();
       proxy
           .toxics()

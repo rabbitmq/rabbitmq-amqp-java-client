@@ -52,23 +52,21 @@ public class AlarmsTest {
     Sync consumeSync = sync(messageCount);
     try (AutoCloseable ignored = alarm(alarmType)) {
       Sync publishTimeoutSync = sync();
-      submitTask(
-          () -> {
-            try {
-              publisher.publish(publisher.message(), ctx -> {});
-            } catch (AmqpException e) {
-              if (e.getCause() instanceof ClientSendTimedOutException) publishTimeoutSync.down();
-            }
-          });
+      submitTask(() -> {
+        try {
+          publisher.publish(publisher.message(), ctx -> {});
+        } catch (AmqpException e) {
+          if (e.getCause() instanceof ClientSendTimedOutException) publishTimeoutSync.down();
+        }
+      });
       Assertions.assertThat(publishTimeoutSync).completes();
       connection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
+          .messageHandler((ctx, msg) -> {
+            ctx.accept();
+            consumeSync.down();
+          })
           .build();
       Assertions.assertThat(consumeSync).completes();
       publishSync.reset(messageCount);

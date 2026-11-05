@@ -108,18 +108,16 @@ public class RequestResponseTest {
       int requestCount = 100;
       Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
-          .forEach(
-              ignored ->
-                  executorService.submit(
-                      () -> {
-                        String request = UUID.randomUUID().toString();
-                        CompletableFuture<Message> responseFuture =
-                            requester.publish(requester.message(request.getBytes(UTF_8)));
-                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
-                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
-                        sync.down();
-                        return null;
-                      }));
+          .forEach(ignored ->
+              executorService.submit(() -> {
+                String request = UUID.randomUUID().toString();
+                CompletableFuture<Message> responseFuture =
+                    requester.publish(requester.message(request.getBytes(UTF_8)));
+                Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+                sync.down();
+                return null;
+              }));
       assertThat(sync).completes();
     }
   }
@@ -143,11 +141,10 @@ public class RequestResponseTest {
       serverConnection
           .responderBuilder()
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, request) -> {
-                calls.add(ctx.isRequesterAlive(request));
-                return HANDLER.handle(ctx, request);
-              })
+          .handler((ctx, request) -> {
+            calls.add(ctx.isRequesterAlive(request));
+            return HANDLER.handle(ctx, request);
+          })
           .build();
 
       String request = UUID.randomUUID().toString();
@@ -181,14 +178,13 @@ public class RequestResponseTest {
       serverConnection
           .responderBuilder()
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, request) -> {
-                calls.add(ctx.isRequesterAlive(request));
-                requestReceivedSync.down();
-                requesterClosedSync.await(Duration.ofSeconds(20));
-                calls.add(ctx.isRequesterAlive(request));
-                return null;
-              })
+          .handler((ctx, request) -> {
+            calls.add(ctx.isRequesterAlive(request));
+            requestReceivedSync.down();
+            requesterClosedSync.await(Duration.ofSeconds(20));
+            calls.add(ctx.isRequesterAlive(request));
+            return null;
+          })
           .build();
 
       String request = UUID.randomUUID().toString();
@@ -221,10 +217,9 @@ public class RequestResponseTest {
           clientConnection
               .requesterBuilder()
               .correlationIdSupplier(correlationIdSequence::getAndIncrement)
-              .requestPostProcessor(
-                  (msg, corrId) ->
-                      msg.property("reply-to-queue", replyToQueue)
-                          .property("message-id", (Long) corrId))
+              .requestPostProcessor((msg, corrId) ->
+                  msg.property("reply-to-queue", replyToQueue)
+                      .property("message-id", (Long) corrId))
               .correlationIdExtractor(msg -> msg.property("correlation-id"))
               .replyToQueue(replyToQueue)
               .requestAddress()
@@ -237,33 +232,27 @@ public class RequestResponseTest {
           .correlationIdExtractor(msg -> msg.property("message-id"))
           .replyPostProcessor((msg, corrId) -> msg.property("correlation-id", (Long) corrId))
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, request) -> {
-                Message reply = HANDLER.handle(ctx, request);
-                return reply
-                    .toAddress()
-                    .queue(request.property("reply-to-queue").toString())
-                    .message();
-              })
+          .handler((ctx, request) -> {
+            Message reply = HANDLER.handle(ctx, request);
+            return reply.toAddress().queue(request.property("reply-to-queue").toString()).message();
+          })
           .build();
 
       int requestCount = 100;
       Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
-          .forEach(
-              ignored ->
-                  executorService.submit(
-                      () -> {
-                        String request = UUID.randomUUID().toString();
-                        CompletableFuture<Message> responseFuture =
-                            requester.publish(requester.message(request.getBytes(UTF_8)));
-                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
-                        org.assertj.core.api.Assertions.assertThat(response.body())
-                            .asString(UTF_8)
-                            .isEqualTo(process(request));
-                        sync.down();
-                        return null;
-                      }));
+          .forEach(ignored ->
+              executorService.submit(() -> {
+                String request = UUID.randomUUID().toString();
+                CompletableFuture<Message> responseFuture =
+                    requester.publish(requester.message(request.getBytes(UTF_8)));
+                Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                org.assertj.core.api.Assertions.assertThat(response.body())
+                    .asString(UTF_8)
+                    .isEqualTo(process(request));
+                sync.down();
+                return null;
+              }));
       assertThat(sync).completes();
     }
   }
@@ -281,9 +270,8 @@ public class RequestResponseTest {
           clientConnection
               .requesterBuilder()
               .correlationIdSupplier(UUID::randomUUID)
-              .requestPostProcessor(
-                  (msg, corrId) ->
-                      msg.correlationId(corrId).replyToAddress().queue(replyToQueue).message())
+              .requestPostProcessor((msg, corrId) ->
+                  msg.correlationId(corrId).replyToAddress().queue(replyToQueue).message())
               .replyToQueue(replyToQueue)
               .requestAddress()
               .queue(requestQueue)
@@ -300,18 +288,16 @@ public class RequestResponseTest {
       int requestCount = 100;
       Sync sync = sync(requestCount);
       IntStream.range(0, requestCount)
-          .forEach(
-              ignored ->
-                  executorService.submit(
-                      () -> {
-                        String request = UUID.randomUUID().toString();
-                        CompletableFuture<Message> responseFuture =
-                            requester.publish(requester.message(request.getBytes(UTF_8)));
-                        Message response = responseFuture.get(10, TimeUnit.SECONDS);
-                        assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
-                        sync.down();
-                        return null;
-                      }));
+          .forEach(ignored ->
+              executorService.submit(() -> {
+                String request = UUID.randomUUID().toString();
+                CompletableFuture<Message> responseFuture =
+                    requester.publish(requester.message(request.getBytes(UTF_8)));
+                Message response = responseFuture.get(10, TimeUnit.SECONDS);
+                assertThat(response.body()).asString(UTF_8).isEqualTo(process(request));
+                sync.down();
+                return null;
+              }));
       assertThat(sync).completes();
     }
   }
@@ -397,15 +383,14 @@ public class RequestResponseTest {
       serverConnection
           .responderBuilder()
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, msg) -> {
-                String request = new String(msg.body(), UTF_8);
-                if (request.contains("poison")) {
-                  return null;
-                } else {
-                  return HANDLER.handle(ctx, msg);
-                }
-              })
+          .handler((ctx, msg) -> {
+            String request = new String(msg.body(), UTF_8);
+            if (request.contains("poison")) {
+              return null;
+            } else {
+              return HANDLER.handle(ctx, msg);
+            }
+          })
           .replyPostProcessor((r, corrId) -> r == null ? null : r.correlationId(corrId))
           .build();
 
@@ -425,30 +410,27 @@ public class RequestResponseTest {
       Sync sync = sync(requestCount);
       Random random = new Random();
       IntStream.range(0, requestCount)
-          .forEach(
-              ignored -> {
-                boolean poison = random.nextBoolean();
-                String request;
-                if (poison) {
-                  request = "poison";
-                  expectedPoisonCount.incrementAndGet();
-                } else {
-                  request = UUID.randomUUID().toString();
+          .forEach(ignored -> {
+            boolean poison = random.nextBoolean();
+            String request;
+            if (poison) {
+              request = "poison";
+              expectedPoisonCount.incrementAndGet();
+            } else {
+              request = UUID.randomUUID().toString();
+            }
+            executorService.submit(() -> {
+              CompletableFuture<Message> responseFuture =
+                  requester.publish(requester.message(request.getBytes(UTF_8)));
+              responseFuture.handle((msg, ex) -> {
+                if (ex != null) {
+                  timedOutRequestCount.incrementAndGet();
                 }
-                executorService.submit(
-                    () -> {
-                      CompletableFuture<Message> responseFuture =
-                          requester.publish(requester.message(request.getBytes(UTF_8)));
-                      responseFuture.handle(
-                          (msg, ex) -> {
-                            if (ex != null) {
-                              timedOutRequestCount.incrementAndGet();
-                            }
-                            sync.down();
-                            return null;
-                          });
-                    });
+                sync.down();
+                return null;
               });
+            });
+          });
       assertThat(sync).completes();
       assertThat(timedOutRequestCount).hasPositiveValue().hasValue(expectedPoisonCount.get());
     }
@@ -464,15 +446,14 @@ public class RequestResponseTest {
       serverConnection
           .responderBuilder()
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, msg) -> {
-                String request = new String(msg.body(), UTF_8);
-                if (request.contains("poison")) {
-                  return null;
-                } else {
-                  return HANDLER.handle(ctx, msg);
-                }
-              })
+          .handler((ctx, msg) -> {
+            String request = new String(msg.body(), UTF_8);
+            if (request.contains("poison")) {
+              return null;
+            } else {
+              return HANDLER.handle(ctx, msg);
+            }
+          })
           .replyPostProcessor((r, corrId) -> r == null ? null : r.correlationId(corrId))
           .build();
 
@@ -491,32 +472,29 @@ public class RequestResponseTest {
       Random random = new Random();
       Sync allRequestSubmitted = sync(requestCount);
       IntStream.range(0, requestCount)
-          .forEach(
-              ignored -> {
-                boolean poison = random.nextBoolean();
-                String request;
-                if (poison) {
-                  request = "poison";
-                  expectedPoisonCount.incrementAndGet();
+          .forEach(ignored -> {
+            boolean poison = random.nextBoolean();
+            String request;
+            if (poison) {
+              request = "poison";
+              expectedPoisonCount.incrementAndGet();
+            } else {
+              request = UUID.randomUUID().toString();
+            }
+            executorService.submit(() -> {
+              CompletableFuture<Message> responseFuture =
+                  requester.publish(requester.message(request.getBytes(UTF_8)));
+              responseFuture.handle((msg, ex) -> {
+                if (ex == null) {
+                  completedRequestCount.incrementAndGet();
                 } else {
-                  request = UUID.randomUUID().toString();
+                  timedOutRequestCount.incrementAndGet();
                 }
-                executorService.submit(
-                    () -> {
-                      CompletableFuture<Message> responseFuture =
-                          requester.publish(requester.message(request.getBytes(UTF_8)));
-                      responseFuture.handle(
-                          (msg, ex) -> {
-                            if (ex == null) {
-                              completedRequestCount.incrementAndGet();
-                            } else {
-                              timedOutRequestCount.incrementAndGet();
-                            }
-                            return null;
-                          });
-                    });
-                allRequestSubmitted.down();
+                return null;
               });
+            });
+            allRequestSubmitted.down();
+          });
       assertThat(allRequestSubmitted).completes();
       waitAtMost(() -> completedRequestCount.get() == requestCount - expectedPoisonCount.get());
       assertThat(timedOutRequestCount).hasValue(0);
@@ -554,14 +532,13 @@ public class RequestResponseTest {
       serverConnection
           .responderBuilder()
           .requestQueue(requestQueue)
-          .handler(
-              (ctx, request) -> {
-                String body = new String(request.body(), UTF_8);
-                if (body.contains("poison")) {
-                  throw new RuntimeException("Poison message");
-                }
-                return HANDLER.handle(ctx, request);
-              })
+          .handler((ctx, request) -> {
+            String body = new String(request.body(), UTF_8);
+            if (body.contains("poison")) {
+              throw new RuntimeException("Poison message");
+            }
+            return HANDLER.handle(ctx, request);
+          })
           .build();
 
       String request = UUID.randomUUID().toString();
@@ -604,16 +581,15 @@ public class RequestResponseTest {
           serverConnection
               .responderBuilder()
               .requestQueue(requestQueue)
-              .handler(
-                  (ctx, request) -> {
-                    receivedSync.down();
-                    try {
-                      Thread.sleep(1000L);
-                    } catch (InterruptedException e) {
-                      throw new RuntimeException(e);
-                    }
-                    return HANDLER.handle(ctx, request);
-                  })
+              .handler((ctx, request) -> {
+                receivedSync.down();
+                try {
+                  Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                  throw new RuntimeException(e);
+                }
+                return HANDLER.handle(ctx, request);
+              })
               .build();
 
       String request = UUID.randomUUID().toString();
@@ -649,16 +625,15 @@ public class RequestResponseTest {
               .responderBuilder()
               .closeTimeout(Duration.ZERO) // close the consumer immediately
               .requestQueue(requestQueue)
-              .handler(
-                  (ctx, request) -> {
-                    receivedSync.down();
-                    try {
-                      Thread.sleep(1000L);
-                    } catch (InterruptedException e) {
-                      throw new RuntimeException(e);
-                    }
-                    return HANDLER.handle(ctx, request);
-                  })
+              .handler((ctx, request) -> {
+                receivedSync.down();
+                try {
+                  Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                  throw new RuntimeException(e);
+                }
+                return HANDLER.handle(ctx, request);
+              })
               .build();
 
       String request = UUID.randomUUID().toString();
@@ -721,9 +696,8 @@ public class RequestResponseTest {
       responder.pause();
       int requestCount = 10;
       IntStream.range(0, requestCount).forEach(ignored -> sendRequest.run());
-      waitAtMost(
-          () ->
-              serverConnection.management().queueInfo(requestQueue).messageCount() == requestCount);
+      waitAtMost(() ->
+          serverConnection.management().queueInfo(requestQueue).messageCount() == requestCount);
 
       futures.forEach(f -> assertThat(f).isNotCompleted());
 

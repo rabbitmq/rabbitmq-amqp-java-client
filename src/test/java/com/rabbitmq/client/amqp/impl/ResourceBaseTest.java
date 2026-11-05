@@ -36,10 +36,8 @@ public class ResourceBaseTest {
     List<Resource.State[]> transitions = new CopyOnWriteArrayList<>();
     TestResource resource =
         new TestResource(
-            List.of(
-                ctx ->
-                    transitions.add(
-                        new Resource.State[] {ctx.previousState(), ctx.currentState()})),
+            List.of(ctx ->
+                transitions.add(new Resource.State[] {ctx.previousState(), ctx.currentState()})),
             Runnable::run);
 
     resource.state(OPEN);

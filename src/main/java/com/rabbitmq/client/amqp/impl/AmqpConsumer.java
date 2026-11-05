@@ -171,11 +171,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
         e -> {
           this.connection
               .consumerWorkService()
-              .dispatch(
-                  () -> {
-                    // get result to make spotbugs happy
-                    boolean ignored = maybeCloseConsumerOnException(this, e);
-                  });
+              .dispatch(() -> {
+                // get result to make spotbugs happy
+                boolean ignored = maybeCloseConsumerOnException(this, e);
+              });
         };
     this.consumerWorkService = connection.consumerWorkService();
     this.consumerWorkService.register(this, this.initialCredits);
@@ -492,33 +491,32 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       Scheduler executor = receiver.executor();
       boolean deferralSupported = deferralSupported(receiver);
       CountDownLatch publishedLatch = new CountDownLatch(1);
-      executor.execute(
-          () -> {
-            ProtonReceiver protonReceiver = (ProtonReceiver) receiver.protonReceiver();
-            Link newLink =
-                new Link(
-                    receiver,
-                    executor,
-                    protonReceiver,
-                    protonReceiver.getCreditState(),
-                    protonReceiver.sessionWindow(),
-                    deferralSupported);
+      executor.execute(() -> {
+        ProtonReceiver protonReceiver = (ProtonReceiver) receiver.protonReceiver();
+        Link newLink =
+            new Link(
+                receiver,
+                executor,
+                protonReceiver,
+                protonReceiver.getCreditState(),
+                protonReceiver.sessionWindow(),
+                deferralSupported);
 
-            EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
-                protonReceiver.linkCreditUpdatedHandler();
-            EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
-                target -> {
-                  eventHandler.handle(target);
-                  CountDownLatch latch = this.echoedFlowAfterPauseLatch.getAndSet(null);
-                  if (latch != null) {
-                    latch.countDown();
-                  }
-                };
-            protonReceiver.creditStateUpdateHandler(decorator);
+        EventHandler<org.apache.qpid.protonj2.engine.Receiver> eventHandler =
+            protonReceiver.linkCreditUpdatedHandler();
+        EventHandler<org.apache.qpid.protonj2.engine.Receiver> decorator =
+            target -> {
+              eventHandler.handle(target);
+              CountDownLatch latch = this.echoedFlowAfterPauseLatch.getAndSet(null);
+              if (latch != null) {
+                latch.countDown();
+              }
+            };
+        protonReceiver.creditStateUpdateHandler(decorator);
 
-            holder.set(newLink);
-            publishedLatch.countDown();
-          });
+        holder.set(newLink);
+        publishedLatch.countDown();
+      });
       if (!publishedLatch.await(10, TimeUnit.SECONDS)) {
         throw new AmqpException("Could not initialize consumer internal state");
       }
@@ -1081,10 +1079,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
                   consumer.replenish(link);
                 });
             IntStream.range(0, batchSize)
-                .forEach(
-                    ignored -> {
-                      consumer.metricsCollector.consumeDisposition(disposition);
-                    });
+                .forEach(ignored -> {
+                  consumer.metricsCollector.consumeDisposition(disposition);
+                });
           }
         } catch (Exception e) {
           handleContextException(this.consumer, e, label);

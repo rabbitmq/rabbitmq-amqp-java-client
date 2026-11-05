@@ -117,10 +117,9 @@ public class AmqpConsumerTest {
           Sync publishSync = sync(messageCount);
           Publisher.Callback callback = ctx -> publishSync.down();
           IntStream.range(0, messageCount)
-              .forEach(
-                  ignored -> {
-                    publisher.publish(publisher.message(), callback);
-                  });
+              .forEach(ignored -> {
+                publisher.publish(publisher.message(), callback);
+              });
           assertThat(publishSync).completes();
         };
 
@@ -206,20 +205,18 @@ public class AmqpConsumerTest {
     Sync consumerClosedSync = sync();
     AtomicInteger deliveryCount = new AtomicInteger();
     c.consumerBuilder()
-        .listeners(
-            ctx -> {
-              if (ctx.currentState() == CLOSED) {
-                consumerClosedSync.down();
-              }
-            })
+        .listeners(ctx -> {
+          if (ctx.currentState() == CLOSED) {
+            consumerClosedSync.down();
+          }
+        })
         .queue(this.q)
-        .messageHandler(
-            (ctx, msg) -> {
-              if (deliveryCount.incrementAndGet() == 1) {
-                closeConnection(cName);
-              }
-              deliveredSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          if (deliveryCount.incrementAndGet() == 1) {
+            closeConnection(cName);
+          }
+          deliveredSync.down();
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -231,11 +228,10 @@ public class AmqpConsumerTest {
     c.close();
     assertThat(consumerClosedSync).completes();
 
-    waitAtMost(
-        () -> {
-          Management.QueueInfo info = connection.management().queueInfo(this.q);
-          return info.messageCount() == 1 && info.consumerCount() == 0;
-        });
+    waitAtMost(() -> {
+      Management.QueueInfo info = connection.management().queueInfo(this.q);
+      return info.messageCount() == 1 && info.consumerCount() == 0;
+    });
   }
 
   @ParameterizedTest
@@ -267,13 +263,12 @@ public class AmqpConsumerTest {
         (AmqpConsumer)
             builder
                 .listeners(recoveredListener(recoveredSync))
-                .messageHandler(
-                    (ctx, msg) -> {
-                      TestUtils.simulateActivity(handlerDelay);
-                      if (!preSettled) {
-                        ctx.accept();
-                      }
-                    })
+                .messageHandler((ctx, msg) -> {
+                  TestUtils.simulateActivity(handlerDelay);
+                  if (!preSettled) {
+                    ctx.accept();
+                  }
+                })
                 .build();
 
     for (int i = 0; i < 3; i++) {
@@ -319,11 +314,10 @@ public class AmqpConsumerTest {
             c.consumerBuilder()
                 .queue(this.q)
                 .listeners(recoveredListener(recoveredSync))
-                .messageHandler(
-                    (ctx, msg) -> {
-                      TestUtils.simulateActivity(Duration.ofMillis(200));
-                      ctx.accept();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  TestUtils.simulateActivity(Duration.ofMillis(200));
+                  ctx.accept();
+                })
                 .build();
 
     // samples unsettledMessageCount() continuously in the background, since the defect (a
@@ -332,12 +326,11 @@ public class AmqpConsumerTest {
     AtomicLong minObserved = new AtomicLong(Long.MAX_VALUE);
     AtomicBoolean watching = new AtomicBoolean(true);
     Thread watcher =
-        new Thread(
-            () -> {
-              while (watching.get()) {
-                minObserved.getAndUpdate(min -> Math.min(min, consumer.unsettledMessageCount()));
-              }
-            });
+        new Thread(() -> {
+          while (watching.get()) {
+            minObserved.getAndUpdate(min -> Math.min(min, consumer.unsettledMessageCount()));
+          }
+        });
     watcher.start();
 
     try {
@@ -378,11 +371,10 @@ public class AmqpConsumerTest {
                 .consumerBuilder()
                 .queue(this.q)
                 .initialCredits(initialCredits)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
     // a zero timeout guarantees the handshake latch is never awaited long enough to see the
     // echoed flow, deterministically driving pause() down the timeout path
@@ -416,11 +408,10 @@ public class AmqpConsumerTest {
                 .consumerBuilder()
                 .queue(this.q)
                 .initialCredits(initialCredits)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
 
     Thread pausingThread = new Thread(consumer::pause);
@@ -475,11 +466,10 @@ public class AmqpConsumerTest {
                 .queue(this.q)
                 .initialCredits(initialCredits)
                 .listeners(recoveredListener(recoveredSync))
-                .messageHandler(
-                    (ctx, msg) -> {
-                      ctx.accept();
-                      consumeSync.down();
-                    })
+                .messageHandler((ctx, msg) -> {
+                  ctx.accept();
+                  consumeSync.down();
+                })
                 .build();
 
     consumer.pause();
@@ -525,10 +515,8 @@ public class AmqpConsumerTest {
         (AmqpConsumer)
             c.consumerBuilder()
                 .queue(this.q)
-                .listeners(
-                    ctx ->
-                        transitions.add(
-                            new Resource.State[] {ctx.previousState(), ctx.currentState()}))
+                .listeners(ctx ->
+                    transitions.add(new Resource.State[] {ctx.previousState(), ctx.currentState()}))
                 .messageHandler((ctx, msg) -> {})
                 .build();
 
@@ -624,18 +612,16 @@ public class AmqpConsumerTest {
                 .consumerBuilder()
                 .queue(this.q)
                 .initialCredits(initialCredits)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      // settle from another thread, well after the handler returns: the
-                      // replenish triggered by this settle is what must eventually grant
-                      // credit back, since with such a small window, completion alone
-                      // (pendingWorkItems reaching 0) is not enough
-                      settlementExecutor.execute(
-                          () -> {
-                            ctx.accept();
-                            consumeSync.down();
-                          });
-                    })
+                .messageHandler((ctx, msg) -> {
+                  // settle from another thread, well after the handler returns: the
+                  // replenish triggered by this settle is what must eventually grant
+                  // credit back, since with such a small window, completion alone
+                  // (pendingWorkItems reaching 0) is not enough
+                  settlementExecutor.execute(() -> {
+                    ctx.accept();
+                    consumeSync.down();
+                  });
+                })
                 .build();
 
     try {
@@ -665,11 +651,10 @@ public class AmqpConsumerTest {
       connection
           .consumerBuilder()
           .queue(this.q)
-          .messageHandler(
-              (ctx, msg) -> {
-                context1.set(ctx);
-                received1.down();
-              })
+          .messageHandler((ctx, msg) -> {
+            context1.set(ctx);
+            received1.down();
+          })
           .build();
 
       AtomicReference<Consumer.Context> context2 = new AtomicReference<>();
@@ -677,11 +662,10 @@ public class AmqpConsumerTest {
       connection
           .consumerBuilder()
           .queue(q2)
-          .messageHandler(
-              (ctx, msg) -> {
-                context2.set(ctx);
-                received2.down();
-              })
+          .messageHandler((ctx, msg) -> {
+            context2.set(ctx);
+            received2.down();
+          })
           .build();
 
       publisher1.publish(publisher1.message(), ctx -> {});
@@ -725,19 +709,18 @@ public class AmqpConsumerTest {
     c.consumerBuilder()
         .queue(this.q)
         .listeners(recoveredListener(recoveredSync))
-        .messageHandler(
-            (ctx, msg) -> {
-              // identify the fresh (post-recovery) delivery by content rather than by timing:
-              // the stale, unsettled first message is requeued and may be redelivered on the
-              // new generation too, racing with the second publish below
-              if (Arrays.equals(msg.body(), freshBody)) {
-                freshContext.set(ctx);
-                freshReceived.down();
-              } else if (staleContext.get() == null) {
-                staleContext.set(ctx);
-                staleReceived.down();
-              }
-            })
+        .messageHandler((ctx, msg) -> {
+          // identify the fresh (post-recovery) delivery by content rather than by timing:
+          // the stale, unsettled first message is requeued and may be redelivered on the
+          // new generation too, racing with the second publish below
+          if (Arrays.equals(msg.body(), freshBody)) {
+            freshContext.set(ctx);
+            freshReceived.down();
+          } else if (staleContext.get() == null) {
+            staleContext.set(ctx);
+            staleReceived.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -786,17 +769,16 @@ public class AmqpConsumerTest {
         .queue(this.q)
         .initialCredits(initialCredits)
         .listeners(recoveredListener(recoveredSync))
-        .messageHandler(
-            (ctx, msg) -> {
-              // only one message is published before the recovery, everything else is
-              // received on the new generation (including the redelivered first message)
-              if (staleContext.compareAndSet(null, ctx)) {
-                staleReceived.down();
-              } else {
-                liveContexts.add(ctx);
-                liveReceived.incrementAndGet();
-              }
-            })
+        .messageHandler((ctx, msg) -> {
+          // only one message is published before the recovery, everything else is
+          // received on the new generation (including the redelivered first message)
+          if (staleContext.compareAndSet(null, ctx)) {
+            staleReceived.down();
+          } else {
+            liveContexts.add(ctx);
+            liveReceived.incrementAndGet();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -812,18 +794,17 @@ public class AmqpConsumerTest {
     int expectedLive = messageCount + 1;
     // the batch is always created from the stale context: live contexts must be settled on
     // their own link, otherwise the consumer runs out of credits and stalls
-    waitAtMost(
-        () -> {
-          List<Consumer.Context> toSettle = new ArrayList<>(liveContexts);
-          if (!toSettle.isEmpty()) {
-            liveContexts.removeAll(toSettle);
-            Consumer.BatchContext batch = staleContext.get().batch(toSettle.size());
-            toSettle.forEach(batch::add);
-            assertThat(batch.size()).isEqualTo(toSettle.size());
-            batch.accept();
-          }
-          return liveReceived.get() == expectedLive && liveContexts.isEmpty();
-        });
+    waitAtMost(() -> {
+      List<Consumer.Context> toSettle = new ArrayList<>(liveContexts);
+      if (!toSettle.isEmpty()) {
+        liveContexts.removeAll(toSettle);
+        Consumer.BatchContext batch = staleContext.get().batch(toSettle.size());
+        toSettle.forEach(batch::add);
+        assertThat(batch.size()).isEqualTo(toSettle.size());
+        batch.accept();
+      }
+      return liveReceived.get() == expectedLive && liveContexts.isEmpty();
+    });
 
     waitAtMost(() -> connection.management().queueInfo(this.q).messageCount() == 0);
 

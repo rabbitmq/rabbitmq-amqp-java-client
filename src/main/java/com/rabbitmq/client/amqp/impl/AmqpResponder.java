@@ -124,29 +124,28 @@ final class AmqpResponder implements Responder {
         this.connection
             .consumerBuilder()
             .queue(builder.requestQueue())
-            .messageHandler(
-                (ctx, msg) -> {
-                  Object correlationId = null;
-                  try {
-                    Message reply = handler.handle(context, msg);
-                    String replyToAddr = msg.replyTo();
-                    if (reply != null && replyToAddr != null) {
-                      reply.to(replyToAddr);
-                    }
-                    correlationId = correlationIdExtractor.apply(msg);
-                    reply = replyPostProcessor.apply(reply, correlationId);
-                    if (reply != null && reply.to() != null) {
-                      sendReply(reply);
-                    }
-                    ctx.accept();
-                  } catch (Exception e) {
-                    LOGGER.info(
-                        "Error while processing request (correlation ID {}): {}",
-                        correlationId,
-                        e.getMessage());
-                    ctx.discard();
-                  }
-                })
+            .messageHandler((ctx, msg) -> {
+              Object correlationId = null;
+              try {
+                Message reply = handler.handle(context, msg);
+                String replyToAddr = msg.replyTo();
+                if (reply != null && replyToAddr != null) {
+                  reply.to(replyToAddr);
+                }
+                correlationId = correlationIdExtractor.apply(msg);
+                reply = replyPostProcessor.apply(reply, correlationId);
+                if (reply != null && reply.to() != null) {
+                  sendReply(reply);
+                }
+                ctx.accept();
+              } catch (Exception e) {
+                LOGGER.info(
+                    "Error while processing request (correlation ID {}): {}",
+                    correlationId,
+                    e.getMessage());
+                ctx.discard();
+              }
+            })
             .build();
   }
 

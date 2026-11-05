@@ -87,10 +87,9 @@ public class TlsTest {
       Publisher publisher = publishingConnection.publisherBuilder().queue(q).build();
       CountDownLatch publishLatch = new CountDownLatch(messageCount);
       IntStream.range(0, messageCount)
-          .forEach(
-              ignored ->
-                  publisher.publish(
-                      publisher.message("hello".getBytes(UTF_8)), ctx -> publishLatch.countDown()));
+          .forEach(ignored ->
+              publisher.publish(
+                  publisher.message("hello".getBytes(UTF_8)), ctx -> publishLatch.countDown()));
       Assertions.assertThat(publishLatch).completes();
       Assertions.assertThat(management.queueInfo(q)).hasMessageCount(messageCount);
 
@@ -98,11 +97,10 @@ public class TlsTest {
       consumingConnection
           .consumerBuilder()
           .queue(q)
-          .messageHandler(
-              (ctx, msg) -> {
-                consumeLatch.countDown();
-                ctx.accept();
-              })
+          .messageHandler((ctx, msg) -> {
+            consumeLatch.countDown();
+            ctx.accept();
+          })
           .build();
       Assertions.assertThat(consumeLatch).completes();
       TestUtils.waitAtMost(() -> management.queueInfo(q).messageCount() == 0);
@@ -124,13 +122,12 @@ public class TlsTest {
       env.connectionBuilder().build();
 
       // using the client certificate in the trust manager, should fail
-      assertThatThrownBy(
-              () ->
-                  env.connectionBuilder()
-                      .tls()
-                      .sslContext(sslContext(trustManagerFactory(clientCertificate())))
-                      .connection()
-                      .build())
+      assertThatThrownBy(() ->
+              env.connectionBuilder()
+                  .tls()
+                  .sslContext(sslContext(trustManagerFactory(clientCertificate())))
+                  .connection()
+                  .build())
           .isInstanceOf(AmqpSecurityException.class)
           .hasCauseInstanceOf(SSLHandshakeException.class);
     }
@@ -214,15 +211,14 @@ public class TlsTest {
   @Test
   void hostnameVerificationShouldFailWhenSettingHostToLoopbackInterface() throws Exception {
     SSLContext sslContext = sslContext(trustManagerFactory(caCertificate()));
-    assertThatThrownBy(
-            () ->
-                environment
-                    .connectionBuilder()
-                    .host("127.0.0.1")
-                    .tls()
-                    .sslContext(sslContext)
-                    .connection()
-                    .build())
+    assertThatThrownBy(() ->
+            environment
+                .connectionBuilder()
+                .host("127.0.0.1")
+                .tls()
+                .sslContext(sslContext)
+                .connection()
+                .build())
         .isInstanceOf(AmqpSecurityException.class)
         .cause()
         .isInstanceOf(SSLHandshakeException.class)

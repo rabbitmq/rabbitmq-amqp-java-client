@@ -62,12 +62,11 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   @Override
   public void exchangeDeleted(String name) {
-    this.submit(
-        s -> {
-          s.exchanges.remove(name);
-          Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, true);
-          this.deleteAutoDeleteExchanges(s, deletedBindings);
-        });
+    this.submit(s -> {
+      s.exchanges.remove(name);
+      Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, true);
+      this.deleteAutoDeleteExchanges(s, deletedBindings);
+    });
   }
 
   @Override
@@ -77,12 +76,11 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   @Override
   public void queueDeleted(String name) {
-    this.submit(
-        s -> {
-          s.queues.remove(name);
-          Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, false);
-          this.deleteAutoDeleteExchanges(s, deletedBindings);
-        });
+    this.submit(s -> {
+      s.queues.remove(name);
+      Set<BindingSpec> deletedBindings = this.deleteBindings(s, name, false);
+      this.deleteAutoDeleteExchanges(s, deletedBindings);
+    });
   }
 
   @Override
@@ -92,12 +90,11 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   @Override
   public void bindingDeleted(AmqpBindingManagement.AmqpUnbindSpecification specification) {
-    this.submit(
-        s -> {
-          BindingSpec spec = new BindingSpec(specification.state());
-          s.bindings.remove(spec);
-          this.deleteAutoDeleteExchanges(s, Collections.singleton(spec));
-        });
+    this.submit(s -> {
+      BindingSpec spec = new BindingSpec(specification.state());
+      s.bindings.remove(spec);
+      this.deleteAutoDeleteExchanges(s, Collections.singleton(spec));
+    });
   }
 
   @Override
@@ -107,19 +104,18 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
   @Override
   public void consumerDeleted(long id, String queue) {
-    this.submit(
-        s -> {
-          s.consumers.remove(id);
-          // if there's no consumer anymore on the queue, delete it if it's auto-delete
-          boolean atLeastOneConsumerOnQueue =
-              s.consumers.values().stream().anyMatch(spec -> Objects.equals(spec.queue, queue));
-          if (!atLeastOneConsumerOnQueue) {
-            QueueSpec queueSpec = s.queues.get(queue);
-            if (queueSpec != null && queueSpec.autoDelete) {
-              this.queueDeleted(queue);
-            }
-          }
-        });
+    this.submit(s -> {
+      s.consumers.remove(id);
+      // if there's no consumer anymore on the queue, delete it if it's auto-delete
+      boolean atLeastOneConsumerOnQueue =
+          s.consumers.values().stream().anyMatch(spec -> Objects.equals(spec.queue, queue));
+      if (!atLeastOneConsumerOnQueue) {
+        QueueSpec queueSpec = s.queues.get(queue);
+        if (queueSpec != null && queueSpec.autoDelete) {
+          this.queueDeleted(queue);
+        }
+      }
+    });
   }
 
   @Override
@@ -171,12 +167,11 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
         new AtomicReference<>(Collections.emptyList());
     AtomicReference<List<QueueSpec>> queueCopy = new AtomicReference<>(Collections.emptyList());
     AtomicReference<Set<BindingSpec>> bindingCopy = new AtomicReference<>(Collections.emptySet());
-    submit(
-        s -> {
-          exchangeCopy.set(new ArrayList<>(s.exchanges.values()));
-          queueCopy.set(new ArrayList<>(s.queues.values()));
-          bindingCopy.set(new LinkedHashSet<>(s.bindings));
-        });
+    submit(s -> {
+      exchangeCopy.set(new ArrayList<>(s.exchanges.values()));
+      queueCopy.set(new ArrayList<>(s.queues.values()));
+      bindingCopy.set(new LinkedHashSet<>(s.bindings));
+    });
     LOGGER.debug(
         "Topology listener '{}' visitor, state retrieved, visiting topology...", this.label);
     visitor.visitExchanges(exchangeCopy.get());

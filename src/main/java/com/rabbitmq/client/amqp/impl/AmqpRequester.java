@@ -92,15 +92,14 @@ final class AmqpRequester implements Requester {
             consumerBuilder
                 .directReplyTo(directReplyTo)
                 .queue(replyTo)
-                .messageHandler(
-                    (ctx, msg) -> {
-                      settleAction.accept(ctx);
-                      OutstandingRequest request =
-                          this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
-                      if (request != null) {
-                        request.future.complete(msg);
-                      }
-                    })
+                .messageHandler((ctx, msg) -> {
+                  settleAction.accept(ctx);
+                  OutstandingRequest request =
+                      this.outstandingRequests.remove(this.correlationIdExtractor.apply(msg));
+                  if (request != null) {
+                    request.future.complete(msg);
+                  }
+                })
                 .build();
 
     if (builder.correlationIdSupplier() == null) {

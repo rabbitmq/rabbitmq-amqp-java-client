@@ -118,11 +118,10 @@ public class Oauth2Test {
     Sync consumerClosedSync = sync();
     c.consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumeSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          ctx.accept();
+          consumeSync.down();
+        })
         .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
         .build();
     p.publish(p.message(), ctx -> {});
@@ -158,11 +157,10 @@ public class Oauth2Test {
     Sync consumerClosedSync = sync();
     c.consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumeSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          ctx.accept();
+          consumeSync.down();
+        })
         .listeners(closedOnSecurityExceptionListener(consumerClosedSync))
         .build();
     p.publish(p.message(), ctx -> {});
@@ -195,16 +193,15 @@ public class Oauth2Test {
             contextPath,
             oAuth2TokenHttpHandler(() -> currentTimeMillis() - ofMinutes(60).toMillis()));
 
-    assertThatThrownBy(
-            () ->
-                environment
-                    .connectionBuilder()
-                    .oauth2()
-                    .tokenEndpointUri(uri)
-                    .clientId("rabbitmq")
-                    .clientSecret("rabbitmq")
-                    .connection()
-                    .build())
+    assertThatThrownBy(() ->
+            environment
+                .connectionBuilder()
+                .oauth2()
+                .tokenEndpointUri(uri)
+                .clientId("rabbitmq")
+                .clientSecret("rabbitmq")
+                .connection()
+                .build())
         .isInstanceOf(AmqpException.AmqpSecurityException.class);
   }
 
@@ -247,23 +244,21 @@ public class Oauth2Test {
     try (Environment env = envBuilder.build()) {
       List<Tuples.Pair<Publisher, Sync>> states =
           IntStream.range(0, connectionCount)
-              .mapToObj(
-                  ignored -> {
-                    Connection c = env.connectionBuilder().build();
-                    String q = name(info);
-                    c.management().queue(q).exclusive(true).declare();
-                    Publisher publisher = c.publisherBuilder().queue(q).build();
-                    Sync consumeSync = sync();
-                    c.consumerBuilder()
-                        .queue(q)
-                        .messageHandler(
-                            (ctx, msg) -> {
-                              ctx.accept();
-                              consumeSync.down();
-                            })
-                        .build();
-                    return Tuples.pair(publisher, consumeSync);
-                  })
+              .mapToObj(ignored -> {
+                Connection c = env.connectionBuilder().build();
+                String q = name(info);
+                c.management().queue(q).exclusive(true).declare();
+                Publisher publisher = c.publisherBuilder().queue(q).build();
+                Sync consumeSync = sync();
+                c.consumerBuilder()
+                    .queue(q)
+                    .messageHandler((ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                    .build();
+                return Tuples.pair(publisher, consumeSync);
+              })
               .collect(toList());
 
       Runnable publish = () -> states.forEach(s -> s.v1().publish(s.v1().message(), ctx -> {}));
@@ -321,11 +316,10 @@ public class Oauth2Test {
     Sync consumeSync = sync();
     c.consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              ctx.accept();
-              consumeSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          ctx.accept();
+          consumeSync.down();
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -375,11 +369,10 @@ public class Oauth2Test {
       Sync consumeSync = sync(3);
       c2.consumerBuilder()
           .queue(q2)
-          .messageHandler(
-              (ctx, msg) -> {
-                ctx.accept();
-                consumeSync.down();
-              })
+          .messageHandler((ctx, msg) -> {
+            ctx.accept();
+            consumeSync.down();
+          })
           .build();
       // the connection must survive several refresh rounds
       for (int i = 0; i < 3; i++) {

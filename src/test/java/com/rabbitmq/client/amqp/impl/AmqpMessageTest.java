@@ -309,12 +309,11 @@ public class AmqpMessageTest {
 
     // Access all sections via converter
     assertThat(
-            message.body(
-                (Object body) -> {
-                  // body(Converter) delegates to the underlying single-body view and therefore
-                  // observes only the first body section when multiple sections are present.
-                  return new String((byte[]) body, StandardCharsets.UTF_8);
-                }))
+            message.body((Object body) -> {
+              // body(Converter) delegates to the underlying single-body view and therefore
+              // observes only the first body section when multiple sections are present.
+              return new String((byte[]) body, StandardCharsets.UTF_8);
+            }))
         .isEqualTo("First ");
   }
 

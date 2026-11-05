@@ -393,10 +393,9 @@ class EntityRecoveryTest {
         .when(bindingSpec)
         .bind();
 
-    assertThatThrownBy(
-            () ->
-                entityRecovery.recoverBinding(
-                    mockBindingSpec, List.of(mockExchangeSpec), List.of(), staleAfter(1)))
+    assertThatThrownBy(() ->
+            entityRecovery.recoverBinding(
+                mockBindingSpec, List.of(mockExchangeSpec), List.of(), staleAfter(1)))
         .isInstanceOf(StaleRecoveryException.class);
 
     verify(bindingSpec, times(1)).bind();

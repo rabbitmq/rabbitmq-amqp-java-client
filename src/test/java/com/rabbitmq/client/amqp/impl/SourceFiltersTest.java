@@ -98,12 +98,11 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset(0L)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  offsets.add((Long) msg.annotation("x-stream-offset"));
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              offsets.add((Long) msg.annotation("x-stream-offset"));
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     SortedSet<Long> offsetTail = offsets.tailSet(offsets.last() / 2);
@@ -115,11 +114,10 @@ public class SourceFiltersTest {
             .offset(offsetTail.first())
             .builder()
             .queue(name)
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     consumer.close();
@@ -135,11 +133,10 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset(FIRST)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     consumer.close();
@@ -156,12 +153,11 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset(LAST)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  firstOffset.compareAndSet(-1, (Long) msg.annotation("x-stream-offset"));
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              firstOffset.compareAndSet(-1, (Long) msg.annotation("x-stream-offset"));
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     assertThat(firstOffset).hasPositiveValue();
@@ -180,18 +176,16 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset(NEXT)
             .builder()
-            .listeners(
-                context -> {
-                  if (context.currentState() == Resource.State.OPEN) {
-                    openSync.down();
-                  }
-                })
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  firstOffset.compareAndSet(-1, (Long) msg.annotation("x-stream-offset"));
-                  consumeSync.down();
-                })
+            .listeners(context -> {
+              if (context.currentState() == Resource.State.OPEN) {
+                openSync.down();
+              }
+            })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              firstOffset.compareAndSet(-1, (Long) msg.annotation("x-stream-offset"));
+              consumeSync.down();
+            })
             .build();
     assertThat(openSync).completes();
     publish(messageCount);
@@ -210,11 +204,10 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset(Instant.now().minus(Duration.ofMinutes(10)))
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     consumer.close();
@@ -230,11 +223,10 @@ public class SourceFiltersTest {
         connection.consumerBuilder().queue(name).stream()
             .offset("10m")
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  ctx.accept();
-                  consumeSync.down();
-                })
+            .messageHandler((ctx, msg) -> {
+              ctx.accept();
+              consumeSync.down();
+            })
             .build();
     assertThat(consumeSync).completes();
     consumer.close();
@@ -260,11 +252,10 @@ public class SourceFiltersTest {
             .filterValues("banana")
             .filterMatchUnfiltered(false)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  ctx.accept();
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              ctx.accept();
+            })
             .build();
     waitUntilStable(receivedCount::get);
     assertThat(receivedCount)
@@ -279,11 +270,10 @@ public class SourceFiltersTest {
             .filterValues("banana")
             .filterMatchUnfiltered(true)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  ctx.accept();
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              ctx.accept();
+            })
             .build();
     waitUntilStable(receivedCount::get);
     assertThat(receivedCount)
@@ -318,11 +308,10 @@ public class SourceFiltersTest {
             .offset(FIRST)
             .filterValues(selection)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  ctx.accept();
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              ctx.accept();
+            })
             .build();
     waitUntilStable(receivedCount::get);
     assertThat(receivedCount)
@@ -337,15 +326,14 @@ public class SourceFiltersTest {
             .offset(FIRST)
             .filterValues(selection)
             .builder()
-            .messageHandler(
-                (ctx, msg) -> {
-                  receivedCount.incrementAndGet();
-                  if (selection.equals(msg.subject())
-                      && selection.equals(msg.annotation("x-stream-filter-value"))) {
-                    selectedMessageCount.incrementAndGet();
-                  }
-                  ctx.accept();
-                })
+            .messageHandler((ctx, msg) -> {
+              receivedCount.incrementAndGet();
+              if (selection.equals(msg.subject())
+                  && selection.equals(msg.annotation("x-stream-filter-value"))) {
+                selectedMessageCount.incrementAndGet();
+              }
+              ctx.accept();
+            })
             .build();
     waitUntilStable(receivedCount::get);
     assertThat(selectedMessageCount)
@@ -565,15 +553,14 @@ public class SourceFiltersTest {
   @Test
   @BrokerVersionAtLeast(RABBITMQ_4_2_0)
   void incorrectFilterShouldThrowException() {
-    assertThatThrownBy(
-            () ->
-                connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).stream()
-                    .offset(FIRST)
-                    .filter()
-                    .sql("TRUE TRUE")
-                    .stream()
-                    .builder()
-                    .build())
+    assertThatThrownBy(() ->
+            connection.consumerBuilder().queue(name).messageHandler((ctx, msg) -> {}).stream()
+                .offset(FIRST)
+                .filter()
+                .sql("TRUE TRUE")
+                .stream()
+                .builder()
+                .build())
         .isInstanceOf(AmqpException.class)
         .hasMessageContaining("filters do not match");
   }
@@ -614,13 +601,12 @@ public class SourceFiltersTest {
         connection
             .consumerBuilder()
             .queue(this.name)
-            .messageHandler(
-                (ctx, msg) -> {
-                  messages.add(msg);
-                  receivedMessageCount.incrementAndGet();
-                  consumedSync.down();
-                  ctx.accept();
-                });
+            .messageHandler((ctx, msg) -> {
+              messages.add(msg);
+              receivedMessageCount.incrementAndGet();
+              consumedSync.down();
+              ctx.accept();
+            });
 
     filterOptions.accept(builder.stream().offset(FIRST).filter());
 

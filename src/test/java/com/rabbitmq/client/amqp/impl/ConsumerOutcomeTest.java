@@ -107,17 +107,16 @@ public class ConsumerOutcomeTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (context, message) -> {
-              deliveryCount.incrementAndGet();
-              messages.offer(message);
-              if (deliveryCount.get() == 1) {
-                context.requeue();
-              } else {
-                context.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((context, message) -> {
+          deliveryCount.incrementAndGet();
+          messages.offer(message);
+          if (deliveryCount.get() == 1) {
+            context.requeue();
+          } else {
+            context.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -141,22 +140,21 @@ public class ConsumerOutcomeTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, message) -> {
-              deliveryCount.incrementAndGet();
-              messages.offer(message);
-              if (deliveryCount.get() == 1) {
-                if (batch) {
-                  Consumer.BatchContext bc = ctx.batch(1);
-                  bc.add(ctx);
-                  ctx = bc;
-                }
-                ctx.requeue(ANNOTATIONS);
-              } else {
-                ctx.accept();
-                redeliveredSync.down();
-              }
-            })
+        .messageHandler((ctx, message) -> {
+          deliveryCount.incrementAndGet();
+          messages.offer(message);
+          if (deliveryCount.get() == 1) {
+            if (batch) {
+              Consumer.BatchContext bc = ctx.batch(1);
+              bc.add(ctx);
+              ctx = bc;
+            }
+            ctx.requeue(ANNOTATIONS);
+          } else {
+            ctx.accept();
+            redeliveredSync.down();
+          }
+        })
         .build();
 
     publisher.publish(publisher.message(), ctx -> {});
@@ -185,12 +183,11 @@ public class ConsumerOutcomeTest {
     this.connection
         .consumerBuilder()
         .queue(dlq)
-        .messageHandler(
-            (ctx, msg) -> {
-              deadLetteredMessage.set(msg);
-              ctx.accept();
-              deadLetteredSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          deadLetteredMessage.set(msg);
+          ctx.accept();
+          deadLetteredSync.down();
+        })
         .build();
 
     UUID messageID = UUID.randomUUID();
@@ -212,15 +209,14 @@ public class ConsumerOutcomeTest {
     this.connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              if (batch) {
-                Consumer.BatchContext bc = ctx.batch(1);
-                bc.add(ctx);
-                ctx = bc;
-              }
-              ctx.discard(ANNOTATIONS);
-            })
+        .messageHandler((ctx, msg) -> {
+          if (batch) {
+            Consumer.BatchContext bc = ctx.batch(1);
+            bc.add(ctx);
+            ctx = bc;
+          }
+          ctx.discard(ANNOTATIONS);
+        })
         .build();
 
     TestUtils.Sync deadLetteredSync = TestUtils.sync();
@@ -228,12 +224,11 @@ public class ConsumerOutcomeTest {
     this.connection
         .consumerBuilder()
         .queue(dlq)
-        .messageHandler(
-            (ctx, msg) -> {
-              deadLetteredMessage.set(msg);
-              ctx.accept();
-              deadLetteredSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          deadLetteredMessage.set(msg);
+          ctx.accept();
+          deadLetteredSync.down();
+        })
         .build();
 
     UUID messageID = UUID.randomUUID();
@@ -278,23 +273,22 @@ public class ConsumerOutcomeTest {
     connection
         .consumerBuilder()
         .queue(q)
-        .messageHandler(
-            (ctx, msg) -> {
-              if (batchContext.get() == null) {
-                batchContext.set(ctx.batch(batchSize));
-              }
-              if (random.nextInt(10) == 0) {
-                ctx.discard();
-                discardedCount.incrementAndGet();
-              } else {
-                batchContext.get().add(ctx);
-                if (batchContext.get().size() == batchSize) {
-                  batchContext.get().accept();
-                  batchContext.set(null);
-                }
-              }
-              receivedSync.down();
-            })
+        .messageHandler((ctx, msg) -> {
+          if (batchContext.get() == null) {
+            batchContext.set(ctx.batch(batchSize));
+          }
+          if (random.nextInt(10) == 0) {
+            ctx.discard();
+            discardedCount.incrementAndGet();
+          } else {
+            batchContext.get().add(ctx);
+            if (batchContext.get().size() == batchSize) {
+              batchContext.get().accept();
+              batchContext.set(null);
+            }
+          }
+          receivedSync.down();
+        })
         .build();
 
     Assertions.assertThat(receivedSync).completes();

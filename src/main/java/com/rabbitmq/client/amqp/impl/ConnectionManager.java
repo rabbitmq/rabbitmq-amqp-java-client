@@ -52,13 +52,12 @@ final class ConnectionManager {
               builder.connectionSettings().affinity().queue(),
               builder.connectionSettings().affinity().operation());
       connection =
-          doOnConnections(
-              conns -> {
-                return this.connections.stream()
-                    .filter(c -> affinity.equals(c.affinity()))
-                    .findAny()
-                    .orElse(null);
-              });
+          doOnConnections(conns -> {
+            return this.connections.stream()
+                .filter(c -> affinity.equals(c.affinity()))
+                .findAny()
+                .orElse(null);
+          });
     }
     if (connection == null) {
       AmqpConnectionBuilder copy = new AmqpConnectionBuilder(this.environment);
@@ -66,33 +65,30 @@ final class ConnectionManager {
       connection = new AmqpConnection(copy);
     }
     AtomicReference<AmqpConnection> connectionReference = new AtomicReference<>(connection);
-    doOnConnections(
-        conns -> {
-          if (this.closed.get()) {
-            throw new IllegalStateException("ConnectionManager is closed");
-          }
-          conns.add(connectionReference.get());
-        });
+    doOnConnections(conns -> {
+      if (this.closed.get()) {
+        throw new IllegalStateException("ConnectionManager is closed");
+      }
+      conns.add(connectionReference.get());
+    });
     return connection;
   }
 
   void remove(AmqpConnection connection) {
-    doOnConnections(
-        conns -> {
-          if (!closed.get()) {
-            conns.remove(connection);
-          }
-        });
+    doOnConnections(conns -> {
+      if (!closed.get()) {
+        conns.remove(connection);
+      }
+    });
   }
 
   void close() {
     if (this.closed.compareAndSet(false, true)) {
       // Snapshot connections under lock to avoid concurrent modification
       Set<AmqpConnection> connectionsToClose =
-          doOnConnections(
-              conns -> {
-                return Set.copyOf(conns);
-              });
+          doOnConnections(conns -> {
+            return Set.copyOf(conns);
+          });
 
       for (AmqpConnection connection : connectionsToClose) {
         try {
@@ -103,10 +99,9 @@ final class ConnectionManager {
       }
 
       // Clear the original set under lock
-      doOnConnections(
-          conns -> {
-            conns.clear();
-          });
+      doOnConnections(conns -> {
+        conns.clear();
+      });
     }
   }
 
