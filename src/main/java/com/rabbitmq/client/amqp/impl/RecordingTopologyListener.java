@@ -187,12 +187,14 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
     private final String name;
     private final String type;
     private final boolean autoDelete;
+    private final boolean internal;
     private final Map<String, Object> arguments = new LinkedHashMap<>();
 
     private ExchangeSpec(AmqpExchangeSpecification specification) {
       this.name = specification.name();
       this.type = specification.type();
       this.autoDelete = specification.autoDelete();
+      this.internal = specification.internal();
       specification.arguments(this.arguments::put);
     }
 
@@ -206,6 +208,10 @@ final class RecordingTopologyListener implements TopologyListener, AutoCloseable
 
     boolean autoDelete() {
       return autoDelete;
+    }
+
+    boolean internal() {
+      return internal;
     }
 
     public Map<String, Object> arguments() {

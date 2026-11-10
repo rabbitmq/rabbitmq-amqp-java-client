@@ -708,6 +708,19 @@ public interface Management extends AutoCloseable {
     ExchangeSpecification autoDelete(boolean autoDelete);
 
     /**
+     * Whether the exchange is internal.
+     *
+     * <p>Applications cannot publish directly to an internal exchange, only other exchanges can
+     * route to it (e.g. with exchange-to-exchange bindings or dead-lettering).
+     *
+     * <p>Default is false.
+     *
+     * @param internal internal flag
+     * @return the exchange specification
+     */
+    ExchangeSpecification internal(boolean internal);
+
+    /**
      * Type of the exchange.
      *
      * @param type exchange type

@@ -101,6 +101,7 @@ final class EntityRecovery {
               .exchange()
               .name(exchange.name())
               .autoDelete(exchange.autoDelete())
+              .internal(exchange.internal())
               .type(exchange.type());
       exchange.arguments().forEach(spec::argument);
       spec.declare();

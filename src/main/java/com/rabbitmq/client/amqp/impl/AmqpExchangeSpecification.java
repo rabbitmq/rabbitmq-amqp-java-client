@@ -26,13 +26,13 @@ import java.util.function.BiConsumer;
 class AmqpExchangeSpecification implements Management.ExchangeSpecification {
 
   private static final boolean DURABLE = true;
-  private static final boolean INTERNAL = false;
 
   private final AmqpManagement management;
 
   private String name;
   private String type = Management.ExchangeType.DIRECT.name().toLowerCase(Locale.ENGLISH);
   private boolean autoDelete = false;
+  private boolean internal = false;
   private final Map<String, Object> arguments = new LinkedHashMap<>();
 
   AmqpExchangeSpecification(AmqpManagement management) {
@@ -48,6 +48,12 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
   @Override
   public Management.ExchangeSpecification autoDelete(boolean autoDelete) {
     this.autoDelete = autoDelete;
+    return this;
+  }
+
+  @Override
+  public Management.ExchangeSpecification internal(boolean internal) {
+    this.internal = internal;
     return this;
   }
 
@@ -88,7 +94,7 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
     body.put("type", this.type);
     body.put("durable", DURABLE);
     body.put("auto_delete", this.autoDelete);
-    body.put("internal", INTERNAL);
+    body.put("internal", this.internal);
     body.put("arguments", this.arguments);
     this.management.declareExchange(this.name, body);
     this.management.recovery().exchangeDeclared(this);
@@ -104,6 +110,10 @@ class AmqpExchangeSpecification implements Management.ExchangeSpecification {
 
   boolean autoDelete() {
     return this.autoDelete;
+  }
+
+  boolean internal() {
+    return this.internal;
   }
 
   void arguments(BiConsumer<String, Object> consumer) {
