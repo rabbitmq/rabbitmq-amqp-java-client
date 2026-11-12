@@ -178,10 +178,8 @@ public class RecordingTopologyListenerTest {
   @Test
   void internalFlagIsRecorded() {
     recovery.exchangeDeclared(exchange("ex"));
-    recovery.exchangeDeclared(
-        (AmqpExchangeSpecification) new AmqpExchangeSpecification(null).name("in").internal(true));
-    org.assertj.core.api.Assertions.assertThat(recovery.exchanges().get("ex").internal()).isFalse();
-    org.assertj.core.api.Assertions.assertThat(recovery.exchanges().get("in").internal()).isTrue();
+    recovery.exchangeDeclared(internalExchange("in"));
+    assertThat(recovery).hasNonInternalExchange("ex").hasInternalExchange("in");
   }
 
   static AmqpExchangeSpecification exchange(String name) {
@@ -191,6 +189,11 @@ public class RecordingTopologyListenerTest {
   static AmqpExchangeSpecification autoDeleteExchange(String name) {
     return (AmqpExchangeSpecification)
         new AmqpExchangeSpecification(null).name(name).autoDelete(true);
+  }
+
+  static AmqpExchangeSpecification internalExchange(String name) {
+    return (AmqpExchangeSpecification)
+        new AmqpExchangeSpecification(null).name(name).internal(true);
   }
 
   static AmqpQueueSpecification queue(String name) {
@@ -240,6 +243,22 @@ public class RecordingTopologyListenerTest {
         fail(
             "Should have exchange '%s' but does not: %s",
             exchange, String.join(", ", actual.exchanges().keySet()));
+      }
+      return this;
+    }
+
+    private RecoveryAssert hasInternalExchange(String exchange) {
+      return hasExchangeWithInternalFlag(exchange, true);
+    }
+
+    private RecoveryAssert hasNonInternalExchange(String exchange) {
+      return hasExchangeWithInternalFlag(exchange, false);
+    }
+
+    private RecoveryAssert hasExchangeWithInternalFlag(String exchange, boolean internal) {
+      hasExchange(exchange);
+      if (actual.exchanges().get(exchange).internal() != internal) {
+        fail("Exchange '%s' internal flag is expected to be %b but is not", exchange, internal);
       }
       return this;
     }

@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpSecurityException;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
@@ -360,6 +361,46 @@ public class TopologyRecoveryTest {
 
       publisher.publish(publisher.message(), context -> {});
       assertThat(consumeSync).completes();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void autoDeleteInternalExchangeShouldBeRedeclaredAsInternal(boolean isolateResources) {
+    try (Connection connection = connection(isolateResources)) {
+      assertThat(connectionAttemptCount).hasValue(1);
+      String e1 = exchange();
+      String e2 = exchange();
+      String q = queue();
+      connection.management().exchange(e1).type(FANOUT).autoDelete(true).declare();
+      connection.management().exchange(e2).type(FANOUT).autoDelete(true).internal(true).declare();
+      connection.management().queue(q).autoDelete(true).exclusive(true).declare();
+      connection.management().binding().sourceExchange(e1).destinationExchange(e2).bind();
+      connection.management().binding().sourceExchange(e2).destinationQueue(q).bind();
+
+      Sync consumeSync = TestUtils.sync();
+      Publisher publisher = connection.publisherBuilder().exchange(e1).build();
+      connection
+          .consumerBuilder()
+          .queue(q)
+          .messageHandler((context, message) -> {
+            context.accept();
+            consumeSync.down();
+          })
+          .build();
+
+      publisher.publish(publisher.message(), context -> {});
+      assertThat(consumeSync).completes();
+
+      closeConnectionAndWaitForRecovery();
+      assertThat(connectionAttemptCount).hasValue(2);
+
+      consumeSync.reset();
+      publisher.publish(publisher.message(), context -> {});
+      assertThat(consumeSync).completes();
+
+      assertThatThrownBy(() -> connection.publisherBuilder().exchange(e2).build())
+          .isInstanceOf(AmqpSecurityException.class);
     }
   }
 
