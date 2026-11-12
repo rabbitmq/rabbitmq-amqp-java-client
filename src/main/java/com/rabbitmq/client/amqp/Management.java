@@ -717,6 +717,7 @@ public interface Management extends AutoCloseable {
      *
      * @param internal internal flag
      * @return the exchange specification
+     * @since 1.8.0
      */
     ExchangeSpecification internal(boolean internal);
 

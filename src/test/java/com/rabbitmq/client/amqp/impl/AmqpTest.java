@@ -47,6 +47,7 @@ import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpEntityDoesNotExistException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpMessageRejectedException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceInvalidStateException;
+import com.rabbitmq.client.amqp.AmqpException.AmqpSecurityException;
 import com.rabbitmq.client.amqp.Connection;
 import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.ConsumerBuilder;
@@ -778,12 +779,16 @@ public class AmqpTest {
       management.binding().sourceExchange(source).destinationExchange(name).bind();
       management.binding().sourceExchange(name).destinationQueue(q).bind();
 
-      Publisher publisher = connection.publisherBuilder().exchange(source).build();
-      Sync confirmSync = sync();
-      publisher.publish(publisher.message(), acceptedCallback(confirmSync));
-      assertThat(confirmSync).completes();
-      waitAtMost(() -> management.queueInfo(q).messageCount() == 1);
-      publisher.close();
+      assertThatThrownBy(() -> connection.publisherBuilder().exchange(name).build())
+          .isInstanceOf(AmqpSecurityException.class)
+          .hasMessageContaining("internal");
+
+      try (Publisher publisher = connection.publisherBuilder().exchange(source).build()) {
+        Sync confirmSync = sync();
+        publisher.publish(publisher.message(), acceptedCallback(confirmSync));
+        assertThat(confirmSync).completes();
+        waitAtMost(() -> management.queueInfo(q).messageCount() == 1);
+      }
     } finally {
       management.queueDelete(q);
       management.exchangeDelete(source);
