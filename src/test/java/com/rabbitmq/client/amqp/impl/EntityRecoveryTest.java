@@ -84,6 +84,7 @@ class EntityRecoveryTest {
     lenient().when(management.exchange()).thenReturn(exchangeSpec);
     lenient().when(exchangeSpec.name(anyString())).thenReturn(exchangeSpec);
     lenient().when(exchangeSpec.autoDelete(anyBoolean())).thenReturn(exchangeSpec);
+    lenient().when(exchangeSpec.internal(anyBoolean())).thenReturn(exchangeSpec);
     lenient().when(exchangeSpec.type(anyString())).thenReturn(exchangeSpec);
     lenient().when(exchangeSpec.argument(anyString(), any())).thenReturn(exchangeSpec);
 
@@ -243,6 +244,7 @@ class EntityRecoveryTest {
 
     when(mockExchangeSpec.name()).thenReturn(exchangeName);
     when(mockExchangeSpec.autoDelete()).thenReturn(true);
+    when(mockExchangeSpec.internal()).thenReturn(true);
     when(mockExchangeSpec.type()).thenReturn("direct");
     when(mockExchangeSpec.arguments()).thenReturn(Collections.emptyMap());
 
@@ -255,6 +257,7 @@ class EntityRecoveryTest {
         mockBindingSpec, List.of(mockExchangeSpec), List.of(mockQueueSpec), NO_CHECK);
 
     verify(bindingSpec, times(2)).bind();
+    verify(exchangeSpec).internal(true);
     verify(exchangeSpec).declare();
     verify(queueSpec).declare();
   }

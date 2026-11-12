@@ -175,6 +175,15 @@ public class RecordingTopologyListenerTest {
         .hasNoBindings();
   }
 
+  @Test
+  void internalFlagIsRecorded() {
+    recovery.exchangeDeclared(exchange("ex"));
+    recovery.exchangeDeclared(
+        (AmqpExchangeSpecification) new AmqpExchangeSpecification(null).name("in").internal(true));
+    org.assertj.core.api.Assertions.assertThat(recovery.exchanges().get("ex").internal()).isFalse();
+    org.assertj.core.api.Assertions.assertThat(recovery.exchanges().get("in").internal()).isTrue();
+  }
+
   static AmqpExchangeSpecification exchange(String name) {
     return (AmqpExchangeSpecification) new AmqpExchangeSpecification(null).name(name);
   }

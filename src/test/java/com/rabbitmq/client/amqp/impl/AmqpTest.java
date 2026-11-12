@@ -761,6 +761,37 @@ public class AmqpTest {
   }
 
   @Test
+  void declareInternalExchange() {
+    Management management = connection.management();
+    String source = name + "-source";
+    String q = name + "-queue";
+    try {
+      management.exchange(name).type(FANOUT).internal(true).declare();
+      // redeclaring with the same flag is idempotent
+      management.exchange(name).type(FANOUT).internal(true).declare();
+      assertThatThrownBy(() -> management.exchange(name).type(FANOUT).declare())
+          .isInstanceOf(AmqpException.class)
+          .hasMessageContaining("409");
+
+      management.exchange(source).type(FANOUT).declare();
+      management.queue(q).declare();
+      management.binding().sourceExchange(source).destinationExchange(name).bind();
+      management.binding().sourceExchange(name).destinationQueue(q).bind();
+
+      Publisher publisher = connection.publisherBuilder().exchange(source).build();
+      Sync confirmSync = sync();
+      publisher.publish(publisher.message(), acceptedCallback(confirmSync));
+      assertThat(confirmSync).completes();
+      waitAtMost(() -> management.queueInfo(q).messageCount() == 1);
+      publisher.close();
+    } finally {
+      management.queueDelete(q);
+      management.exchangeDelete(source);
+      management.exchangeDelete(name);
+    }
+  }
+
+  @Test
   void declareQueueWithUnsupportedArgument() {
     Management management = connection.management();
     List<java.util.function.Consumer<Management>> operations =
