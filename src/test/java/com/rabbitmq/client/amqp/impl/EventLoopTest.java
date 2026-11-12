@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +71,18 @@ public class EventLoopTest {
     assertThatThrownBy(() -> client.submit(s -> {})).isInstanceOf(IllegalStateException.class);
     loop.close();
     assertThatThrownBy(() -> loop.register(State::new)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void executorShutdownBeforeLoopCloseShouldBeReportedAsClosedLoop() {
+    eventExecutorGroup.shutdownGracefully(0, 10, TimeUnit.SECONDS).syncUninterruptibly();
+    assertThatThrownBy(() -> client.submit(s -> {}))
+        .isInstanceOf(IllegalStateException.class)
+        .hasCauseInstanceOf(RejectedExecutionException.class);
+    assertThatThrownBy(() -> loop.register(State::new))
+        .isInstanceOf(IllegalStateException.class)
+        .hasCauseInstanceOf(RejectedExecutionException.class);
+    assertThatCode(client::close).doesNotThrowAnyException();
   }
 
   @Test

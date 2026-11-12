@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,7 +55,7 @@ final class EventLoop implements AutoCloseable {
     Client<S> client = new Client<>(this);
     CountDownLatch latch = new CountDownLatch(1);
 
-    eventExecutor.execute(() -> {
+    execute(() -> {
       try {
         S state = stateSupplier.get();
         activeClients.put(client.id, state);
@@ -87,7 +88,7 @@ final class EventLoop implements AutoCloseable {
     } else {
       CountDownLatch latch = new CountDownLatch(1);
 
-      eventExecutor.execute(() -> {
+      execute(() -> {
         try {
           executeTask(client, task);
         } finally {
@@ -105,6 +106,15 @@ final class EventLoop implements AutoCloseable {
         Thread.currentThread().interrupt();
         throw new AmqpException("Topology task processing has been interrupted", e);
       }
+    }
+  }
+
+  private void execute(Runnable task) {
+    try {
+      eventExecutor.execute(task);
+    } catch (RejectedExecutionException e) {
+      // the executor can be shut down between the closed flag check and the task submission
+      throw new IllegalStateException("Event loop is closed", e);
     }
   }
 
