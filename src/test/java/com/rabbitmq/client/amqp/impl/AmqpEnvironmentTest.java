@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Broadcom. All Rights Reserved.
+// Copyright (c) 2026 Broadcom. All Rights Reserved.
 // The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,6 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.rabbitmq.client.amqp.Environment;
 import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,28 +29,31 @@ public class AmqpEnvironmentTest {
 
   @Test
   void closingEnvironmentShouldStopInternalEventLoopThreadsPromptly() {
-    List<Thread> eventLoopThreads;
-    try (Environment environment = TestUtils.environmentBuilder().build()) {
-      // opening a connection starts the environment internal event loop threads
+    AmqpEnvironment environment = (AmqpEnvironment) TestUtils.environmentBuilder().build();
+    try {
+      // opening a connection starts the event loop threads
       environment.connectionBuilder().build();
-      eventLoopThreads = eventLoopThreads(environment);
-      assertThat(eventLoopThreads).isNotEmpty().allMatch(Thread::isAlive);
+      List<Thread> eventLoopThreads = eventLoopThreads(environment);
+      assertThat(eventLoopThreads).hasSize(2).allMatch(Thread::isAlive);
+
+      long start = System.nanoTime();
+      environment.close();
+      Duration closeDuration = Duration.ofNanos(System.nanoTime() - start);
+
+      // the threads are not daemon threads, lingering ones delay JVM exit (#434)
+      assertThat(closeDuration).isLessThan(Duration.ofSeconds(2));
+      waitAtMost(Duration.ofSeconds(1), () -> eventLoopThreads.stream().noneMatch(Thread::isAlive));
+    } finally {
+      environment.close();
     }
-    // the environment is closed by the try-with-resources block, its internal event loop threads
-    // are not daemon threads and used to stay alive for Netty's default graceful shutdown quiet
-    // period (2 seconds), which kept the JVM from exiting once the application was done (#434)
-    waitAtMost(Duration.ofSeconds(1), () -> eventLoopThreads.stream().noneMatch(Thread::isAlive));
   }
 
-  private static List<Thread> eventLoopThreads(Environment environment) {
-    String id = environment.toString().substring("rabbitmq-amqp-".length());
-    String prefix = "rabbitmq-amqp-environment-" + id + "-";
+  private static List<Thread> eventLoopThreads(AmqpEnvironment environment) {
+    String prefix = String.format("rabbitmq-amqp-environment-%d-", environment.id());
     return Thread.getAllStackTraces().keySet().stream()
-        .filter(t -> t.getName().startsWith(prefix))
-        .filter(
-            t ->
-                t.getName().contains("event-loop-")
-                    || t.getName().contains("connection-state-loop-"))
+        .filter(t ->
+            t.getName().startsWith(prefix + "event-loop-")
+                || t.getName().startsWith(prefix + "connection-state-loop-"))
         .collect(Collectors.toList());
   }
 }

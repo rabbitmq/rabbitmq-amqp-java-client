@@ -42,6 +42,7 @@ final class AmqpEnvironment implements Environment {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AmqpEnvironment.class);
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(0);
+  private static final long EVENT_LOOP_SHUTDOWN_TIMEOUT_IN_SECONDS = 15;
 
   private final Client client;
   private final DefaultConnectionSettings<?> connectionSettings =
@@ -156,9 +157,9 @@ final class AmqpEnvironment implements Environment {
       this.credentialsManagerFactory.close();
       this.client.close();
       this.connectionStateEventLoop.close();
-      this.connectionStateEventExecutorGroup.shutdownGracefully(0, 15, TimeUnit.SECONDS);
+      shutdown(this.connectionStateEventExecutorGroup);
       this.recoveryEventLoop.close();
-      this.recoveryEventExecutorGroup.shutdownGracefully(0, 15, TimeUnit.SECONDS);
+      shutdown(this.recoveryEventExecutorGroup);
       if (this.clockRefreshFuture != null) {
         this.clockRefreshFuture.cancel(false);
       }
@@ -173,6 +174,11 @@ final class AmqpEnvironment implements Environment {
       }
       LOGGER.debug("Environment {} has been closed", this);
     }
+  }
+
+  // no quiet period: the event loop threads are not daemon threads and would delay JVM exit
+  private static void shutdown(EventExecutorGroup group) {
+    group.shutdownGracefully(0, EVENT_LOOP_SHUTDOWN_TIMEOUT_IN_SECONDS, TimeUnit.SECONDS);
   }
 
   @Override
@@ -230,6 +236,10 @@ final class AmqpEnvironment implements Environment {
 
   void removeConnection(AmqpConnection connection) {
     this.connectionManager.remove(connection);
+  }
+
+  long id() {
+    return this.id;
   }
 
   @Override
