@@ -60,6 +60,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#name(java.lang.String)" tabindex="0">name(String)</a></li>
 <li><a href="#autoDelete(boolean)" tabindex="0">autoDelete(boolean)</a></li>
+<li><a href="#internal(boolean)" tabindex="0">internal(boolean)</a></li>
 <li><a href="#type(com.rabbitmq.client.amqp.Management.ExchangeType)" tabindex="0">type(Management.ExchangeType)</a></li>
 <li><a href="#type(java.lang.String)" tabindex="0">type(String)</a></li>
 <li><a href="#argument(java.lang.String,java.lang.Object)" tabindex="0">argument(String, Object)</a></li>
@@ -128,18 +129,23 @@ loadScripts(document, 'script');</script>
 <div class="block">Declare the exchange.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Management.ExchangeSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.ExchangeSpecification</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#name(java.lang.String)" class="member-name-link">name</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#internal(boolean)" class="member-name-link">internal</a><wbr>(boolean&nbsp;internal)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">The name of the exchange.</div>
+<div class="block">Whether the exchange is internal.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Management.ExchangeSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.ExchangeSpecification</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#type(com.rabbitmq.client.amqp.Management.ExchangeType)" class="member-name-link">type</a><wbr>(<a href="Management.ExchangeType.html" title="enum in com.rabbitmq.client.amqp">Management.ExchangeType</a>&nbsp;type)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#name(java.lang.String)" class="member-name-link">name</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Type of the exchange.</div>
+<div class="block">The name of the exchange.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Management.ExchangeSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.ExchangeSpecification</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#type(java.lang.String)" class="member-name-link">type</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;type)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#type(com.rabbitmq.client.amqp.Management.ExchangeType)" class="member-name-link">type</a><wbr>(<a href="Management.ExchangeType.html" title="enum in com.rabbitmq.client.amqp">Management.ExchangeType</a>&nbsp;type)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Type of the exchange.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Management.ExchangeSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.ExchangeSpecification</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#type(java.lang.String)" class="member-name-link">type</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;type)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Type of the exchange (as a string, for non-built-in exchange types).</div>
 </div>
 </div>
@@ -180,6 +186,26 @@ loadScripts(document, 'script');</script>
 <dl class="notes">
 <dt>Parameters:</dt>
 <dd><code>autoDelete</code> - auto-delete flag.</dd>
+<dt>Returns:</dt>
+<dd>the exchange specification</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="internal(boolean)">
+<h3>internal</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="return-type"><a href="Management.ExchangeSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.ExchangeSpecification</a></span>&nbsp;<span class="element-name">internal</span><wbr><span class="parameters">(boolean&nbsp;internal)</span></div>
+<div class="block">Whether the exchange is internal.
+
+<p>Applications cannot publish directly to an internal exchange, only other exchanges can
+route to it (e.g. with exchange-to-exchange bindings or dead-lettering).
+
+<p>Default is false.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>internal</code> - internal flag</dd>
 <dt>Returns:</dt>
 <dd>the exchange specification</dd>
 </dl>
