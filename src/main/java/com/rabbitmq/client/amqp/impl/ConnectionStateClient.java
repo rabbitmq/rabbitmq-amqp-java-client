@@ -27,7 +27,9 @@ import com.rabbitmq.client.amqp.Requester;
 import com.rabbitmq.client.amqp.Resource;
 import com.rabbitmq.client.amqp.Responder;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -145,8 +147,15 @@ final class ConnectionStateClient implements AutoCloseable {
   // Recovery-related methods
   // --------------------------------------------------------------
 
-  void handleDisconnect(long attemptEpoch, DisconnectionEvent event) {
-    this.client.submit(state -> state.handleDisconnect(attemptEpoch, event));
+  void handleDisconnect(
+      long attemptEpoch,
+      org.apache.qpid.protonj2.client.Connection nativeConnection,
+      DisconnectionEvent event) {
+    this.client.submit(state -> state.handleDisconnect(attemptEpoch, nativeConnection, event));
+  }
+
+  void handleInitialOpen(org.apache.qpid.protonj2.client.Connection nativeConnection) {
+    this.client.submit(state -> state.handleInitialOpen(nativeConnection));
   }
 
   void handleSessionFailure(long attemptEpoch, AmqpException exception) {
@@ -194,6 +203,9 @@ final class ConnectionStateClient implements AutoCloseable {
     private final List<AmqpConsumer> consumers = new ArrayList<>();
     private final List<Requester> requesters = new ArrayList<>();
     private final List<Responder> responders = new ArrayList<>();
+    // disconnections of the native connections opened during the initial connection creation
+    private final Map<org.apache.qpid.protonj2.client.Connection, AmqpException>
+        initialDisconnects = new IdentityHashMap<>();
 
     private ConnectionState(RecoverableConnection connection) {
       this.connection = connection;
@@ -203,11 +215,35 @@ final class ConnectionStateClient implements AutoCloseable {
       return this.epoch;
     }
 
-    private void handleDisconnect(long eventEpoch, DisconnectionEvent event) {
+    private void handleDisconnect(
+        long eventEpoch,
+        org.apache.qpid.protonj2.client.Connection nativeConnection,
+        DisconnectionEvent event) {
       AmqpException exception = ExceptionUtils.convert(event.failureCause());
       apply(
           onDisconnect(
-              this.internalState, this.epoch, eventEpoch, exception, this.connection.name()));
+              this.internalState,
+              this.epoch,
+              eventEpoch,
+              nativeConnection == this.connection.nativeConnection(),
+              exception,
+              this.connection.recoveryActivated(),
+              this.connection.name()));
+      if (this.internalState == InternalState.INITIAL) {
+        this.initialDisconnects.put(nativeConnection, exception);
+      }
+    }
+
+    private void handleInitialOpen(org.apache.qpid.protonj2.client.Connection nativeConnection) {
+      AmqpException failure = this.initialDisconnects.get(nativeConnection);
+      this.initialDisconnects.clear();
+      apply(
+          onInitialOpen(
+              this.internalState,
+              this.epoch,
+              failure,
+              this.connection.recoveryActivated(),
+              this.connection.name()));
     }
 
     private void handleSessionFailure(long eventEpoch, AmqpException exception) {
@@ -234,6 +270,7 @@ final class ConnectionStateClient implements AutoCloseable {
     }
 
     private void markClosed(Throwable cause) {
+      this.initialDisconnects.clear();
       apply(onMarkClosed(this.epoch, cause));
     }
 
@@ -245,7 +282,9 @@ final class ConnectionStateClient implements AutoCloseable {
         InternalState state,
         long epoch,
         long eventEpoch,
+        boolean fromCurrentNativeConnection,
         AmqpException exception,
+        boolean recoveryActivated,
         String connectionName) {
       if (eventEpoch < epoch) {
         LOGGER.debug(
@@ -259,7 +298,21 @@ final class ConnectionStateClient implements AutoCloseable {
         return TransitionResult.noChange(state, epoch);
       }
 
-      if (!RECOVERY_PREDICATE.test(exception)) {
+      if (state == InternalState.INITIAL) {
+        // the connection creation sees the failures of its native connections and the
+        // disconnection of the native connection it ends up with is handled when it completes
+        LOGGER.debug("Deferring disconnect during creation of connection {}", connectionName);
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      if (state != InternalState.RECOVERING_CONNECTION && !fromCurrentNativeConnection) {
+        // late event of a native connection that failed to open
+        LOGGER.debug(
+            "Ignoring disconnect of previous native connection for connection {}", connectionName);
+        return TransitionResult.noChange(state, epoch);
+      }
+
+      if (!recoveryActivated || !RECOVERY_PREDICATE.test(exception)) {
         return TransitionResult.of(state, epoch, s -> s.connection.close(exception));
       }
 
@@ -275,6 +328,30 @@ final class ConnectionStateClient implements AutoCloseable {
       // We must transition back to RECOVERING_CONNECTION and start over.
       LOGGER.debug("Valid disconnect detected, initiating recovery...");
       return startRecovery(epoch + 1, exception, false);
+    }
+
+    static TransitionResult onInitialOpen(
+        InternalState state,
+        long epoch,
+        AmqpException disconnectFailure,
+        boolean recoveryActivated,
+        String connectionName) {
+      if (state != InternalState.INITIAL) {
+        return TransitionResult.noChange(state, epoch);
+      }
+      if (disconnectFailure != null) {
+        LOGGER.debug("Connection {} disconnected during its creation", connectionName);
+        return onDisconnect(
+            InternalState.CONNECTED,
+            epoch,
+            epoch,
+            true,
+            disconnectFailure,
+            recoveryActivated,
+            connectionName);
+      }
+      return TransitionResult.of(
+          InternalState.CONNECTED, epoch, s -> s.connection.updateState(OPEN, null));
     }
 
     static TransitionResult onSessionFailure(
@@ -475,6 +552,8 @@ final class ConnectionStateClient implements AutoCloseable {
     Resource.State state();
 
     String name();
+
+    boolean recoveryActivated();
 
     void updateState(Resource.State state, Throwable cause);
 

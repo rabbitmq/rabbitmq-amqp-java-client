@@ -143,7 +143,6 @@ final class AmqpConnection extends ResourceBase
         builder.isolateResources()
             ? () -> new SessionHandler.SingleSessionSessionHandler(this)
             : () -> new SessionHandler.ConnectionNativeSessionSessionHandler(this);
-    BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler;
     this.recoveryConfiguration = builder.recoveryConfiguration();
 
     Pair<TopologyListener, EntityRecovery> topologyInfra = createTopologyInfrastructure(builder);
@@ -165,15 +164,8 @@ final class AmqpConnection extends ResourceBase
     this.connectionStateClient =
         new ConnectionStateClient(this.environment.connectionStateEventLoop(), this);
 
-    if (this.recoveryConfiguration.activated()) {
-      disconnectHandler = createDisconnectHandler(this.connectionStateClient.epoch());
-    } else {
-      disconnectHandler =
-          (c, e) -> {
-            AmqpException failureCause = convert(e.failureCause(), "Connection disconnected");
-            this.close(failureCause);
-          };
-    }
+    BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent> disconnectHandler =
+        createDisconnectHandler(this.connectionStateClient.epoch());
     java.util.function.Consumer<ClientException> sessionCloseHandler =
         createSessionCloseHandler(this.connectionStateClient.epoch());
     if (this.connectionSettings.affinity().activated()) {
@@ -240,9 +232,18 @@ final class AmqpConnection extends ResourceBase
       this.sqlFilterExpressionsSupported = supportSqlFilterExpressions(brokerVersion);
       this.directReplyToSupported = supportDirectReplyTo(brokerVersion);
       LOGGER.debug("Opened connection '{}' on node '{}'.", this.name(), this.connectionNodename());
-      this.connectionStateClient.executeInLoop(() -> this.updateState(OPEN));
+      this.connectionStateClient.handleInitialOpen(this.nativeConnection);
       this.environment.metricsCollector().openConnection();
     } catch (RuntimeException e) {
+      this.connectionStateClient.markClosed(e);
+      this.connectionStateClient.executeInLoop(() -> this.state(CLOSED, e));
+      try {
+        this.connectionStateClient.close();
+      } catch (Exception closeException) {
+        LOGGER.info(
+            "Error while closing state client after connection creation failure: {}",
+            closeException.getMessage());
+      }
       try {
         this.credentialsRegistration.close();
       } catch (Exception closeException) {
@@ -473,7 +474,7 @@ final class AmqpConnection extends ResourceBase
   private BiConsumer<org.apache.qpid.protonj2.client.Connection, DisconnectionEvent>
       createDisconnectHandler(long attemptEpoch) {
     return (conn, event) -> {
-      this.connectionStateClient.handleDisconnect(attemptEpoch, event);
+      this.connectionStateClient.handleDisconnect(attemptEpoch, conn, event);
     };
   }
 
@@ -971,10 +972,6 @@ final class AmqpConnection extends ResourceBase
     return Objects.hashCode(id);
   }
 
-  void updateState(Resource.State state) {
-    this.state(state);
-  }
-
   static class NativeConnectionWrapper {
 
     private final org.apache.qpid.protonj2.client.Connection connection;
@@ -1069,6 +1066,11 @@ final class AmqpConnection extends ResourceBase
     if (this.management != null) {
       this.management.releaseResources(e);
     }
+  }
+
+  @Override
+  public boolean recoveryActivated() {
+    return this.recoveryConfiguration.activated();
   }
 
   @Override
