@@ -19,11 +19,19 @@ package com.rabbitmq.client.amqp.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.rabbitmq.client.amqp.Resource;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.qpid.protonj2.client.Connection;
+import org.apache.qpid.protonj2.client.DisconnectionEvent;
+import org.apache.qpid.protonj2.client.exceptions.ClientConnectionRemotelyClosedException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,14 +40,16 @@ public class ConnectionStateClientTest {
 
   EventExecutorGroup eventExecutorGroup;
   EventLoop loop;
+  ConnectionStateClient.RecoverableConnection connection;
   ConnectionStateClient client;
 
   @BeforeEach
   void beforeEach() {
     eventExecutorGroup = new DefaultEventExecutorGroup(1);
     loop = new EventLoop(eventExecutorGroup);
-    client =
-        new ConnectionStateClient(loop, mock(ConnectionStateClient.RecoverableConnection.class));
+    connection = mock(ConnectionStateClient.RecoverableConnection.class);
+    when(connection.recoveryActivated()).thenReturn(true);
+    client = new ConnectionStateClient(loop, connection);
   }
 
   @AfterEach
@@ -85,5 +95,68 @@ public class ConnectionStateClientTest {
                   throw failure;
                 }))
         .isSameAs(failure);
+  }
+
+  @Test
+  void disconnectOfOtherNativeConnectionDuringCreationShouldNotTriggerRecovery() {
+    Connection failed = mock(Connection.class);
+    Connection opened = mock(Connection.class);
+    when(connection.nativeConnection()).thenReturn(opened);
+    client.handleDisconnect(client.epoch(), failed, disconnection());
+    client.handleInitialOpen(opened);
+    // late event of the failed native connection
+    client.handleDisconnect(1, failed, disconnection());
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(1);
+    verify(connection).updateState(Resource.State.OPEN, null);
+    verify(connection, never()).submitRecoveryTask(any());
+
+    client.handleDisconnect(1, opened, disconnection());
+    assertThat(client.epoch()).isEqualTo(2);
+    verify(connection).submitRecoveryTask(any());
+  }
+
+  @Test
+  void disconnectOfOpenedNativeConnectionDuringCreationShouldTriggerRecovery() {
+    Connection opened = mock(Connection.class);
+    client.handleDisconnect(client.epoch(), opened, disconnection());
+    client.handleInitialOpen(opened);
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(2);
+    verify(connection, never()).updateState(Resource.State.OPEN, null);
+    verify(connection).updateState(any(), any());
+    verify(connection).submitRecoveryTask(any());
+  }
+
+  @Test
+  void disconnectAfterCreationFailureShouldNotTriggerRecovery() {
+    Connection failed = mock(Connection.class);
+    client.markClosed(new IllegalStateException());
+    client.handleDisconnect(1, failed, disconnection());
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(2);
+    verify(connection, never()).submitRecoveryTask(any());
+  }
+
+  @Test
+  void disconnectShouldCloseConnectionIfRecoveryIsNotActivated() {
+    when(connection.recoveryActivated()).thenReturn(false);
+    Connection opened = mock(Connection.class);
+    when(connection.nativeConnection()).thenReturn(opened);
+    client.handleInitialOpen(opened);
+    client.handleDisconnect(1, opened, disconnection());
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(1);
+    verify(connection).close(any());
+    verify(connection, never()).submitRecoveryTask(any());
+  }
+
+  private static DisconnectionEvent disconnection() {
+    return new DisconnectionEvent(
+        "localhost", 5672, new ClientConnectionRemotelyClosedException("simulated failure"));
   }
 }

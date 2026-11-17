@@ -32,6 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.rabbitmq.client.amqp.BackOffDelayPolicy;
+import com.rabbitmq.client.amqp.Connection;
+import com.rabbitmq.client.amqp.Consumer;
 import com.rabbitmq.client.amqp.Environment;
 import com.rabbitmq.client.amqp.Management;
 import com.rabbitmq.client.amqp.Publisher;
@@ -46,13 +48,18 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
@@ -65,6 +72,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -333,6 +342,208 @@ public class RecoveryClusterTest {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(
+      value = Management.QueueType.class,
+      names = {"QUORUM", "STREAM"})
+  void consumerWithAffinityShouldRecoverOnAnotherNodeWhenItsNodeIsDown(Management.QueueType type) {
+    String q = queueName(type);
+    declareQueueWithMemberOnEachNode(q, type);
+    // dedicated environment, so that the affinity cache does not know the other follower
+    Environment affinityEnvironment = environmentWithAllUris();
+    String stoppedNode = null;
+    try {
+      AmqpConnection c =
+          connectionMatchingAffinity(
+              affinityEnvironment,
+              b ->
+                  b.name("consumer-affinity")
+                      .affinity()
+                      .queue(q)
+                      .operation(CONSUME)
+                      // on a follower, so that stopping its node does not require a leader election
+                      .strategy(
+                          ConnectionUtils.LEADER_FOR_PUBLISHING_FOLLOWERS_FOR_CONSUMING_STRATEGY)
+                      .connection(),
+              (conn, info) -> {
+                String nodename = conn.connectionNodename();
+                return info.members().contains(nodename) && !nodename.equals(info.leader());
+              },
+              q);
+      stoppedNode = c.connectionNodename();
+      Set<String> received = ConcurrentHashMap.newKeySet();
+      Consumer consumer =
+          c.consumerBuilder()
+              .queue(q)
+              .messageHandler((ctx, msg) -> {
+                received.add(new String(msg.body(), StandardCharsets.UTF_8));
+                ctx.accept();
+              })
+              .build();
+      String liveNode = otherNode(stoppedNode);
+      List<String> beforeStop = publish(q, liveNode, "before-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(beforeStop));
+
+      LOGGER.info("Stopping node {} of consumer connection...", stoppedNode);
+      Cli.stopNode(stoppedNode);
+
+      String node = stoppedNode;
+      // the connection is still open until the client detects the failure
+      waitAtMost(
+          TIMEOUT,
+          () ->
+              c.state() == OPEN
+                  && ((ResourceBase) consumer).state() == OPEN
+                  && !node.equals(c.connectionNodename()),
+          () ->
+              format(
+                  "Consumer connection state is %s on node %s, expecting %s on another node than %s",
+                  c.state(), c.connectionNodename(), OPEN, node));
+      List<String> afterStop = publish(q, liveNode, "after-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(afterStop));
+    } finally {
+      affinityEnvironment.close();
+      if (stoppedNode != null) {
+        Cli.startNode(stoppedNode);
+      }
+      deleteQueue(q);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = Management.QueueType.class,
+      names = {"QUORUM", "STREAM"})
+  void publisherWithAffinityShouldRecoverOnAnotherNodeWhenLeaderIsDown(Management.QueueType type) {
+    String q = queueName(type);
+    declareQueueWithMemberOnEachNode(q, type);
+    // dedicated environment, so that the affinity cache has not learned the queue info
+    // and the addresses of the nodes yet
+    Environment affinityEnvironment = environmentWithAllUris();
+    String stoppedNode = null;
+    try {
+      AmqpConnection c =
+          connectionMatchingAffinity(
+              affinityEnvironment,
+              b -> b.name("publisher-affinity").affinity().queue(q).operation(PUBLISH).connection(),
+              (conn, info) -> conn.connectionNodename().equals(info.leader()),
+              q);
+      stoppedNode = c.connectionNodename();
+      Publisher publisher = c.publisherBuilder().queue(q).build();
+      assertThat(publishAndWaitForAccepted(publisher, 10)).isTrue();
+
+      LOGGER.info("Stopping leader node {} of publisher connection...", stoppedNode);
+      Cli.stopNode(stoppedNode);
+
+      String node = stoppedNode;
+      // the connection is still open until the client detects the failure
+      waitAtMost(
+          TIMEOUT,
+          () ->
+              c.state() == OPEN
+                  && ((ResourceBase) publisher).state() == OPEN
+                  && !node.equals(c.connectionNodename()),
+          () ->
+              format(
+                  "Publisher connection state is %s on node %s, expecting %s on another node than %s",
+                  c.state(), c.connectionNodename(), OPEN, node));
+      assertThat(publishAndWaitForAccepted(publisher, 10)).isTrue();
+    } finally {
+      affinityEnvironment.close();
+      if (stoppedNode != null) {
+        Cli.startNode(stoppedNode);
+      }
+      deleteQueue(q);
+    }
+  }
+
+  private String queueName(Management.QueueType type) {
+    return type.name().toLowerCase() + "-affinity-" + new Random().nextInt(1000);
+  }
+
+  private void declareQueueWithMemberOnEachNode(String q, Management.QueueType type) {
+    if (type == Management.QueueType.QUORUM) {
+      management.queue(q).quorum().initialMemberCount(nodes.size()).queue().declare();
+    } else {
+      management.queue(q).stream().initialMemberCount(nodes.size()).queue().declare();
+    }
+  }
+
+  private void deleteQueue(String q) {
+    waitAtMostNoException(TIMEOUT, () -> management.queueDelete(q));
+  }
+
+  private AmqpConnection connectionMatchingAffinity(
+      Environment env,
+      java.util.function.Consumer<AmqpConnectionBuilder> operation,
+      BiPredicate<AmqpConnection, Management.QueueInfo> matching,
+      String q) {
+    // affinity is best effort, the connection may not be on a matching node
+    AtomicReference<AmqpConnection> connection = new AtomicReference<>();
+    waitAtMost(
+        TIMEOUT,
+        () -> {
+          AmqpConnection c = connection(env, operation);
+          if (matching.test(c, management.queueInfo(q))) {
+            connection.set(c);
+            return true;
+          } else {
+            c.close();
+            return false;
+          }
+        });
+    return connection.get();
+  }
+
+  private static Environment environmentWithAllUris() {
+    return new AmqpEnvironmentBuilder()
+        .connectionSettings()
+        .uris(URIS)
+        .environmentBuilder()
+        .build();
+  }
+
+  private static String uri(String node) {
+    // rabbit@node0 => amqp://localhost:5672, etc
+    return URIS[Integer.parseInt(node.substring(node.length() - 1))];
+  }
+
+  private static String otherNode(String node) {
+    return nodes.stream().filter(n -> !n.equals(node)).findFirst().get();
+  }
+
+  private List<String> publish(String q, String node, String prefix, int count) {
+    List<String> bodies = IntStream.range(0, count).mapToObj(i -> prefix + i).collect(toList());
+    try (Connection c = environment.connectionBuilder().uri(uri(node)).build();
+        Publisher publisher = c.publisherBuilder().queue(q).build()) {
+      assertThat(publishAndWaitForAccepted(publisher, bodies)).isTrue();
+    }
+    return bodies;
+  }
+
+  private static boolean publishAndWaitForAccepted(Publisher publisher, int count) {
+    return publishAndWaitForAccepted(
+        publisher, IntStream.range(0, count).mapToObj(String::valueOf).collect(toList()));
+  }
+
+  private static boolean publishAndWaitForAccepted(Publisher publisher, List<String> bodies) {
+    CountDownLatch latch = new CountDownLatch(bodies.size());
+    bodies.forEach(b ->
+        publisher.publish(
+            publisher.message(b.getBytes(StandardCharsets.UTF_8)),
+            ctx -> {
+              if (ctx.status() == Publisher.Status.ACCEPTED) {
+                latch.countDown();
+              }
+            }));
+    try {
+      return latch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    }
+  }
+
   @NotNull
   private List<QueueConfiguration> queueConfigurations(
       List<Management.QueueType> queueTypes, int queueCount) {
@@ -517,10 +728,14 @@ public class RecoveryClusterTest {
   }
 
   AmqpConnection connection(java.util.function.Consumer<AmqpConnectionBuilder> operation) {
+    return connection(this.environment, operation);
+  }
+
+  static AmqpConnection connection(
+      Environment env, java.util.function.Consumer<AmqpConnectionBuilder> operation) {
     AmqpConnectionBuilder builder =
         (AmqpConnectionBuilder)
-            environment
-                .connectionBuilder()
+            env.connectionBuilder()
                 .recovery()
                 .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
                 .connectionBuilder();
