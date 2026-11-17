@@ -30,6 +30,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpConnectionException;
 import com.rabbitmq.client.amqp.AmqpException.AmqpResourceClosedException;
+import io.netty.channel.ConnectTimeoutException;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLException;
@@ -92,6 +97,21 @@ public class ExceptionUtilsTest {
     assertThat(convert(new ClientMessageFormatViolationException("Message size exceeds limit")))
         .isInstanceOf(AmqpException.AmqpInvalidMessageException.class)
         .hasCauseInstanceOf(ClientMessageFormatViolationException.class);
+  }
+
+  @Test
+  void connectFailuresShouldBeConnectionExceptions() {
+    // as reported by protonj2 when the connection cannot be established
+    List.of(
+            new ConnectTimeoutException("connection timed out after 3000 ms: /10.255.255.1:5672"),
+            new UnknownHostException("does-not-exist.invalid"),
+            new NoRouteToHostException("No route to host"),
+            new SocketException("Host is down"))
+        .forEach(cause ->
+            assertThat(
+                    convert(new ClientConnectionRemotelyClosedException(cause.getMessage(), cause)))
+                .isInstanceOf(AmqpConnectionException.class)
+                .hasCauseInstanceOf(ClientConnectionRemotelyClosedException.class));
   }
 
   @Test
