@@ -226,6 +226,7 @@ final class AmqpConnection extends ResourceBase
                 return wrapper;
               },
               this.connectionSettings.addresses(),
+              this.connectionSettings::selectAddress,
               this.management,
               this.affinity,
               this.environment.affinityCache(),
@@ -515,6 +516,7 @@ final class AmqpConnection extends ResourceBase
                   return wrapper;
                 },
                 this.connectionSettings.addresses(),
+                this.connectionSettings::selectAddress,
                 this.management,
                 this.affinity,
                 this.environment.affinityCache(),

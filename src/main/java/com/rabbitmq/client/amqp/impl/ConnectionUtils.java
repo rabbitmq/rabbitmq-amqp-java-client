@@ -18,12 +18,16 @@
 package com.rabbitmq.client.amqp.impl;
 
 import com.rabbitmq.client.amqp.Address;
+import com.rabbitmq.client.amqp.AddressSelector;
 import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.ConnectionSettings;
 import com.rabbitmq.client.amqp.Management;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
@@ -54,13 +58,15 @@ final class ConnectionUtils {
    * <p>Affinity is best effort: the last connection is returned if no node with affinity is found
    * after a few attempts, or if the queue info cannot be looked up (e.g. the queue does not exist).
    * An {@link AmqpException.AmqpConnectionException} is thrown if the nodes with affinity cannot be
-   * reached, so that the caller can try again later. The management resources are released and the
-   * management is marked unavailable when an {@link AmqpException.AmqpConnectionException} is
-   * thrown.
+   * reached, so that the caller can try again later. The addresses of the nodes with affinity that
+   * cannot be reached are not tried again during the call. The management resources are released
+   * and the management is marked unavailable when an {@link AmqpException.AmqpConnectionException}
+   * is thrown.
    */
   static AmqpConnection.NativeConnectionWrapper enforceAffinity(
       Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
       List<Address> addresses,
+      AddressSelector addressSelector,
       AmqpManagement management,
       AffinityContext context,
       AffinityCache affinityCache,
@@ -77,24 +83,27 @@ final class ConnectionUtils {
       // null when the queue info is not in the cache: no hint, any node
       List<String> nodesWithAffinity =
           info == null ? null : strategy.nodesWithAffinity(context, info);
+      HintedFailures hintedFailures = new HintedFailures();
       for (int attempt = 1; ; attempt++) {
+        // the previous connection is closed already, not to close again if connect fails
         connectionWrapper = null;
-        CandidateConnection candidate =
+        connectionWrapper =
             connect(
                 connectionFactory,
                 addresses,
                 addressHints(nodesWithAffinity, affinityCache),
+                addressSelector,
+                hintedFailures,
                 retryStrategy,
                 context,
                 connectionName);
-        connectionWrapper = candidate.connection;
         String nodename = connectionWrapper.nodename();
         affinityCache.nodenameToAddress(nodename, connectionWrapper.address());
         if (attempt == 1) {
           // the cached queue info may be stale, e.g. the leader moved
           info =
               refreshQueueInfo(
-                  management, context, affinityCache, retryStrategy, candidate.hintedFailure);
+                  management, context, affinityCache, retryStrategy, hintedFailures.last);
           if (info == null) {
             LOGGER.debug("Could not look up info for queue '{}'", context.queue());
             return connectionWrapper;
@@ -117,9 +126,9 @@ final class ConnectionUtils {
           LOGGER.debug("Connected to node '{}' for '{}'", nodename, connectionName);
           return connectionWrapper;
         } else if (attempt == 5) {
-          if (candidate.hintedFailure != null) {
+          if (hintedFailures.last != null) {
             // the nodes with affinity cannot be reached, the caller retries later (recovery)
-            throw candidate.hintedFailure;
+            throw hintedFailures.last;
           }
           LOGGER.debug(
               "Could not find affinity {} after {} attempt(s), using last connection for '{}'.",
@@ -171,33 +180,49 @@ final class ConnectionUtils {
         .collect(Collectors.toList());
   }
 
-  private static CandidateConnection connect(
+  private static AmqpConnection.NativeConnectionWrapper connect(
       Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
       List<Address> addresses,
       List<Address> addressHints,
+      AddressSelector addressSelector,
+      HintedFailures hintedFailures,
       RetryStrategy retryStrategy,
       AffinityContext context,
       String connectionName) {
-    try {
-      return new CandidateConnection(
-          retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints)), null);
-    } catch (AmqpException.AmqpConnectionException e) {
-      if (addressHints == null || addressHints.isEmpty()) {
-        throw e;
+    if (addressHints != null) {
+      List<Address> hints = new ArrayList<>(addressHints);
+      hints.removeAll(hintedFailures.addresses);
+      // one hinted address at a time, to know which ones cannot be reached
+      for (int i = 0, count = hints.size(); i < count; i++) {
+        Address hint = addressSelector.select(hints);
+        try {
+          return retryStrategy.maybeRetry(() -> connectionFactory.apply(List.of(hint)));
+        } catch (AmqpException.AmqpConnectionException e) {
+          LOGGER.debug(
+              "Could not connect to {} with affinity {} for '{}' ({})",
+              hint,
+              context,
+              connectionName,
+              e.getMessage());
+          hints.remove(hint);
+          hintedFailures.add(hint, e);
+        }
       }
-      LOGGER.debug(
-          "Could not connect to nodes with affinity {} for '{}' ({}), trying the other addresses",
-          context,
-          connectionName,
-          e.getMessage());
-      // the hinted nodes are likely down, no need to try them again
-      List<Address> fallbackAddresses =
-          addresses.stream().filter(a -> !addressHints.contains(a)).collect(Collectors.toList());
-      return new CandidateConnection(
-          retryStrategy.maybeRetry(() ->
-              connectionFactory.apply(fallbackAddresses.isEmpty() ? null : fallbackAddresses)),
-          e);
     }
+    if (hintedFailures.last == null) {
+      return retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints));
+    }
+    LOGGER.debug(
+        "Could not connect to nodes with affinity {} for '{}', trying the other addresses",
+        context,
+        connectionName);
+    // the hinted nodes that failed are likely down, no need to try them again
+    List<Address> fallbackAddresses =
+        addresses.stream()
+            .filter(a -> !hintedFailures.addresses.contains(a))
+            .collect(Collectors.toList());
+    return retryStrategy.maybeRetry(
+        () -> connectionFactory.apply(fallbackAddresses.isEmpty() ? null : fallbackAddresses));
   }
 
   private static Management.QueueInfo refreshQueueInfo(
@@ -218,17 +243,15 @@ final class ConnectionUtils {
     }
   }
 
-  private static final class CandidateConnection {
+  // the hinted addresses that cannot be reached during an affinity enforcement
+  private static final class HintedFailures {
 
-    private final AmqpConnection.NativeConnectionWrapper connection;
-    // the connection failure to the nodes with affinity, if any, before the fallback
-    private final AmqpException.AmqpConnectionException hintedFailure;
+    private final Set<Address> addresses = new HashSet<>();
+    private AmqpException.AmqpConnectionException last;
 
-    private CandidateConnection(
-        AmqpConnection.NativeConnectionWrapper connection,
-        AmqpException.AmqpConnectionException hintedFailure) {
-      this.connection = connection;
-      this.hintedFailure = hintedFailure;
+    private void add(Address address, AmqpException.AmqpConnectionException failure) {
+      this.addresses.add(address);
+      this.last = failure;
     }
   }
 
