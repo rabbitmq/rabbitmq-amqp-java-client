@@ -17,6 +17,8 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
+import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
+import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
 import static com.rabbitmq.client.amqp.Management.QueueType.QUORUM;
 import static com.rabbitmq.client.amqp.Management.QueueType.STREAM;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -217,6 +219,188 @@ public class AmqpConnectionAffinityUnitTest {
     verify(nativeConnection, times(1)).close();
   }
 
+  @Test
+  void hintedAddressFailsShouldFallBackToAllAddresses() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(management.queueInfo(Q)).thenReturn(info());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(null)).thenReturn(follower2Connection());
+    AmqpConnection.NativeConnectionWrapper w =
+        enforceAffinity(cf, management, affinity(CONSUME), cache);
+    assertThat(w).hasNodename(FOLLOWER2_NODENAME);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(1)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, never()).close();
+    verify(management, never()).markUnavailable();
+    assertThat(cache)
+        .contains(info())
+        .hasMapping(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS)
+        .hasMapping(FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
+  }
+
+  @Test
+  void hintedAddressFailsFallbackDoesNotMatchShouldRetry() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(management.queueInfo(Q)).thenReturn(info());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(null)).thenReturn(leaderConnection()).thenReturn(follower2Connection());
+    AmqpConnection.NativeConnectionWrapper w =
+        enforceAffinity(cf, management, affinity(CONSUME), cache);
+    assertThat(w).hasNodename(FOLLOWER2_NODENAME);
+    verify(cf, times(2)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(2)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, times(1)).close();
+    assertThat(cache)
+        .hasMapping(LEADER_NODENAME, LEADER_ADDRESS)
+        .hasMapping(FOLLOWER2_NODENAME, FOLLOWER2_ADDRESS);
+  }
+
+  @Test
+  void hintedAddressFailsShouldFallBackToOtherAddresses() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(management.queueInfo(Q)).thenReturn(info());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(List.of(LEADER_ADDRESS, FOLLOWER2_ADDRESS)))
+        .thenReturn(leaderConnection())
+        .thenReturn(follower2Connection());
+    AmqpConnection.NativeConnectionWrapper w =
+        enforceAffinity(
+            cf,
+            List.of(LEADER_ADDRESS, FOLLOWER1_ADDRESS, FOLLOWER2_ADDRESS),
+            management,
+            affinity(CONSUME),
+            cache);
+    assertThat(w).hasNodename(FOLLOWER2_NODENAME);
+    verify(cf, times(2)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(2)).apply(List.of(LEADER_ADDRESS, FOLLOWER2_ADDRESS));
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, times(1)).close();
+    verify(management, never()).markUnavailable();
+  }
+
+  @Test
+  void hintedAddressesAreAllAddressesShouldFallBackToAllAddresses() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(management.queueInfo(Q)).thenReturn(info());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(null)).thenReturn(follower2Connection());
+    AmqpConnection.NativeConnectionWrapper w =
+        enforceAffinity(cf, List.of(FOLLOWER1_ADDRESS), management, affinity(CONSUME), cache);
+    assertThat(w).hasNodename(FOLLOWER2_NODENAME);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(1)).apply(null);
+    verifyNoMoreInteractions(cf);
+  }
+
+  @Test
+  void hintedAddressFailsWithSecurityErrorShouldNotFallBack() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS)))
+        .thenThrow(new AmqpException.AmqpSecurityException("", null));
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isInstanceOf(AmqpException.AmqpSecurityException.class);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, never()).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(management, never()).markUnavailable();
+  }
+
+  @Test
+  void noHintAndConnectionFailsShouldNotFallBack() {
+    cache.queueInfo(info());
+    when(cf.apply(anyListOrNull())).thenThrow(connectionException());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+    verify(cf, times(1)).apply(List.of());
+    verifyNoMoreInteractions(cf);
+    verify(management, times(1)).markUnavailable();
+  }
+
+  @Test
+  void fallbackFailsShouldThrowAndMarkManagementUnavailable() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(null)).thenThrow(connectionException());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isInstanceOf(AmqpException.AmqpConnectionException.class);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(1)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(management, times(1)).markUnavailable();
+    verify(nativeConnection, never()).close();
+  }
+
+  @Test
+  void fallbackNeverMatchesShouldThrowHintedConnectionFailure() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    AmqpException.AmqpConnectionException hintedFailure = connectionException();
+    when(management.queueInfo(Q)).thenReturn(info());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(hintedFailure);
+    when(cf.apply(null)).thenReturn(leaderConnection());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isSameAs(hintedFailure);
+    verify(cf, times(5)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(5)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, times(5)).close();
+    verify(management, times(1)).markUnavailable();
+  }
+
+  @Test
+  void queueInfoLookupFailsAfterFallbackShouldThrowHintedConnectionFailure() {
+    cache.queueInfo(info()).nodenameToAddress(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+    AmqpException.AmqpConnectionException hintedFailure = connectionException();
+    AmqpException lookupException = new AmqpException("Unexpected response code: 400");
+    when(management.queueInfo(Q)).thenThrow(lookupException);
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenThrow(hintedFailure);
+    when(cf.apply(null)).thenReturn(leaderConnection());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isSameAs(hintedFailure)
+        .hasSuppressedException(lookupException);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verify(cf, times(1)).apply(null);
+    verifyNoMoreInteractions(cf);
+    verify(nativeConnection, times(1)).close();
+    verify(management, times(1)).markUnavailable();
+  }
+
+  @Test
+  void queueInfoLookupFailsWithoutFallbackShouldThrowLookupException() {
+    cache.queueInfo(info());
+    AmqpException lookupException = new AmqpException("Unexpected response code: 400");
+    when(management.queueInfo(Q)).thenThrow(lookupException);
+    when(cf.apply(List.of())).thenReturn(leaderConnection());
+    assertThatThrownBy(() -> enforceAffinity(cf, management, affinity(CONSUME), cache))
+        .isSameAs(lookupException);
+    verify(cf, times(1)).apply(List.of());
+    verifyNoMoreInteractions(cf);
+    verify(management, never()).markUnavailable();
+  }
+
+  @Test
+  void publishStaleLeaderFailsShouldFallBackAndFindNewLeader() {
+    cache.queueInfo(info(LEADER_NODENAME)).nodenameToAddress(LEADER_NODENAME, LEADER_ADDRESS);
+    when(management.queueInfo(Q)).thenReturn(info(FOLLOWER1_NODENAME));
+    when(cf.apply(List.of(LEADER_ADDRESS))).thenThrow(connectionException());
+    when(cf.apply(null)).thenReturn(follower1Connection());
+    when(cf.apply(List.of(FOLLOWER1_ADDRESS))).thenReturn(follower1Connection());
+    AmqpConnection.NativeConnectionWrapper w =
+        enforceAffinity(cf, management, affinity(PUBLISH), cache);
+    assertThat(w).hasNodename(FOLLOWER1_NODENAME);
+    verify(cf, times(1)).apply(List.of(LEADER_ADDRESS));
+    verify(cf, times(1)).apply(null);
+    verify(cf, times(1)).apply(List.of(FOLLOWER1_ADDRESS));
+    verifyNoMoreInteractions(cf);
+    verify(management, times(1)).queueInfo(Q);
+    verify(nativeConnection, times(1)).close();
+    assertThat(cache)
+        .contains(info(FOLLOWER1_NODENAME))
+        .hasMapping(LEADER_NODENAME, LEADER_ADDRESS)
+        .hasMapping(FOLLOWER1_NODENAME, FOLLOWER1_ADDRESS);
+  }
+
   AmqpConnection.NativeConnectionWrapper leaderConnection() {
     return new AmqpConnection.NativeConnectionWrapper(
         this.nativeConnection, null, LEADER_NODENAME, LEADER_ADDRESS);
@@ -233,7 +417,15 @@ public class AmqpConnectionAffinityUnitTest {
   }
 
   static ConnectionUtils.AffinityContext affinity() {
-    return new ConnectionUtils.AffinityContext(Q, ConnectionSettings.Affinity.Operation.PUBLISH);
+    return affinity(PUBLISH);
+  }
+
+  static ConnectionUtils.AffinityContext affinity(ConnectionSettings.Affinity.Operation operation) {
+    return new ConnectionUtils.AffinityContext(Q, operation);
+  }
+
+  static AmqpException.AmqpConnectionException connectionException() {
+    return new AmqpException.AmqpConnectionException("Connection refused", null);
   }
 
   static Management.QueueInfo info(String leader) {
@@ -449,8 +641,18 @@ public class AmqpConnectionAffinityUnitTest {
       AmqpManagement management,
       ConnectionUtils.AffinityContext context,
       ConnectionUtils.AffinityCache affinityCache) {
+    return enforceAffinity(connectionFactory, List.of(), management, context, affinityCache);
+  }
+
+  private static AmqpConnection.NativeConnectionWrapper enforceAffinity(
+      Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
+      List<Address> addresses,
+      AmqpManagement management,
+      ConnectionUtils.AffinityContext context,
+      ConnectionUtils.AffinityCache affinityCache) {
     return ConnectionUtils.enforceAffinity(
         connectionFactory,
+        addresses,
         management,
         context,
         affinityCache,

@@ -238,6 +238,10 @@ abstract class DefaultConnectionSettings<T> implements ConnectionSettings<T> {
     return this.connectionTimeout;
   }
 
+  List<Address> addresses() {
+    return this.addresses;
+  }
+
   Address selectAddress(List<Address> addresses) {
     if (addresses == null || addresses.isEmpty()) {
       return this.addressSelector.select(this.addresses);

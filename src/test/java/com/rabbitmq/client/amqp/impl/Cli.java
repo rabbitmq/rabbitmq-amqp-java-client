@@ -24,6 +24,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -320,6 +321,31 @@ abstract class Cli {
             + " rabbitmqctl await_online_nodes "
             + DOCKER_NODES_TO_CONTAINERS.size());
     executeCommand(dockerCommand + "rabbitmqctl status");
+  }
+
+  static void stopNode(String node) {
+    // no drain, unlike restartNode, the node stays down until startNode is called
+    // no kill either, it can lose the registration of the stream coordinator member of the node
+    executeCommand("docker stop " + nodeToDockerContainer(node));
+  }
+
+  static void startNode(String node) {
+    String container = nodeToDockerContainer(node);
+    executeCommand("docker start " + container);
+    // the node may not be reachable yet right after the container starts
+    TestUtils.waitAtMostNoException(
+        Duration.ofSeconds(60),
+        () -> executeCommand("docker exec " + container + " rabbitmqctl await_startup"));
+    String otherContainer =
+        DOCKER_NODES_TO_CONTAINERS.values().stream()
+            .filter(c -> !c.equals(container))
+            .findAny()
+            .get();
+    executeCommand(
+        "docker exec "
+            + otherContainer
+            + " rabbitmqctl await_online_nodes "
+            + DOCKER_NODES_TO_CONTAINERS.size());
   }
 
   static void rebalance() {
