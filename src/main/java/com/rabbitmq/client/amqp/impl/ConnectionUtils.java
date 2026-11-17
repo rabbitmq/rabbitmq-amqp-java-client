@@ -48,6 +48,16 @@ final class ConnectionUtils {
 
   private ConnectionUtils() {}
 
+  /**
+   * Create a connection on a node with affinity with the queue of the context.
+   *
+   * <p>Affinity is best effort: the last connection is returned if no node with affinity is found
+   * after a few attempts, or if the queue info cannot be looked up (e.g. the queue does not exist).
+   * An {@link AmqpException.AmqpConnectionException} is thrown if the nodes with affinity cannot be
+   * reached, so that the caller can try again later. The management resources are released and the
+   * management is marked unavailable when an {@link AmqpException.AmqpConnectionException} is
+   * thrown.
+   */
   static AmqpConnection.NativeConnectionWrapper enforceAffinity(
       Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
       List<Address> addresses,
@@ -63,129 +73,66 @@ final class ConnectionUtils {
     }
     AmqpConnection.NativeConnectionWrapper connectionWrapper = null;
     try {
-      AmqpConnection.NativeConnectionWrapper pickedConnection = null;
-      int attemptCount = 0;
-      boolean queueInfoRefreshed = false;
-      List<String> nodesWithAffinity = null;
       Management.QueueInfo info = affinityCache.queueInfo(context.queue());
-      while (pickedConnection == null) {
-        attemptCount++;
+      // null when the queue info is not in the cache: no hint, any node
+      List<String> nodesWithAffinity =
+          info == null ? null : strategy.nodesWithAffinity(context, info);
+      for (int attempt = 1; ; attempt++) {
         connectionWrapper = null;
-        AmqpException.AmqpConnectionException hintedConnectionFailure = null;
-        if (info == null) {
-          connectionWrapper = retryStrategy.maybeRetry(() -> connectionFactory.apply(null));
-          info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
-          queueInfoRefreshed = true;
-        }
-        if (info == null) {
-          // likely we could not look up the queue info, because e.g. the queue does not exist
-          return connectionWrapper;
-        }
-        LOGGER.debug(
-            "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {}) for '{}'",
-            info.name(),
-            info.type(),
-            info.leader(),
-            info.members(),
-            connectionName);
-        if (nodesWithAffinity == null) {
+        CandidateConnection candidate =
+            connect(
+                connectionFactory,
+                addresses,
+                addressHints(nodesWithAffinity, affinityCache),
+                retryStrategy,
+                context,
+                connectionName);
+        connectionWrapper = candidate.connection;
+        String nodename = connectionWrapper.nodename();
+        affinityCache.nodenameToAddress(nodename, connectionWrapper.address());
+        if (attempt == 1) {
+          // the cached queue info may be stale, e.g. the leader moved
+          info =
+              refreshQueueInfo(
+                  management, context, affinityCache, retryStrategy, candidate.hintedFailure);
+          if (info == null) {
+            LOGGER.debug("Could not look up info for queue '{}'", context.queue());
+            return connectionWrapper;
+          }
+          LOGGER.debug(
+              "Looking affinity with queue '{}' (type = {}, leader = {}, replicas = {}) for '{}'",
+              info.name(),
+              info.type(),
+              info.leader(),
+              info.members(),
+              connectionName);
           nodesWithAffinity = strategy.nodesWithAffinity(context, info);
         }
-        if (connectionWrapper == null) {
-          List<Address> addressHints =
-              nodesWithAffinity.stream()
-                  .map(affinityCache::nodenameToAddress)
-                  .filter(Objects::nonNull)
-                  .collect(Collectors.toList());
-          try {
-            connectionWrapper =
-                retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints));
-          } catch (AmqpException.AmqpConnectionException e) {
-            if (addressHints.isEmpty()) {
-              throw e;
-            }
-            LOGGER.debug(
-                "Could not connect to nodes with affinity {} for '{}' ({}), trying all the addresses",
-                context,
-                connectionName,
-                e.getMessage());
-            hintedConnectionFailure = e;
-            // the hinted nodes are likely down, no need to try them again
-            List<Address> fallbackAddresses =
-                addresses.stream()
-                    .filter(a -> !addressHints.contains(a))
-                    .collect(Collectors.toList());
-            connectionWrapper =
-                retryStrategy.maybeRetry(() ->
-                    connectionFactory.apply(
-                        fallbackAddresses.isEmpty() ? null : fallbackAddresses));
-          }
-        }
-        LOGGER.trace("Nodes matching affinity {}: {}.", context, nodesWithAffinity);
-        LOGGER.trace("Currently connected to node {}.", connectionWrapper.nodename());
-        affinityCache.nodenameToAddress(connectionWrapper.nodename(), connectionWrapper.address());
-        if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
-          if (!queueInfoRefreshed) {
-            LOGGER.trace(
-                "Found affinity, but refreshing queue information to check affinity is still valid.");
-            info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
-            if (info == null) {
-              LOGGER.trace("Could not look up info for queue '{}'", context.queue());
-              pickedConnection = connectionWrapper;
-            } else {
-              nodesWithAffinity = strategy.nodesWithAffinity(context, info);
-              queueInfoRefreshed = true;
-              if (nodesWithAffinity.contains(connectionWrapper.nodename())) {
-                pickedConnection = connectionWrapper;
-              } else {
-                LOGGER.debug("Affinity no longer valid, retrying.");
-                management.releaseResources(null);
-                connectionWrapper.connection().close();
-              }
-            }
-          } else {
-            pickedConnection = connectionWrapper;
-          }
-          if (pickedConnection != null) {
-            LOGGER.debug(
-                "Connected to node '{}' for '{}'", pickedConnection.nodename(), connectionName);
-          }
-        } else if (attemptCount == 5) {
-          if (hintedConnectionFailure != null) {
+        LOGGER.trace(
+            "Nodes matching affinity {}: {}, connected to {}.",
+            context,
+            nodesWithAffinity,
+            nodename);
+        if (nodesWithAffinity.contains(nodename)) {
+          LOGGER.debug("Connected to node '{}' for '{}'", nodename, connectionName);
+          return connectionWrapper;
+        } else if (attempt == 5) {
+          if (candidate.hintedFailure != null) {
             // the nodes with affinity cannot be reached, the caller retries later (recovery)
-            throw hintedConnectionFailure;
+            throw candidate.hintedFailure;
           }
           LOGGER.debug(
               "Could not find affinity {} after {} attempt(s), using last connection for '{}'.",
               context,
-              attemptCount,
+              attempt,
               connectionName);
-          pickedConnection = connectionWrapper;
+          return connectionWrapper;
         } else {
-          LOGGER.trace(
-              "Affinity {} not found with node {}.", context, connectionWrapper.nodename());
-          if (!queueInfoRefreshed) {
-            try {
-              info = lookUpQueueInfo(management, context, affinityCache, retryStrategy);
-            } catch (AmqpException e) {
-              if (hintedConnectionFailure == null
-                  || e instanceof AmqpException.AmqpConnectionException) {
-                throw e;
-              }
-              // the queue may be unavailable because its nodes cannot be reached
-              hintedConnectionFailure.addSuppressed(e);
-              throw hintedConnectionFailure;
-            }
-            if (info != null) {
-              nodesWithAffinity = strategy.nodesWithAffinity(context, info);
-              queueInfoRefreshed = true;
-            }
-          }
+          LOGGER.trace("Affinity {} not found with node {}.", context, nodename);
           management.releaseResources(null);
           connectionWrapper.connection().close();
         }
       }
-      return pickedConnection;
     } catch (AmqpException.AmqpConnectionException e) {
       management.releaseResources(e);
       try {
@@ -210,6 +157,78 @@ final class ConnectionUtils {
           connectionName,
           e);
       throw e;
+    }
+  }
+
+  private static List<Address> addressHints(
+      List<String> nodesWithAffinity, AffinityCache affinityCache) {
+    if (nodesWithAffinity == null) {
+      return null;
+    }
+    return nodesWithAffinity.stream()
+        .map(affinityCache::nodenameToAddress)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
+  }
+
+  private static CandidateConnection connect(
+      Function<List<Address>, AmqpConnection.NativeConnectionWrapper> connectionFactory,
+      List<Address> addresses,
+      List<Address> addressHints,
+      RetryStrategy retryStrategy,
+      AffinityContext context,
+      String connectionName) {
+    try {
+      return new CandidateConnection(
+          retryStrategy.maybeRetry(() -> connectionFactory.apply(addressHints)), null);
+    } catch (AmqpException.AmqpConnectionException e) {
+      if (addressHints == null || addressHints.isEmpty()) {
+        throw e;
+      }
+      LOGGER.debug(
+          "Could not connect to nodes with affinity {} for '{}' ({}), trying the other addresses",
+          context,
+          connectionName,
+          e.getMessage());
+      // the hinted nodes are likely down, no need to try them again
+      List<Address> fallbackAddresses =
+          addresses.stream().filter(a -> !addressHints.contains(a)).collect(Collectors.toList());
+      return new CandidateConnection(
+          retryStrategy.maybeRetry(() ->
+              connectionFactory.apply(fallbackAddresses.isEmpty() ? null : fallbackAddresses)),
+          e);
+    }
+  }
+
+  private static Management.QueueInfo refreshQueueInfo(
+      AmqpManagement management,
+      AffinityContext context,
+      AffinityCache affinityCache,
+      RetryStrategy retryStrategy,
+      AmqpException.AmqpConnectionException hintedFailure) {
+    try {
+      return lookUpQueueInfo(management, context, affinityCache, retryStrategy);
+    } catch (AmqpException e) {
+      if (hintedFailure == null || e instanceof AmqpException.AmqpConnectionException) {
+        throw e;
+      }
+      // the queue may be unavailable because its nodes cannot be reached
+      hintedFailure.addSuppressed(e);
+      throw hintedFailure;
+    }
+  }
+
+  private static final class CandidateConnection {
+
+    private final AmqpConnection.NativeConnectionWrapper connection;
+    // the connection failure to the nodes with affinity, if any, before the fallback
+    private final AmqpException.AmqpConnectionException hintedFailure;
+
+    private CandidateConnection(
+        AmqpConnection.NativeConnectionWrapper connection,
+        AmqpException.AmqpConnectionException hintedFailure) {
+      this.connection = connection;
+      this.hintedFailure = hintedFailure;
     }
   }
 
