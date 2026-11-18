@@ -512,7 +512,10 @@ loadScripts(document, 'script');</script>
 <h3>leaderLocator</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="Management.QueueSpecification.html" title="interface in com.rabbitmq.client.amqp">Management.QueueSpecification</a></span>&nbsp;<span class="element-name">leaderLocator</span><wbr><span class="parameters">(<a href="Management.QueueLeaderLocator.html" title="enum in com.rabbitmq.client.amqp">Management.QueueLeaderLocator</a>&nbsp;locator)</span></div>
-<div class="block">Leader-locator strategy (replica placement) for the queue.</div>
+<div class="block">Leader-locator strategy (replica placement) for the queue.
+
+<p>Sets the <code>x-queue-leader-locator</code> argument, for all queue types. The queue type
+must be set before calling this method.</div>
 <dl class="notes">
 <dt>Parameters:</dt>
 <dd><code>locator</code> - locator strategy</dd>
