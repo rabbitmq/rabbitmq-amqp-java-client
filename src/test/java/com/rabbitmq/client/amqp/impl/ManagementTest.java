@@ -43,6 +43,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @AmqpTestInfrastructure
@@ -82,6 +83,24 @@ public class ManagementTest {
     queueInfo = management.queue().exclusive(true).autoDelete(false).declare();
     assertThat(queueInfo.name()).isNotEqualTo(q);
     assertThat(nameSupplierCallCount).hasValue(1 + 2);
+  }
+
+  @ParameterizedTest
+  @EnumSource(Management.QueueType.class)
+  void queueDeclareWithLeaderLocatorShouldBeIdempotent(Management.QueueType type) {
+    Management m = connection.management();
+    for (Management.QueueLeaderLocator locator : Management.QueueLeaderLocator.values()) {
+      String q = Utils.NAME_SUPPLIER.get();
+      try {
+        for (int i = 0; i < 2; i++) {
+          Management.QueueInfo info = m.queue(q).type(type).leaderLocator(locator).declare();
+          assertThat(info).hasArgument("x-queue-leader-locator", locator.locator());
+          assertThat(info.arguments()).doesNotContainKey("x-queue-master-locator");
+        }
+      } finally {
+        m.queueDelete(q);
+      }
+    }
   }
 
   @Test

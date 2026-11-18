@@ -26,6 +26,8 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 public class AmqpQueueSpecificationTest {
 
@@ -109,5 +111,47 @@ public class AmqpQueueSpecificationTest {
         .hasMessageContaining(
             "Initial offset must be between 0 and "
                 + AmqpQueueSpecification.MAX_STREAM_INITIAL_OFFSET);
+  }
+
+  @ParameterizedTest
+  @EnumSource(Management.QueueType.class)
+  void leaderLocatorShouldSetLeaderLocatorArgumentForAllTypes(Management.QueueType type) {
+    for (Management.QueueLeaderLocator locator : Management.QueueLeaderLocator.values()) {
+      AmqpQueueSpecification spec = new AmqpQueueSpecification(mock(AmqpManagement.class));
+      spec.type(type).leaderLocator(locator);
+
+      assertThat(arguments(spec))
+          .containsEntry("x-queue-leader-locator", locator.locator())
+          .doesNotContainKey("x-queue-master-locator");
+    }
+  }
+
+  @Test
+  void leaderLocatorShouldBeIgnoredIfTypeIsNotSet() {
+    AmqpQueueSpecification spec = new AmqpQueueSpecification(mock(AmqpManagement.class));
+    spec.leaderLocator(Management.QueueLeaderLocator.BALANCED).classic();
+
+    assertThat(arguments(spec))
+        .doesNotContainKeys("x-queue-leader-locator", "x-queue-master-locator");
+  }
+
+  @Test
+  void leaderLocatorNullShouldRemoveOnlyLeaderLocatorArgument() {
+    AmqpQueueSpecification spec = new AmqpQueueSpecification(mock(AmqpManagement.class));
+    spec.classic()
+        .queue()
+        .argument("x-queue-master-locator", "client-local")
+        .leaderLocator(Management.QueueLeaderLocator.BALANCED)
+        .leaderLocator(null);
+
+    assertThat(arguments(spec))
+        .doesNotContainKey("x-queue-leader-locator")
+        .containsEntry("x-queue-master-locator", "client-local");
+  }
+
+  private static Map<String, Object> arguments(AmqpQueueSpecification spec) {
+    Map<String, Object> arguments = new HashMap<>();
+    spec.arguments(arguments::put);
+    return arguments;
   }
 }
