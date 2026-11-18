@@ -289,6 +289,57 @@ class ConnectionStateTransitionsTest {
         });
   }
 
+  @Test
+  void creationFailureClosesAndFencesLaterEvents() {
+    PropertyChecker.forAll(
+        Generator.from(data ->
+            new DisconnectInput(
+                ConnectionStateClient.InternalState.INITIAL,
+                data.generate(EPOCHS),
+                0,
+                data.generate(EXCEPTIONS),
+                data.generate(Generator.booleans()))),
+        input -> {
+          ConnectionStateClient.TransitionResult closed =
+              ConnectionStateClient.ConnectionState.onCreationFailure(input.epoch);
+          if (closed.state() != ConnectionStateClient.InternalState.CLOSED
+              || closed.epoch() != input.epoch + 1) {
+            return false;
+          }
+          for (long eventEpoch : new long[] {input.epoch, closed.epoch()}) {
+            for (boolean fromCurrentNativeConnection : new boolean[] {true, false}) {
+              ConnectionStateClient.TransitionResult disconnect =
+                  ConnectionStateClient.ConnectionState.onDisconnect(
+                      closed.state(),
+                      closed.epoch(),
+                      eventEpoch,
+                      fromCurrentNativeConnection,
+                      input.exception,
+                      input.recoveryActivated,
+                      "test-connection");
+              if (disconnect.state() != closed.state() || disconnect.epoch() != closed.epoch()) {
+                return false;
+              }
+            }
+            ConnectionStateClient.TransitionResult sessionFailure =
+                ConnectionStateClient.ConnectionState.onSessionFailure(
+                    closed.state(), closed.epoch(), eventEpoch, input.exception, "test-connection");
+            if (sessionFailure.state() != closed.state()
+                || sessionFailure.epoch() != closed.epoch()) {
+              return false;
+            }
+          }
+          ConnectionStateClient.TransitionResult initialOpen =
+              ConnectionStateClient.ConnectionState.onInitialOpen(
+                  closed.state(),
+                  closed.epoch(),
+                  input.exception,
+                  input.recoveryActivated,
+                  "test-connection");
+          return initialOpen.state() == closed.state() && initialOpen.epoch() == closed.epoch();
+        });
+  }
+
   private static final class DisconnectInput {
     final ConnectionStateClient.InternalState state;
     final long epoch;

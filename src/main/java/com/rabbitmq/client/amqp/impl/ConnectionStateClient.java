@@ -101,6 +101,10 @@ final class ConnectionStateClient implements AutoCloseable {
     this.client.submit(s -> s.markClosed(cause));
   }
 
+  void markCreationFailed() {
+    this.client.submit(ConnectionState::markCreationFailed);
+  }
+
   boolean registerPublisher(AmqpPublisher publisher) {
     return this.registerEntity(s -> s.publishers.add(publisher));
   }
@@ -191,6 +195,10 @@ final class ConnectionStateClient implements AutoCloseable {
     this.client.close();
   }
 
+  boolean isClosed() {
+    return this.client.isClosed();
+  }
+
   static class ConnectionState {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionState.class);
@@ -272,6 +280,11 @@ final class ConnectionStateClient implements AutoCloseable {
     private void markClosed(Throwable cause) {
       this.initialDisconnects.clear();
       apply(onMarkClosed(this.epoch, cause));
+    }
+
+    private void markCreationFailed() {
+      this.initialDisconnects.clear();
+      apply(onCreationFailure(this.epoch));
     }
 
     // --------------------------------------------------------------
@@ -456,6 +469,11 @@ final class ConnectionStateClient implements AutoCloseable {
       // Invalidate any pending IO tasks instantly
       return TransitionResult.of(
           InternalState.CLOSED, epoch + 1, s -> s.connection.updateState(CLOSING, cause));
+    }
+
+    static TransitionResult onCreationFailure(long epoch) {
+      // the connection is never returned to the application, its listeners are not notified
+      return TransitionResult.of(InternalState.CLOSED, epoch + 1, s -> {});
     }
 
     // --------------------------------------------------------------

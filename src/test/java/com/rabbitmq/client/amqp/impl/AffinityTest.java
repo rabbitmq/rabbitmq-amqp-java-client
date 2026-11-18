@@ -17,8 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
-import static com.rabbitmq.client.amqp.Resource.State.CLOSING;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
 import static com.rabbitmq.client.amqp.Resource.State.OPENING;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
@@ -129,21 +127,27 @@ public class AffinityTest {
   @Test
   void connectionShouldBeClosedAndNotRecoverWhenCreationFails() throws Exception {
     List<Resource.State> states = new CopyOnWriteArrayList<>();
+    List<AmqpConnection> connections = new CopyOnWriteArrayList<>();
     String uri = "amqp://localhost:" + freePort();
     assertThatThrownBy(() ->
             environment
                 .connectionBuilder()
                 .uri(uri)
-                .listeners(ctx -> states.add(ctx.currentState()))
+                .listeners(ctx -> {
+                  connections.add((AmqpConnection) ctx.resource());
+                  states.add(ctx.currentState());
+                })
                 .affinity()
                 .queue(name)
                 .connection()
                 .build())
         .isInstanceOf(AmqpException.AmqpConnectionException.class);
-    waitAtMost(() -> states.contains(CLOSED));
-    // the disconnection of the unreachable native connection is notified asynchronously
-    Thread.sleep(500);
-    assertThat(states).containsExactly(OPENING, CLOSING, CLOSED);
+    waitAtMost(() -> states.contains(OPENING));
+    AmqpConnection c = connections.get(0);
+    // no state change, so no other notification
+    assertThat(c.state()).isEqualTo(OPENING);
+    assertThat(c.stateClientClosed()).isTrue();
+    assertThat(states).containsExactly(OPENING);
   }
 
   private static int freePort() throws IOException {
