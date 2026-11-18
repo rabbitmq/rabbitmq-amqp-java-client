@@ -239,7 +239,7 @@ public interface Management extends AutoCloseable {
      * Leader-locator strategy (replica placement) for the queue.
      *
      * <p>Sets the <code>x-queue-leader-locator</code> argument, for all queue types. The queue type
-     * must be set before calling this method.
+     * can be set before or after calling this method.
      *
      * @param locator locator strategy
      * @return the queue specification

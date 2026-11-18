@@ -127,12 +127,22 @@ public class AmqpQueueSpecificationTest {
   }
 
   @Test
-  void leaderLocatorShouldBeIgnoredIfTypeIsNotSet() {
+  void leaderLocatorShouldBeSetIfTypeIsNotSet() {
     AmqpQueueSpecification spec = new AmqpQueueSpecification(mock(AmqpManagement.class));
-    spec.leaderLocator(Management.QueueLeaderLocator.BALANCED).classic();
+    spec.leaderLocator(Management.QueueLeaderLocator.BALANCED);
 
     assertThat(arguments(spec))
-        .doesNotContainKeys("x-queue-leader-locator", "x-queue-master-locator");
+        .containsEntry("x-queue-leader-locator", "balanced")
+        .doesNotContainKeys("x-queue-type", "x-queue-master-locator");
+  }
+
+  @ParameterizedTest
+  @EnumSource(Management.QueueType.class)
+  void leaderLocatorShouldBeSetIfTypeIsSetAfter(Management.QueueType type) {
+    AmqpQueueSpecification spec = new AmqpQueueSpecification(mock(AmqpManagement.class));
+    spec.leaderLocator(Management.QueueLeaderLocator.BALANCED).type(type);
+
+    assertThat(arguments(spec)).containsEntry("x-queue-leader-locator", "balanced");
   }
 
   @Test
