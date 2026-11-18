@@ -17,7 +17,6 @@
 // info@rabbitmq.com.
 package com.rabbitmq.client.amqp.impl;
 
-import static com.rabbitmq.client.amqp.Management.QueueLeaderLocator.BALANCED;
 import static java.lang.String.format;
 
 import com.rabbitmq.client.amqp.ByteCapacity;
@@ -144,17 +143,11 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
   @Override
   public Management.QueueSpecification leaderLocator(Management.QueueLeaderLocator locator) {
     if (locator == null) {
-      arg("x-queue-master-locator", null);
       arg("x-queue-leader-locator", null);
+    } else if (type() != null) {
+      arg("x-queue-leader-locator", locator.locator());
     } else {
-      QueueType type = type();
-      if (type == QueueType.CLASSIC) {
-        arg("x-queue-master-locator", locator == BALANCED ? "min-masters" : locator.locator());
-      } else if (type == QueueType.QUORUM || type == QueueType.STREAM) {
-        arg("x-queue-leader-locator", locator.locator());
-      } else {
-        LOGGER.warn("Set queue type before setting leader locator");
-      }
+      LOGGER.warn("Set queue type before setting leader locator");
     }
     return this;
   }
