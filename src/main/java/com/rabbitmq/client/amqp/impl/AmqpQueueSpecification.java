@@ -27,12 +27,9 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class AmqpQueueSpecification implements Management.QueueSpecification {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(AmqpQueueSpecification.class);
   private static final Duration TEN_YEARS = Duration.ofDays(365 * 10);
   private static final boolean DURABLE = true;
   // same as broker
@@ -142,13 +139,7 @@ class AmqpQueueSpecification implements Management.QueueSpecification {
 
   @Override
   public Management.QueueSpecification leaderLocator(Management.QueueLeaderLocator locator) {
-    if (locator == null) {
-      arg("x-queue-leader-locator", null);
-    } else if (type() != null) {
-      arg("x-queue-leader-locator", locator.locator());
-    } else {
-      LOGGER.warn("Set queue type before setting leader locator");
-    }
+    arg("x-queue-leader-locator", locator == null ? null : locator.locator());
     return this;
   }
 

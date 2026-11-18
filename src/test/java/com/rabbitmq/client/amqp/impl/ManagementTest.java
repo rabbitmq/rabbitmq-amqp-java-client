@@ -92,14 +92,29 @@ public class ManagementTest {
     for (Management.QueueLeaderLocator locator : Management.QueueLeaderLocator.values()) {
       String q = Utils.NAME_SUPPLIER.get();
       try {
-        for (int i = 0; i < 2; i++) {
-          Management.QueueInfo info = m.queue(q).type(type).leaderLocator(locator).declare();
-          assertThat(info).hasArgument("x-queue-leader-locator", locator.locator());
-          assertThat(info.arguments()).doesNotContainKey("x-queue-master-locator");
-        }
+        Management.QueueInfo info = m.queue(q).type(type).leaderLocator(locator).declare();
+        assertThat(info).hasArgument("x-queue-leader-locator", locator.locator());
+        assertThat(info.arguments()).doesNotContainKey("x-queue-master-locator");
+        info = m.queue(q).leaderLocator(locator).type(type).declare();
+        assertThat(info).hasArgument("x-queue-leader-locator", locator.locator());
       } finally {
         m.queueDelete(q);
       }
+    }
+  }
+
+  @Test
+  void queueDeclareWithLeaderLocatorWithoutTypeShouldSetLeaderLocator() {
+    Management m = connection.management();
+    String q = Utils.NAME_SUPPLIER.get();
+    try {
+      for (int i = 0; i < 2; i++) {
+        Management.QueueInfo info =
+            m.queue(q).leaderLocator(Management.QueueLeaderLocator.BALANCED).declare();
+        assertThat(info).hasArgument("x-queue-leader-locator", "balanced");
+      }
+    } finally {
+      m.queueDelete(q);
     }
   }
 
