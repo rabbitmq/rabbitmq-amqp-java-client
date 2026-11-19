@@ -137,6 +137,10 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   // recoverAfterConnectionFailure. Held only across field writes, never across I/O.
   // Recovery takes it in the connection event loop, so never wait on the loop while holding it.
   private final Object lifecycleLock = new Object();
+  // guarded by lifecycleLock: link closures notified during the creation are deferred, the
+  // constructor handles them once the consumer is created, or ignores them if the creation fails
+  private boolean created = false;
+  private ClientException creationCloseException;
 
   // One instance per receiver generation. Everything the credit path touches lives here, so a
   // generation's state cannot outlive the executor that owns it.
@@ -172,6 +176,9 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
           this.connection
               .consumerWorkService()
               .dispatch(() -> {
+                if (this.deferredDuringCreation(e)) {
+                  return;
+                }
                 // get result to make spotbugs happy
                 boolean ignored = maybeCloseConsumerOnException(this, e);
               });
@@ -187,12 +194,36 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
       if (this.activate(openedLink)) {
         openedLink.receiver.addCredit(this.initialCredits);
       }
-    } catch (ClientException e) {
+    } catch (ClientException | RuntimeException e) {
       AmqpException ex = ExceptionUtils.convert(e);
-      this.close(ex);
+      // the consumer is not returned to the application, its listeners are not notified
+      this.releaseResources(() -> {});
       throw ex;
     }
     this.metricsCollector.openConsumer();
+    ClientException deferred;
+    synchronized (this.lifecycleLock) {
+      this.created = true;
+      deferred = this.creationCloseException;
+      this.creationCloseException = null;
+    }
+    if (deferred != null) {
+      this.consumerWorkService.dispatch(() -> {
+        boolean ignored = maybeCloseConsumerOnException(this, deferred);
+      });
+    }
+  }
+
+  private boolean deferredDuringCreation(ClientException e) {
+    synchronized (this.lifecycleLock) {
+      if (this.created) {
+        return false;
+      }
+      if (this.creationCloseException == null) {
+        this.creationCloseException = e;
+      }
+      return true;
+    }
   }
 
   @Override
@@ -624,13 +655,24 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   }
 
   void close(Throwable cause) {
+    if (this.releaseResources(() -> this.state(CLOSING, cause))) {
+      this.state(CLOSED, cause);
+      MetricsCollector mc = this.metricsCollector;
+      if (mc != null) {
+        mc.closeConsumer();
+      }
+    }
+  }
+
+  // returns false if the consumer was already closed
+  private boolean releaseResources(Runnable onClosing) {
     Link linkToClose;
     synchronized (this.lifecycleLock) {
       if (!this.closed.compareAndSet(false, true)) {
-        return;
+        return false;
       }
       linkToClose = this.link;
-      this.state(CLOSING, cause);
+      onClosing.run();
     }
     if (this.consumerWorkService != null) {
       this.consumerWorkService.unregister(this);
@@ -644,11 +686,7 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     } catch (Exception e) {
       LOGGER.warn("Error while closing receiver", e);
     }
-    this.state(CLOSED, cause);
-    MetricsCollector mc = this.metricsCollector;
-    if (mc != null) {
-      mc.closeConsumer();
-    }
+    return true;
   }
 
   private static void closeQuietly(ClientReceiver receiver) {

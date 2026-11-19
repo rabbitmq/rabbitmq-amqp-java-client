@@ -23,7 +23,7 @@ import java.time.Duration;
 public interface PublisherBuilder extends AddressBuilder<PublisherBuilder> {
 
   /**
-   * Add {@link com.rabbitmq.client.amqp.Resource.StateListener}s to the consumer.
+   * Add {@link com.rabbitmq.client.amqp.Resource.StateListener}s to the publisher.
    *
    * @param listeners listeners
    * @return this builder instance
