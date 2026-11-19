@@ -235,8 +235,13 @@ final class AmqpConnection extends ResourceBase
       this.connectionStateClient.handleInitialOpen(this.nativeConnection);
       this.environment.metricsCollector().openConnection();
     } catch (RuntimeException e) {
-      this.connectionStateClient.markClosed(e);
-      this.connectionStateClient.executeInLoop(() -> this.state(CLOSED, e));
+      // the connection is not returned to the application, a later close() must be a no-op
+      this.closed.set(true);
+      try {
+        this.connectionStateClient.markCreationFailed();
+      } catch (IllegalStateException loopException) {
+        LOGGER.debug("Error in event loop: {}", loopException.getMessage());
+      }
       try {
         this.connectionStateClient.close();
       } catch (Exception closeException) {
@@ -872,6 +877,11 @@ final class AmqpConnection extends ResourceBase
 
   long id() {
     return this.id;
+  }
+
+  // for testing: no recovery can start once the state client is closed
+  boolean stateClientClosed() {
+    return this.connectionStateClient.isClosed();
   }
 
   @Override

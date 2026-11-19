@@ -25,6 +25,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rabbitmq.client.amqp.AmqpException;
 import com.rabbitmq.client.amqp.Resource;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
@@ -133,12 +134,38 @@ public class ConnectionStateClientTest {
   @Test
   void disconnectAfterCreationFailureShouldNotTriggerRecovery() {
     Connection failed = mock(Connection.class);
-    client.markClosed(new IllegalStateException());
     client.handleDisconnect(1, failed, disconnection());
+    client.markCreationFailed();
+    for (long eventEpoch : new long[] {1, 2}) {
+      client.handleDisconnect(eventEpoch, failed, disconnection());
+      client.handleSessionFailure(
+          eventEpoch, new AmqpException.AmqpConnectionException("simulated failure", null));
+    }
+    client.handleInitialOpen(failed);
     long epoch = client.epoch();
 
     assertThat(epoch).isEqualTo(2);
     verify(connection, never()).submitRecoveryTask(any());
+    verify(connection, never()).close(any());
+  }
+
+  @Test
+  void creationFailureShouldNotChangeConnectionState() {
+    client.markCreationFailed();
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(2);
+    verify(connection, never()).updateState(any(), any());
+  }
+
+  @Test
+  void markClosedShouldUpdateConnectionState() {
+    IllegalStateException cause = new IllegalStateException();
+    client.markClosed(cause);
+    long epoch = client.epoch();
+
+    assertThat(epoch).isEqualTo(2);
+    verify(connection).updateState(Resource.State.CLOSING, cause);
   }
 
   @Test
