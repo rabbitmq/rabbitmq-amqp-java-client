@@ -29,6 +29,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -96,18 +97,9 @@ public class MetricsCollectorTest {
               .build();
       verify(metricsCollector, times(2)).openConnection();
 
-      CountDownLatch c2ClosedLatch = new CountDownLatch(1);
-      doAnswer(
-              invocation -> {
-                c2ClosedLatch.countDown();
-                return null;
-              })
-          .when(metricsCollector)
-          .closeConnection();
       Cli.closeConnection(c2Name);
-      assertThat(c2ClosedLatch).completes();
       // the connection is closed because automatic recovery was not activated
-      verify(metricsCollector, times(1)).closeConnection();
+      verify(metricsCollector, timeout(10_000).times(1)).closeConnection();
 
       String q = c1.management().queue().exclusive(true).declare().name();
       verify(metricsCollector, never()).openPublisher();
