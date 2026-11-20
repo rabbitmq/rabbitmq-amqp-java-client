@@ -17,10 +17,10 @@
 package org.apache.qpid.protonj2.codec.encoders;
 
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
@@ -106,9 +106,9 @@ public final class ProtonEncoder implements Encoder {
     private static final UnsignedLongTypeEncoder ulongEncoder = UnsignedLongTypeEncoder.INSTANCE;
     private static final DeliveryTagEncoder deliveryTagEncoder = DeliveryTagEncoder.INSTANCE;
 
-    private ProtonEncoderState singleThreadedState;
+    private volatile ProtonEncoderState singleThreadedState;
 
-    private final Map<Class<?>, TypeEncoder<?>> typeEncoders = new HashMap<>();
+    private final Map<Class<?>, TypeEncoder<?>> typeEncoders = new ConcurrentHashMap<>();
     {
         typeEncoders.put(arrayEncoder.getTypeClass(), arrayEncoder);
         typeEncoders.put(binaryEncoder.getTypeClass(), binaryEncoder);
@@ -160,11 +160,12 @@ public final class ProtonEncoder implements Encoder {
     @Override
     public ProtonEncoderState getCachedEncoderState() {
         ProtonEncoderState state = singleThreadedState;
+
         if (state == null) {
             singleThreadedState = state = newEncoderState();
         }
 
-        return singleThreadedState.reset();
+        return state.reset();
     }
 
     @Override
@@ -791,7 +792,9 @@ public final class ProtonEncoder implements Encoder {
 
         // Ensure that next time we find the encoder immediately and don't need to
         // go through this process again.
-        typeEncoders.put(typeClass, encoder);
+        if (encoder != null) {
+            typeEncoders.put(typeClass, encoder);
+        }
 
         return encoder;
     }

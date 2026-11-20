@@ -21,10 +21,12 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.qpid.protonj2.buffer.ProtonBuffer;
 import org.apache.qpid.protonj2.codec.DecodeException;
@@ -171,16 +173,17 @@ public final class ProtonStreamDecoder implements StreamDecoder {
 
     // Registry of decoders for described types which can be updated with user defined
     // decoders as well as the default decoders.
-    private final Map<Object, StreamDescribedTypeDecoder<?>> describedTypeDecoders = new HashMap<>();
+    private final Map<Object, StreamDescribedTypeDecoder<?>> describedTypeDecoders = new ConcurrentHashMap<>();
 
     // Registry of decoders for described types which are not registered which can be updated with a
     // limited number of cached decoders to speed up processing
-    private final Map<Object, UnknownDescribedTypeDecoder> unknownDescribedTypeDecoders = new HashMap<>();
+    private final Map<Object, UnknownDescribedTypeDecoder> unknownDescribedTypeDecoders = new ConcurrentHashMap<>();
+    private final AtomicInteger unknownDescribedTypeDecodersSlots = new AtomicInteger(UNKNOWN_DESCRIBED_TYPES_CACHE_LIMIT);
 
     // Quick access to decoders that handle AMQP types like Transfer, Properties etc.
     private final StreamDescribedTypeDecoder<?>[] amqpTypeDecoders = new StreamDescribedTypeDecoder[256];
 
-    private ProtonStreamDecoderState singleThreadedState;
+    private volatile ProtonStreamDecoderState singleThreadedState;
 
     // Internal Decoders used to prevent user to access Proton specific decoding methods
     private static final Symbol8TypeDecoder symbol8Decoder;
@@ -229,6 +232,7 @@ public final class ProtonStreamDecoder implements StreamDecoder {
     @Override
     public ProtonStreamDecoderState getCachedDecoderState() {
         ProtonStreamDecoderState state = singleThreadedState;
+
         if (state == null) {
             singleThreadedState = state = newDecoderState();
         }
@@ -361,15 +365,20 @@ public final class ProtonStreamDecoder implements StreamDecoder {
 
     @Override
     public <V> ProtonStreamDecoder registerDescribedTypeDecoder(StreamDescribedTypeDecoder<V> decoder) {
-        StreamDescribedTypeDecoder<?> describedTypeDecoder = decoder;
+        Objects.requireNonNull(decoder, "Stream described type decoder cannot be null");
+
+        if (decoder.getDescriptorCode() == null || decoder.getDescriptorSymbol() == null) {
+            throw new IllegalArgumentException(
+                "DescribedTypeDecoder instance must return both a Symbol and an UnsignedLong descriptor value");
+        }
 
         // Cache AMQP type decoders in the quick lookup array.
         if (decoder.getDescriptorCode().compareTo(amqpTypeDecoders.length) < 0) {
             amqpTypeDecoders[decoder.getDescriptorCode().intValue()] = decoder;
         }
 
-        describedTypeDecoders.put(describedTypeDecoder.getDescriptorCode(), describedTypeDecoder);
-        describedTypeDecoders.put(describedTypeDecoder.getDescriptorSymbol(), describedTypeDecoder);
+        describedTypeDecoders.put(decoder.getDescriptorCode(), decoder);
+        describedTypeDecoders.put(decoder.getDescriptorSymbol(), decoder);
 
         return this;
     }
@@ -720,7 +729,7 @@ public final class ProtonStreamDecoder implements StreamDecoder {
             case EncodingCodes.NULL:
                 return defaultValue;
             default:
-                throw new DecodeException("Expected Unsigned Long type but found encoding: " + EncodingCodes.toString(encodingCode));
+                throw new DecodeException("Expected Long type but found encoding: " + EncodingCodes.toString(encodingCode));
         }
     }
 
@@ -1001,8 +1010,8 @@ public final class ProtonStreamDecoder implements StreamDecoder {
 
         final boolean canCache;
 
-        if (descriptor instanceof Symbol && ((Symbol) descriptor).getLength() > UNKNOWN_DESCRIBED_TYPE_DESCRIPTOR_SIZE_LIMIT) {
-            canCache = false;
+        if (descriptor instanceof Symbol) {
+            canCache = ((Symbol) descriptor).getLength() <= UNKNOWN_DESCRIBED_TYPE_DESCRIPTOR_SIZE_LIMIT;
         } else {
             canCache = descriptor instanceof UnsignedLong;
         }
@@ -1015,8 +1024,11 @@ public final class ProtonStreamDecoder implements StreamDecoder {
             }
         };
 
-        if (canCache && unknownDescribedTypeDecoders.size() < UNKNOWN_DESCRIBED_TYPES_CACHE_LIMIT) {
-            unknownDescribedTypeDecoders.put(descriptor, streamTypeDecoder);
+        if (canCache && unknownDescribedTypeDecodersSlots.getAndUpdate(available -> available > 0 ? available - 1 : available) > 0) {
+            final UnknownDescribedTypeDecoder previous = unknownDescribedTypeDecoders.putIfAbsent(descriptor, streamTypeDecoder);
+            if (previous != null) {
+                unknownDescribedTypeDecodersSlots.incrementAndGet();
+            }
         }
 
         return streamTypeDecoder;
