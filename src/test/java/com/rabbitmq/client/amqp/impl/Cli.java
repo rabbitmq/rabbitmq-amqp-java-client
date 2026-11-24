@@ -241,6 +241,27 @@ abstract class Cli {
     quorumQueueServersCommand(queue, "restart_server");
   }
 
+  static void stopQuorumQueueServer(String queue, String node) {
+    quorumQueueServerCommand(queue, "stop_server", node);
+  }
+
+  static void restartQuorumQueueServer(String queue, String node) {
+    quorumQueueServerCommand(queue, "restart_server", node);
+  }
+
+  private static void quorumQueueServerCommand(String queue, String function, String node) {
+    rabbitmqctl(
+        "eval '{ok, Q} = rabbit_amqqueue:lookup(rabbit_misc:r(<<\"/\">>, queue, <<\""
+            + queue
+            + "\">>)), "
+            + "{RaName, _} = amqqueue:get_pid(Q), "
+            + "rabbit_quorum_queue:"
+            + function
+            + "({RaName, list_to_atom(\""
+            + node
+            + "\")}).'");
+  }
+
   static void endSessionsWithLinkTo(String queue) {
     // an unexpected frame makes the broker end the session with an internal error
     rabbitmqctl(

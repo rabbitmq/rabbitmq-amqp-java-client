@@ -20,7 +20,9 @@ package com.rabbitmq.client.amqp.impl;
 import static com.rabbitmq.client.amqp.BackOffDelayPolicy.fixedWithInitialDelay;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.CONSUME;
 import static com.rabbitmq.client.amqp.ConnectionSettings.Affinity.Operation.PUBLISH;
+import static com.rabbitmq.client.amqp.Resource.State.CLOSED;
 import static com.rabbitmq.client.amqp.Resource.State.OPEN;
+import static com.rabbitmq.client.amqp.Resource.State.RECOVERING;
 import static com.rabbitmq.client.amqp.impl.Assertions.assertThat;
 import static com.rabbitmq.client.amqp.impl.TestUtils.newLoggerLevel;
 import static com.rabbitmq.client.amqp.impl.TestUtils.waitAtMost;
@@ -50,6 +52,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -452,6 +455,67 @@ public class RecoveryClusterTest {
       affinityEnvironment.close();
       if (stoppedNode != null) {
         Cli.startNode(stoppedNode);
+      }
+      deleteQueue(q);
+    }
+  }
+
+  @Test
+  void consumerShouldRecoverWhenQuorumQueueHasNoQuorumLongerThanLinkOpenTimeout()
+      throws InterruptedException {
+    String q = queueName(Management.QueueType.QUORUM);
+    declareQueueWithMemberOnEachNode(q, Management.QueueType.QUORUM);
+    String leader = management.queueInfo(q).leader();
+    List<String> otherNodes = nodes.stream().filter(n -> !n.equals(leader)).collect(toList());
+    AtomicBoolean membersStopped = new AtomicBoolean(false);
+    try {
+      String connectionName = "consumer-no-quorum";
+      // only the node of the leader, the recovery cannot avoid the queue without quorum
+      AmqpConnection c = connection(b -> b.name(connectionName).uri(uri(leader)));
+      Set<String> received = ConcurrentHashMap.newKeySet();
+      List<Resource.State> consumerStates = new CopyOnWriteArrayList<>();
+      AmqpConsumer consumer =
+          (AmqpConsumer)
+              c.consumerBuilder()
+                  .queue(q)
+                  .listeners(context -> consumerStates.add(context.currentState()))
+                  .messageHandler((ctx, msg) -> {
+                    received.add(new String(msg.body(), StandardCharsets.UTF_8));
+                    ctx.accept();
+                  })
+                  .build();
+      List<String> beforeStop = publish(q, leader, "before-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(beforeStop));
+
+      LOGGER.info("Stopping members of quorum queue {} on nodes {}...", q, otherNodes);
+      membersStopped.set(true);
+      otherNodes.forEach(n -> Cli.stopQuorumQueueServer(q, n));
+      Cli.closeConnection(connectionName);
+      waitAtMost(TIMEOUT, () -> consumerStates.contains(RECOVERING));
+
+      // longer than the link open timeout (15 seconds)
+      Thread.sleep(Duration.ofSeconds(25).toMillis());
+      assertThat(consumer.state()).isEqualTo(RECOVERING);
+
+      LOGGER.info("Restarting members of quorum queue {} on nodes {}...", q, otherNodes);
+      otherNodes.forEach(n -> Cli.restartQuorumQueueServer(q, n));
+      membersStopped.set(false);
+
+      waitAtMost(
+          Duration.ofSeconds(90),
+          () -> c.state() == OPEN && consumer.state() == OPEN,
+          () -> format("Connection is %s, consumer is %s", c.state(), consumer.state()));
+      assertThat(consumerStates).doesNotContain(CLOSED);
+      List<String> afterRestart = publish(q, leader, "after-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(afterRestart));
+      // the timed-out attaches must not leave consumers on the queue
+      waitAtMost(
+          Duration.ofSeconds(90),
+          () -> management.queueInfo(q).consumerCount() == 1,
+          () -> format("Queue has %d consumer(s)", management.queueInfo(q).consumerCount()));
+    } finally {
+      if (membersStopped.get()) {
+        otherNodes.forEach(n -> Cli.restartQuorumQueueServer(q, n));
       }
       deleteQueue(q);
     }
