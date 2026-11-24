@@ -24,7 +24,10 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convert;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convertPublishFailure;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.maybeCloseOnException;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.operationTimedOut;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.quorumQueueConsumeTimedOut;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.transientConsumerRecoveryFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rabbitmq.client.amqp.AmqpException;
@@ -44,6 +47,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientIllegalStateException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientMessageFormatViolationException;
+import org.apache.qpid.protonj2.client.exceptions.ClientOperationTimedOutException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 import org.junit.jupiter.api.Test;
 
@@ -133,6 +137,58 @@ public class ExceptionUtilsTest {
         .isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpResourceClosedException("foo"))).isFalse();
     assertThat(noRunningStreamMemberOnNode(new AmqpConnectionException("foo", null))).isFalse();
+  }
+
+  @Test
+  void transientConsumerRecoveryFailureTest() {
+    // as thrown by the receiver creation when the link open times out
+    AmqpException linkOpenTimedOut =
+        convert(
+            new ClientOperationTimedOutException(
+                "Link open timed out waiting for remote to respond"),
+            "Error while creating receiver from '%s'",
+            "/queues/qq");
+    assertThat(linkOpenTimedOut).isNotInstanceOf(AmqpResourceClosedException.class);
+    assertThat(operationTimedOut(linkOpenTimedOut)).isTrue();
+    assertThat(transientConsumerRecoveryFailure(linkOpenTimedOut)).isTrue();
+
+    // as thrown when the server gives up on the checkout of a quorum queue
+    AmqpException consumeTimedOut =
+        convert(
+            new ClientLinkRemotelyClosedException(
+                "timed out consuming from quorum queue 'qq' in vhost '/': {'%2F_qq',rabbit@node1} "
+                    + "[condition = amqp:internal-error]",
+                ErrorCondition.create(
+                    "amqp:internal-error",
+                    "timed out consuming from quorum queue 'qq' in vhost '/': {'%2F_qq',rabbit@node1}",
+                    null)));
+    assertThat(consumeTimedOut).isInstanceOf(AmqpResourceClosedException.class);
+    assertThat(quorumQueueConsumeTimedOut(consumeTimedOut)).isTrue();
+    assertThat(transientConsumerRecoveryFailure(consumeTimedOut)).isTrue();
+
+    assertThat(
+            transientConsumerRecoveryFailure(
+                new AmqpResourceClosedException(
+                    "stream queue 's' in vhost '/' does not have a running replica on the local node [condition = amqp:internal-error]")))
+        .isTrue();
+
+    // permanent failures
+    assertThat(
+            transientConsumerRecoveryFailure(
+                new AmqpResourceClosedException(
+                    "failed consuming from quorum queue 'qq' in vhost '/': noproc [condition = amqp:internal-error]")))
+        .isFalse();
+    assertThat(
+            transientConsumerRecoveryFailure(
+                convert(
+                    new ClientLinkRemotelyClosedException("", errorCondition(ERROR_NOT_FOUND)))))
+        .isFalse();
+    assertThat(transientConsumerRecoveryFailure(new AmqpException("foo"))).isFalse();
+    assertThat(
+            quorumQueueConsumeTimedOut(
+                new AmqpException("timed out consuming from quorum queue 'qq' in vhost '/'")))
+        .isFalse();
+    assertThat(operationTimedOut(null)).isFalse();
   }
 
   ErrorCondition errorCondition(String condition) {

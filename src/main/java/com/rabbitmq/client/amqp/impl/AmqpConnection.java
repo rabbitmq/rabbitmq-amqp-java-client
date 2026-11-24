@@ -130,6 +130,9 @@ final class AmqpConnection extends ResourceBase
   private volatile ConsumerWorkService consumerWorkService;
   private volatile Executor dispatchingExecutor;
   volatile Runnable beforeResourceRecoveryHook = () -> {};
+  // package-private for testing: restarts of the connection recovery a consumer with a transient
+  // failure can cause before the recovery gives up on it
+  volatile int maxConsumerRecoveryRestarts = 10;
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   AmqpConnection(AmqpConnectionBuilder builder) {
@@ -563,7 +566,8 @@ final class AmqpConnection extends ResourceBase
     } else {
       LOGGER.debug("{} consumer(s) to recover", consumersToRecover.size());
       RecoveryGuard guard = recoveryGuard(attemptEpoch);
-      List<AmqpConsumer> failedConsumers = new ArrayList<>();
+      List<Pair<AmqpConsumer, Exception>> failedConsumers = new ArrayList<>();
+      AmqpException restartCause = null;
       for (AmqpConsumer consumer : consumersToRecover) {
         Utils.throwIfInterrupted();
         this.beforeResourceRecoveryHook.run();
@@ -571,6 +575,7 @@ final class AmqpConnection extends ResourceBase
         try {
           LOGGER.debug("Recovering consumer {} (queue '{}')", consumer.id(), consumer.queue());
           consumer.recoverAfterConnectionFailure(guard);
+          consumer.resetRecoveryRestarts();
           LOGGER.debug("Recovered consumer {} (queue '{}')", consumer.id(), consumer.queue());
         } catch (AmqpException.AmqpConnectionException ex) {
           LOGGER.warn(
@@ -579,45 +584,67 @@ final class AmqpConnection extends ResourceBase
               consumer.queue(),
               ex);
           throw ex;
-        } catch (AmqpException.AmqpResourceClosedException ex) {
-          if (ExceptionUtils.sessionRemotelyClosed(ex)) {
+        } catch (StaleRecoveryException ex) {
+          throw ex;
+        } catch (Exception ex) {
+          if (ex instanceof AmqpException.AmqpResourceClosedException
+              && ExceptionUtils.sessionRemotelyClosed(ex)) {
             LOGGER.warn(
                 "Session closed while trying to recover consumer {} (queue '{}'), restarting recovery",
                 consumer.id(),
                 consumer.queue(),
                 ex);
             throw new AmqpException.AmqpConnectionException("Session closed during recovery", ex);
-          } else if (ExceptionUtils.noRunningStreamMemberOnNode(ex)) {
-            LOGGER.warn(
-                "Could not recover consumer {} (queue '{}') because there is "
-                    + "running stream member on the node, restarting recovery",
-                consumer.id(),
-                consumer.queue(),
-                ex);
-            throw new AmqpException.AmqpConnectionException(
-                "No running stream member on the node", ex);
+          } else if (ExceptionUtils.transientConsumerRecoveryFailure(ex)) {
+            // the server session may still be busy with the attach, and may even register the
+            // consumer later, only a new connection gets rid of it
+            int restarts = consumer.incrementRecoveryRestarts();
+            int maxRestarts = this.maxConsumerRecoveryRestarts;
+            if (restarts <= maxRestarts) {
+              LOGGER.warn(
+                  "Transient error while trying to recover consumer {} (queue '{}'), "
+                      + "restarting recovery (restart {}/{})",
+                  consumer.id(),
+                  consumer.queue(),
+                  restarts,
+                  maxRestarts,
+                  ex);
+              throw new AmqpException.AmqpConnectionException(
+                  "Transient error while recovering consumer", ex);
+            } else {
+              LOGGER.warn(
+                  "Giving up recovering consumer {} (queue '{}') after {} recovery restart(s)",
+                  consumer.id(),
+                  consumer.queue(),
+                  maxRestarts,
+                  ex);
+              failedConsumers.add(pair(consumer, ex));
+              if (ExceptionUtils.operationTimedOut(ex)) {
+                // the attach may still block the server session, the next resources would
+                // time out on it
+                restartCause =
+                    new AmqpException.AmqpConnectionException(
+                        "Link open timed out while recovering consumer", ex);
+                break;
+              }
+            }
           } else {
             LOGGER.warn(
                 "Error while trying to recover consumer {} (queue '{}')",
                 consumer.id(),
                 consumer.queue(),
                 ex);
-            failedConsumers.add(consumer);
+            failedConsumers.add(pair(consumer, ex));
           }
-        } catch (StaleRecoveryException ex) {
-          throw ex;
-        } catch (Exception ex) {
-          LOGGER.warn(
-              "Error while trying to recover consumer {} (queue '{}')",
-              consumer.id(),
-              consumer.queue(),
-              ex);
-          failedConsumers.add(consumer);
         }
       }
       // a newer recovery must not pick up the resources this recovery decides to close
-      guard.runIfCurrent(() -> failedConsumers.forEach(this.connectionStateClient::removeConsumer));
-      failedConsumers.forEach(AmqpConsumer::close);
+      guard.runIfCurrent(
+          () -> failedConsumers.forEach(f -> this.connectionStateClient.removeConsumer(f.v1())));
+      failedConsumers.forEach(f -> f.v1().close(f.v2()));
+      if (restartCause != null) {
+        throw restartCause;
+      }
     }
   }
 
@@ -628,7 +655,7 @@ final class AmqpConnection extends ResourceBase
     } else {
       LOGGER.debug("{} publisher(s) to recover", publishersToRecover.size());
       RecoveryGuard guard = recoveryGuard(attemptEpoch);
-      List<AmqpPublisher> failedPublishers = new ArrayList<>();
+      List<Pair<AmqpPublisher, Exception>> failedPublishers = new ArrayList<>();
       for (AmqpPublisher publisher : publishersToRecover) {
         Utils.throwIfInterrupted();
         this.beforeResourceRecoveryHook.run();
@@ -660,7 +687,7 @@ final class AmqpConnection extends ResourceBase
                 publisher.id(),
                 publisher.address(),
                 ex);
-            failedPublishers.add(publisher);
+            failedPublishers.add(pair(publisher, ex));
           }
         } catch (StaleRecoveryException ex) {
           throw ex;
@@ -670,12 +697,12 @@ final class AmqpConnection extends ResourceBase
               publisher.id(),
               publisher.address(),
               ex);
-          failedPublishers.add(publisher);
+          failedPublishers.add(pair(publisher, ex));
         }
       }
       guard.runIfCurrent(
-          () -> failedPublishers.forEach(this.connectionStateClient::removePublisher));
-      failedPublishers.forEach(AmqpPublisher::close);
+          () -> failedPublishers.forEach(f -> this.connectionStateClient.removePublisher(f.v1())));
+      failedPublishers.forEach(f -> f.v1().close(f.v2()));
     }
   }
 
