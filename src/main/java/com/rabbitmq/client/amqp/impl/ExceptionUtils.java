@@ -29,6 +29,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientConnectionSecurityExcept
 import org.apache.qpid.protonj2.client.exceptions.ClientException;
 import org.apache.qpid.protonj2.client.exceptions.ClientLinkRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientMessageFormatViolationException;
+import org.apache.qpid.protonj2.client.exceptions.ClientOperationTimedOutException;
 import org.apache.qpid.protonj2.client.exceptions.ClientResourceRemotelyClosedException;
 import org.apache.qpid.protonj2.client.exceptions.ClientSessionRemotelyClosedException;
 
@@ -175,6 +176,31 @@ abstract class ExceptionUtils {
     } else {
       return false;
     }
+  }
+
+  static boolean operationTimedOut(Throwable e) {
+    Throwable current = e;
+    while (current != null) {
+      if (current instanceof ClientOperationTimedOutException) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
+  static boolean quorumQueueConsumeTimedOut(Exception e) {
+    if (e instanceof AmqpException.AmqpResourceClosedException) {
+      String message = e.getMessage();
+      return message != null && message.contains("timed out consuming from quorum");
+    } else {
+      return false;
+    }
+  }
+
+  // the queue is likely to become available again, e.g. a quorum queue electing a new leader
+  static boolean transientConsumerRecoveryFailure(Exception e) {
+    return noRunningStreamMemberOnNode(e) || operationTimedOut(e) || quorumQueueConsumeTimedOut(e);
   }
 
   private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {

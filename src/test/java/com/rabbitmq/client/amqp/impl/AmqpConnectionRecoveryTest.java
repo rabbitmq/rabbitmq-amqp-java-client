@@ -50,6 +50,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.qpid.protonj2.client.exceptions.ClientOperationTimedOutException;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -340,8 +341,17 @@ public class AmqpConnectionRecoveryTest {
       c.management().queue(downQ).quorum().queue().declare();
       c.management().queue(q).declare();
       try {
+        AtomicReference<Throwable> downConsumerCloseCause = new AtomicReference<>();
         Consumer downConsumer =
-            c.consumerBuilder().queue(downQ).messageHandler((ctx, msg) -> ctx.accept()).build();
+            c.consumerBuilder()
+                .queue(downQ)
+                .messageHandler((ctx, msg) -> ctx.accept())
+                .listeners(context -> {
+                  if (context.currentState() == CLOSED) {
+                    downConsumerCloseCause.set(context.failureCause());
+                  }
+                })
+                .build();
         TestUtils.Sync consumeSync = TestUtils.sync();
         c.consumerBuilder()
             .queue(q)
@@ -359,6 +369,8 @@ public class AmqpConnectionRecoveryTest {
         assertThat(stateSync.get(RECOVERING)).completes();
         assertThat(stateSync.get(OPEN)).completes();
         waitAtMost(() -> ((AmqpConsumer) downConsumer).state() == CLOSED);
+        assertThat(downConsumerCloseCause.get())
+            .isInstanceOf(AmqpException.AmqpResourceClosedException.class);
 
         TestUtils.Sync publishSync = TestUtils.sync();
         p.publish(
@@ -379,6 +391,170 @@ public class AmqpConnectionRecoveryTest {
         }
       }
     }
+  }
+
+  @Test
+  void consumerRecoveryShouldRestartRecoveryOnTransientFailure(TestInfo info) {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(OPEN, TestUtils.sync(2));
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      c.management().queue(q).quorum().queue().declare();
+      try {
+        TestUtils.Sync consumeSync = TestUtils.sync();
+        AmqpConsumer consumer =
+            (AmqpConsumer)
+                c.consumerBuilder()
+                    .queue(q)
+                    .messageHandler((ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                    .build();
+        Publisher p = c.publisherBuilder().queue(q).build();
+        long consumerId = consumer.id();
+
+        int failedAttempts = 2;
+        AtomicInteger recoveryAttempts = new AtomicInteger();
+        consumer.beforeActivateHook =
+            () -> {
+              if (recoveryAttempts.incrementAndGet() <= failedAttempts) {
+                throw linkOpenTimedOut(q);
+              }
+            };
+        int connectionAttemptsBefore = connectionAttemptCount.get();
+
+        Cli.closeConnection(connectionName);
+
+        assertThat(stateSync.get(OPEN)).completes();
+        waitAtMost(() -> consumer.state() == OPEN);
+        assertThat(recoveryAttempts).hasValue(failedAttempts + 1);
+        // a new connection for each recovery restart
+        assertThat(connectionAttemptCount.get() - connectionAttemptsBefore)
+            .isGreaterThanOrEqualTo(failedAttempts + 1);
+        assertThat(consumer.id()).isEqualTo(consumerId);
+
+        TestUtils.Sync publishSync = TestUtils.sync();
+        p.publish(
+            p.message(),
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            });
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+      } finally {
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
+  @Test
+  void consumerRecoveryShouldGiveUpAfterMaxRestartsOnTransientFailure(TestInfo info) {
+    String q = name(info);
+    String connectionName = UUID.randomUUID().toString();
+    Map<Resource.State, TestUtils.Sync> stateSync = new ConcurrentHashMap<>();
+    stateSync.put(OPEN, TestUtils.sync(2));
+    AmqpConnectionBuilder builder =
+        (AmqpConnectionBuilder)
+            new AmqpConnectionBuilder(environment)
+                .name(connectionName)
+                .listeners(context -> {
+                  if (stateSync.containsKey(context.currentState())) {
+                    stateSync.get(context.currentState()).down();
+                  }
+                })
+                .recovery()
+                .backOffDelayPolicy(BACK_OFF_DELAY_POLICY)
+                .connectionBuilder();
+    try (AmqpConnection c = new AmqpConnection(builder)) {
+      int maxRestarts = 2;
+      c.maxConsumerRecoveryRestarts = maxRestarts;
+      c.management().queue(q).quorum().queue().declare();
+      try {
+        AtomicReference<Throwable> closeCause = new AtomicReference<>();
+        AmqpConsumer failingConsumer =
+            (AmqpConsumer)
+                c.consumerBuilder()
+                    .queue(q)
+                    .messageHandler((ctx, msg) -> ctx.accept())
+                    .listeners(context -> {
+                      if (context.currentState() == CLOSED) {
+                        closeCause.set(context.failureCause());
+                      }
+                    })
+                    .build();
+        AtomicInteger recoveryAttempts = new AtomicInteger();
+        failingConsumer.beforeActivateHook =
+            () -> {
+              recoveryAttempts.incrementAndGet();
+              throw linkOpenTimedOut(q);
+            };
+        TestUtils.Sync consumeSync = TestUtils.sync();
+        AmqpConsumer consumer =
+            (AmqpConsumer)
+                c.consumerBuilder()
+                    .queue(q)
+                    .messageHandler((ctx, msg) -> {
+                      ctx.accept();
+                      consumeSync.down();
+                    })
+                    .build();
+        Publisher p = c.publisherBuilder().queue(q).build();
+        int connectionAttemptsBefore = connectionAttemptCount.get();
+
+        Cli.closeConnection(connectionName);
+
+        assertThat(stateSync.get(OPEN)).completes();
+        waitAtMost(() -> failingConsumer.state() == CLOSED);
+        assertThat(recoveryAttempts).hasValue(maxRestarts + 1);
+        // giving up on a timed-out consumer restarts the recovery one last time
+        assertThat(connectionAttemptCount.get() - connectionAttemptsBefore)
+            .isGreaterThanOrEqualTo(maxRestarts + 2);
+        assertThat(closeCause.get()).isNotNull();
+        assertThat(ExceptionUtils.operationTimedOut(closeCause.get())).isTrue();
+        assertThat(consumer.state()).isEqualTo(OPEN);
+        assertThat(((AmqpPublisher) p).state()).isEqualTo(OPEN);
+
+        TestUtils.Sync publishSync = TestUtils.sync();
+        p.publish(
+            p.message(),
+            context -> {
+              if (context.status() == ACCEPTED) {
+                publishSync.down();
+              }
+            });
+        assertThat(publishSync).completes();
+        assertThat(consumeSync).completes();
+      } finally {
+        try (Connection cleanup = environment.connectionBuilder().build()) {
+          cleanup.management().queueDelete(q);
+        }
+      }
+    }
+  }
+
+  private static AmqpException linkOpenTimedOut(String queue) {
+    return ExceptionUtils.convert(
+        new ClientOperationTimedOutException("Link open timed out waiting for remote to respond"),
+        "Error while creating receiver from '%s'",
+        "/queues/" + queue);
   }
 
   @Test

@@ -50,6 +50,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
@@ -132,6 +133,8 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
   // package-private for testing: runs after the native receiver has been reopened during
   // recovery, immediately before the new generation is activated
   volatile Runnable beforeActivateHook = () -> {};
+  // consecutive connection recovery restarts caused by a transient failure of this consumer
+  private final AtomicInteger recoveryRestarts = new AtomicInteger(0);
 
   // Arbitrates the two writers of the consumer lifecycle: close() and the tail of
   // recoverAfterConnectionFailure. Held only across field writes, never across I/O.
@@ -652,6 +655,14 @@ final class AmqpConsumer extends ResourceBase implements Consumer {
     } catch (ClientException e) {
       throw ExceptionUtils.convert(e);
     }
+  }
+
+  int incrementRecoveryRestarts() {
+    return this.recoveryRestarts.incrementAndGet();
+  }
+
+  void resetRecoveryRestarts() {
+    this.recoveryRestarts.set(0);
   }
 
   void close(Throwable cause) {
