@@ -189,10 +189,14 @@ abstract class ExceptionUtils {
     return false;
   }
 
-  static boolean quorumQueueConsumeTimedOut(Exception e) {
+  // the server tries each member of the quorum queue and returns the error of the last one only
+  // (timeout, noproc, nodedown), whatever happened with the other members
+  static boolean quorumQueueConsumeFailed(Exception e) {
     if (e instanceof AmqpException.AmqpResourceClosedException) {
       String message = e.getMessage();
-      return message != null && message.contains("timed out consuming from quorum");
+      return message != null
+          && (message.contains("timed out consuming from quorum")
+              || message.contains("failed consuming from quorum"));
     } else {
       return false;
     }
@@ -200,7 +204,7 @@ abstract class ExceptionUtils {
 
   // the queue is likely to become available again, e.g. a quorum queue electing a new leader
   static boolean transientConsumerRecoveryFailure(Exception e) {
-    return noRunningStreamMemberOnNode(e) || operationTimedOut(e) || quorumQueueConsumeTimedOut(e);
+    return noRunningStreamMemberOnNode(e) || operationTimedOut(e) || quorumQueueConsumeFailed(e);
   }
 
   private static boolean isUnauthorizedAccess(ErrorCondition errorCondition) {
