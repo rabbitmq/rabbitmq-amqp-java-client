@@ -521,6 +521,64 @@ public class RecoveryClusterTest {
     }
   }
 
+  @Test
+  void consumerShouldRecoverWhenNoQuorumQueueMemberIsRunning() throws InterruptedException {
+    String q = queueName(Management.QueueType.QUORUM);
+    declareQueueWithMemberOnEachNode(q, Management.QueueType.QUORUM);
+    String leader = management.queueInfo(q).leader();
+    AtomicBoolean membersStopped = new AtomicBoolean(false);
+    try {
+      String connectionName = "consumer-no-member";
+      AmqpConnection c = connection(b -> b.name(connectionName).uri(uri(leader)));
+      Set<String> received = ConcurrentHashMap.newKeySet();
+      List<Resource.State> consumerStates = new CopyOnWriteArrayList<>();
+      AmqpConsumer consumer =
+          (AmqpConsumer)
+              c.consumerBuilder()
+                  .queue(q)
+                  .listeners(context -> consumerStates.add(context.currentState()))
+                  .messageHandler((ctx, msg) -> {
+                    received.add(new String(msg.body(), StandardCharsets.UTF_8));
+                    ctx.accept();
+                  })
+                  .build();
+      List<String> beforeStop = publish(q, leader, "before-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(beforeStop));
+
+      LOGGER.info("Stopping members of quorum queue {} on all nodes...", q);
+      membersStopped.set(true);
+      nodes.forEach(n -> Cli.stopQuorumQueueServer(q, n));
+      Cli.closeConnection(connectionName);
+      waitAtMost(TIMEOUT, () -> consumerStates.contains(RECOVERING));
+
+      // every member returns noproc at once, the attaches fail with
+      // "failed consuming from quorum queue ... noproc"
+      Thread.sleep(Duration.ofSeconds(20).toMillis());
+      assertThat(consumer.state()).isEqualTo(RECOVERING);
+
+      LOGGER.info("Restarting members of quorum queue {} on all nodes...", q);
+      nodes.forEach(n -> Cli.restartQuorumQueueServer(q, n));
+      membersStopped.set(false);
+
+      waitAtMost(
+          Duration.ofSeconds(90),
+          () -> c.state() == OPEN && consumer.state() == OPEN,
+          () -> format("Connection is %s, consumer is %s", c.state(), consumer.state()));
+      assertThat(consumerStates).doesNotContain(CLOSED);
+      List<String> afterRestart = publish(q, leader, "after-", 10);
+      waitAtMost(TIMEOUT, () -> received.containsAll(afterRestart));
+      waitAtMost(
+          Duration.ofSeconds(90),
+          () -> management.queueInfo(q).consumerCount() == 1,
+          () -> format("Queue has %d consumer(s)", management.queueInfo(q).consumerCount()));
+    } finally {
+      if (membersStopped.get()) {
+        nodes.forEach(n -> Cli.restartQuorumQueueServer(q, n));
+      }
+      deleteQueue(q);
+    }
+  }
+
   private String queueName(Management.QueueType type) {
     return type.name().toLowerCase() + "-affinity-" + new Random().nextInt(1000);
   }

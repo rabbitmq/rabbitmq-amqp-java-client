@@ -25,7 +25,7 @@ import static com.rabbitmq.client.amqp.impl.ExceptionUtils.convertPublishFailure
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.maybeCloseOnException;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.noRunningStreamMemberOnNode;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.operationTimedOut;
-import static com.rabbitmq.client.amqp.impl.ExceptionUtils.quorumQueueConsumeTimedOut;
+import static com.rabbitmq.client.amqp.impl.ExceptionUtils.quorumQueueConsumeFailed;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.sessionRemotelyClosed;
 import static com.rabbitmq.client.amqp.impl.ExceptionUtils.transientConsumerRecoveryFailure;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -163,8 +163,27 @@ public class ExceptionUtilsTest {
                     "timed out consuming from quorum queue 'qq' in vhost '/': {'%2F_qq',rabbit@node1}",
                     null)));
     assertThat(consumeTimedOut).isInstanceOf(AmqpResourceClosedException.class);
-    assertThat(quorumQueueConsumeTimedOut(consumeTimedOut)).isTrue();
+    assertThat(quorumQueueConsumeFailed(consumeTimedOut)).isTrue();
     assertThat(transientConsumerRecoveryFailure(consumeTimedOut)).isTrue();
+
+    // as thrown when the last member of a quorum queue tried by the server is not running
+    AmqpException consumeFailed =
+        convert(
+            new ClientLinkRemotelyClosedException(
+                "failed consuming from quorum queue 'qq' in vhost '/': noproc "
+                    + "[condition = amqp:internal-error]",
+                ErrorCondition.create(
+                    "amqp:internal-error",
+                    "failed consuming from quorum queue 'qq' in vhost '/': noproc",
+                    null)));
+    assertThat(consumeFailed).isInstanceOf(AmqpResourceClosedException.class);
+    assertThat(quorumQueueConsumeFailed(consumeFailed)).isTrue();
+    assertThat(transientConsumerRecoveryFailure(consumeFailed)).isTrue();
+    assertThat(
+            transientConsumerRecoveryFailure(
+                new AmqpResourceClosedException(
+                    "failed consuming from quorum queue 'qq' in vhost '/': nodedown [condition = amqp:internal-error]")))
+        .isTrue();
 
     assertThat(
             transientConsumerRecoveryFailure(
@@ -176,7 +195,7 @@ public class ExceptionUtilsTest {
     assertThat(
             transientConsumerRecoveryFailure(
                 new AmqpResourceClosedException(
-                    "failed consuming from quorum queue 'qq' in vhost '/': noproc [condition = amqp:internal-error]")))
+                    "Could not operate on queue 'cq' in vhost '/': {absent,{resource,<<\"/\">>,queue,<<\"cq\">>},stopped} [condition = amqp:internal-error]")))
         .isFalse();
     assertThat(
             transientConsumerRecoveryFailure(
@@ -185,8 +204,12 @@ public class ExceptionUtilsTest {
         .isFalse();
     assertThat(transientConsumerRecoveryFailure(new AmqpException("foo"))).isFalse();
     assertThat(
-            quorumQueueConsumeTimedOut(
+            quorumQueueConsumeFailed(
                 new AmqpException("timed out consuming from quorum queue 'qq' in vhost '/'")))
+        .isFalse();
+    assertThat(
+            quorumQueueConsumeFailed(
+                new AmqpException("failed consuming from quorum queue 'qq' in vhost '/': noproc")))
         .isFalse();
     assertThat(operationTimedOut(null)).isFalse();
   }
